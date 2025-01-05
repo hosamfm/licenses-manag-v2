@@ -225,6 +225,8 @@
 
             hideAllMessages();
 
+            if (!registrationCode) return;
+
             // التحقق من تنسيق كود التسجيل
             const isValidFormat = /^[XR][A-Z0-9]{16,17}$/.test(registrationCode);
             if (!isValidFormat) {
@@ -236,58 +238,43 @@
 
             spinner.classList.remove('d-none');
 
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(async () => {
-                try {
-                    const result = await window.checkRegistrationCode(registrationCode, 'New License');
-                    spinner.classList.add('d-none');
+            try {
+                const result = await window.checkRegistrationCode(registrationCode, 'New License');
+                spinner.classList.add('d-none');
 
-                    if (result.error) {
-                        showMessage(registrationCodeError, result.message, timesIcon);
-                        submitButton.disabled = true;
-                        isValidCode = false;
-                    } else if (result.exists) {
-                        showMessage(registrationCodeAlert, result.message, timesIcon);
-                        submitButton.disabled = true;
-                        isValidCode = false;
-                    } else {
-                        showMessage(registrationCodeSuccess, 'كود التسجيل صالح للاستخدام', checkIcon);
-                        submitButton.disabled = false;
-                        isValidCode = true;
-                    }
-                } catch (error) {
-                    console.error('Error validating registration code:', error);
-                    spinner.classList.add('d-none');
-                    showMessage(registrationCodeError, 'حدث خطأ أثناء التحقق من الكود. يرجى المحاولة مرة أخرى.', timesIcon);
+                if (result.error) {
+                    showMessage(registrationCodeError, result.message, timesIcon);
                     submitButton.disabled = true;
                     isValidCode = false;
+                } else if (result.exists) {
+                    showMessage(registrationCodeAlert, result.message, timesIcon);
+                    submitButton.disabled = true;
+                    isValidCode = false;
+                } else {
+                    showMessage(registrationCodeSuccess, 'كود التسجيل صالح للاستخدام', checkIcon);
+                    submitButton.disabled = false;
+                    isValidCode = true;
                 }
-            }, 500);
+            } catch (error) {
+                console.error('Error validating registration code:', error);
+                spinner.classList.add('d-none');
+                showMessage(registrationCodeError, 'حدث خطأ أثناء التحقق من الكود. يرجى المحاولة مرة أخرى.', timesIcon);
+                submitButton.disabled = true;
+                isValidCode = false;
+            }
         }
 
+        // التحقق عند تغيير القيمة
         registrationCodeInput.addEventListener('input', function() {
             this.value = this.value.toUpperCase();
-            validateRegistrationCode();
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(validateRegistrationCode, 500);
         });
 
-        // التحقق من الكود عند تحميل الصفحة
+        // التحقق عند تحميل الصفحة إذا كان هناك قيمة
         if (registrationCodeInput.value.trim()) {
             validateRegistrationCode();
         }
-
-        // التحقق من الكود عند لصق النص
-        registrationCodeInput.addEventListener('paste', function() {
-            setTimeout(validateRegistrationCode, 0);
-        });
-
-        // التحقق من الكود عند تغيير القيمة برمجياً
-        const originalSetValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-        Object.defineProperty(registrationCodeInput, 'value', {
-            set: function(v) {
-                originalSetValue.call(this, v);
-                validateRegistrationCode();
-            }
-        });
 
         form.addEventListener('submit', function(event) {
             if (!isValidCode) {
@@ -308,10 +295,7 @@
             submitButton.disabled = true;
             submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري المعالجة...';
         });
-    });
-</script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
+
         // تهيئة أداة مسح الصور
         const scanner = new ImageCodeScanner({
             targetInput: document.getElementById('registrationCode'),
@@ -319,6 +303,7 @@
                 document.getElementById('registrationCodeError').style.display = 'none';
                 document.getElementById('registrationCodeSuccess').style.display = 'block';
                 document.getElementById('registrationCodeSuccess').textContent = 'تم استخراج الكود بنجاح';
+                validateRegistrationCode(); // التحقق من الكود بعد نجاح المسح
             },
             onError: (error) => {
                 document.getElementById('registrationCodeError').style.display = 'block';
