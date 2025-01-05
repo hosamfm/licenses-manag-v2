@@ -9,30 +9,29 @@ class ImageCodeScanner {
         this.container = document.createElement('div');
         this.container.className = 'image-code-scanner-container';
         
-        // إنشاء زر الكاميرا
+        // Create camera button
         this.cameraButton = document.createElement('button');
         this.cameraButton.className = 'btn btn-outline-secondary';
         this.cameraButton.innerHTML = '<i class="fas fa-camera"></i>';
         this.cameraButton.title = 'التقاط صورة';
         
-        // إنشاء زر الرفع
+        // Create file upload button
         this.uploadButton = document.createElement('button');
         this.uploadButton.className = 'btn btn-outline-secondary';
         this.uploadButton.innerHTML = '<i class="fas fa-upload"></i>';
         this.uploadButton.title = 'تحميل صورة';
         
-        // إدخال الملف المخفي
+        // Hidden file input
         this.fileInput = document.createElement('input');
         this.fileInput.type = 'file';
         this.fileInput.accept = 'image/*';
         this.fileInput.style.display = 'none';
         
-        // إضافة مستمعي الأحداث
+        // Add event listeners
         this.uploadButton.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-        this.cameraButton.addEventListener('click', () => this.startCamera());
         
-        // إضافة العناصر
+        // Append elements
         this.container.appendChild(this.cameraButton);
         this.container.appendChild(this.uploadButton);
         this.container.appendChild(this.fileInput);
@@ -61,31 +60,8 @@ class ImageCodeScanner {
                             <div class="camera-container">
                                 <video autoplay playsinline></video>
                                 <div class="viewfinder">
-                                    <div class="viewfinder-frame">
-                                        <div class="corner-guides">
-                                            <div class="corner top-left"></div>
-                                            <div class="corner top-right"></div>
-                                            <div class="corner bottom-left"></div>
-                                            <div class="corner bottom-right"></div>
-                                        </div>
-                                        <div class="guide-lines">
-                                            <div class="line horizontal"></div>
-                                            <div class="line vertical"></div>
-                                        </div>
-                                        <div class="code-outline">
-                                            <div class="code-text">R _ _ _ _ _ _ _ _ _ _ _ _ _ _ _</div>
-                                        </div>
-                                    </div>
+                                    <div class="viewfinder-frame"></div>
                                     <div class="viewfinder-help">قم بمحاذاة كود الترخيص داخل الإطار</div>
-                                    <div class="light-indicator">
-                                        <i class="fas fa-sun"></i>
-                                        <span class="light-level">جاري قياس مستوى الإضاءة...</span>
-                                    </div>
-                                    <div class="zoom-controls">
-                                        <button class="zoom-out"><i class="fas fa-minus"></i></button>
-                                        <span class="zoom-level">1x</span>
-                                        <button class="zoom-in"><i class="fas fa-plus"></i></button>
-                                    </div>
                                 </div>
                                 <canvas style="display: none"></canvas>
                                 <div class="preview-container" style="display: none">
@@ -102,6 +78,12 @@ class ImageCodeScanner {
                             <button type="button" class="btn btn-primary capture-btn">
                                 <i class="fas fa-camera me-2"></i>التقاط
                             </button>
+                        </div>
+                        <div class="processing-overlay" style="display: none">
+                            <div class="spinner-border text-light" role="status">
+                                <span class="visually-hidden">جاري المعالجة...</span>
+                            </div>
+                            <div class="mt-2 text-light">جاري معالجة الصورة...</div>
                         </div>
                     </div>
                 </div>
@@ -241,15 +223,21 @@ class ImageCodeScanner {
                 body: formData
             });
 
-            const result = await response.json();
-            
-            if (!result.success) {
-                throw new Error(result.error);
+            if (!response.ok) {
+                throw new Error('فشل في معالجة الصورة');
             }
 
-            return result.code;
+            const { text } = await response.json();
+            if (text && this.targetInput) {
+                this.targetInput.value = text;
+                this.onSuccess(text);
+                return text; // إرجاع النص المستخرج لعرضه في المعاينة
+            } else {
+                this.onError('لم يتم العثور على كود ترخيص صالح');
+                return null;
+            }
         } catch (error) {
-            console.error('Error processing image:', error);
+            this.onError(error.message);
             throw error;
         }
     }
@@ -266,13 +254,30 @@ class ImageCodeScanner {
 const style = document.createElement('style');
 style.textContent = `
     .image-code-scanner-container {
-        display: inline-block;
+        display: inline-flex;
+        gap: 5px;
+    }
+    
+    .image-code-scanner-container button {
+        padding: 6px 12px;
     }
     
     .camera-container {
         position: relative;
         width: 100%;
+        height: 0;
+        padding-bottom: 75%;
         background: #000;
+        overflow: hidden;
+    }
+    
+    .camera-container video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
     }
     
     .viewfinder {
@@ -282,159 +287,74 @@ style.textContent = `
         right: 0;
         bottom: 0;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
+        background: rgba(0, 0, 0, 0.5);
     }
     
     .viewfinder-frame {
-        position: relative;
-        width: 80%;
-        height: 120px;
-        border: 2px solid rgba(255, 255, 255, 0.8);
+        width: 300px;
+        height: 60px;
+        border: 2px solid #fff;
         border-radius: 4px;
-    }
-    
-    .corner-guides {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-    }
-    
-    .corner {
-        position: absolute;
-        width: 20px;
-        height: 20px;
-        border: 3px solid #fff;
-    }
-    
-    .top-left {
-        top: -2px;
-        left: -2px;
-        border-right: none;
-        border-bottom: none;
-    }
-    
-    .top-right {
-        top: -2px;
-        right: -2px;
-        border-left: none;
-        border-bottom: none;
-    }
-    
-    .bottom-left {
-        bottom: -2px;
-        left: -2px;
-        border-right: none;
-        border-top: none;
-    }
-    
-    .bottom-right {
-        bottom: -2px;
-        right: -2px;
-        border-left: none;
-        border-top: none;
-    }
-    
-    .guide-lines {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-    }
-    
-    .line {
-        position: absolute;
-        background: rgba(255, 255, 255, 0.3);
-    }
-    
-    .line.horizontal {
-        width: 100%;
-        height: 1px;
-        top: 50%;
-    }
-    
-    .line.vertical {
-        width: 1px;
-        height: 100%;
-        left: 50%;
-    }
-    
-    .code-outline {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 90%;
-        text-align: center;
-    }
-    
-    .code-text {
-        color: rgba(255, 255, 255, 0.6);
-        font-family: monospace;
-        font-size: 16px;
-        letter-spacing: 2px;
-    }
-    
-    .light-indicator {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background: rgba(0, 0, 0, 0.6);
-        padding: 5px 10px;
-        border-radius: 15px;
-        color: #fff;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-    
-    .zoom-controls {
-        position: absolute;
-        bottom: 20px;
-        right: 10px;
-        background: rgba(0, 0, 0, 0.6);
-        padding: 5px;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    .zoom-controls button {
-        background: none;
-        border: none;
-        color: #fff;
-        cursor: pointer;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .zoom-controls button:hover {
-        background: rgba(255, 255, 255, 0.2);
-    }
-    
-    .zoom-level {
-        color: #fff;
-        font-size: 14px;
-        min-width: 30px;
-        text-align: center;
+        background: transparent;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
     }
     
     .viewfinder-help {
+        position: absolute;
+        bottom: 20px;
+        left: 0;
+        right: 0;
+        text-align: center;
         color: #fff;
-        background: rgba(0, 0, 0, 0.6);
-        padding: 8px 15px;
-        border-radius: 20px;
-        margin-top: 10px;
         font-size: 14px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+    
+    .preview-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    
+    .preview-image {
+        max-width: 100%;
+        max-height: 70%;
+        object-fit: contain;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
+    
+    .preview-code {
+        font-family: monospace;
+        font-size: 1.2em;
+        padding: 10px 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        color: #fff;
+    }
+    
+    .processing-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
     }
 `;
 document.head.appendChild(style);
