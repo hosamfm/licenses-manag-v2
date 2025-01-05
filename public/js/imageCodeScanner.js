@@ -173,23 +173,27 @@ class ImageCodeScanner {
                     canvas.toBlob(async (blob) => {
                         try {
                             const result = await this.processImage(blob);
-                            showPreview(imageUrl, result);
                             if (result) {
+                                showPreview(imageUrl, result);
                                 setTimeout(() => {
                                     modalInstance.hide();
                                     stream.getTracks().forEach(track => track.stop());
                                 }, 1500);
+                            } else {
+                                showPreview(imageUrl, 'لم يتم العثور على كود');
                             }
                         } catch (error) {
-                            showPreview(imageUrl, null);
+                            console.error('Error processing image:', error);
+                            showPreview(imageUrl, 'حدث خطأ في معالجة الصورة');
                             this.onError(error.message);
                         } finally {
                             hideProcessing();
                         }
                     });
                 } catch (error) {
+                    console.error('Error capturing image:', error);
                     hideProcessing();
-                    this.onError('فشل في معالجة الصورة');
+                    this.onError('فشل في التقاط الصورة');
                 }
             });
             
@@ -229,11 +233,14 @@ class ImageCodeScanner {
             if (text && this.targetInput) {
                 this.targetInput.value = text;
                 this.onSuccess(text);
+                return text; // إرجاع النص المستخرج لعرضه في المعاينة
             } else {
                 this.onError('لم يتم العثور على كود ترخيص صالح');
+                return null;
             }
         } catch (error) {
             this.onError(error.message);
+            throw error;
         }
     }
 
