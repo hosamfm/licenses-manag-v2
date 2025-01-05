@@ -22,7 +22,9 @@
                                placeholder="مثال: X1234567890123456"
                                pattern="^[XR][A-Z0-9]{16,17}$"
                                title="يجب أن يبدأ الكود بحرف X أو R وأن يكون طوله 17 أو 18 حرفًا">
-                        <div id="imageCodeScannerContainer"></div>
+                        <button type="button" class="btn btn-primary" id="scanButton">
+                            <i class="fas fa-camera"></i>
+                        </button>
                         <span class="input-group-text" id="registrationCodeStatus">
                             <i class="fas fa-spinner fa-spin d-none"></i>
                             <i class="fas fa-check text-success d-none"></i>
@@ -306,7 +308,7 @@
             }
         });
         
-        scanner.mount(document.getElementById('imageCodeScannerContainer'));
+        scanner.mount(document.getElementById('scanButton'));
     });
 </script>
 <script>

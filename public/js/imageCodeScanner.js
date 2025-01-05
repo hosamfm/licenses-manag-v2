@@ -1,9 +1,8 @@
 class ImageCodeScanner {
     constructor(options = {}) {
-        this.targetInput = options.targetInput;
+        this.targetInput = null;
         this.onSuccess = options.onSuccess || (() => {});
         this.onError = options.onError || (() => {});
-        this.setupUI();
     }
 
     setupUI() {
@@ -29,7 +28,6 @@ class ImageCodeScanner {
         this.fileInput.style.display = 'none';
         
         // Add event listeners
-        this.cameraButton.addEventListener('click', () => this.startCamera());
         this.uploadButton.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         
@@ -162,20 +160,17 @@ class ImageCodeScanner {
                 // التقاط المنطقة المحددة فقط
                 canvas.width = captureWidth;
                 canvas.height = captureHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(
+                canvas.getContext('2d').drawImage(
                     video,
                     captureX, captureY, captureWidth, captureHeight,
                     0, 0, captureWidth, captureHeight
                 );
                 
                 try {
-                    // تحويل الصورة إلى blob
+                    const imageUrl = canvas.toDataURL('image/png');
                     canvas.toBlob(async (blob) => {
                         try {
                             const result = await this.processImage(blob);
-                            const imageUrl = URL.createObjectURL(blob);
-                            
                             if (result) {
                                 showPreview(imageUrl, result);
                                 setTimeout(() => {
@@ -187,13 +182,12 @@ class ImageCodeScanner {
                             }
                         } catch (error) {
                             console.error('Error processing image:', error);
-                            const imageUrl = URL.createObjectURL(blob);
                             showPreview(imageUrl, 'حدث خطأ في معالجة الصورة');
                             this.onError(error.message);
                         } finally {
                             hideProcessing();
                         }
-                    }, 'image/jpeg', 0.95);
+                    });
                 } catch (error) {
                     console.error('Error capturing image:', error);
                     hideProcessing();
@@ -219,10 +213,10 @@ class ImageCodeScanner {
         }
     }
 
-    async processImage(imageBlob) {
+    async processImage(imageData) {
         try {
             const formData = new FormData();
-            formData.append('image', imageBlob, 'code.jpg');
+            formData.append('image', imageData);
 
             const response = await fetch('/api/ocr', {
                 method: 'POST',
@@ -230,61 +224,29 @@ class ImageCodeScanner {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'فشل في معالجة الصورة');
+                throw new Error('فشل في معالجة الصورة');
             }
 
             const { text } = await response.json();
             if (text && this.targetInput) {
                 this.targetInput.value = text;
                 this.onSuccess(text);
-                return text;
+                return text; // إرجاع النص المستخرج لعرضه في المعاينة
+            } else {
+                this.onError('لم يتم العثور على كود ترخيص صالح');
+                return null;
             }
-            return null;
         } catch (error) {
-            console.error('Error in processImage:', error);
             this.onError(error.message);
             throw error;
         }
     }
 
-    async compressImage(blob) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                
-                // تحجيم الصورة إذا كانت كبيرة جداً
-                const MAX_WIDTH = 1000;
-                if (width > MAX_WIDTH) {
-                    height = Math.round((height * MAX_WIDTH) / width);
-                    width = MAX_WIDTH;
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-                
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // تحويل الصورة إلى JPEG مع جودة مناسبة
-                canvas.toBlob(
-                    (blob) => resolve(blob),
-                    'image/jpeg',
-                    0.9
-                );
-            };
-            img.onerror = reject;
-            img.src = URL.createObjectURL(blob);
-        });
-    }
-
     mount(element) {
-        if (element) {
-            element.appendChild(this.container);
-        }
+        if (!element) return;
+        
+        this.targetInput = element.closest('.input-group').querySelector('input');
+        element.addEventListener('click', () => this.startCamera());
     }
 }
 
@@ -331,35 +293,12 @@ style.textContent = `
     }
     
     .viewfinder-frame {
-        width: 300px;  
-        height: 60px;  
+        width: 300px;
+        height: 60px;
         border: 2px solid #fff;
         border-radius: 4px;
         background: transparent;
         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-        position: relative;
-    }
-    
-    .viewfinder-frame::before,
-    .viewfinder-frame::after {
-        content: '';
-        position: absolute;
-        width: 20px;
-        height: 20px;
-        border-color: #4CAF50;
-        border-style: solid;
-    }
-    
-    .viewfinder-frame::before {
-        top: -2px;
-        left: -2px;
-        border-width: 2px 0 0 2px;
-    }
-    
-    .viewfinder-frame::after {
-        bottom: -2px;
-        right: -2px;
-        border-width: 0 2px 2px 0;
     }
     
     .viewfinder-help {
