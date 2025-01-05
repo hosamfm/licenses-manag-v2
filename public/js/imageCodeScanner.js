@@ -169,31 +169,24 @@ class ImageCodeScanner {
                 );
                 
                 try {
-                    const imageUrl = canvas.toDataURL('image/png');
-                    canvas.toBlob(async (blob) => {
-                        try {
-                            const result = await this.processImage(blob);
-                            if (result) {
-                                showPreview(imageUrl, result);
-                                setTimeout(() => {
-                                    modalInstance.hide();
-                                    stream.getTracks().forEach(track => track.stop());
-                                }, 1500);
-                            } else {
-                                showPreview(imageUrl, 'لم يتم العثور على كود');
-                            }
-                        } catch (error) {
-                            console.error('Error processing image:', error);
-                            showPreview(imageUrl, 'حدث خطأ في معالجة الصورة');
-                            this.onError(error.message);
-                        } finally {
-                            hideProcessing();
-                        }
-                    });
+                    const compressedImage = await this.compressImage(canvas.toBlob());
+                    const imageUrl = URL.createObjectURL(compressedImage);
+                    const result = await this.processImage(compressedImage);
+                    if (result) {
+                        showPreview(imageUrl, result);
+                        setTimeout(() => {
+                            modalInstance.hide();
+                            stream.getTracks().forEach(track => track.stop());
+                        }, 1500);
+                    } else {
+                        showPreview(imageUrl, 'لم يتم العثور على كود');
+                    }
                 } catch (error) {
-                    console.error('Error capturing image:', error);
+                    console.error('Error processing image:', error);
+                    showPreview(canvas.toDataURL('image/png'), 'حدث خطأ في معالجة الصورة');
+                    this.onError(error.message);
+                } finally {
                     hideProcessing();
-                    this.onError('فشل في التقاط الصورة');
                 }
             });
             
@@ -215,10 +208,13 @@ class ImageCodeScanner {
         }
     }
 
-    async processImage(imageData) {
+    async processImage(imageBlob) {
         try {
+            // تحويل الصورة إلى حجم أصغر قبل الإرسال
+            const compressedImage = await this.compressImage(imageBlob);
+            
             const formData = new FormData();
-            formData.append('image', imageData);
+            formData.append('image', compressedImage, 'code.jpg');
 
             const response = await fetch('/api/ocr', {
                 method: 'POST',
@@ -226,22 +222,54 @@ class ImageCodeScanner {
             });
 
             if (!response.ok) {
-                throw new Error('فشل في معالجة الصورة');
+                const error = await response.json();
+                throw new Error(error.error || 'فشل في معالجة الصورة');
             }
 
             const { text } = await response.json();
             if (text && this.targetInput) {
                 this.targetInput.value = text;
                 this.onSuccess(text);
-                return text; // إرجاع النص المستخرج لعرضه في المعاينة
-            } else {
-                this.onError('لم يتم العثور على كود ترخيص صالح');
-                return null;
+                return text;
             }
+            return null;
         } catch (error) {
             this.onError(error.message);
             throw error;
         }
+    }
+
+    async compressImage(blob) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // تحجيم الصورة إذا كانت كبيرة جداً
+                const MAX_WIDTH = 1000;
+                if (width > MAX_WIDTH) {
+                    height = Math.round((height * MAX_WIDTH) / width);
+                    width = MAX_WIDTH;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // تحويل الصورة إلى JPEG مع جودة مناسبة
+                canvas.toBlob(
+                    (blob) => resolve(blob),
+                    'image/jpeg',
+                    0.9
+                );
+            };
+            img.onerror = reject;
+            img.src = URL.createObjectURL(blob);
+        });
     }
 
     mount(element) {
@@ -294,12 +322,35 @@ style.textContent = `
     }
     
     .viewfinder-frame {
-        width: 80%;
-        height: 100px;
+        width: 300px;  
+        height: 60px;  
         border: 2px solid #fff;
         border-radius: 4px;
         background: transparent;
         box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    
+    .viewfinder-frame::before,
+    .viewfinder-frame::after {
+        content: '';
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border-color: #4CAF50;
+        border-style: solid;
+    }
+    
+    .viewfinder-frame::before {
+        top: -2px;
+        left: -2px;
+        border-width: 2px 0 0 2px;
+    }
+    
+    .viewfinder-frame::after {
+        bottom: -2px;
+        right: -2px;
+        border-width: 0 2px 2px 0;
     }
     
     .viewfinder-help {
