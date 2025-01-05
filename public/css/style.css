@@ -1,0 +1,236 @@
+/* إضافة هوامش سفلية للصفحات */
+body {
+    margin-bottom: 90px; /* يمكنك تعديل القيمة حسب الحاجة */
+}
+
+form {
+    margin-bottom: 90px; /* يمكنك تعديل القيمة حسب الحاجة */
+}
+
+section, main {
+    margin-bottom: 90px; /* يمكنك تعديل القيمة حسب الحاجة */
+}
+
+/* تحسينات للشاشات الصغيرة والكبيرة */
+@media (max-width: 768px), (min-width: 769px) {
+    .navbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        height: 60px; /* زيادة ارتفاع الناف بار */
+    }
+
+    .navbar-logo {
+        height: 40px; /* يمكنك تعديل هذا القيمة حسب الحاجة */
+        order: 1; /* وضع الشعار في أقصى اليمين */
+    }
+
+    .navbar-brand-text {
+        margin-left: 10px;
+        order: 2; /* وضع اسم البرنامج بجانب الشعار */
+    }
+
+    .navbar-toggler {
+        order: 3; /* وضع الزر بجانب الروابط */
+        height: 40px; /* يمكنك تعديل هذا القيمة حسب الحاجة */
+        display: flex;
+        align-items: center;
+    }
+
+    .navbar-collapse {
+        background-color: #ffffff; /* تحديث لون خلفية القائمة المنسدلة */
+    }
+
+    .navbar-nav {
+        order: 3; /* الروابط في المنتصف */
+        text-align: center;
+    }
+
+    .navbar-nav .nav-item {
+        background-color: transparent; /* تحديث لون خلفية عناصر القائمة المنسدلة */
+    }
+
+    .order-4 {
+        order: 4; /* وضع تسجيل الخروج على اليسار */
+    }
+
+    .nav-link.btn {
+        display: inline; 
+        padding: 0;
+        border: none; 
+        margin-bottom: 0;
+    }
+}
+
+/* تحسينات للشاشات الأصغر */
+@media (max-width: 480px) {
+    .navbar-brand-text {
+        font-size: 1rem; /* تقليل حجم النص في الشعار */
+    }
+
+    .navbar-nav .nav-item {
+        font-size: 0.9rem;
+    }
+
+    .form-container {
+        padding: 5px;
+    }
+
+    .homepage-section h2 {
+        font-size: 1rem;
+    }
+
+    .homepage-section p {
+        font-size: 0.8rem;
+    }
+}
+
+/* تحسينات للشاشات الكبيرة */
+@media (min-width: 769px) {
+    .navbar-logo {
+        height: 50px;
+        margin-bottom: 0;
+    }
+
+    .navbar-brand-text {
+        font-size: 1.25rem;
+        font-weight: bold;
+    }
+}
+
+/* تحسينات لنموذج تسجيل الدخول */
+.form-container {
+    max-width: 400px;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    background-color: #f9f9f9;
+    margin-bottom: 30px; /* إضافة هامش سفلي لنموذج تسجيل الدخول */
+}
+
+.form-container .form-label {
+    font-weight: bold;
+}
+
+.form-container .form-control {
+    margin-bottom: 10px;
+}
+
+.form-container .btn {
+    margin-top: 10px;
+}
+
+/* تحسينات للنصوص */
+.text-center {
+    text-align: center;
+}
+
+.alert {
+    margin-top: 20px;
+    margin-bottom: 30px; /* إضافة هامش سفلي للتنبيهات */
+}
+
+.feature-item {
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 10px;
+    cursor: pointer;
+    margin-bottom: 30px; /* إضافة هامش سفلي لعناصر الميزات */
+}
+
+.feature-item.active {
+    background-color: #e0f7fa;
+    border-color: #007bff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.feature-item .form-check-input {
+    display: none;
+}
+
+.feature-item .form-check-input:checked + .form-check-label::before {
+    content: "✔️";
+    margin-right: 8px;
+    color: #007bff;
+}
+
+/* Baloo Bhaijaan 2 Font Styles */
+.baloo-light, .baloo-bold, .baloo-extrabold {
+    font-family: "Baloo Bhaijaan 2", sans-serif;
+    font-style: normal;
+}
+
+.baloo-light {
+    font-weight: 400;
+}
+
+.baloo-bold {
+    font-weight: 700;
+}
+
+.baloo-extrabold {
+    font-weight: 800;
+}
+
+/* Almarai Font Styles */
+.almarai-light, .almarai-regular, .almarai-bold, .almarai-extrabold {
+    font-family: "Almarai", sans-serif;
+    font-style: normal;
+}
+
+.almarai-light {
+    font-weight: 300;
+}
+
+.almarai-regular {
+    font-weight: 400;
+}
+
+.almarai-bold {
+    font-weight: 700;
+}
+
+.almarai-extrabold {
+    font-weight: 800;
+}
+
+/* تطبيق خط Almarai على عناصر النص العامة */
+body, h1, h2, h3, h4, h5, h6, p, label, input, button {
+    font-family: 'Almarai', sans-serif;
+}
+
+/* تنسيقات إضافية لصفحة التحقق */
+.code-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.code {
+    font-size: 24px;
+    font-weight: bold;
+    margin-left: 10px;
+}
+
+.btn-copy {
+    margin-left: 10px;
+}
+
+.btn-home {
+    display: block;
+    margin: 30px auto;
+    text-align: center;
+}
+.footer {
+    width: 100%; /* اجعل العرض 100% */
+    padding-left: 5px; /* هوامش داخلية من اليسار */
+    padding-right: 5px; /* هوامش داخلية من اليمين */
+    box-sizing: border-box; /* لضمان احتساب الهوامش الداخلية ضمن العرض */
+    min-height: 30px; /* تعديل الحد الأدنى للارتفاع حسب الحاجة */
+    display: flex; /* استخدام flexbox لتوسيط النص عموديًا */
+    align-items: center; /* توسيط العناصر عموديًا */
+}

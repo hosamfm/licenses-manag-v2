@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <%- include('partials/_head.ejs') %>
+    <style>
+        :root {
+            --primary-blue: #1B365D;
+            --primary-teal: #1D9A9A;
+            --primary-yellow: #F4B223;
+            --background-gradient: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-teal) 100%);
+            --text-light: #ffffff;
+            --text-dark: #1B365D;
+            --border-color: #e2e8f0;
+        }
+
+        body {
+            background-color: #f8fafc;
+            color: var(--text-dark);
+        }
+
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .welcome-section {
+            position: relative;
+            background: var(--background-gradient);
+            border-radius: 1.5rem;
+            padding: 3rem 2rem;
+            color: white;
+            margin-bottom: 2.5rem;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        .welcome-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            background: url('/images/pattern.png');
+            opacity: 0.1;
+            mix-blend-mode: overlay;
+        }
+
+        .welcome-title {
+            font-size: 2.8rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .welcome-subtitle {
+            font-size: 1.4rem;
+            opacity: 0.95;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+            animation: fadeIn 0.8s ease-out 0.2s backwards;
+        }
+
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .action-card {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-decoration: none;
+            color: var(--text-dark);
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 1rem;
+        }
+
+        .action-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border-color: var(--primary-teal);
+        }
+
+        .action-card i {
+            font-size: 2.5rem;
+            color: var(--primary-teal);
+            margin-bottom: 0.5rem;
+        }
+
+        .action-card h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--primary-blue);
+        }
+
+        .action-card p {
+            color: #64748b;
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        .status-alert {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            border: 1px solid var(--border-color);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .status-alert.warning {
+            border-right: 4px solid var(--primary-yellow);
+        }
+
+        .status-alert i {
+            color: var(--primary-yellow);
+            font-size: 1.5rem;
+            margin-top: 0.25rem;
+        }
+
+        .status-alert h4 {
+            color: var(--primary-blue);
+            margin-bottom: 0.5rem;
+        }
+
+        .status-alert p {
+            color: #64748b;
+            margin: 0;
+        }
+
+        .status-alert a {
+            color: var(--primary-teal);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .status-alert a:hover {
+            text-decoration: underline;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-10px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .welcome-title {
+                font-size: 2rem;
+            }
+
+            .welcome-subtitle {
+                font-size: 1.1rem;
+            }
+
+            .action-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .welcome-section {
+                padding: 2rem 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body dir="rtl">
+    <%- include('partials/_header.ejs') %>
+    
+    <div class="dashboard-container">
+        <div class="welcome-section">
+            <h1 class="welcome-title">مرحباً بك في نظام إدارة التراخيص</h1>
+            <p class="welcome-subtitle">نظام متكامل لإدارة وطلب تراخيص برامج سراج وكريستال</p>
+        </div>
+
+        <% if (session.account_status === 'inactive') { %>
+            <div class="status-alert warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>
+                    <h4>تفعيل الحساب</h4>
+                    <p>
+                        رمز التفعيل الخاص بك: <strong><%= session.temp_code %></strong>
+                        <br>
+                        يرجى إرسال الرمز إلى <a href="https://t.me/ATCIT_bot" target="_blank">بوت التلغرام</a> لتفعيل حسابك
+                    </p>
+                </div>
+            </div>
+        <% } else if (session.userRole === 'no_permissions') { %>
+            <div class="status-alert warning">
+                <i class="fas fa-lock"></i>
+                <div>
+                    <h4>لا توجد صلاحيات</h4>
+                    <p>
+                        يرجى التواصل مع شركة الترابط التقني للإتصالات وتقنية المعلومات للحصول على الصلاحيات المطلوبة
+                    </p>
+                </div>
+            </div>
+        <% } else { %>
+            <div class="action-grid">
+                <% if (session.userRole !== 'no_permissions') { %>
+                    <a href="/licenses/create-license-request" class="action-card">
+                        <i class="fas fa-plus-circle"></i>
+                        <div>
+                            <h3>طلب ترخيص جديد</h3>
+                            <p>تقديم طلب للحصول على ترخيص جديد</p>
+                        </div>
+                    </a>
+                    <a href="/licenses/manage" class="action-card">
+                        <i class="fas fa-tasks"></i>
+                        <div>
+                            <h3>إدارة التراخيص</h3>
+                            <p>عرض وإدارة جميع طلبات التراخيص</p>
+                        </div>
+                    </a>
+                <% } %>
+                <% if (session.userRole === 'admin' || session.userRole === 'supervisor' || session.userRole === 'supplier') { %>
+                    <a href="/licenses/admin/user-management" class="action-card">
+                        <i class="fas fa-users-cog"></i>
+                        <div>
+                            <h3>إدارة المستخدمين</h3>
+                            <p>إدارة حسابات وصلاحيات المستخدمين</p>
+                        </div>
+                    </a>
+                <% } %>
+            </div>
+        <% } %>
+    </div>
+
+    <%- include('partials/_footer.ejs') %>
+</body>
+</html>

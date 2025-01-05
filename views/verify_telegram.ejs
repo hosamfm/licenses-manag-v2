@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <%- include('partials/_head') %>
+  <style>
+    body {
+      direction: rtl;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/_header') %>
+
+  <div class="container mt-5">
+    <% if (flashMessages.success) { %>
+      <div class="alert alert-success"><%= flashMessages.success %></div>
+    <% } %>
+    <% if (flashMessages.error) { %>
+      <div class="alert alert-danger"><%= flashMessages.error %></div>
+    <% } %>
+
+    <h1 class="text-center">النظام يطلب التحقق من حساب تيليجرام</h1>
+    <% if (user.telegram_chat_id) { %>
+      <p>رقم معرف تيليجرام الخاص بك: <strong id="telegram-chat-id"><%= user.telegram_chat_id %></strong></p>
+      <div class="alert alert-success" id="verification-status">تم التحقق من حسابك بالفعل.</div>
+    <% } else { %>
+      <p>تم إنشاء حسابك بنجاح. لاستخدام النظام، يجب تأكيد حساب تيليجرام الخاص بك. يرجى إرسال الرمز المكون من 4 أرقام إلى النظام عبر هذا الرابط <a href="https://t.me/ATCIT_bot" target="_blank">https://t.me/ATCIT_bot</a> أو في تيليجرام ابحث عن @ATCIT وأرسل الرمز الخاص بك.</p>
+      <div class="code-container">
+        <p>رقم التحقق الخاص بك هو: <span class="code" id="verification-code"><%= temp_code %></span></p>
+        <button class="btn btn-primary btn-copy" onclick="copyToClipboard()">نسخ الكود</button>
+      </div>
+    <% } %>
+    <a href="/" class="btn btn-secondary btn-home">العودة إلى الصفحة الرئيسية</a>
+  </div>
+
+  <%- include('partials/_footer') %>
+
+  <script>
+    function copyToClipboard() {
+      var copyText = document.getElementById("verification-code").textContent;
+      navigator.clipboard.writeText(copyText).then(function() {
+        alert("تم نسخ الكود: " + copyText);
+      }, function(err) {
+        console.error('Error copying text: ', err);
+      });
+    }
+
+    async function checkVerificationStatus() {
+      try {
+        const response = await fetch('/auth/verify-telegram/status', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        if (data.verified) {
+          document.getElementById('telegram-chat-id').textContent = data.telegramChatId;
+          document.getElementById('verification-status').textContent = 'تم التحقق من حسابك بالفعل.';
+          document.getElementById('verification-status').classList.add('alert', 'alert-success');
+        }
+      } catch (error) {
+        console.error('Error checking verification status:', error);
+      }
+    }
+
+    setInterval(checkVerificationStatus, 10000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ar">
+<%- include('partials/_head.ejs') %>
+<body>
+<%- include('partials/_header.ejs') %>
+<main role="main" class="container mt-4" style="margin-bottom: 60px;">
+    <h2 class="mb-4">إدارة المستخدمين</h2>
+    
+    <!-- رسالة تأكيد -->
+    <div id="confirmationMessage" class="alert alert-success" style="display: none;">تم تسجيل المستخدم بنجاح.</div>
+    
+    <!-- حقل البحث -->
+    <div class="mb-4">
+        <input type="text" class="form-control" id="searchInput" placeholder="ابحث في المستخدمين">
+    </div>
+    
+    <!-- جدول إدارة المستخدمين -->
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered" id="usersTable">
+            <thead class="table-dark">
+                <tr>
+                    <th>اسم المستخدم</th>
+                    <th>الاسم الكامل</th>
+                    <th>رقم الهاتف</th>
+                    <th>حالة الحساب</th>
+                    <th>دور المستخدم</th>
+                    <th>رقم التعريف في تيليجرام</th>
+                    <th>المشرف/المورد</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (users && users.length > 0) { %>
+                    <% users.forEach(function(user) { %>
+                        <tr>
+                            <td><%= user.username %></td>
+                            <td><%= user.full_name %></td>
+                            <td><%= user.phone_number %></td>
+                            <td><%= user.account_status %></td>
+                            <td><%= user.user_role %></td>
+                            <td><%= user.telegram_chat_id %></td>
+                            <td>
+                                <% if (user.user_role === 'representative' && session.userRole === 'admin') { %>
+                                    <form action="/licenses/admin/user-management/update-supervisor" method="POST" class="d-inline">
+                                        <input type="hidden" name="userId" value="<%= user._id %>">
+                                        <select name="supervisorId" class="form-select form-select-sm" required>
+                                            <option value="">اختر المشرف/المورد</option>
+                                            <% supervisors.forEach(function(supervisor) { %>
+                                                <option value="<%= supervisor._id %>" <%= user.supervisor && user.supervisor.toString() === supervisor._id.toString() ? 'selected' : '' %>><%= supervisor.full_name %></option>
+                                            <% }); %>
+                                            <% suppliers.forEach(function(supplier) { %>
+                                                <option value="<%= supplier._id %>" <%= user.supervisor && user.supervisor.toString() === supplier._id.toString() ? 'selected' : '' %>><%= supplier.full_name %></option>
+                                            <% }); %>
+                                        </select>
+                                        <button type="submit" class="btn btn-secondary btn-sm mt-1">تحديث</button>
+                                    </form>
+                                <% } else if (user.user_role === 'representative') { %>
+                                    <%= user.supervisor ? user.supervisor.full_name : 'N/A' %>
+                                <% } %>
+                            </td>
+                            <td>
+                                <% if (session.userRole === 'admin') { %>
+                                    <form action="/licenses/admin/user-management/update-role" method="POST" class="d-inline">
+                                        <input type="hidden" name="userId" value="<%= user._id %>">
+                                        <select name="userRole" class="form-select form-select-sm" required>
+                                            <option value="no_permissions" <%= user.user_role === 'no_permissions' ? 'selected' : '' %>>بدون صلاحيات</option>
+                                            <option value="representative" <%= user.user_role === 'representative' ? 'selected' : '' %>>ممثل</option>
+                                            <option value="supervisor" <%= user.user_role === 'supervisor' ? 'selected' : '' %>>مشرف</option>
+                                            <option value="admin" <%= user.user_role === 'admin' ? 'selected' : '' %>>مسؤول</option>
+                                            <option value="supplier" <%= user.user_role === 'supplier' ? 'selected' : '' %>>مورد</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-primary btn-sm mt-1">تحديث</button>
+                                    </form>
+                                <% } %>
+                                <% if (session.userRole === 'admin') { %>
+                                    <form action="/licenses/admin/user-management/delete" method="POST" class="d-inline delete-form">
+                                        <input type="hidden" name="userId" value="<%= user._id %>">
+                                        <button type="button" class="btn btn-danger btn-sm mt-1 delete-button">حذف</button>
+                                    </form>
+                                    <button type="button" class="btn btn-secondary btn-sm mt-1" data-bs-toggle="modal" data-bs-target="#updateChatIdModal" data-user-id="<%= user._id %>" data-telegram-chat-id="<%= user.telegram_chat_id %>">تحديث معرف الدردشة</button>
+                                <% } %>
+                                <% if (session.userRole === 'admin' || session.userRole === 'supervisor'|| session.userRole === 'supplier') { %>
+                                    <button type="button" class="btn btn-warning btn-sm mt-1" data-bs-toggle="modal" data-bs-target="#changePasswordModal" data-user-id="<%= user._id %>">تغيير كلمة المرور</button>
+                                <% } %>
+                            </td>
+                        </tr>
+                    <% }); %>
+                <% } else { %>
+                    <tr>
+                        <td colspan="8">لا يوجد مستخدمين.</td>
+                    </tr>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- إضافة مستخدم جديد -->
+    <% if (session.userRole === 'admin' || session.userRole === 'supervisor'|| session.userRole === 'supplier') { %>
+        <button type="button" class="btn btn-success mt-4" data-bs-toggle="modal" data-bs-target="#addUserModal">إضافة مستخدم جديد</button>
+    <% } %>
+</main>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addUserModalLabel">إضافة مستخدم جديد</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="addUserForm" action="/auth/admin/register" method="POST">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="username" class="form-label">اسم المستخدم</label>
+            <input type="text" class="form-control" id="username" name="username" required oninput="this.value = this.value.toLowerCase()"> <!-- تحويل الأحرف الكبيرة إلى صغيرة -->
+          </div>
+          <div class="mb-3">
+            <label for="fullName" class="form-label">الاسم الكامل</label>
+            <input type="text" class="form-control" id="fullName" name="fullName" required>
+          </div>
+          <div class="mb-3">
+            <label for="phoneNumber" class="form-label">رقم الهاتف</label>
+            <input type="text" class="form-control" id="phoneNumber" name="phoneNumber" required>
+          </div>
+          <div class="mb-3">
+            <label for="companyName" class="form-label">اسم الشركة</label>
+            <input type="text" class="form-control" id="companyName" name="companyName" required>
+          </div>
+          <% if (session.userRole === 'admin') { %>
+            <div class="mb-3">
+              <label for="userRole" class="form-label">دور المستخدم</label>
+              <select class="form-select" id="userRole" name="userRole" required>
+                <option value="no_permissions">بدون صلاحيات</option>
+                <option value="representative">ممثل</option>
+                <option value="supervisor">مشرف</option>
+                <option value="admin">مسؤول</option>
+                <option value="supplier">مورد</option>
+              </select>
+            </div>
+          <% } else { %>
+            <input type="hidden" name="userRole" value="representative">
+          <% } %>
+          <div class="mb-3">
+            <label for="password" class="form-label">كلمة المرور</label>
+            <input type="password" class="form-control" id="password" name="password" required>
+          </div>
+          <div class="mb-3">
+            <label for="confirmPassword" class="form-label">تأكيد كلمة المرور</label>
+            <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          <button type="submit" class="btn btn-success">إضافة المستخدم</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Update Chat ID Modal -->
+<div class="modal fade" id="updateChatIdModal" tabindex="-1" aria-labelledby="updateChatIdModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateChatIdModalLabel">تحديث معرف الدردشة في تيليجرام</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form action="/licenses/admin/user-management/update-telegram-chat-id" method="POST">
+        <div class="modal-body">
+          <input type="hidden" name="userId" id="updateChatIdUserId">
+          <div class="mb-3">
+            <label for="updateTelegramChatId" class="form-label">رقم التعريف في تيليجرام</label>
+            <input type="text" class="form-control" id="updateTelegramChatId" name="telegramChatId" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          <button type="submit" class="btn btn-secondary">تحديث</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- Change Password Modal -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="changePasswordModalLabel">تغيير كلمة المرور</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form action="/licenses/admin/user-management/change-password" method="POST">
+        <div class="modal-body">
+          <input type="hidden" name="userId" id="changePasswordUserId">
+          <div class="mb-3">
+            <label for="newPassword" class="form-label">كلمة المرور الجديدة</label>
+            <input type="password" class="form-control" id="newPassword" name="newPassword" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          <button type="submit" class="btn btn-warning">تغيير كلمة المرور</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/_footer.ejs') %>
+<script>
+  // Pass data to Update Chat ID Modal
+  var updateChatIdModal = document.getElementById('updateChatIdModal');
+  updateChatIdModal.addEventListener('show.bs.modal', function (event) {
+    var button = event.relatedTarget;
+    var userId = button.getAttribute('data-user-id');
+    var telegramChatId = button.getAttribute('data-telegram-chat-id');
+    var modalUserId = updateChatIdModal.querySelector('#updateChatIdUserId');
+    var modalTelegramChatId = updateChatIdModal.querySelector('#updateTelegramChatId');
+    modalUserId.value = userId;
+    modalTelegramChatId.value = telegramChatId;
+  });
+
+  // Pass data to Change Password Modal
+  var changePasswordModal = document.getElementById('changePasswordModal');
+  changePasswordModal.addEventListener('show.bs.modal', function (event) {
+    var button = event.relatedTarget;
+    var userId = button.getAttribute('data-user-id');
+    var modalUserId = changePasswordModal.querySelector('#changePasswordUserId');
+    modalUserId.value = userId;
+  });
+
+  // Confirmation for delete action
+  document.querySelectorAll('.delete-button').forEach(function(button) {
+    button.addEventListener('click', function() {
+      if (confirm('هل أنت متأكد من أنك تريد حذف هذا المستخدم؟')) {
+        this.closest('form').submit();
+      }
+    });
+  });
+
+  // Handle Add User form submission
+  document.getElementById('addUserForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    var form = this;
+    fetch(form.action, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(new FormData(form))
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(err => { throw err; });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.success) {
+        // عرض رسالة تأكيد
+        document.getElementById('confirmationMessage').style.display = 'block';
+        // إخفاء النافذة المنبثقة
+        var addUserModal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+        addUserModal.hide();
+        // إعادة تعيين النموذج
+        form.reset();
+        // تحديث الصفحة بعد 1 ثانية لعرض المستخدم الجديد
+        setTimeout(() => {
+          location.reload();
+        }, 1000);
+      } else {
+        alert('Error adding user: ' + data.error);
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Error adding user: ' + error.error);
+    });
+  });
+
+  // البحث في جدول المستخدمين
+  document.getElementById('searchInput').addEventListener('input', function() {
+    var searchValue = this.value.toLowerCase();
+    var rows = document.querySelectorAll('#usersTable tbody tr');
+    rows.forEach(function(row) {
+      var username = row.children[0].textContent.toLowerCase();
+      var fullName = row.children[1].textContent.toLowerCase();
+      var phoneNumber = row.children[2].textContent.toLowerCase();
+      var companyName = row.children[3].textContent.toLowerCase();
+      if (username.includes(searchValue) || fullName.includes(searchValue) || phoneNumber.includes(searchValue) || companyName.includes(searchValue)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  });
+</script>
+</body>
+</html>

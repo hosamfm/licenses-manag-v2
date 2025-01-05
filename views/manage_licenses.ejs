@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ar">
+<%- include('partials/_head.ejs') %>
+<style>
+    /* تغيير لون ترويسة الجدول */
+    .table thead th {
+        background-color: #202538; 
+        color: white; 
+    }
+    #licenseRequestsTable {
+        display: none;
+    }
+</style>
+<body>
+<%- include('partials/_header.ejs') %>
+
+<div class="container mt-5">
+    <div class="page-header mb-4">
+        <h2 class="almarai-bold">إدارة طلبات التراخيص</h2>
+    </div>
+
+    <!-- نموذج البحث والتصفية -->
+    <div class="filter-section mb-3">
+        <input type="text" name="searchQuery" id="searchQuery" class="form-control almarai-regular" placeholder="بحث عن ترخيص" style="max-width: 300px;">
+
+        <div class="filter-buttons">
+            <% if (['admin', 'supervisor', 'supplier'].includes(session.userRole)) { %>
+                <input type="text" name="userName" id="filterUserName" class="form-control almarai-regular" placeholder="بحث باسم المستخدم" style="max-width: 200px;">
+            <% } %>
+            <button id="dateFilterBtn" class="btn btn-secondary baloo">التاريخ الطلب</button>
+            <input type="hidden" id="filterStartDate">
+            <input type="hidden" id="filterEndDate">
+        </div>
+    </div>
+
+    <!-- قسم الإجماليات -->
+    <div class="summary-section mb-3">
+        <p>إجمالي الطلبات: <span id="totalRequests">0</span></p>
+        <p>الطلبات المعتمدة: <span id="approvedRequests">0</span></p>
+        <p>الطلبات المعلقة: <span id="pendingRequests">0</span></p>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover table-bordered align-middle">
+            <thead class="table-primary">
+                <tr>
+                    <th class="text-center text-white almarai-bold">رقم</th>
+                    <% if (['admin', 'supervisor', 'supplier'].includes(session.userRole)) { %>
+                        <th class="text-center text-white almarai-bold">مقدم الطلب</th>
+                    <% } %>
+                    <th class="text-center text-white almarai-bold">تاريخ الطلب</th>
+                    <th class="text-center text-white almarai-bold">نوع الترخيص</th>
+                    <th class="text-center text-white almarai-bold">مرخص لـ</th>
+                    <th class="text-center text-white almarai-bold">كود التسجيل</th>
+                    <th class="text-center text-white almarai-bold">كود الميزات</th>
+                    <% if (session.userRole !== 'supplier') { %>
+                        <th class="text-center text-white almarai-bold">سعر الطلب</th>
+                    <% } %>
+                    <th class="text-center text-white almarai-bold">حالة الطلب</th>
+                    <th class="text-center text-white almarai-bold">الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody id="licenseRequestsTable" data-user-role="<%= session.userRole %>" data-user-id="<%= session.userId %>">
+                <% licenseRequests.forEach(request => { %>
+                    <tr>
+                        <td class="text-center"><%= request.number %></td>
+                        <% if (['admin', 'supervisor', 'supplier'].includes(session.userRole)) { %>
+                            <td class="text-center"><%= request.username %></td>
+                        <% } %>
+                        <td class="text-center"><%= request.date %></td>
+                        <td class="text-center"><%= request.type %></td>
+                        <td class="text-center"><%= request.licensee %></td>
+                        <td class="text-center"><%= request.registrationCode %></td>
+                        <td class="text-center">
+                            <button class="btn btn-info feature-code-btn" data-feature-code="<%= request.featuresCode %>"><%= request.featuresCode %></button>
+                        </td>
+                        <% if (session.userRole !== 'supplier') { %>
+                            <td class="text-center"><%= request.price %></td>
+                        <% } %>
+                        <td class="text-center"><%= request.status %></td>
+                        <td class="text-center">
+                            <button class="btn btn-success btn-sm mb-1 view-license-info" data-id="<%= request._id %>">عرض معلومات الترخيص</button>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+        <div id="loading" class="text-center my-3" style="display:none;">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">جار التحميل...</span>
+            </div>
+        </div>
+        <div id="pagination" class="text-center my-3">
+            <button id="prevPage" class="btn btn-primary" disabled>الصفحة السابقة</button>
+            <span>الصفحة <span id="currentPage">1</span> من <span id="totalPages">1</span></span>
+            <button id="nextPage" class="btn btn-primary">الصفحة التالية</button>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لعرض تفاصيل كود الميزات -->
+<div class="modal fade" id="featureCodeModal" tabindex="-1" aria-labelledby="featureCodeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title almarai-bold" id="featureCodeModalLabel">تفاصيل كود الميزات</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <ul id="featureList" class="almarai-regular"></ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary baloo" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لعرض معلومات الترخيص -->
+<!-- نافذة منبثقة لعرض معلومات الترخيص -->
+<div class="modal fade" id="licenseInfoModal" tabindex="-1" aria-labelledby="licenseInfoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title almarai-bold" id="licenseInfoModalLabel">معلومات الترخيص</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="almarai-regular"><strong>اسم المرخص له:</strong> <span id="modalLicenseeName"></span></p>
+                <p class="almarai-regular"><strong>الرقم التسلسلي:</strong> <span id="modalSerialNumber"></span></p>
+                <p class="almarai-regular"><strong>كود التسجيل:</strong> <span id="modalRegistrationCode"></span></p>
+                <p class="almarai-regular"><strong>كود التفعيل:</strong> <span id="modalActivationCode"></span></p>
+                <p class="almarai-regular"><strong>كود الميزات:</strong> <span id="modalFeaturesCode"></span></p>
+                <p class="almarai-regular"><strong>تاريخ الانتهاء:</strong> <span id="modalExpirationDate"></span></p>
+                <hr>
+                <h6 class="almarai-bold">المزايا:</h6>
+                <ul id="modalFeaturesList" class="almarai-regular"></ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary baloo" data-bs-dismiss="modal" style="margin-left: 10px;">إغلاق</button>
+                <button type="button" class="btn btn-primary baloo" id="copyButton" style="margin-left: 10px;">نسخ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('copyButton').addEventListener('click', function() {
+        var licenseeName = document.getElementById('modalLicenseeName').textContent;
+        var serialNumber = document.getElementById('modalSerialNumber').textContent;
+        var registrationCode = document.getElementById('modalRegistrationCode').textContent;
+        var activationCode = document.getElementById('modalActivationCode').textContent;
+        var featuresCode = document.getElementById('modalFeaturesCode').textContent;
+        var expirationDate = document.getElementById('modalExpirationDate').textContent;
+
+        var textToCopy = `${licenseeName}\n${serialNumber}\n${registrationCode}\n${activationCode}\n${featuresCode}\n${expirationDate}`;
+
+        navigator.clipboard.writeText(textToCopy).then(function() {
+            alert('تم نسخ المعلومات بنجاح');
+        }, function(err) {
+            console.error('حدث خطأ أثناء النسخ: ', err);
+        });
+    });
+</script>
+
+
+<%- include('partials/_footer.ejs') %>
+<script src="/js/manage_licenses.js"></script>
+</body>
+</html>

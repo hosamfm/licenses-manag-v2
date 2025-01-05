@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/_head.ejs') %>
+<body>
+<%- include('partials/_header.ejs') %>
+<main role="main" class="container mt-4">
+    <h2>Manage Supplier Chat ID</h2>
+    <form action="/admin/chat-id" method="POST">
+        <div class="mb-3">
+            <label for="chatId" class="form-label">Supplier Chat ID</label>
+            <input type="text" class="form-control" id="chatId" name="chatId" value="<%= chatId %>" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Update</button>
+    </form>
+</main>
+<%- include('partials/_footer.ejs') %>
+</body>
+</html>

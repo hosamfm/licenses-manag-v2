@@ -1,0 +1,295 @@
+<nav class="navbar navbar-expand-lg sticky-top">
+    <div class="container-fluid px-3 px-lg-4">
+        <!-- Logo & Brand -->
+        <a class="navbar-brand d-flex align-items-center" href="/">
+            <div class="brand-container">
+                <div class="logo-background">
+                    <img src="/images/logo.png" alt="شعار شركة الترابط التقني" class="navbar-logo">
+                </div>
+                <span class="brand-text">نظام إدارة التراخيص</span>
+            </div>
+        </a>
+
+        <!-- Mobile Toggle Button -->
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <i class="fas fa-bars"></i>
+        </button>
+
+        <!-- Navigation Menu -->
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav mx-auto">
+                <% if (session && session.userId) { %>
+                    <li class="nav-item">
+                        <a class="nav-link <%= (typeof originalUrl !== 'undefined' && originalUrl === '/') ? 'active' : '' %>" href="/">
+                            <i class="fas fa-home"></i>
+                            <span>الرئيسية</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/licenses/create-license-request">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>طلب ترخيص</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/licenses/manage">
+                            <i class="fas fa-tasks"></i>
+                            <span>إدارة التراخيص</span>
+                        </a>
+                    </li>
+                    <% if (session.userRole === 'admin' || session.userRole === 'supervisor' || session.userRole === 'supplier') { %>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/licenses/admin/user-management">
+                                <i class="fas fa-users-cog"></i>
+                                <span>إدارة المستخدمين</span>
+                            </a>
+                        </li>
+                    <% } %>
+                    <% if (session.userRole === 'admin') { %>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-cog"></i>
+                                <span>الإعدادات</span>
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="/settings">
+                                        <i class="fas fa-sliders-h"></i>
+                                        <span>إعدادات النظام</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/program-details/page">
+                                        <i class="fas fa-info-circle"></i>
+                                        <span>تفاصيل البرنامج</span>
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/telegram/messages">
+                                        <i class="fab fa-telegram"></i>
+                                        <span>رسائل التلغرام</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                    <% } %>
+                <% } %>
+            </ul>
+
+            <!-- User Menu -->
+            <% if (session && session.userId) { %>
+                <div class="nav-item dropdown user-menu">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <div class="user-info">
+                            <i class="fas fa-user-circle"></i>
+                            <span class="username"><%= session.username %></span>
+                        </div>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li class="dropdown-header">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-user-circle fs-4"></i>
+                                <div class="ms-2">
+                                    <div class="fw-bold"><%= session.username %></div>
+                                    <small class="text-muted"><%= session.userRole %></small>
+                                </div>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-danger" href="/auth/logout">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>تسجيل الخروج</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</nav>
+
+<style>
+    /* Navbar Styles */
+    .navbar {
+        background: white;
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.04);
+        padding: 0.75rem 0;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+    }
+
+    /* Brand Styles */
+    .brand-container {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .logo-background {
+        background-color: rgba(255, 255, 255, 0.9);
+        padding: 0.5rem;
+        border-radius: 50%;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .navbar-logo {
+        height: 40px;
+        width: auto;
+        transition: transform 0.3s ease;
+    }
+
+    .navbar-logo:hover {
+        transform: scale(1.05);
+    }
+
+    .brand-text {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: var(--text-dark);
+        white-space: nowrap;
+    }
+
+    /* Navigation Links */
+    .navbar-nav {
+        margin-right: 2rem;
+    }
+
+    .nav-link {
+        color: #64748b;
+        padding: 0.5rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+        border-radius: 0.5rem;
+        margin: 0 0.25rem;
+    }
+
+    .nav-link:hover, .nav-link.active {
+        color: var(--primary-blue);
+        background: rgba(29, 154, 154, 0.08);
+    }
+
+    .nav-link.active {
+        font-weight: 600;
+    }
+
+    .nav-link i {
+        font-size: 1.1rem;
+        width: 1.5rem;
+        text-align: center;
+    }
+
+    /* User Menu */
+    .user-menu {
+        margin-right: 1rem;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .user-info:hover {
+        background: rgba(29, 154, 154, 0.08);
+    }
+
+    .user-info i {
+        font-size: 1.5rem;
+        color: var(--primary-teal);
+    }
+
+    .username {
+        font-weight: 500;
+        color: var(--text-dark);
+    }
+
+    /* Dropdown Menu */
+    .dropdown-menu {
+        border: none;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        border-radius: 0.75rem;
+        padding: 0.5rem;
+        min-width: 240px;
+    }
+
+    .dropdown-header {
+        color: #64748b;
+        padding: 0.75rem 1rem;
+    }
+
+    .dropdown-item {
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border-radius: 0.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .dropdown-item i {
+        width: 1.5rem;
+        text-align: center;
+        font-size: 1.1rem;
+    }
+
+    .dropdown-item:hover {
+        background: rgba(29, 154, 154, 0.08);
+    }
+
+    .dropdown-item.text-danger:hover {
+        background: rgba(239, 68, 68, 0.08);
+    }
+
+    .dropdown-divider {
+        margin: 0.5rem 0;
+        border-color: #e2e8f0;
+    }
+
+    /* Mobile Menu Button */
+    .navbar-toggler {
+        padding: 0.5rem;
+        border: none;
+        background: transparent;
+        color: var(--text-dark);
+    }
+
+    .navbar-toggler:focus {
+        box-shadow: none;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 991.98px) {
+        .navbar-nav {
+            margin: 1rem 0;
+        }
+
+        .nav-link {
+            padding: 0.75rem 1rem;
+        }
+
+        .user-menu {
+            margin: 0;
+        }
+
+        .dropdown-menu {
+            border: none;
+            box-shadow: none;
+            padding: 0;
+        }
+
+        .dropdown-item {
+            padding: 0.75rem 1rem;
+        }
+    }
+</style>

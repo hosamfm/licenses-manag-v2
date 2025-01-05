@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <%- include('partials/_head') %>
+  <title>إعدادات النظام</title>
+  <style>
+    .container {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    .table th, .table td {
+      vertical-align: middle;
+    }
+    .form-control {
+      margin-bottom: 10px;
+    }
+    .btn {
+      margin: 5px 0;
+    }
+    h1, h2 {
+      margin-bottom: 20px;
+    }
+    .alert {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/_header') %>
+  <div class="container mt-5">
+    <h1>إعدادات النظام</h1>
+    <hr>
+
+    <% if (flashMessages.error) { %>
+      <div class="alert alert-danger"><%= flashMessages.error %></div>
+    <% } %>
+    <% if (flashMessages.success) { %>
+      <div class="alert alert-success"><%= flashMessages.success %></div>
+    <% } %>
+
+    <h2>تعديل أو إضافة ميزات لنظام كريستال/سراج</h2>
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>اسم الميزة</th>
+          <th>سعر الميزة</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% features.forEach(feature => { %>
+          <tr>
+            <td><%= feature.name %></td>
+            <td><%= feature.price %></td>
+            <td>
+              <button class="btn btn-primary" onclick="openEditModal('<%= feature._id %>', '<%= feature.name %>', '<%= feature.value %>', '<%= feature.price %>')">تعديل</button>
+              <form action="/settings/features/<%= feature._id %>/delete" method="POST" style="display:inline;" onsubmit="return confirmDelete()">
+                <button type="submit" class="btn btn-danger">حذف</button>
+              </form>
+            </td>
+          </tr>
+        <% }); %>
+        <tr>
+          <form action="/settings/features/add" method="POST">
+            <td><input type="text" name="new_name" placeholder="اسم الميزة الجديدة" class="form-control"></td>
+            <td><input type="number" step="0.01" name="new_price" placeholder="سعر الميزة الجديدة" class="form-control"></td>
+            <td><button type="submit" class="btn btn-success" onclick="return confirm('هل أنت متأكد من إضافة هذه الميزة؟')">إضافة</button></td>
+          </form>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>تعديل أو إضافة موردين</h2>
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>اسم المورد</th>
+          <th>رقم التعريف في المحادثة</th>
+          <th>المستخدمين</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% suppliers.forEach(supplier => { %>
+          <tr>
+            <td><%= supplier.name %></td>
+            <td><%= supplier.chatId %></td>
+            <td>
+              <ul>
+                <% supplier.users.forEach(user => { %>
+                  <li><%= user.full_name %></li>
+                <% }); %>
+              </ul>
+            </td>
+            <td>
+              <button class="btn btn-primary" onclick="openEditSupplierModal('<%= supplier._id %>', '<%= supplier.name %>', '<%= supplier.chatId %>', '<%= supplier.users.map(user => user._id).join(', ') %>')">تعديل</button>
+              <form action="/settings/suppliers/<%= supplier._id %>/delete" method="POST" style="display:inline;" onsubmit="return confirmDelete()">
+                <button type="submit" class="btn btn-danger">حذف</button>
+              </form>
+            </td>
+          </tr>
+        <% }); %>
+        <tr>
+          <form action="/settings/suppliers/add" method="POST">
+            <td><input type="text" name="new_name" placeholder="اسم المورد الجديد" class="form-control"></td>
+            <td><input type="text" name="new_chatId" placeholder="رقم التعريف الجديد في المحادثة" class="form-control"></td>
+            <td>
+              <select name="new_userId" class="form-control">
+                <option value="">اختر مستخدم</option>
+                <% users.forEach(user => { %>
+                  <option value="<%= user._id %>"><%= user.full_name %></option>
+                <% }); %>
+              </select>
+            </td>
+            <td><button type="submit" class="btn btn-success" onclick="return confirm('هل أنت متأكد من إضافة هذا المورد؟')">إضافة</button></td>
+          </form>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>اختر مورد لنظام كريستال</h2>
+    <form action="/settings/save-crystal-supplier" method="POST">
+      <select name="crystal_supplier" class="form-control">
+        <% suppliers.forEach(supplier => { %>
+          <option value="<%= supplier._id %>" <%= supplier._id.equals(crystalSupplier) ? 'selected' : '' %>><%= supplier.name %></option>
+        <% }); %>
+      </select>
+      <button type="submit" class="btn btn-primary mt-2">حفظ</button>
+    </form>
+
+    <h2>اختر مورد لنظام سراج</h2>
+    <form action="/settings/save-siraj-supplier" method="POST">
+      <select name="siraj_supplier" class="form-control">
+        <% suppliers.forEach(supplier => { %>
+          <option value="<%= supplier._id %>" <%= supplier._id.equals(sirajSupplier) ? 'selected' : '' %>><%= supplier.name %></option>
+        <% }); %>
+      </select>
+      <button type="submit" class="btn btn-primary mt-2">حفظ</button>
+    </form>
+
+    <h2>تعديل رمز التحقق لـ TELEGRAM_BOT_TOKEN</h2>
+    <div class="form-group">
+      <label for="telegram_bot_token">رمز التحقق الحالي</label>
+      <span id="telegram_bot_token"><%= process.env.TELEGRAM_BOT_TOKEN %></span>
+      <button class="btn btn-primary" onclick="openEditTokenModal()">تعديل</button>
+    </div>
+
+  </div>
+
+  <!-- Edit Feature Modal -->
+  <div class="modal fade" id="editFeatureModal" tabindex="-1" aria-labelledby="editFeatureModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="editFeatureForm" method="POST">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editFeatureModalLabel">تعديل الميزة</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="featureName">اسم الميزة</label>
+              <input type="text" id="featureName" name="name" class="form-control" required>
+            </div>
+            <div class="form-group mt-2">
+              <label for="featureValue">قيمة الميزة</label>
+              <input type="number" id="featureValue" name="value" class="form-control" required>
+            </div>
+            <div class="form-group mt-2">
+              <label for="featurePrice">سعر الميزة</label>
+              <input type="number" step="0.01" id="featurePrice" name="price" class="form-control" required>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Supplier Modal -->
+  <div class="modal fade" id="editSupplierModal" tabindex="-1" aria-labelledby="editSupplierModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="editSupplierForm" method="POST">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editSupplierModalLabel">تعديل المورد</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="supplierName">اسم المورد</label>
+              <input type="text" id="supplierName" name="name" class="form-control" required>
+            </div>
+            <div class="form-group mt-2">
+              <label for="supplierChatId">رقم التعريف في المحادثة</label>
+              <input type="text" id="supplierChatId" name="chatId" class="form-control" required>
+            </div>
+            <div class="form-group mt-2">
+              <label for="availableUsers">اختر مستخدم لإضافته</label>
+              <div class="input-group">
+                <select id="availableUsers" class="form-control">
+                  <option value="">اختر مستخدم</option>
+                  <% users.forEach(user => { %>
+                    <option value="<%= user._id %>"><%= user.full_name %></option>
+                  <% }); %>
+                </select>
+                <button type="button" class="btn btn-success" onclick="addUser()">إضافة</button>
+              </div>
+            </div>
+            <div class="form-group mt-2">
+              <label for="supplierUsers">المستخدمين الحاليين</label>
+              <ul id="selectedUsers" class="list-group">
+                <!-- سيتم إضافة المستخدمين هنا ديناميكياً -->
+              </ul>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Telegram Bot Token Modal -->
+  <div class="modal fade" id="editTokenModal" tabindex="-1" aria-labelledby="editTokenModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form action="/settings/save-telegram-bot-token" method="POST">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editTokenModalLabel">تعديل رمز التحقق لـ TELEGRAM_BOT_TOKEN</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="new_telegram_bot_token">رمز التحقق الجديد</label>
+              <input type="text" name="new_telegram_bot_token" id="new_telegram_bot_token" class="form-control" required>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <%- include('partials/_footer.ejs') %>
+  <script>
+    // دالة لإضافة مستخدم إلى قائمة المستخدمين المحددين
+    function addUser() {
+      const availableUsers = document.getElementById('availableUsers');
+      const selectedUsers = document.getElementById('selectedUsers');
+
+      const selectedUserId = availableUsers.value;
+      const selectedUserName = availableUsers.options[availableUsers.selectedIndex].text;
+
+      if (selectedUserId && !Array.from(selectedUsers.children).some(li => li.dataset.id === selectedUserId)) {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.dataset.id = selectedUserId;
+        li.innerHTML = `${selectedUserName} <button type="button" class="btn btn-danger btn-sm" onclick="removeUser(this)">إزالة</button>`;
+        selectedUsers.appendChild(li);
+      }
+    }
+
+    // دالة لإزالة مستخدم من قائمة المستخدمين المحددين
+    function removeUser(button) {
+      button.parentElement.remove();
+    }
+
+    // دالة لفتح النافذة المنبثقة مع إعداد البيانات
+    function openEditSupplierModal(id, name, chatId, users) {
+      document.getElementById('editSupplierForm').action = '/settings/suppliers/' + id + '/edit';
+      document.getElementById('supplierName').value = name;
+      document.getElementById('supplierChatId').value = chatId;
+
+      const selectedUsers = document.getElementById('selectedUsers');
+      selectedUsers.innerHTML = ''; // إفراغ القائمة الحالية
+
+      const userArray = users ? users.split(', ') : [];
+      userArray.forEach(userId => {
+        const userOption = Array.from(document.getElementById('availableUsers').options).find(option => option.value === userId);
+        if (userOption) {
+          const userName = userOption.text;
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between align-items-center';
+          li.dataset.id = userId;
+          li.innerHTML = `${userName} <button type="button" class="btn btn-danger btn-sm" onclick="removeUser(this)">إزالة</button>`;
+          selectedUsers.appendChild(li);
+        }
+      });
+
+      const myModal = new bootstrap.Modal(document.getElementById('editSupplierModal'));
+      myModal.show();
+    }
+
+    // عند حفظ التعديلات، نقوم بإضافة المستخدمين المحددين إلى النموذج
+    document.getElementById('editSupplierForm').addEventListener('submit', function (event) {
+      const selectedUsers = document.getElementById('selectedUsers');
+      const users = Array.from(selectedUsers.children).map(li => li.dataset.id);
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'users';
+      input.value = JSON.stringify(users); // تعديل هنا
+      this.appendChild(input);
+    });
+
+    function openEditModal(id, name, value, price) {
+      document.getElementById('editFeatureForm').action = '/settings/features/' + id + '/edit';
+      document.getElementById('featureName').value = name;
+      document.getElementById('featureValue').value = value;
+      document.getElementById('featurePrice').value = price;
+      var myModal = new bootstrap.Modal(document.getElementById('editFeatureModal'));
+      myModal.show();
+    }
+
+    function openEditTokenModal() {
+      var myModal = new bootstrap.Modal(document.getElementById('editTokenModal'));
+      myModal.show();
+    }
+
+    function confirmDelete() {
+      return confirm('هل أنت متأكد من أنك تريد الحذف؟');
+    }
+  </script>
+</body>
+</html>

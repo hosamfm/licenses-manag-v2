@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar">
+<%- include('partials/_head.ejs') %>
+  <body dir="rtl">
+<%- include('partials/_header.ejs') %>
+    <main role="main">
+      <div class="container mt-5">
+        <h2 class="text-center">إنشاء حساب</h2>
+
+        <!-- رسائل الفلاش -->
+        <% if (flashMessages.error) { %>
+          <div class="alert alert-danger text-center">
+            <%= flashMessages.error %>
+          </div>
+        <% } %>
+        <% if (flashMessages.success) { %>
+          <div class="alert alert-success text-center">
+            <%= flashMessages.success %>
+          </div>
+        <% } %>
+
+        <form action="/auth/register" method="POST" class="form-container" id="registrationForm">
+          <div class="mb-3">
+            <label for="username" class="form-label">اسم المستخدم</label>
+            <input type="text" id="username" name="username" placeholder="مثال: user123" required class="form-control" pattern="^[a-zA-Z0-9.\-]+$" title="يسمح فقط بالحروف الإنجليزية، الأرقام، النقاط والشرطات." oninput="toLowerCase(this)">
+            <div class="invalid-feedback" id="usernameError">يسمح فقط بالحروف الإنجليزية، الأرقام، النقاط والشرطات.</div>
+          </div>
+          <div class="mb-3">
+            <label for="fullName" class="form-label">الاسم الكامل</label>
+            <input type="text" id="fullName" name="fullName" placeholder="أدخل الاسم الكامل" required class="form-control">
+            <div class="invalid-feedback" id="fullNameError">يرجى إدخال الاسم الكامل.</div>
+          </div>
+          <div class="mb-3">
+            <label for="companyName" class="form-label">اسم الشركة أو الوكالة التابع لها</label>
+            <input type="text" id="companyName" name="companyName" placeholder="أدخل اسم الشركة أو الوكالة" required class="form-control">
+            <div class="invalid-feedback" id="companyNameError">يرجى إدخال اسم الشركة أو الوكالة.</div>
+          </div>
+          <div class="mb-3">
+            <label for="phoneNumber" class="form-label">رقم الهاتف المحمول</label>
+            <input type="text" id="phoneNumber" name="phoneNumber" placeholder="مثال: 0123456789 أو +1234567890" required class="form-control" pattern="^(0|\+)[0-9]+$" title="يجب أن يبدأ الرقم بـ 0 أو + ويحتوي على أرقام فقط.">
+            <div class="invalid-feedback" id="phoneNumberError">يجب أن يبدأ الرقم بـ 0 أو + ويحتوي على أرقام فقط.</div>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">كلمة المرور</label>
+            <input type="password" id="password" name="password" placeholder="أدخل كلمة المرور" required class="form-control">
+            <div id="passwordStrength" class="form-text"></div>
+          </div>
+          <div class="mb-3">
+            <label for="confirmPassword" class="form-label">تأكيد كلمة المرور</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" placeholder="أدخل تأكيد كلمة المرور" required class="form-control">
+            <div id="passwordMatch" class="form-text"></div>
+          </div>
+          <% if (session.userRole === 'supervisor') { %>
+            <input type="hidden" name="supervisorId" value="<%= session.userId %>">
+          <% } %>
+          <div class="mb-3 text-center">
+            <button type="submit" class="btn btn-primary w-100">إنشاء حساب</button>
+          </div>
+          <div class="text-center">
+            <p>هل لديك حساب؟ <a href="/auth/login">تسجيل الدخول</a></p>
+          </div>
+        </form>
+      </div>
+    </main>
+<%- include('partials/_footer.ejs') %>
+  <script>
+    document.getElementById('registrationForm').addEventListener('submit', function(event) {
+      var password = document.getElementById('password').value;
+      var confirmPassword = document.getElementById('confirmPassword').value;
+      if (password !== confirmPassword) {
+        event.preventDefault();
+        document.getElementById('passwordMatch').innerText = 'كلمتا المرور غير متطابقتين.';
+        document.getElementById('passwordMatch').style.color = 'red';
+      }
+    });
+
+    document.getElementById('password').addEventListener('input', function() {
+      var password = document.getElementById('password').value;
+      var strength = document.getElementById('passwordStrength');
+      var strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      if (password.length >= 8) {
+        if (strongPasswordPattern.test(password)) {
+          strength.innerText = 'كلمة المرور قوية.';
+          strength.style.color = 'green';
+        } else {
+          strength.innerText = 'كلمة المرور متوسطة، يُفضل أن تحتوي على حرف كبير، حرف صغير، رقم ورمز.';
+          strength.style.color = 'orange';
+        }
+      } else {
+        strength.innerText = 'كلمة المرور ضعيفة، يجب أن تحتوي على 8 أحرف على الأقل.';
+        strength.style.color = 'red';
+      }
+    });
+
+    // إضافة أحداث لعرض الأخطاء عند الإدخال غير الصحيح
+    document.querySelectorAll('input').forEach(input => {
+      input.addEventListener('invalid', function() {
+        var id = this.id + 'Error';
+        var errorElement = document.getElementById(id);
+        if (errorElement) {
+          errorElement.style.display = 'block';
+        }
+      });
+
+      input.addEventListener('input', function() {
+        var id = this.id + 'Error';
+        var errorElement = document.getElementById(id);
+        if (this.validity.valid && errorElement) {
+          errorElement.style.display = 'none';
+        }
+      });
+    });
+
+    function toLowerCase(input) {
+      input.value = input.value.toLowerCase();
+    }
+  </script>
+  </body>
+</html>
