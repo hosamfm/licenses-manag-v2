@@ -4,7 +4,7 @@ const router = express.Router();
 const Feature = require('../models/Feature');
 const LicenseRequest = require('../models/LicenseRequest');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
-const { sendTelegramMessage } = require('../utils/telegram');
+const telegramService = require('../services/telegramService');
 
 // نقطة النهاية لتحميل طلبات التراخيص بالصفحات
 router.get('/api/license-requests', async (req, res) => {
@@ -139,7 +139,7 @@ router.post('/licenses/notify-deletion', async (req, res) => {
     try {
         const { registrationCode, reason } = req.body;
         const message = `تم حذف الترخيص ${registrationCode}\nالسبب: ${reason}`;
-        await sendTelegramMessage(message);
+        await telegramService.notifySupplierOfDeletion(registrationCode, reason);
         res.json({ success: true });
     } catch (error) {
         console.error('Error sending deletion notification:', error);
