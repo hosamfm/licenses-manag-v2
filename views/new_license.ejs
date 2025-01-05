@@ -186,141 +186,127 @@
 <script src="/js/licenseForm.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const form = document.querySelector('form');
-        const codeInput = document.getElementById('registrationCode');
+        const registrationCodeInput = document.getElementById('registrationCode');
         const registrationCodeStatus = document.getElementById('registrationCodeStatus');
-        const spinner = registrationCodeStatus.querySelector('.fa-spin');
-        const checkIcon = registrationCodeStatus.querySelector('.fa-check');
-        const timesIcon = registrationCodeStatus.querySelector('.fa-times');
-        let checkTimeout;
+        const registrationCodeError = document.getElementById('registrationCodeError');
+        const registrationCodeAlert = document.getElementById('registrationCodeAlert');
+        const registrationCodeSuccess = document.getElementById('registrationCodeSuccess');
+        const form = document.getElementById('newLicenseForm');
+        const submitButton = document.getElementById('submitButton');
+        let isSubmitting = false;
+        let isValidCode = false;
 
-        // إنشاء كائن السكانر
-        const scanner = new ImageCodeScanner({
-            onSuccess: (code) => {
-                codeInput.value = code;
-                validateCode(code); // التحقق من الكود فور إدخاله من السكانر
-            },
-            onError: (error) => {
-                showError(error);
-            }
-        });
-        
-        scanner.mount(document.getElementById('scanButton'));
-
-        // دالة للتحقق من صحة الكود
-        async function validateCode(code) {
-            if (!code) {
-                hideAllIcons();
-                return;
-            }
-
-            // إظهار أيقونة التحميل
-            showSpinner();
-
-            try {
-                const response = await fetch('/api/check-code', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ code })
-                });
-
-                const data = await response.json();
-
-                if (data.valid) {
-                    showSuccess();
-                } else {
-                    showError(data.message);
-                }
-            } catch (error) {
-                showError('حدث خطأ أثناء التحقق من الكود');
-            }
-        }
-
-        // دوال مساعدة لإظهار/إخفاء الأيقونات
-        function showSpinner() {
-            hideAllIcons();
-            spinner.classList.remove('d-none');
-        }
-
-        function showSuccess() {
-            hideAllIcons();
-            checkIcon.classList.remove('d-none');
-        }
-
-        function showError(message) {
-            hideAllIcons();
-            timesIcon.classList.remove('d-none');
-            if (message) {
-                // يمكن إضافة رسالة الخطأ هنا إذا كنت تريد عرضها
-                console.error(message);
-            }
-        }
-
-        function hideAllIcons() {
+        function hideAllMessages() {
+            registrationCodeError.classList.add('d-none');
+            registrationCodeAlert.classList.add('d-none');
+            registrationCodeSuccess.classList.add('d-none');
+            const spinner = registrationCodeStatus.querySelector('.fa-spinner');
+            const checkIcon = registrationCodeStatus.querySelector('.fa-check');
+            const timesIcon = registrationCodeStatus.querySelector('.fa-times');
             spinner.classList.add('d-none');
             checkIcon.classList.add('d-none');
             timesIcon.classList.add('d-none');
         }
 
-        // معالجة تغيير قيمة حقل الكود
-        codeInput.addEventListener('input', function(e) {
-            const code = e.target.value.trim();
-            
-            // إلغاء المؤقت السابق إذا وجد
-            if (checkTimeout) {
-                clearTimeout(checkTimeout);
+        function showMessage(element, message, icon) {
+            element.textContent = message;
+            element.classList.remove('d-none');
+            if (icon) {
+                icon.classList.remove('d-none');
             }
-
-            // إذا كان الكود فارغاً
-            if (!code) {
-                hideAllIcons();
-                return;
-            }
-
-            // انتظار لمدة 300 مللي ثانية بعد آخر تغيير قبل التحقق
-            checkTimeout = setTimeout(() => {
-                validateCode(code);
-            }, 300);
-        });
-
-        // التحقق من الكود عند تحميل الصفحة إذا كان موجوداً
-        if (codeInput.value) {
-            validateCode(codeInput.value);
         }
 
-        // معالجة تقديم النموذج
-        form.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const code = codeInput.value.trim();
-            if (!code) {
-                showError('الرجاء إدخال كود التسجيل');
+        let debounceTimer;
+        async function validateRegistrationCode() {
+            const registrationCode = registrationCodeInput.value.trim();
+            const spinner = registrationCodeStatus.querySelector('.fa-spinner');
+            const checkIcon = registrationCodeStatus.querySelector('.fa-check');
+            const timesIcon = registrationCodeStatus.querySelector('.fa-times');
+
+            hideAllMessages();
+
+            // التحقق من تنسيق كود التسجيل
+            const isValidFormat = /^[XR][A-Z0-9]{16,17}$/.test(registrationCode);
+            if (!isValidFormat) {
+                showMessage(registrationCodeError, 'تنسيق كود التسجيل غير صحيح. يجب أن يبدأ بحرف X أو R وأن يكون طوله 17 أو 18 حرفاً.', timesIcon);
+                submitButton.disabled = true;
+                isValidCode = false;
                 return;
             }
 
-            showSpinner();
+            spinner.classList.remove('d-none');
 
-            try {
-                const response = await fetch('/api/check-code', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ code })
-                });
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const result = await window.checkRegistrationCode(registrationCode, 'New License');
+                    spinner.classList.add('d-none');
 
-                const data = await response.json();
-
-                if (data.valid) {
-                    form.submit();
-                } else {
-                    showError(data.message || 'كود التسجيل غير صالح');
+                    if (result.error) {
+                        showMessage(registrationCodeError, result.message, timesIcon);
+                        submitButton.disabled = true;
+                        isValidCode = false;
+                    } else if (result.exists) {
+                        showMessage(registrationCodeAlert, result.message, timesIcon);
+                        submitButton.disabled = true;
+                        isValidCode = false;
+                    } else {
+                        showMessage(registrationCodeSuccess, 'كود التسجيل صالح للاستخدام', checkIcon);
+                        submitButton.disabled = false;
+                        isValidCode = true;
+                    }
+                } catch (error) {
+                    console.error('Error validating registration code:', error);
+                    spinner.classList.add('d-none');
+                    showMessage(registrationCodeError, 'حدث خطأ أثناء التحقق من الكود. يرجى المحاولة مرة أخرى.', timesIcon);
+                    submitButton.disabled = true;
+                    isValidCode = false;
                 }
-            } catch (error) {
-                showError('حدث خطأ أثناء التحقق من الكود');
+            }, 500);
+        }
+
+        registrationCodeInput.addEventListener('input', function() {
+            this.value = this.value.toUpperCase();
+            validateRegistrationCode();
+        });
+
+        // التحقق من الكود عند تحميل الصفحة
+        if (registrationCodeInput.value.trim()) {
+            validateRegistrationCode();
+        }
+
+        // التحقق من الكود عند لصق النص
+        registrationCodeInput.addEventListener('paste', function() {
+            setTimeout(validateRegistrationCode, 0);
+        });
+
+        // التحقق من الكود عند تغيير القيمة برمجياً
+        const originalSetValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        Object.defineProperty(registrationCodeInput, 'value', {
+            set: function(v) {
+                originalSetValue.call(this, v);
+                validateRegistrationCode();
             }
+        });
+
+        form.addEventListener('submit', function(event) {
+            if (!isValidCode) {
+                event.preventDefault();
+                const visibleMessage = document.querySelector('#registrationCodeError:not(.d-none), #registrationCodeAlert:not(.d-none)');
+                if (visibleMessage) {
+                    visibleMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+
+            if (isSubmitting) {
+                event.preventDefault();
+                return;
+            }
+
+            isSubmitting = true;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري المعالجة...';
         });
     });
 </script>
