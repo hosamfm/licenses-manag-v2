@@ -12,12 +12,9 @@ class OCRService {
             await this.worker.loadLanguage('eng');
             await this.worker.initialize('eng');
             await this.worker.setParameters({
-                tessedit_char_whitelist: 'ABCDEF0123456789RX',
-                tessedit_pageseg_mode: '6', // تحسين للنص المنفرد
-                preserve_interword_spaces: '1',
-                tessjs_create_pdf: '0',
-                tessjs_create_hocr: '0',
-                tessjs_create_tsv: '0',
+                tessedit_char_whitelist: 'ABCDEF0123456789R',
+                tessedit_pageseg_mode: '7', // وضع السطر الواحد
+                preserve_interword_spaces: '0',
                 tessjs_create_box: '0',
                 tessjs_create_unlv: '0',
                 tessjs_create_osd: '0'
@@ -25,115 +22,80 @@ class OCRService {
         }
     }
 
-    async preprocessImage(imageBuffer) {
+    async preprocessImage(imageBuffer, rotation = 0) {
         try {
-            // تحويل الصورة إلى تدرجات الرمادي وتحسين التباين
-            const processedBuffer = await sharp(imageBuffer)
-                .grayscale() // تحويل إلى تدرجات الرمادي
+            let processedImage = sharp(imageBuffer)
+                .grayscale()
                 .normalize() // تطبيع التباين
                 .modulate({
                     brightness: 1.2, // زيادة السطوع قليلاً
                     contrast: 1.4    // زيادة التباين
                 })
                 .sharpen({
-                    sigma: 1.5,      // حدة معتدلة
+                    sigma: 1.5,
                     m1: 1.5,
                     m2: 0.7
                 })
-                .threshold(128)      // تحويل إلى أبيض وأسود
-                .toBuffer();
+                .threshold(150); // تحويل إلى أبيض وأسود نقي
 
-            return processedBuffer;
+            // تطبيق التدوير إذا تم تحديده
+            if (rotation !== 0) {
+                processedImage = processedImage.rotate(rotation);
+            }
+
+            return await processedImage.toBuffer();
         } catch (error) {
             console.error('Error preprocessing image:', error);
-            return imageBuffer; // إرجاع الصورة الأصلية في حالة الفشل
+            return imageBuffer;
         }
     }
 
-    isValidHexCode(code) {
-        if (!code || typeof code !== 'string') return false;
-
-        // التحقق من أن الكود يبدأ بـ R أو X
-        if (!code.startsWith('R') && !code.startsWith('X')) {
-            return false;
-        }
-        
-        // التحقق من الطول (17 أو 18 حرفاً)
-        if (code.length !== 17 && code.length !== 18) {
-            return false;
-        }
-        
-        // التحقق من أن باقي الأحرف هي ست عشرية صالحة (0-9 و A-F)
-        const hexPart = code.substring(1);
-        return /^[0-9A-F]+$/i.test(hexPart);
-    }
-
-    findPossibleCodes(text) {
-        const possibleCodes = [];
-        
-        // تنظيف النص
-        const cleanText = text.replace(/[^A-F0-9RX\n\s]/gi, '')
-            .toUpperCase()
-            .split(/[\n\s]+/)
-            .filter(line => line.length > 0);
-        
-        for (const line of cleanText) {
-            // البحث عن الأنماط المحتملة للكود
-            for (let i = 0; i <= line.length - 17; i++) {
-                const potentialCode = line.substr(i, 18);
-                if (this.isValidHexCode(potentialCode)) {
-                    possibleCodes.push(potentialCode);
-                }
-                // محاولة مع 17 حرفاً أيضاً
-                const shorterCode = line.substr(i, 17);
-                if (this.isValidHexCode(shorterCode)) {
-                    possibleCodes.push(shorterCode);
-                }
-            }
-        }
-        
-        return [...new Set(possibleCodes)]; // إزالة التكرارات
-    }
-
-    async recognizeText(imageData) {
+    async recognizeText(imageBuffer) {
         try {
             await this.initialize();
             
-            // معالجة الصورة
-            const processedImage = await this.preprocessImage(imageData);
+            // المحاولات مع زوايا مختلفة
+            const rotations = [0, 90, 270, 180];
             
-            // محاولات متعددة مع إعدادات مختلفة
-            const attempts = [
-                { rotate: 0 },
-                { rotate: 90 },
-                { rotate: 270 },
-                { rotate: 180 }
-            ];
-
-            for (const attempt of attempts) {
-                try {
-                    const { data: { text } } = await this.worker.recognize(processedImage, {
-                        rotate: attempt.rotate
-                    });
-                    
-                    console.log(`Recognized text (rotation ${attempt.rotate}°):`, text);
-                    
-                    const possibleCodes = this.findPossibleCodes(text);
-                    console.log(`Possible codes (rotation ${attempt.rotate}°):`, possibleCodes);
-                    
-                    if (possibleCodes.length > 0) {
-                        return possibleCodes[0];
-                    }
-                } catch (err) {
-                    console.error(`Error in attempt with rotation ${attempt.rotate}°:`, err);
+            for (const rotation of rotations) {
+                // معالجة الصورة مع التدوير
+                const processedImage = await this.preprocessImage(imageBuffer, rotation);
+                
+                // التعرف على النص
+                const { data: { text, confidence } } = await this.worker.recognize(processedImage);
+                
+                // تنظيف وتحقق من النص
+                const cleanedText = this.validateAndCleanCode(text);
+                
+                // إذا وجدنا كوداً صالحاً ونسبة الثقة جيدة
+                if (cleanedText && confidence > 60) {
+                    console.log(`Found valid code with rotation ${rotation}° and confidence ${confidence}%`);
+                    return cleanedText;
                 }
             }
             
-            throw new Error('لم يتم العثور على كود ترخيص صالح. الكود يجب أن يبدأ بـ R أو X ويتبعه 16-17 حرف ست عشري (0-9, A-F)');
+            return null;
         } catch (error) {
-            console.error('Error in OCR processing:', error);
+            console.error('OCR Error:', error);
             throw error;
         }
+    }
+
+    validateAndCleanCode(text) {
+        if (!text) return null;
+        
+        // إزالة المسافات والأحرف الخاصة
+        let code = text.replace(/[^A-F0-9R]/g, '').toUpperCase();
+        
+        // التحقق من الطول والتنسيق
+        if (code.length === 16 && code.startsWith('R')) {
+            // التحقق من أن جميع الأحرف صالحة
+            if (/^R[0-9A-F]{15}$/.test(code)) {
+                return code;
+            }
+        }
+        
+        return null;
     }
 
     async terminate() {
