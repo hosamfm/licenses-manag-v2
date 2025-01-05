@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar">
 <%- include('partials/_head.ejs') %>
+<script src="/js/imageCodeScanner.js"></script>
 <body>
 <%- include('partials/_header.ejs') %>
 <style>
@@ -46,6 +47,9 @@
                                title="كود التسجيل القديم يجب أن يبدأ بحرف X أو R ويكون طوله 17 أو 18 حرفًا." 
                                list="baseRegistrationCodeList" 
                                autocomplete="off">
+                        <button type="button" class="btn btn-primary" id="baseScanButton">
+                            <i class="fas fa-camera"></i>
+                        </button>
                         <span class="input-group-text">
                             <i class="fas fa-check-circle text-success d-none" id="baseRegistrationCodeSuccessIcon"></i>
                             <i class="fas fa-times-circle text-danger d-none" id="baseRegistrationCodeErrorIcon"></i>
@@ -72,6 +76,9 @@
                                title="يجب أن يبدأ الكود بحرف X أو R وأن يكون طوله 17 أو 18 حرفًا" 
                                list="registrationCodeList" 
                                autocomplete="off">
+                        <button type="button" class="btn btn-primary" id="scanButton">
+                            <i class="fas fa-camera"></i>
+                        </button>
                         <span class="input-group-text">
                             <i class="fas fa-check-circle text-success d-none" id="registrationCodeSuccessIcon"></i>
                             <i class="fas fa-times-circle text-danger d-none" id="registrationCodeErrorIcon"></i>
@@ -532,6 +539,42 @@
                 updateTotalPrice();
             });
         });
+    });
+</script>
+
+<!-- وظائف مسح الصور -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // تهيئة أداة مسح الصور للكود الأساسي
+        const baseScanner = new ImageCodeScanner({
+            onSuccess: (text) => {
+                const baseRegistrationCodeInput = document.getElementById('baseRegistrationCode');
+                baseRegistrationCodeInput.value = text;
+                validateAndCheckBaseRegistrationCode();
+            },
+            onError: (error) => {
+                const baseRegistrationCodeError = document.getElementById('baseRegistrationCodeError');
+                baseRegistrationCodeError.textContent = error;
+                baseRegistrationCodeError.classList.remove('d-none');
+            }
+        });
+        
+        // تهيئة أداة مسح الصور للكود الجديد
+        const scanner = new ImageCodeScanner({
+            onSuccess: (text) => {
+                const registrationCodeInput = document.getElementById('registrationCode');
+                registrationCodeInput.value = text;
+                validateAndCheckRegistrationCode();
+            },
+            onError: (error) => {
+                const registrationCodeError = document.getElementById('registrationCodeError');
+                registrationCodeError.textContent = error;
+                registrationCodeError.classList.remove('d-none');
+            }
+        });
+        
+        baseScanner.mount(document.getElementById('baseScanButton'));
+        scanner.mount(document.getElementById('scanButton'));
     });
 </script>
 </body>
