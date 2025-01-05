@@ -126,8 +126,17 @@ router.get('/details/:id', [isAuthenticated, checkRole(['admin', 'supervisor', '
 router.get('/api/features/:featureCode', async (req, res) => {
     const { featureCode } = req.params;
     try {
-        const features = await Feature.find({ value: { $in: featureCode.split(',') } });
-        res.json(features);
+        const numericFeatureCode = parseInt(featureCode);
+        if (isNaN(numericFeatureCode)) {
+            return res.status(400).json({ error: 'Invalid feature code format' });
+        }
+
+        const features = await Feature.find();
+        const selectedFeatures = features.filter(feature => 
+            (numericFeatureCode & (1 << feature.value)) !== 0
+        );
+
+        res.json({ features: selectedFeatures });
     } catch (error) {
         console.error('Error loading features:', error);
         res.status(500).json({ error: 'Internal server error' });
