@@ -78,14 +78,14 @@ app.use((req, res, next) => {
 });
 
 app.use(authRoutes);
+app.use(licensesApiRoutes); // نقل هذا قبل licenseRoutes
 app.use('/licenses', licenseRoutes);
 app.use('/admin', chatIdRoutes);
 app.use('/program-details', require('./routes/programDetails'));
 app.use(settingsRoutes);
-app.use(licensesApiRoutes); // إضافة استخدام المسار الجديد
 app.use('/telegram', telegramMessagesRoutes);
 app.use(priceReaderLicenseRoutes);
-app.use(ocrRoutes); // تسجيل مسارات OCR
+app.use(ocrRoutes);
 
 app.get("/", isAuthenticated, async (req, res) => {
   try {

@@ -1,11 +1,10 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Feature = require('../models/Feature');
 const LicenseRequest = require('../models/LicenseRequest');
-const User = require('../models/User');
-const Supplier = require('../models/Supplier');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
-const telegramService = require('../services/telegramService');
+const { sendTelegramMessage } = require('../utils/telegram');
 
 // نقطة النهاية لتحميل طلبات التراخيص بالصفحات
 router.get('/api/license-requests', async (req, res) => {
@@ -123,30 +122,80 @@ router.get('/details/:id', [isAuthenticated, checkRole(['admin', 'supervisor', '
     }
 });
 
-
 // نقطة النهاية لتحميل تفاصيل الميزات
 router.get('/api/features/:featureCode', async (req, res) => {
     const { featureCode } = req.params;
-
     try {
-        const features = await Feature.find({});
-        const selectedFeatures = features.filter(feature => (featureCode & (1 << feature.value)) !== 0);
-
-        res.json({ features: selectedFeatures });
+        const features = await Feature.find({ value: { $in: featureCode.split(',') } });
+        res.json(features);
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error('Error loading features:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// نقطة النهاية لإشعار الحذف
+// إرسال إشعار حذف الترخيص
 router.post('/licenses/notify-deletion', async (req, res) => {
-    const { userId, registrationCode } = req.body;
     try {
-      await telegramService.notifyUserOfDeletion(userId, registrationCode);
-      await telegramService.notifySupplierOfDeletion(registrationCode);
-      res.status(200).json({ success: true, message: 'تم إرسال إشعار الحذف بنجاح.' });
+        const { registrationCode, reason } = req.body;
+        const message = `تم حذف الترخيص ${registrationCode}\nالسبب: ${reason}`;
+        await sendTelegramMessage(message);
+        res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+        console.error('Error sending deletion notification:', error);
+        res.status(500).json({ error: 'Failed to send notification' });
+    }
+});
+
+// الحصول على تفاصيل الترخيص باستخدام كود التسجيل
+router.get('/licenses/license-details', [isAuthenticated], async (req, res) => {
+    try {
+        const { registrationCode } = req.query;
+        if (!registrationCode) {
+            return res.status(400).json({ error: 'Registration code is required' });
+        }
+
+        // البحث عن الترخيص في جدول الطلبات
+        const licenseRequest = await mongoose.connection.db.collection('licenserequests').findOne({ 
+            registrationCode: registrationCode.toUpperCase(),
+            status: 'Approved'
+        });
+
+        if (!licenseRequest) {
+            return res.status(404).json({ error: 'License not found' });
+        }
+
+        // إرجاع تفاصيل الترخيص
+        res.json({
+            licenseeName: licenseRequest.licenseeName,
+            registrationCode: licenseRequest.registrationCode,
+            featuresCode: licenseRequest.featuresCode,
+            exists: true
+        });
+    } catch (error) {
+        console.error('Error fetching license details:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// البحث عن أكواد التسجيل
+router.get('/licenses/registration-codes', [isAuthenticated], async (req, res) => {
+    try {
+        const { query } = req.query;
+        if (!query) {
+            return res.json([]);
+        }
+
+        // البحث عن أكواد التسجيل المطابقة
+        const licenses = await mongoose.connection.db.collection('licenserequests').find({
+            registrationCode: { $regex: query.toUpperCase(), $options: 'i' },
+            status: 'Approved'
+        }).project({ registrationCode: 1, _id: 0 }).limit(10).toArray();
+
+        res.json(licenses);
+    } catch (error) {
+        console.error('Error searching registration codes:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

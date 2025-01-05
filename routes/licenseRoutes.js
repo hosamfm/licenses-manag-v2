@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const router = express.Router();
+const mongoose = require('mongoose');
 const LicenseRequest = require('../models/LicenseRequest');
 const bcrypt = require('bcrypt');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
@@ -555,6 +556,56 @@ router.post('/re-license', [
     } catch (error) {
         console.error('Error creating re-license request:', error.message, error.stack);
         return res.status(500).json({ success: false, message: 'حدث خطأ أثناء تقديم الطلب. حاول مرة أخرى.' });
+    }
+});
+
+router.get('/license-details', [isAuthenticated], async (req, res) => {
+    try {
+        const { registrationCode } = req.query;
+        if (!registrationCode) {
+            return res.status(400).json({ error: 'Registration code is required' });
+        }
+
+        // البحث عن الترخيص في جدول الطلبات
+        const licenseRequest = await mongoose.connection.db.collection('licenserequests').findOne({ 
+            registrationCode: registrationCode.toUpperCase(),
+            status: 'Approved'
+        });
+
+        if (!licenseRequest) {
+            return res.status(404).json({ error: 'License not found' });
+        }
+
+        // إرجاع تفاصيل الترخيص
+        res.json({
+            licenseeName: licenseRequest.licenseeName,
+            registrationCode: licenseRequest.registrationCode,
+            featuresCode: licenseRequest.featuresCode,
+            exists: true
+        });
+    } catch (error) {
+        console.error('Error fetching license details:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+router.get('/registration-codes', [isAuthenticated], async (req, res) => {
+    try {
+        const { query } = req.query;
+        if (!query) {
+            return res.json([]);
+        }
+
+        // البحث عن أكواد التسجيل المطابقة
+        const licenses = await mongoose.connection.db.collection('licenserequests').find({
+            registrationCode: { $regex: query.toUpperCase(), $options: 'i' },
+            status: 'Approved'
+        }).project({ registrationCode: 1, _id: 0 }).limit(10).toArray();
+
+        res.json(licenses);
+    } catch (error) {
+        console.error('Error searching registration codes:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
