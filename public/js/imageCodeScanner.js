@@ -162,31 +162,42 @@ class ImageCodeScanner {
                 // التقاط المنطقة المحددة فقط
                 canvas.width = captureWidth;
                 canvas.height = captureHeight;
-                canvas.getContext('2d').drawImage(
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(
                     video,
                     captureX, captureY, captureWidth, captureHeight,
                     0, 0, captureWidth, captureHeight
                 );
                 
                 try {
-                    const compressedImage = await this.compressImage(canvas.toBlob());
-                    const imageUrl = URL.createObjectURL(compressedImage);
-                    const result = await this.processImage(compressedImage);
-                    if (result) {
-                        showPreview(imageUrl, result);
-                        setTimeout(() => {
-                            modalInstance.hide();
-                            stream.getTracks().forEach(track => track.stop());
-                        }, 1500);
-                    } else {
-                        showPreview(imageUrl, 'لم يتم العثور على كود');
-                    }
+                    // تحويل الصورة إلى blob
+                    canvas.toBlob(async (blob) => {
+                        try {
+                            const result = await this.processImage(blob);
+                            const imageUrl = URL.createObjectURL(blob);
+                            
+                            if (result) {
+                                showPreview(imageUrl, result);
+                                setTimeout(() => {
+                                    modalInstance.hide();
+                                    stream.getTracks().forEach(track => track.stop());
+                                }, 1500);
+                            } else {
+                                showPreview(imageUrl, 'لم يتم العثور على كود');
+                            }
+                        } catch (error) {
+                            console.error('Error processing image:', error);
+                            const imageUrl = URL.createObjectURL(blob);
+                            showPreview(imageUrl, 'حدث خطأ في معالجة الصورة');
+                            this.onError(error.message);
+                        } finally {
+                            hideProcessing();
+                        }
+                    }, 'image/jpeg', 0.95);
                 } catch (error) {
-                    console.error('Error processing image:', error);
-                    showPreview(canvas.toDataURL('image/png'), 'حدث خطأ في معالجة الصورة');
-                    this.onError(error.message);
-                } finally {
+                    console.error('Error capturing image:', error);
                     hideProcessing();
+                    this.onError('فشل في التقاط الصورة');
                 }
             });
             
@@ -210,11 +221,8 @@ class ImageCodeScanner {
 
     async processImage(imageBlob) {
         try {
-            // تحويل الصورة إلى حجم أصغر قبل الإرسال
-            const compressedImage = await this.compressImage(imageBlob);
-            
             const formData = new FormData();
-            formData.append('image', compressedImage, 'code.jpg');
+            formData.append('image', imageBlob, 'code.jpg');
 
             const response = await fetch('/api/ocr', {
                 method: 'POST',
@@ -234,6 +242,7 @@ class ImageCodeScanner {
             }
             return null;
         } catch (error) {
+            console.error('Error in processImage:', error);
             this.onError(error.message);
             throw error;
         }

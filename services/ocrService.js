@@ -124,19 +124,42 @@ class OCRService {
     async recognizeText(imageData) {
         try {
             await this.initialize();
-            
-            // معالجة الصورة
-            const recognizedCode = await this.processImage(imageData);
-            
-            if (recognizedCode) {
-                return recognizedCode;
+
+            // قراءة النص من الصورة
+            const { data: { text } } = await this.worker.recognize(imageData, {
+                lang: 'eng',
+                tessedit_char_whitelist: '0123456789ABCDEFXR',
+                tessedit_pageseg_mode: '7' // تعامل مع النص كسطر واحد
+            });
+
+            console.log('النص المستخرج:', text);
+
+            // البحث عن الأكواد المحتملة
+            const possibleCodes = this.findPossibleCodes(text);
+            console.log('الأكواد المحتملة:', possibleCodes);
+
+            if (possibleCodes.length > 0) {
+                return possibleCodes[0];
             }
-            
-            throw new Error('لم يتم العثور على كود ترخيص صالح. الكود يجب أن يبدأ بـ R أو X ويتبعه 16-17 حرف ست عشري (0-9, A-F)');
+
+            return null;
         } catch (error) {
-            console.error('Error in OCR processing:', error);
-            throw error;
+            console.error('Error in recognizeText:', error);
+            throw new Error('فشل في التعرف على النص في الصورة');
         }
+    }
+
+    findPossibleCodes(text) {
+        // تنظيف النص من الأحرف غير المطلوبة
+        const cleanText = text.replace(/[^0-9A-FXR]/g, '');
+        console.log('النص بعد التنظيف:', cleanText);
+        
+        // البحث عن الأكواد التي تبدأ بـ R أو X
+        const pattern = /[RX][0-9A-F]{16,17}/g;
+        const matches = cleanText.match(pattern) || [];
+        console.log('الأكواد المطابقة:', matches);
+        
+        return matches;
     }
 
     async terminate() {
