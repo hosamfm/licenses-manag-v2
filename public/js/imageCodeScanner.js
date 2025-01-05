@@ -66,13 +66,26 @@ class ImageCodeScanner {
                                     <div class="viewfinder-help">قم بمحاذاة كود الترخيص داخل الإطار</div>
                                 </div>
                                 <canvas style="display: none"></canvas>
+                                <div class="preview-container" style="display: none">
+                                    <img class="preview-image" />
+                                    <div class="preview-code"></div>
+                                </div>
                             </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                            <button type="button" class="btn btn-warning retry-btn" style="display: none">
+                                <i class="fas fa-redo me-2"></i>إعادة المحاولة
+                            </button>
                             <button type="button" class="btn btn-primary capture-btn">
                                 <i class="fas fa-camera me-2"></i>التقاط
                             </button>
+                        </div>
+                        <div class="processing-overlay" style="display: none">
+                            <div class="spinner-border text-light" role="status">
+                                <span class="visually-hidden">جاري المعالجة...</span>
+                            </div>
+                            <div class="mt-2 text-light">جاري معالجة الصورة...</div>
                         </div>
                     </div>
                 </div>
@@ -84,16 +97,57 @@ class ImageCodeScanner {
             const video = modal.querySelector('video');
             const canvas = modal.querySelector('canvas');
             const captureBtn = modal.querySelector('.capture-btn');
+            const retryBtn = modal.querySelector('.retry-btn');
+            const previewContainer = modal.querySelector('.preview-container');
+            const previewImage = modal.querySelector('.preview-image');
+            const previewCode = modal.querySelector('.preview-code');
+            const processingOverlay = modal.querySelector('.processing-overlay');
+            const viewfinder = modal.querySelector('.viewfinder');
             
             video.srcObject = stream;
             
             // انتظار تحميل الفيديو
             await new Promise(resolve => video.addEventListener('loadedmetadata', resolve));
             
-            captureBtn.addEventListener('click', () => {
+            const showProcessing = () => {
+                processingOverlay.style.display = 'flex';
+                captureBtn.disabled = true;
+                retryBtn.disabled = true;
+            };
+            
+            const hideProcessing = () => {
+                processingOverlay.style.display = 'none';
+                captureBtn.disabled = false;
+                retryBtn.disabled = false;
+            };
+            
+            const showPreview = (imageUrl, code) => {
+                video.style.display = 'none';
+                viewfinder.style.display = 'none';
+                previewContainer.style.display = 'block';
+                previewImage.src = imageUrl;
+                previewCode.textContent = code || 'لم يتم العثور على كود';
+                previewCode.className = `preview-code ${code ? 'text-success' : 'text-danger'}`;
+                captureBtn.style.display = 'none';
+                retryBtn.style.display = 'inline-block';
+            };
+            
+            const hidePreview = () => {
+                video.style.display = 'block';
+                viewfinder.style.display = 'flex';
+                previewContainer.style.display = 'none';
+                captureBtn.style.display = 'inline-block';
+                retryBtn.style.display = 'none';
+            };
+            
+            retryBtn.addEventListener('click', hidePreview);
+            
+            captureBtn.addEventListener('click', async () => {
+                showProcessing();
+                
                 // تحديد منطقة الالتقاط بناءً على إطار التحديد
-                const viewfinder = modal.querySelector('.viewfinder-frame');
-                const rect = viewfinder.getBoundingClientRect();
+                const viewfinderFrame = modal.querySelector('.viewfinder-frame');
+                const rect = viewfinderFrame.getBoundingClientRect();
                 const videoRect = video.getBoundingClientRect();
                 
                 // حساب نسبة المنطقة المحددة
@@ -114,11 +168,29 @@ class ImageCodeScanner {
                     0, 0, captureWidth, captureHeight
                 );
                 
-                canvas.toBlob(async (blob) => {
-                    await this.processImage(blob);
-                    modalInstance.hide();
-                    stream.getTracks().forEach(track => track.stop());
-                });
+                try {
+                    const imageUrl = canvas.toDataURL('image/png');
+                    canvas.toBlob(async (blob) => {
+                        try {
+                            const result = await this.processImage(blob);
+                            showPreview(imageUrl, result);
+                            if (result) {
+                                setTimeout(() => {
+                                    modalInstance.hide();
+                                    stream.getTracks().forEach(track => track.stop());
+                                }, 1500);
+                            }
+                        } catch (error) {
+                            showPreview(imageUrl, null);
+                            this.onError(error.message);
+                        } finally {
+                            hideProcessing();
+                        }
+                    });
+                } catch (error) {
+                    hideProcessing();
+                    this.onError('فشل في معالجة الصورة');
+                }
             });
             
             modal.addEventListener('hidden.bs.modal', () => {
@@ -232,6 +304,51 @@ style.textContent = `
         color: #fff;
         font-size: 14px;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+    
+    .preview-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    
+    .preview-image {
+        max-width: 100%;
+        max-height: 70%;
+        object-fit: contain;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
+    
+    .preview-code {
+        font-family: monospace;
+        font-size: 1.2em;
+        padding: 10px 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        color: #fff;
+    }
+    
+    .processing-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
     }
 `;
 document.head.appendChild(style);

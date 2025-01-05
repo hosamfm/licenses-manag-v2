@@ -1,4 +1,5 @@
 const Tesseract = require('tesseract.js');
+const sharp = require('sharp');
 
 class OCRService {
     constructor() {
@@ -10,16 +11,48 @@ class OCRService {
             this.worker = await Tesseract.createWorker();
             await this.worker.loadLanguage('eng');
             await this.worker.initialize('eng');
-            // تحسين إعدادات التعرف للحروف الست عشرية
             await this.worker.setParameters({
                 tessedit_char_whitelist: 'ABCDEF0123456789RX',
-                tessedit_pageseg_mode: '7', // تحسين لقراءة سطر واحد
-                tessedit_ocr_engine_mode: '2', // وضع الدقة العالية
+                tessedit_pageseg_mode: '6', // تحسين للنص المنفرد
+                preserve_interword_spaces: '1',
+                tessjs_create_pdf: '0',
+                tessjs_create_hocr: '0',
+                tessjs_create_tsv: '0',
+                tessjs_create_box: '0',
+                tessjs_create_unlv: '0',
+                tessjs_create_osd: '0'
             });
         }
     }
 
+    async preprocessImage(imageBuffer) {
+        try {
+            // تحويل الصورة إلى تدرجات الرمادي وتحسين التباين
+            const processedBuffer = await sharp(imageBuffer)
+                .grayscale() // تحويل إلى تدرجات الرمادي
+                .normalize() // تطبيع التباين
+                .modulate({
+                    brightness: 1.2, // زيادة السطوع قليلاً
+                    contrast: 1.4    // زيادة التباين
+                })
+                .sharpen({
+                    sigma: 1.5,      // حدة معتدلة
+                    m1: 1.5,
+                    m2: 0.7
+                })
+                .threshold(128)      // تحويل إلى أبيض وأسود
+                .toBuffer();
+
+            return processedBuffer;
+        } catch (error) {
+            console.error('Error preprocessing image:', error);
+            return imageBuffer; // إرجاع الصورة الأصلية في حالة الفشل
+        }
+    }
+
     isValidHexCode(code) {
+        if (!code || typeof code !== 'string') return false;
+
         // التحقق من أن الكود يبدأ بـ R أو X
         if (!code.startsWith('R') && !code.startsWith('X')) {
             return false;
@@ -35,34 +68,64 @@ class OCRService {
         return /^[0-9A-F]+$/i.test(hexPart);
     }
 
+    findPossibleCodes(text) {
+        const possibleCodes = [];
+        
+        // تنظيف النص
+        const cleanText = text.replace(/[^A-F0-9RX\n\s]/gi, '')
+            .toUpperCase()
+            .split(/[\n\s]+/)
+            .filter(line => line.length > 0);
+        
+        for (const line of cleanText) {
+            // البحث عن الأنماط المحتملة للكود
+            for (let i = 0; i <= line.length - 17; i++) {
+                const potentialCode = line.substr(i, 18);
+                if (this.isValidHexCode(potentialCode)) {
+                    possibleCodes.push(potentialCode);
+                }
+                // محاولة مع 17 حرفاً أيضاً
+                const shorterCode = line.substr(i, 17);
+                if (this.isValidHexCode(shorterCode)) {
+                    possibleCodes.push(shorterCode);
+                }
+            }
+        }
+        
+        return [...new Set(possibleCodes)]; // إزالة التكرارات
+    }
+
     async recognizeText(imageData) {
         try {
             await this.initialize();
             
-            // تحسين الصورة قبل المعالجة
-            const { data: { text } } = await this.worker.recognize(imageData, {
-                rectangle: { top: 0, left: 0, width: 300, height: 50 }, // تركيز على منطقة أصغر
-                preprocessing: true
-            });
+            // معالجة الصورة
+            const processedImage = await this.preprocessImage(imageData);
             
-            // تنظيف النص وتحويله إلى أحرف كبيرة
-            const lines = text.split('\n')
-                .map(line => line.trim().toUpperCase())
-                .filter(line => line.length > 0);
-            
-            // البحث عن كود صالح
-            for (const line of lines) {
-                // إزالة المسافات والرموز الخاصة
-                const cleanLine = line.replace(/[^A-F0-9RX]/g, '');
-                
-                // البحث عن نمط الكود في السطر
-                const matches = cleanLine.match(/[RX][A-F0-9]{16,17}/g);
-                if (matches) {
-                    for (const match of matches) {
-                        if (this.isValidHexCode(match)) {
-                            return match;
-                        }
+            // محاولات متعددة مع إعدادات مختلفة
+            const attempts = [
+                { rotate: 0 },
+                { rotate: 90 },
+                { rotate: 270 },
+                { rotate: 180 }
+            ];
+
+            for (const attempt of attempts) {
+                try {
+                    const { data: { text } } = await this.worker.recognize(processedImage, {
+                        rotate: attempt.rotate
+                    });
+                    
+                    console.log(`Recognized text (rotation ${attempt.rotate}°):`, text);
+                    
+                    const possibleCodes = this.findPossibleCodes(text);
+                    console.log(`Possible codes (rotation ${attempt.rotate}°):`, possibleCodes);
+                    
+                    if (possibleCodes.length > 0) {
+                        return possibleCodes[0];
                     }
+                } catch (err) {
+                    console.error(`Error in attempt with rotation ${attempt.rotate}°:`, err);
                 }
             }
             
