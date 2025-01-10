@@ -1,118 +1,80 @@
 // services/ocrService.js
-const Tesseract = require('tesseract.js');
+const fetch = require('node-fetch');
+const FormData = require('form-data');
 const sharp = require('sharp');
 
+/**
+ * لم نعد بحاجة إلى تهيئة Worker خاص بـ Tesseract،
+ * لذا لن نستخدم constructor أو initialize/terminate كما في السابق.
+ */
 class OCRService {
-    constructor() {
-        this.worker = null;
-    }
-
-    async initialize() {
-        // إذا كان الـ worker غير مهيأ، قم بإنشائه وضبط اللغة
-        if (!this.worker) {
-            this.worker = await Tesseract.createWorker();
-            await this.worker.loadLanguage('eng');
-            await this.worker.initialize('eng');
-
-            // ملاحظة: يمكنك تجربة psm=7 أو psm=8 أو حتى psm=13
-            await this.worker.setParameters({
-                tessedit_char_whitelist: 'ABCDEF0123456789RX',
-                tessedit_char_blacklist: 'abcdefghijklmnopqrstuvwxyz', // استبعاد الأحرف الصغيرة تماماً
-                tessedit_pageseg_mode: '7', // وضع التعرف على سطر واحد
-                preserve_interword_spaces: '1',
-                tessjs_create_pdf: '0',
-                tessjs_create_hocr: '0',
-                tessjs_create_tsv: '0',
-                tessjs_create_box: '0',
-                tessjs_create_unlv: '0',
-                tessjs_create_osd: '0',
-            });
-        }
-    }
-
+    
     /**
-     * معالجة الصورة قبل تمريرها لـ Tesseract
-     * يمكنك تغيير ترتيب الخطوات أو إضافة عمليات مورفولوجية (erosion/dilation) حسب الحاجة
+     * معالجة الصورة قبل إرسالها إلى OCR.space
+     * (ما زلنا نستخدم Sharp لتحسين الصورة إن أحببت)
      */
     async preprocessImage(imageBuffer) {
         try {
             const processedBuffer = await sharp(imageBuffer)
-                .rotate()        // ضبط التدوير التلقائي بناء على الـ EXIF
-                .resize({        // تكبير الصورة (إن كانت صغيرة) لتحسين الدقة
+                .rotate()        // تدوير تلقائي وفق بيانات EXIF
+                .resize({
                     width: 1000,
                     height: 800,
                     fit: 'inside',
                     withoutEnlargement: false
                 })
-                .grayscale()     // تحويل إلى تدرجات الرمادي
-                .normalize()     // تطبيع التباين
-                .sharpen({       // زيادة الحدة قليلاً
+                .grayscale()
+                .normalize()
+                .sharpen({
                     sigma: 1.0,
                     m1: 1.0,
                     m2: 0.5
                 })
-                .threshold(140)  // عتبة binarization (يمكن تعديلها أو تجربة قيم أخرى)
+                .threshold(140)
                 .toBuffer();
-
+            
             return processedBuffer;
         } catch (error) {
             console.error('Error preprocessing image:', error);
-            // إذا فشلت المعالجة المسبقة، نعيد الصورة الأصلية كحل أخير
-            return imageBuffer;
+            return imageBuffer; // fallback: إرجاع الصورة الأصلية إن فشلت المعالجة
         }
     }
 
     /**
-     * استبدالات للأخطاء الشائعة في OCR
+     * استبدالات للأخطاء الشائعة في قراءة الأحرف
      */
     correctCommonMistakes(text) {
         return text
-            .replace(/O/g, '0')  // حرف O -> رقم 0
-            .replace(/I/g, '1')  // حرف I -> رقم 1
-            .replace(/L/g, '1'); // حرف L -> رقم 1 (إن كنت ترغب)
+            .replace(/O/g, '0')  // O -> 0
+            .replace(/I/g, '1')  // I -> 1
+            .replace(/L/g, '1'); // L -> 1
     }
 
     /**
-     * التحقق من صحة الكود
-     * يشترط أن يبدأ بـ R أو X
-     * طوله 17 أو 18 حرف
-     * باقي الأحرف 0-9A-F
+     * التحقق من صحة الكود (R أو X + 16/17 محرف هيكس)
      */
     isValidHexCode(code) {
         if (!code || typeof code !== 'string') return false;
-
-        // التحقق من أن الكود يبدأ بـ R أو X
-        if (!code.startsWith('R') && !code.startsWith('X')) {
-            return false;
-        }
-
-        // الطول يجب أن يكون 17 أو 18
-        if (code.length !== 17 && code.length !== 18) {
-            return false;
-        }
-
-        // التحقق من الأحرف الست عشرية
-        const hexPart = code.substring(1); // احذف الحرف الأول (R أو X)
+        if (!code.startsWith('R') && !code.startsWith('X')) return false;
+        if (code.length !== 17 && code.length !== 18) return false;
+        const hexPart = code.substring(1);
         return /^[0-9A-F]+$/i.test(hexPart);
     }
 
     /**
-     * البحث في النص واستخراج الأكواد المحتملة
+     * البحث عن الأكواد المحتملة في النص
      */
     findPossibleCodes(rawText) {
-        // تصحيح الأخطاء الشائعة أولاً
         const correctedText = this.correctCommonMistakes(rawText);
-
-        // إزالة كل ما ليس A-F0-9 R X أو مسافة أو سطر جديد
         const cleanText = correctedText
-            .replace(/[^A-F0-9RX\n\s]/gi, '')
+            .replace(/[^A-F0-9RX\n\s]/gi, '')  // حذف أي رموز غير مسموحة
             .toUpperCase()
-            .split(/[\n\s]+/) // قسّم إلى أسطر أو كلمات
+            .split(/[\n\s]+/)
             .filter(line => line.length > 0);
 
         const possibleCodes = [];
         for (const line of cleanText) {
-            // جرّب استخراج substr بطول 17 و 18
+            // جرّب substr بطول 17 أو 18
             for (let i = 0; i <= line.length - 17; i++) {
                 const maybe18 = line.substr(i, 18);
                 if (this.isValidHexCode(maybe18)) {
@@ -124,61 +86,52 @@ class OCRService {
                 }
             }
         }
-
-        return [...new Set(possibleCodes)]; // إزالة التكرارات
+        return [...new Set(possibleCodes)];
     }
 
     /**
-     * الدالة الرئيسية للتعرف على النص
+     * الدالة الرئيسية للتعرف على النص من الصورة باستخدام OCR.space
      */
-    async recognizeText(imageData) {
+    async recognizeText(imageBuffer) {
         try {
-            // تهيئة الـ worker إن لم يكن جاهزاً
-            await this.initialize();
+            // 1) معالجة الصورة أولًا
+            const processedImage = await this.preprocessImage(imageBuffer);
+            
+            // 2) تجهيز form-data
+            // ملاحظة: يمكنك تخزين مفتاحك بشكل آمن في متغير بيئة
+            // أو ملف إعدادات عوضًا عن كتابته صراحةً
+            const formData = new FormData();
+            formData.append('file', processedImage, { filename: 'image.png' });
+            formData.append('apikey', 'K85529519688957'); // ضع مفتاحك هنا
+            formData.append('language', 'eng');
+            
+            // 3) إرسال الطلب إلى OCR.space
+            const response = await fetch('https://api.ocr.space/parse/image', {
+                method: 'POST',
+                body: formData,
+            });
+            if (!response.ok) {
+                throw new Error(`OCR.space API responded with status ${response.status}`);
+            }
+            
+            // 4) قراءة النص من النتيجة
+            const result = await response.json();
+            const rawText = result?.ParsedResults?.[0]?.ParsedText || '';
+            console.log('Raw OCR Text:', rawText);
 
-            // معالجة الصورة
-            const processedImage = await this.preprocessImage(imageData);
+            // 5) البحث عن الأكواد المحتملة
+            const possibleCodes = this.findPossibleCodes(rawText);
+            console.log('Possible codes:', possibleCodes);
 
-            // جرّب تدوير الصورة في عدة زوايا + ربما PSM مختلف
-            const rotateAngles = [0, 90, 180, 270];
-            // يمكنك أيضاً تجربة PSM متعددة: [7, 8] إن أردت
-            for (const angle of rotateAngles) {
-                try {
-                    const { data: { text } } = await this.worker.recognize(processedImage, {
-                        rotate: angle,
-                    });
-
-                    console.log(`Recognized text (rotation ${angle}°):`, text);
-
-                    // ابحث عن الأكواد الممكنة
-                    const possibleCodes = this.findPossibleCodes(text);
-                    console.log(`Possible codes (rotation ${angle}°):`, possibleCodes);
-
-                    if (possibleCodes.length > 0) {
-                        // يكفي إعادة أول كود صحيح نجده
-                        return possibleCodes[0];
-                    }
-                } catch (err) {
-                    console.error(`Error in attempt with rotation ${angle}°:`, err);
-                }
+            if (possibleCodes.length > 0) {
+                return possibleCodes[0];
             }
 
-            // في حال لم نجد أي كود صحيح
-            throw new Error(
-                'لم يتم العثور على كود ترخيص صالح. الكود يجب أن يبدأ بـ R أو X ' +
-                'ويتبعه 16 أو 17 حرف ست عشري (0-9, A-F).'
-            );
+            // إذا لم نجد أي كود صالح
+            throw new Error('لم يتم العثور على كود ترخيص صالح.');
         } catch (error) {
             console.error('Error in OCR processing:', error);
             throw error;
-        }
-    }
-
-    // لإنهاء الـ worker في حال أردت إيقاف الخدمة أو إنهاء السيرفر
-    async terminate() {
-        if (this.worker) {
-            await this.worker.terminate();
-            this.worker = null;
         }
     }
 }

@@ -18,7 +18,10 @@ router.post('/api/ocr', upload.single('image'), async (req, res) => {
             return res.status(400).json({ error: 'No image file provided' });
         }
 
+        // احصل على محتوى الصورة
         const imageBuffer = req.file.buffer;
+        
+        // استدعِ الدالة الجديدة التي تستخدم OCR.space
         const recognizedText = await ocrService.recognizeText(imageBuffer);
 
         return res.json({ text: recognizedText });
