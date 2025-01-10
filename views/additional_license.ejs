@@ -37,6 +37,7 @@
             <form id="additionalLicenseForm" action="/licenses/create" method="POST" class="form-container almarai-regular">
                 <input type="hidden" name="requestType" value="Additional License">
                 
+                <!-- كود التسجيل الأساسي -->
                 <div class="mb-4">
                     <label for="baseRegistrationCode" class="form-label almarai-bold">كود التسجيل الأساسي او للترخيص السابق</label>
                     <div class="input-group">
@@ -60,12 +61,21 @@
                     <small class="text-muted">أدخل كود التسجيل الأساسي للترخيص السابق للتحقق من صلاحيته</small>
                 </div>
 
+                <!-- اسم المرخص له -->
                 <div class="mb-4">
                     <label for="licenseeName" class="form-label almarai-bold">اسم المرخص له</label>
                     <input type="text" class="form-control almarai-regular" id="licenseeName" name="licenseeName" required readonly>
                     <small class="text-muted">سيتم تعبئة هذا الحقل تلقائياً عند التحقق من كود التسجيل الأساسي</small>
                 </div>
 
+                <!-- حقل اسم الفرع (جديد) -->
+                <div class="mb-4" id="branchNameContainer" style="display: none;">
+                    <label for="branchName" class="form-label almarai-bold">اسم الفرع</label>
+                    <input type="text" class="form-control almarai-regular" id="branchName" name="branchName">
+                    <small class="text-muted">يرجى إدخال اسم الفرع إذا كان الترخيص متعلقاً بفرع محدد</small>
+                </div>
+
+                <!-- كود التسجيل الجديد -->
                 <div class="mb-4">
                     <label for="registrationCode" class="form-label almarai-bold">كود التسجيل الجديد</label>
                     <div class="input-group">
@@ -89,6 +99,7 @@
                     <small class="text-muted">أدخل كود التسجيل الجديد للترخيص الإضافي</small>
                 </div>
 
+                <!-- اختيار الميزات -->
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <button type="button" class="btn btn-primary almarai-bold" data-bs-toggle="modal" data-bs-target="#featuresModal">
@@ -129,7 +140,7 @@
     </div>
 </main>
 
-<!-- Modal -->
+<!-- نافذة اختيار الميزات -->
 <div class="modal fade" id="featuresModal" tabindex="-1" aria-labelledby="featuresModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
@@ -383,6 +394,9 @@
 
         // تحديث السعر الإجمالي
         updateTotalPrice();
+        
+        // استدعاء دالة إظهار/إخفاء حقل اسم الفرع
+        updateBranchNameVisibility();
     }
 
     function updateTotalPrice() {
@@ -424,7 +438,10 @@
         // تهيئة الميزات الافتراضية عند تحميل الصفحة
         initializeDefaultFeatures();
 
-        // إضافة مستمع للبحث
+        // تحديث الحالة الأولية لحقل اسم الفرع
+        updateBranchNameVisibility();
+
+        // إضافة مستمع للبحث في الميزات
         const searchInput = document.getElementById('featureSearch');
         if (searchInput) {
             searchInput.addEventListener('input', function() {
@@ -576,6 +593,35 @@
         baseScanner.mount(document.getElementById('baseScanButton'));
         scanner.mount(document.getElementById('scanButton'));
     });
+</script>
+
+<!-- دالة إظهار/إخفاء حقل اسم الفرع (جديدة) -->
+<script>
+    /**
+     * تظهر/تخفي حقل اسم الفرع بناءً على الميزات المختارة
+     */
+    function updateBranchNameVisibility() {
+        // مثلًا: إذا كانت الميزة برقم 8 تتطلب إظهار حقل الفرع
+        // عدّل الرقم أو الشرط حسب حاجتك
+        const branchNameContainer = document.getElementById('branchNameContainer');
+        const featureCheckboxes = document.querySelectorAll('input[name="features"]:checked');
+
+        let requiresBranchName = false;
+        featureCheckboxes.forEach(checkbox => {
+            const featureValue = parseInt(checkbox.value);
+            if (featureValue === 8) {
+                requiresBranchName = true;
+            }
+        });
+
+        if (requiresBranchName) {
+            branchNameContainer.style.display = '';
+        } else {
+            branchNameContainer.style.display = 'none';
+            // تفريغ الحقل عند الإخفاء (اختياري)
+            document.getElementById('branchName').value = '';
+        }
+    }
 </script>
 </body>
 </html>

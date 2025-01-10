@@ -39,10 +39,14 @@ const licenseRequestSchema = new mongoose.Schema({
     default: 0.00,
     validate: {
       validator: function(v) {
-        return v >= 0;
+        return !isNaN(v) && v >= 0;
       },
       message: props => `${props.value} is not a valid decimal value!`
     }
+  },
+  branchName: {
+    type: String,
+    required: false
   },
   finalLicense: {
     type: mongoose.Schema.Types.ObjectId,

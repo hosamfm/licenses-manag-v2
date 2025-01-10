@@ -27,6 +27,7 @@
         margin: 0;
     }
 </style>
+
 <main role="main" class="container mt-4">
     <div class="card shadow-sm">
         <div class="card-header bg-light">
@@ -63,6 +64,13 @@
                 <div class="mb-4">
                     <label for="licenseeName" class="form-label almarai-bold">اسم المرخص له</label>
                     <input type="text" class="form-control almarai-regular" id="licenseeName" name="licenseeName" required readonly>
+                </div>
+
+                <!-- حقل اسم الفرع (جديد) -->
+                <div class="mb-4" id="branchNameContainer" style="display: none;">
+                    <label for="branchName" class="form-label almarai-bold">اسم الفرع</label>
+                    <input type="text" class="form-control almarai-regular" id="branchName" name="branchName">
+                    <small class="text-muted">يرجى إدخال اسم الفرع إذا كان الترخيص متعلقاً بفرع محدد</small>
                 </div>
 
                 <!-- كود الميزات السابق -->
@@ -118,7 +126,7 @@
     </div>
 </main>
 
-<!-- Modal -->
+<!-- نافذة اختيار الميزات -->
 <div class="modal fade" id="featuresModal" tabindex="-1" aria-labelledby="featuresModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
@@ -182,9 +190,14 @@
         const registrationCodeTemporaryError = document.getElementById('registrationCodeTemporaryError');
         const selectFeaturesButton = document.getElementById('selectFeaturesButton');
         const submitBtn = document.getElementById('submitBtn');
+        
+        // نحتفظ بقيمة كود الميزات القديم حتى نستطيع تمييز الميزات الموجودة سابقاً من الميزات الجديدة
         let oldFeatureCode = 0;
         let isSubmitting = false;
 
+        /**
+         * إخفاء جميع الرسائل والأيقونات الخاصة بالكود
+         */
         function hideAllMessages() {
             registrationCodeError.classList.add('d-none');
             registrationCodeTemporaryError.classList.add('d-none');
@@ -197,6 +210,9 @@
             timesIcon.classList.add('d-none');
         }
 
+        /**
+         * إظهار رسالة محددة مع أيقونة معينة
+         */
         function showMessage(element, message, icon) {
             element.textContent = message;
             element.classList.remove('d-none');
@@ -205,6 +221,9 @@
             }
         }
 
+        /**
+         * التحقق من صحة كود التسجيل واستدعاء الدوال المناسبة
+         */
         async function validateAndCheckRegistrationCode() {
             const registrationCode = registrationCodeInput.value.trim().toUpperCase();
             registrationCodeInput.value = registrationCode;
@@ -229,6 +248,8 @@
             spinner.classList.remove('d-none');
 
             try {
+                // الدالة fetchLicenseDetails يجب أن تكون معرّفة في أحد الملفات المشمولة (main.js أو formUtils.js)
+                // توقيع الدالة ينتظر: fetchLicenseDetails(code, licenseeNameInput, oldFeaturesCodeInput, featuresCheckboxes, 'additional-feature-request')
                 const data = await fetchLicenseDetails(registrationCode, licenseeNameInput, oldFeaturesCodeInput, featuresCheckboxes, 'additional-feature-request');
                 if (data.exists) {
                     showMessage(registrationCodeSuccess, 'تم العثور على الترخيص. يمكنك اختيار الميزات الإضافية.', checkIcon);
@@ -238,14 +259,14 @@
                     oldFeatureCode = parseInt(data.featuresCode) || 0;
                     oldFeaturesCodeInput.value = oldFeatureCode.toString();
                     
-                    // تحديث حالة الميزات
+                    // تحديث حالة الميزات (تمييز الميزات الموجودة مسبقاً بحيث لا يمكن إلغاؤها)
                     const checkboxes = document.querySelectorAll('input[name="features"]');
                     checkboxes.forEach(checkbox => {
                         const featureValue = parseInt(checkbox.value);
                         const card = document.querySelector(`[data-feature-id="${featureValue}"]`);
                         
+                        // إذا كانت الميزة موجودة مسبقاً (حسب الكود القديم) نجعلها مختارة ومعطّلة
                         if (oldFeatureCode & (1 << featureValue)) {
-                            // الميزات الموجودة مسبقاً
                             checkbox.checked = true;
                             checkbox.disabled = true;
                             if (card) {
@@ -254,7 +275,7 @@
                                 card.style.cursor = 'not-allowed';
                             }
                         } else {
-                            // الميزات الجديدة المتاحة
+                            // الميزات الجديدة تبقى قابلة للاختيار
                             checkbox.checked = false;
                             checkbox.disabled = false;
                             if (card) {
@@ -284,7 +305,9 @@
             }
         }
 
-        // تحديث حالة البطاقة عند التحديد
+        /**
+         * عند الضغط على البطاقة، نحدّث حالة الـ checkbox إذا كان ممكناً
+         */
         window.toggleFeature = function(card) {
             const featureId = card.dataset.featureId;
             const checkbox = document.querySelector(`#feature${featureId}`);
@@ -307,6 +330,33 @@
             }
         }
 
+        /**
+         * دالة تحديث ظهور حقل اسم الفرع
+         *  - يظهر الحقل إذا كانت ميزة المزامنة (قيمة = 8) جديدة ومختارة
+         *  - يختفي إذا لم تكن مختارة أو كانت ضمن الميزات القديمة المعطّلة (التي لا يمكن إلغاؤها)
+         */
+        function updateBranchNameVisibility() {
+            // نفترض أن ميزة "المزامنة" هي الرقم 8
+            const syncFeatureCheckbox = document.querySelector('input[name="features"][value="8"]');
+            const branchNameContainer = document.getElementById('branchNameContainer');
+            const branchNameInput = document.getElementById('branchName');
+            
+            // تحقق مما إذا كانت الميزة 8 مختارة وليست معطلة
+            const showBranchName = syncFeatureCheckbox && syncFeatureCheckbox.checked && !syncFeatureCheckbox.disabled;
+            
+            if (showBranchName) {
+                branchNameContainer.style.display = '';
+                branchNameInput.required = true;
+            } else {
+                branchNameContainer.style.display = 'none';
+                branchNameInput.required = false;
+                branchNameInput.value = '';
+            }
+        }
+
+        /**
+         * تحديث الميزات المختارة وإعادة حساب التكلفة
+         */
         function updateSelectedFeatures() {
             const selectedFeatures = document.querySelectorAll('input[name="features"]');
             let featureCode = oldFeatureCode;
@@ -325,7 +375,7 @@
                     const listItem = document.createElement('div');
                     listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
                     
-                    // إضافة علامة للميزات الموجودة مسبقاً
+                    // إذا كانت الميزة قديمة (checkbox.disabled = true)
                     if (checkbox.disabled) {
                         listItem.innerHTML = `
                             <div>
@@ -348,14 +398,17 @@
                 }
             });
 
+            // **تحديث حالة حقل اسم الفرع** قبل حفظ القيم
+            updateBranchNameVisibility();
+
             featuresCodeInput.value = featureCode;
             featuresCodeDisplay.value = featureCode;
             requestPriceInput.value = totalPrice.toFixed(2);
             requestPriceDisplay.value = totalPrice.toFixed(2);
             requestPriceText.textContent = totalPrice.toFixed(2);
-            
+
             // تفعيل زر الإرسال إذا تم اختيار ميزة جديدة واحدة على الأقل
-            submitBtn.disabled = newFeaturesCount === 0;
+            submitBtn.disabled = (newFeaturesCount === 0);
         }
 
         // البحث في الميزات

@@ -33,7 +33,15 @@ router.post('/create', [
     body('registrationCode').notEmpty().withMessage('Registration Code is required').matches(/^[XR][A-Za-z0-9]{16,17}$/).withMessage('Invalid Registration Code'),
     body('featuresCode').notEmpty().withMessage('Features Code is required'),
     body('requestType').notEmpty().withMessage('Request Type is required'),
-    body('requestPrice').isFloat({ min: 0 }).withMessage('Request Price must be a non-negative number')
+    body('requestPrice').isFloat({ min: 0 }).withMessage('Request Price must be a non-negative number'),
+    body('branchName').custom((value, { req }) => {
+        const featuresCode = parseInt(req.body.featuresCode);
+        const hasSyncFeature = (featuresCode & (1 << 8)) !== 0;
+        if (hasSyncFeature && !value) {
+            throw new Error('Branch Name is required when Sync Feature is selected');
+        }
+        return true;
+    })
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -41,7 +49,7 @@ router.post('/create', [
     }
 
     try {
-        const { licenseeName, registrationCode, featuresCode, requestType, requestPrice, baseRegistrationCode } = req.body;
+        const { licenseeName, registrationCode, featuresCode, requestType, requestPrice, baseRegistrationCode, branchName } = req.body;
         const userId = req.session.userId;
 
         const newLicenseRequest = {
@@ -52,7 +60,8 @@ router.post('/create', [
             requestType,
             status: 'Pending',
             userId,
-            baseRegistrationCode: requestType === 'Additional License' ? baseRegistrationCode : undefined
+            baseRegistrationCode: requestType === 'Additional License' ? baseRegistrationCode : undefined,
+            branchName: branchName || undefined
         };
 
         const createdLicenseRequest = await LicenseRequest.create(newLicenseRequest);
@@ -390,7 +399,15 @@ router.post('/additional-license', [
     body('registrationCode').notEmpty().withMessage('Registration Code is required').matches(/^[XR][A-Za-z0-9]{16,17}$/).withMessage('Invalid Registration Code'),
     body('featuresCode').notEmpty().withMessage('Features Code is required'),
     body('requestPrice').isFloat({ min: 0 }).withMessage('Request Price must be a non-negative number'),
-    body('baseRegistrationCode').notEmpty().withMessage('Base Registration Code is required')
+    body('baseRegistrationCode').notEmpty().withMessage('Base Registration Code is required'),
+    body('branchName').custom((value, { req }) => {
+        const featuresCode = parseInt(req.body.featuresCode);
+        const hasSyncFeature = (featuresCode & (1 << 8)) !== 0;
+        if (hasSyncFeature && !value) {
+            throw new Error('Branch Name is required when Sync Feature is selected');
+        }
+        return true;
+    })
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -398,7 +415,7 @@ router.post('/additional-license', [
     }
 
     try {
-        const { licenseeName, registrationCode, featuresCode, requestPrice, baseRegistrationCode } = req.body;
+        const { licenseeName, registrationCode, featuresCode, requestPrice, baseRegistrationCode, branchName } = req.body;
         const userId = req.session.userId;
 
         const newLicenseRequest = {
@@ -409,7 +426,8 @@ router.post('/additional-license', [
             requestType: 'Additional License',
             status: 'Pending',
             userId,
-            baseRegistrationCode
+            baseRegistrationCode,
+            branchName: branchName || undefined
         };
 
         const createdLicenseRequest = await LicenseRequest.create(newLicenseRequest);
@@ -480,7 +498,16 @@ router.post('/additional-feature-request', [
     body('registrationCode').notEmpty().withMessage('Registration Code is required').matches(/^[XR][A-Za-z0-9]{16,17}$/).withMessage('Invalid Registration Code'),
     body('featuresCode').notEmpty().withMessage('Features Code is required'),
     body('requestPrice').isFloat({ min: 0 }).withMessage('Request Price must be a non-negative number'),
-    body('oldFeaturesCode').notEmpty().withMessage('Old Features Code is required')
+    body('oldFeaturesCode').notEmpty().withMessage('Old Features Code is required'),
+    body('branchName').custom((value, { req }) => {
+        const oldFeatures = parseInt(req.body.oldFeaturesCode) || 0;
+        const newFeatures = parseInt(req.body.featuresCode) || 0;
+        const hasSyncFeature = (newFeatures & (1 << 8)) !== 0 && !(oldFeatures & (1 << 8));
+        if (hasSyncFeature && !value) {
+            throw new Error('Branch Name is required when adding Sync Feature');
+        }
+        return true;
+    })
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -488,7 +515,7 @@ router.post('/additional-feature-request', [
     }
 
     try {
-        const { licenseeName, registrationCode, featuresCode, requestPrice, oldFeaturesCode } = req.body;
+        const { licenseeName, registrationCode, featuresCode, requestPrice, oldFeaturesCode, branchName } = req.body;
         const userId = req.session.userId;
 
         const newLicenseRequest = {
@@ -496,10 +523,11 @@ router.post('/additional-feature-request', [
             registrationCode,
             featuresCode,
             requestPrice,
+            oldFeaturesCode,
             requestType: 'Additional Feature Request',
             status: 'Pending',
             userId,
-            oldFeaturesCode
+            branchName: branchName || undefined
         };
 
         const createdLicenseRequest = await LicenseRequest.create(newLicenseRequest);

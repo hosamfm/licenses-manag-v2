@@ -14,6 +14,7 @@
         <div class="card-body">
             <form id="newLicenseForm" method="POST" action="/licenses/create">
                 <input type="hidden" name="requestType" value="New License">
+                
                 <!-- رقم التسجيل -->
                 <div class="mb-4">
                     <label for="registrationCode" class="form-label almarai-bold">رقم التسجيل</label>
@@ -41,6 +42,13 @@
                 <div class="mb-4">
                     <label for="licenseeName" class="form-label almarai-bold">اسم المرخص له</label>
                     <input type="text" class="form-control almarai-regular" id="licenseeName" name="licenseeName" required>
+                </div>
+
+                <!-- اسم الفرع - يظهر فقط عند اختيار خدمة المزامنة -->
+                <div class="mb-4 d-none" id="branchNameContainer">
+                    <label for="branchName" class="form-label almarai-bold">اسم الفرع</label>
+                    <input type="text" class="form-control almarai-regular" id="branchName" name="branchName">
+                    <small class="text-muted">يرجى إدخال اسم الفرع لخدمة المزامنة</small>
                 </div>
 
                 <!-- الميزات المحددة -->
@@ -359,6 +367,9 @@
                 <span class="badge bg-light text-primary ms-2">${featureCount}</span>
             `;
         }
+
+        // تحديث حالة حقل اسم الفرع
+        updateBranchNameVisibility();
     }
 
     function toggleFeature(card, featureId) {
@@ -368,6 +379,7 @@
             updateCardSelection(card, checkbox.checked);
             updateTotalPrice();
             updateSelectedFeatures();
+            updateBranchNameVisibility(); // إضافة هذا السطر
         }
     }
 
@@ -421,6 +433,37 @@
     document.querySelector('#featuresModal .btn-primary').addEventListener('click', function() {
         updateSelectedFeatures();
         updateTotalPrice();
+    });
+</script>
+
+<!-- دالة إظهار/إخفاء حقل "اسم الفرع" -->
+<script>
+    function updateBranchNameVisibility() {
+        const syncFeatureCheckbox = document.querySelector('input[name="features"][value="8"]');
+        const branchNameContainer = document.getElementById('branchNameContainer');
+        const branchNameInput = document.getElementById('branchName');
+        
+        if (syncFeatureCheckbox && syncFeatureCheckbox.checked) {
+            branchNameContainer.classList.remove('d-none');
+            branchNameInput.required = true;
+        } else {
+            branchNameContainer.classList.add('d-none');
+            branchNameInput.required = false;
+            branchNameInput.value = '';
+        }
+    }
+
+    // إضافة مستمع للتغييرات في اختيار الميزات
+    document.addEventListener('DOMContentLoaded', function() {
+        const checkboxes = document.querySelectorAll('input[name="features"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                updateBranchNameVisibility();
+            });
+        });
+        
+        // تحديث الحالة الأولية
+        updateBranchNameVisibility();
     });
 </script>
 </body>

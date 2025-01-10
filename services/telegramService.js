@@ -24,7 +24,8 @@ const createMessageString = (licenseRequest) => {
     oldFeaturesCode,
     newRegistrationCode,
     oldRegistrationCode,
-    baseRegistrationCode
+    baseRegistrationCode,
+    branchName
   } = licenseRequest;
 
   const regCode = registrationCode || newRegistrationCode;
@@ -36,6 +37,13 @@ const createMessageString = (licenseRequest) => {
   const product = regCode.startsWith('X') ? 'نظام الكريستال' : 'نظام سراج';
 
   let baseInfo = `نوع الطلب: ${requestType}\nالمنتج: ${product}\n------------------\nمرخص لـ: ${licenseeName}\nرمز التسجيل: ${regCode}\nرمز الميزات: ${featuresCode}\n`;
+
+  // إضافة اسم الفرع إذا كانت ميزة المزامنة موجودة
+  const features = parseInt(featuresCode) || 0;
+  const hasSyncFeature = (features & (1 << 8)) !== 0;
+  if (hasSyncFeature && branchName) {
+    baseInfo += `اسم الفرع: ${branchName}\n`;
+  }
 
   // تنسيق التاريخ بالأرقام الإنجليزية
   const formatExpirationDate = (date) => {
@@ -55,6 +63,9 @@ const createMessageString = (licenseRequest) => {
       break;
     case 'Additional License':
       additionalInfo = `رمز التسجيل الأساسي: ${baseRegistrationCode || 'N/A'}\n`;
+      if (branchName) {
+        additionalInfo += `اسم الفرع: ${branchName}\n`;
+      }
       break;
     case 'Free License':
       additionalInfo = `السبب: ${reason}\n`;
@@ -64,6 +75,13 @@ const createMessageString = (licenseRequest) => {
       break;
     case 'Additional Feature Request':
       additionalInfo = `رمز الميزات القديم: ${oldFeaturesCode || 'N/A'}\n`;
+      // التحقق مما إذا كانت ميزة المزامنة مضافة (الميزة رقم 8)
+      const oldFeatures = parseInt(oldFeaturesCode) || 0;
+      const newFeatures = parseInt(featuresCode) || 0;
+      const hasSyncFeature = (newFeatures & (1 << 8)) !== 0 && !(oldFeatures & (1 << 8));
+      if (hasSyncFeature && branchName) {
+        additionalInfo += `اسم الفرع: ${branchName}\n`;
+      }
       break;
     case 'Re-License':
       additionalInfo = `رمز التسجيل القديم: ${oldRegistrationCode || 'N/A'}\nالسبب: ${reason}\n`;
