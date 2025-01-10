@@ -52,9 +52,6 @@
                         <th class="text-center text-white almarai-bold">مرخص لـ</th>
                         <th class="text-center text-white almarai-bold">كود التسجيل</th>
                         <th class="text-center text-white almarai-bold">كود الميزات</th>
-                        <% if (session.userRole !== 'supplier') { %>
-                            <th class="text-center text-white almarai-bold">سعر الطلب</th>
-                        <% } %>
                         <th class="text-center text-white almarai-bold">حالة الطلب</th>
                         <th class="text-center text-white almarai-bold">الإجراءات</th>
                     </tr>
@@ -73,9 +70,6 @@
                             <td class="text-center">
                                 <button class="btn btn-info feature-code-btn" data-feature-code="<%= request.featuresCode %>"><%= request.featuresCode %></button>
                             </td>
-                            <% if (session.userRole !== 'supplier') { %>
-                                <td class="text-center"><%= request.price %></td>
-                            <% } %>
                             <td class="text-center"><%= request.status %></td>
                             <td class="text-center">
                                 <button class="btn btn-success btn-sm mb-1 view-license-info" data-id="<%= request._id %>">عرض معلومات الترخيص</button>

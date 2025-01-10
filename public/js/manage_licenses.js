@@ -152,13 +152,6 @@ $(document).ready(function() {
                         html: `<button class="btn btn-info feature-code-btn" data-feature-code="${licenseRequest.featuresCode}">${licenseRequest.featuresCode}</button>`
                     }).appendTo(row);
 
-                    if (!['supplier'].includes(userRole)) {
-                        $('<td>', {
-                            class: 'text-center request-price',
-                            text: licenseRequest.requestPrice !== undefined && licenseRequest.requestPrice !== null ? licenseRequest.requestPrice.toFixed(2) : '0.00'
-                        }).appendTo(row);
-                    }
-
                     const statusCell = $('<td>', {
                         class: 'text-center',
                         html: `${licenseRequest.status}`

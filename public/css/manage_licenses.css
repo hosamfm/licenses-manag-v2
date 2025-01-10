@@ -16,7 +16,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 2rem auto;
     padding: 0 1rem;
 }
@@ -147,27 +147,28 @@ body {
 }
 
 .table-responsive {
+    margin-top: 1rem;
     overflow-x: auto;
-    margin: 0 -1px;
+    border-radius: var(--border-radius);
+    background: white;
+    box-shadow: var(--box-shadow);
 }
 
 .table {
-    margin: 0;
+    font-size: 1.1rem;
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 0.9rem;
 }
 
 .table thead th {
-    background: var(--primary-blue);
+    font-size: 1.15rem;
+    padding: 1rem;
+    background-color: var(--primary-blue);
     color: white !important;
     font-weight: 600;
-    padding: 0.75rem 0.5rem;
-    border: none;
     white-space: nowrap;
     text-align: center;
-    font-size: 0.95rem;
 }
 
 .table tbody tr {
@@ -179,7 +180,7 @@ body {
 }
 
 .table td {
-    padding: 0.75rem 0.5rem;
+    padding: 1rem;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-dark);
     vertical-align: middle;
