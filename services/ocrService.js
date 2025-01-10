@@ -104,6 +104,10 @@ class OCRService {
             formData.append('file', processedImage, { filename: 'image.png' });
             formData.append('apikey', 'K85529519688957'); // ضع مفتاحك هنا
             formData.append('language', 'eng');
+            formData.append('OCREngine', '2');           // استخدام المحرك 2 للدقة العالية
+            formData.append('scale', 'true');           // تحسين دقة التعرف للصور منخفضة الدقة
+            formData.append('isTable', 'false');        // لا نحتاج لمعالجة الجداول
+            formData.append('detectOrientation', 'true'); // كشف وتصحيح اتجاه النص تلقائياً
             
             // 3) إرسال الطلب إلى OCR.space
             const response = await fetch('https://api.ocr.space/parse/image', {
@@ -116,6 +120,17 @@ class OCRService {
             
             // 4) قراءة النص من النتيجة
             const result = await response.json();
+            
+            // التحقق من وجود أخطاء في الاستجابة
+            if (result.IsErroredOnProcessing) {
+                throw new Error(result.ErrorMessage || 'حدث خطأ أثناء معالجة الصورة');
+            }
+
+            // التحقق من نجاح عملية OCR
+            if (result.OCRExitCode !== 1) {
+                throw new Error('فشلت عملية التعرف على النص');
+            }
+
             const rawText = result?.ParsedResults?.[0]?.ParsedText || '';
             console.log('Raw OCR Text:', rawText);
 
