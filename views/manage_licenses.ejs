@@ -31,7 +31,9 @@
             </div>
             <div class="search-group">
                 <% if (['admin', 'supervisor', 'supplier'].includes(session.userRole)) { %>
-                    <input type="text" name="userName" id="filterUserName" class="form-control almarai-regular" placeholder="بحث باسم المستخدم" style="max-width: 200px;">
+                    <select id="filterUserName" class="form-select almarai-regular" style="max-width: 200px;">
+                        <option value="">اختر المستخدم</option>
+                    </select>
                 <% } %>
                 <input type="text" name="searchQuery" id="searchQuery" class="form-control almarai-regular" placeholder="بحث عن ترخيص" style="max-width: 300px;">
             </div>

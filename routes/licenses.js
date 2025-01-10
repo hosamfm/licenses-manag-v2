@@ -8,7 +8,7 @@ const telegramService = require('../services/telegramService');
 
 // نقطة النهاية لتحميل طلبات التراخيص بالصفحات
 router.get('/api/license-requests', async (req, res) => {
-    const { page = 1, limit = 50, searchQuery, userName, startDate, endDate } = req.query;
+    const { page = 1, limit = 50, searchQuery, selectedUserId, startDate, endDate } = req.query;
     const { userId, userRole } = req.session;
 
     try {
@@ -22,16 +22,8 @@ router.get('/api/license-requests', async (req, res) => {
             ];
         }
 
-        if (userName) {
-            const users = await User.find({
-                $or: [
-                    { username: { $regex: userName, $options: 'i' } },
-                    { full_name: { $regex: userName, $options: 'i' } },
-                    { company_name: { $regex: userName, $options: 'i' } }
-                ]
-            });
-            const userIds = users.map(user => user._id);
-            query.userId = { $in: userIds };
+        if (selectedUserId) {
+            query.userId = selectedUserId;
         }
 
         if (startDate && endDate) {

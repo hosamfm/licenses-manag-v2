@@ -49,7 +49,6 @@ router.post('/auth/admin/register', isAuthenticated, checkRole(['admin', 'superv
   }
 });
 
-
 // المسارات الحالية
 router.post('/auth/register', async (req, res) => {
   try {
@@ -273,6 +272,38 @@ router.post('/licenses/admin/user-management/change-password', [isAuthenticated,
     console.error('Error updating password:', error.message, error.stack);
     req.flash('error', 'Error updating password. Please try again.');
     res.status(500).redirect('/licenses/admin/user-management');
+  }
+});
+
+// الحصول على قائمة المستخدمين للقائمة المنسدلة
+router.get('/api/users/list', isAuthenticated, checkRole(['admin', 'supervisor', 'supplier']), async (req, res) => {
+  try {
+    let query = {};
+    const { search } = req.query;
+
+    // تحديد المستخدمين بناءً على دور المستخدم الحالي
+    if (req.session.userRole === 'supervisor') {
+      query.supervisor = req.session.userId;
+    } else if (req.session.userRole === 'supplier') {
+      query.supervisor = req.session.userId;
+    }
+
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { full_name: { $regex: search, $options: 'i' } },
+        { company_name: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const users = await User.find(query)
+      .select('username full_name company_name _id')
+      .sort({ username: 1 });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب قائمة المستخدمين' });
   }
 });
 

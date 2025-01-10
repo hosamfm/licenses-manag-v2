@@ -1,3 +1,16 @@
+// Debounce function to limit the rate at which a function can fire
+const debounce = (func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+};
+
 $(document).ready(function() {
     const userRole = $('#licenseRequestsTable').data('user-role');
     const userId = $('#licenseRequestsTable').data('user-id');
@@ -62,7 +75,7 @@ $(document).ready(function() {
         });
     };
 
-    const fetchLicenseRequests = (page, searchQuery = '', userName = '', startDate = '', endDate = '') => {
+    const fetchLicenseRequests = (page, searchQuery = '', selectedUserId = '', startDate = '', endDate = '') => {
         if (isLoading) return;
         isLoading = true;
         loading.show();
@@ -71,7 +84,7 @@ $(document).ready(function() {
             page,
             limit,
             searchQuery,
-            userName,
+            selectedUserId,
             startDate,
             endDate
         });
@@ -206,10 +219,10 @@ $(document).ready(function() {
         if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 50 && !isLoading) {
             currentPage++;
             const searchQuery = $('#searchQuery').val();
-            const userName = $('#filterUserName').val();
+            const selectedUserId = $('#filterUserName').val();
             const startDate = $('#filterStartDate').val();
             const endDate = $('#filterEndDate').val();
-            fetchLicenseRequests(currentPage, searchQuery, userName, startDate, endDate);
+            fetchLicenseRequests(currentPage, searchQuery, selectedUserId, startDate, endDate);
         }
     };
 
@@ -300,10 +313,10 @@ $(document).ready(function() {
             if (currentPage > 1) {
                 currentPage--;
                 const searchQuery = $('#searchQuery').val();
-                const userName = $('#filterUserName').val();
+                const selectedUserId = $('#filterUserName').val();
                 const startDate = $('#filterStartDate').val();
                 const endDate = $('#filterEndDate').val();
-                fetchLicenseRequests(currentPage, searchQuery, userName, startDate, endDate);
+                fetchLicenseRequests(currentPage, searchQuery, selectedUserId, startDate, endDate);
             }
         });
 
@@ -312,10 +325,10 @@ $(document).ready(function() {
             if (currentPage < totalPages) {
                 currentPage++;
                 const searchQuery = $('#searchQuery').val();
-                const userName = $('#filterUserName').val();
+                const selectedUserId = $('#filterUserName').val();
                 const startDate = $('#filterStartDate').val();
                 const endDate = $('#filterEndDate').val();
-                fetchLicenseRequests(currentPage, searchQuery, userName, startDate, endDate);
+                fetchLicenseRequests(currentPage, searchQuery, selectedUserId, startDate, endDate);
             }
         });
     };
@@ -330,37 +343,71 @@ $(document).ready(function() {
                 $('#filterEndDate').val(selectedDates[1].toISOString().split('T')[0]);
                 currentPage = 1; // Reset to the first page
                 const searchQuery = $('#searchQuery').val();
-                const userName = $('#filterUserName').val();
-                fetchLicenseRequests(currentPage, searchQuery, userName, selectedDates[0].toISOString().split('T')[0], selectedDates[1].toISOString().split('T')[0]);
+                const selectedUserId = $('#filterUserName').val();
+                fetchLicenseRequests(currentPage, searchQuery, selectedUserId, selectedDates[0].toISOString().split('T')[0], selectedDates[1].toISOString().split('T')[0]);
             }
         }
     });
 
     // Dynamic search and filter functionality
     const searchQueryInput = $('#searchQuery');
-    const filterUserNameInput = $('#filterUserName');
+    const filterUserNameSelect = $('#filterUserName');
     const filterStartDateInput = $('#filterStartDate');
     const filterEndDateInput = $('#filterEndDate');
 
-    searchQueryInput.on('input', function() {
-        currentPage = 1; // Reset to the first page
-        const searchQuery = $(this).val();
-        const userName = filterUserNameInput.val();
-        const startDate = filterStartDateInput.val();
-        const endDate = filterEndDateInput.val();
-        fetchLicenseRequests(currentPage, searchQuery, userName, startDate, endDate);
+    const loadUsers = async (searchTerm = '') => {
+        try {
+            const response = await fetch(`/api/users/list${searchTerm ? `?search=${encodeURIComponent(searchTerm)}` : ''}`);
+            if (!response.ok) throw new Error('Failed to fetch users');
+            const users = await response.json();
+            
+            const select = $('#filterUserName');
+            select.find('option:not(:first)').remove();
+            
+            users.forEach(user => {
+                const displayName = user.full_name || user.username;
+                const companyInfo = user.company_name ? ` (${user.company_name})` : '';
+                select.append($('<option>', {
+                    value: user._id,
+                    text: displayName + companyInfo
+                }));
+            });
+        } catch (error) {
+            console.error('Error loading users:', error);
+        }
+    };
+
+    // تحميل المستخدمين عند تحميل الصفحة
+    if ($('#filterUserName').length) {
+        loadUsers();
+    }
+
+    // إضافة خاصية البحث في القائمة المنسدلة
+    let searchTimeout;
+    $('#filterUserName').on('keyup', function() {
+        clearTimeout(searchTimeout);
+        const searchTerm = $(this).val();
+        searchTimeout = setTimeout(() => loadUsers(searchTerm), 300);
     });
 
-    if (filterUserNameInput.length) {
-        filterUserNameInput.on('input', function() {
-            currentPage = 1; // Reset to the first page
-            const searchQuery = searchQueryInput.val();
-            const userName = $(this).val();
-            const startDate = filterStartDateInput.val();
-            const endDate = filterEndDateInput.val();
-            fetchLicenseRequests(currentPage, searchQuery, userName, startDate, endDate);
-        });
-    }
+    const performSearch = () => {
+        currentPage = 1;
+        const searchQuery = searchQueryInput.val();
+        const selectedUserId = filterUserNameSelect.val();
+        const startDate = $('#filterStartDate').val();
+        const endDate = $('#filterEndDate').val();
+
+        fetchLicenseRequests(currentPage, searchQuery, selectedUserId, startDate, endDate)
+            .then(updateUI)
+            .catch(error => {
+                console.error('Error performing search:', error);
+                alert('حدث خطأ أثناء البحث');
+            });
+    };
+
+    // Event listeners for search inputs
+    searchQueryInput.on('input', debounce(performSearch, 500));
+    filterUserNameSelect.on('change', performSearch);
 
     // Initial load
     fetchLicenseRequests(currentPage);
