@@ -165,7 +165,7 @@ $(document).ready(function() {
                             text: 'عرض معلومات الترخيص'
                         }).appendTo(actionsCell);
                     }
-                    if (userRole === 'admin') {
+                    if (userRole === 'admin' && licenseRequest.status === 'Pending') {
                         $('<button>', {
                             class: 'btn btn-danger btn-sm mb-1 delete-license-request',
                             'data-id': licenseRequest._id,
