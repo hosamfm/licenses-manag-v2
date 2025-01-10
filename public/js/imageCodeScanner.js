@@ -1,6 +1,7 @@
+// public/js/imageCodeScanner.js
 class ImageCodeScanner {
     constructor(options = {}) {
-        this.targetInput = null;
+        this.targetInput = options.targetInput || null;
         this.onSuccess = options.onSuccess || (() => {});
         this.onError = options.onError || (() => {});
     }
@@ -9,44 +10,38 @@ class ImageCodeScanner {
         this.container = document.createElement('div');
         this.container.className = 'image-code-scanner-container';
         
-        // Create camera button
-        this.cameraButton = document.createElement('button');
-        this.cameraButton.className = 'btn btn-outline-secondary';
-        this.cameraButton.innerHTML = '<i class="fas fa-camera"></i>';
-        this.cameraButton.title = 'التقاط صورة';
-        
-        // Create file upload button
+        // زر رفع ملف
         this.uploadButton = document.createElement('button');
         this.uploadButton.className = 'btn btn-outline-secondary';
         this.uploadButton.innerHTML = '<i class="fas fa-upload"></i>';
         this.uploadButton.title = 'تحميل صورة';
-        
-        // Hidden file input
+
+        // حقل إدخال ملف مخفي
         this.fileInput = document.createElement('input');
         this.fileInput.type = 'file';
         this.fileInput.accept = 'image/*';
         this.fileInput.style.display = 'none';
         
-        // Add event listeners
+        // ربط الأحداث
         this.uploadButton.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         
-        // Append elements
-        this.container.appendChild(this.cameraButton);
+        // إضافة العناصر
         this.container.appendChild(this.uploadButton);
         this.container.appendChild(this.fileInput);
     }
 
     async startCamera() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
                     facingMode: 'environment',
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
-                } 
+                }
             });
             
+            // إنشاء مودال لأخذ الصورة
             const modal = document.createElement('div');
             modal.className = 'modal fade';
             modal.innerHTML = `
@@ -101,24 +96,21 @@ class ImageCodeScanner {
             const previewCode = modal.querySelector('.preview-code');
             const processingOverlay = modal.querySelector('.processing-overlay');
             const viewfinder = modal.querySelector('.viewfinder');
-            
+
             video.srcObject = stream;
-            
-            // انتظار تحميل الفيديو
             await new Promise(resolve => video.addEventListener('loadedmetadata', resolve));
-            
+
             const showProcessing = () => {
                 processingOverlay.style.display = 'flex';
                 captureBtn.disabled = true;
                 retryBtn.disabled = true;
             };
-            
             const hideProcessing = () => {
                 processingOverlay.style.display = 'none';
                 captureBtn.disabled = false;
                 retryBtn.disabled = false;
             };
-            
+
             const showPreview = (imageUrl, code) => {
                 video.style.display = 'none';
                 viewfinder.style.display = 'none';
@@ -129,7 +121,6 @@ class ImageCodeScanner {
                 captureBtn.style.display = 'none';
                 retryBtn.style.display = 'inline-block';
             };
-            
             const hidePreview = () => {
                 video.style.display = 'block';
                 viewfinder.style.display = 'flex';
@@ -137,27 +128,25 @@ class ImageCodeScanner {
                 captureBtn.style.display = 'inline-block';
                 retryBtn.style.display = 'none';
             };
-            
+
             retryBtn.addEventListener('click', hidePreview);
-            
+
             captureBtn.addEventListener('click', async () => {
                 showProcessing();
-                
-                // تحديد منطقة الالتقاط بناءً على إطار التحديد
                 const viewfinderFrame = modal.querySelector('.viewfinder-frame');
                 const rect = viewfinderFrame.getBoundingClientRect();
                 const videoRect = video.getBoundingClientRect();
-                
-                // حساب نسبة المنطقة المحددة
+
+                // حساب نسبة التقاط الإطار
                 const scaleX = video.videoWidth / videoRect.width;
                 const scaleY = video.videoHeight / videoRect.height;
-                
+
                 const captureWidth = rect.width * scaleX;
                 const captureHeight = rect.height * scaleY;
                 const captureX = (rect.left - videoRect.left) * scaleX;
                 const captureY = (rect.top - videoRect.top) * scaleY;
-                
-                // التقاط المنطقة المحددة فقط
+
+                // رسم المنطقة المحددة فقط
                 canvas.width = captureWidth;
                 canvas.height = captureHeight;
                 canvas.getContext('2d').drawImage(
@@ -194,22 +183,25 @@ class ImageCodeScanner {
                     this.onError('فشل في التقاط الصورة');
                 }
             });
-            
+
             modal.addEventListener('hidden.bs.modal', () => {
                 stream.getTracks().forEach(track => track.stop());
                 modal.remove();
             });
-            
+
             modalInstance.show();
         } catch (error) {
-            this.onError('فشل في الوصول إلى الكاميرا');
+            this.onError('فشل في الوصول إلى الكاميرا: ' + error.message);
         }
     }
 
     async handleFileSelect(event) {
         const file = event.target.files[0];
-        if (file) {
+        if (!file) return;
+        try {
             await this.processImage(file);
+        } catch (err) {
+            this.onError(err.message);
         }
     }
 
@@ -224,14 +216,14 @@ class ImageCodeScanner {
             });
 
             if (!response.ok) {
-                throw new Error('فشل في معالجة الصورة');
+                throw new Error('فشل في معالجة الصورة (استجابة غير ناجحة)');
             }
 
             const { text } = await response.json();
             if (text && this.targetInput) {
                 this.targetInput.value = text;
                 this.onSuccess(text);
-                return text; // إرجاع النص المستخرج لعرضه في المعاينة
+                return text; 
             } else {
                 this.onError('لم يتم العثور على كود ترخيص صالح');
                 return null;
@@ -244,117 +236,89 @@ class ImageCodeScanner {
 
     mount(element) {
         if (!element) return;
-        
-        this.targetInput = element.closest('.input-group').querySelector('input');
-        element.addEventListener('click', () => this.startCamera());
+        this.setupUI();
+
+        // نضيف زر "الكاميرا" بجانب زر الرفع (اختياري)
+        // يمكنك الاكتفاء بالـ uploadButton لوحده إن أردت
+        const cameraButton = document.createElement('button');
+        cameraButton.className = 'btn btn-outline-secondary ms-1';
+        cameraButton.innerHTML = '<i class="fas fa-camera"></i>';
+        cameraButton.title = 'التقاط صورة';
+        cameraButton.addEventListener('click', () => this.startCamera());
+
+        this.container.insertBefore(cameraButton, this.uploadButton);
+
+        // ضع عناصر الواجهة بعد زر "التقاط الكود" الأساسي
+        element.insertAdjacentElement('afterend', this.container);
+
+        // حفظ مرجع الحقل الهدف
+        // (يفترض أنه في نفس .input-group التي تحوي الزر)
+        this.targetInput = this.targetInput || element.closest('.input-group').querySelector('input');
     }
 }
 
-// Add styles
+// إضافة بعض الأنماط (CSS) إن لم تكن موجودة
 const style = document.createElement('style');
 style.textContent = `
-    .image-code-scanner-container {
-        display: inline-flex;
-        gap: 5px;
-    }
-    
-    .image-code-scanner-container button {
-        padding: 6px 12px;
-    }
-    
-    .camera-container {
-        position: relative;
-        width: 100%;
-        height: 0;
-        padding-bottom: 75%;
-        background: #000;
-        overflow: hidden;
-    }
-    
-    .camera-container video {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    
-    .viewfinder {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.5);
-    }
-    
-    .viewfinder-frame {
-        width: 300px;
-        height: 60px;
-        border: 2px solid #fff;
-        border-radius: 4px;
-        background: transparent;
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-    }
-    
-    .viewfinder-help {
-        position: absolute;
-        bottom: 20px;
-        left: 0;
-        right: 0;
-        text-align: center;
-        color: #fff;
-        font-size: 14px;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-    }
-    
-    .preview-container {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: #000;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
-    
-    .preview-image {
-        max-width: 100%;
-        max-height: 70%;
-        object-fit: contain;
-        border-radius: 4px;
-        margin-bottom: 15px;
-    }
-    
-    .preview-code {
-        font-family: monospace;
-        font-size: 1.2em;
-        padding: 10px 20px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-        color: #fff;
-    }
-    
-    .processing-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-    }
+.image-code-scanner-container {
+    display: inline-flex;
+    gap: 5px;
+    margin-right: 5px;
+}
+.camera-container {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 75%;
+    background: #000;
+    overflow: hidden;
+}
+.camera-container video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.viewfinder {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.5);
+}
+.viewfinder-frame {
+    width: 300px; height: 60px;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    background: transparent;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+.viewfinder-help {
+    position: absolute;
+    bottom: 20px; left: 0; right: 0;
+    text-align: center; color: #fff; font-size: 14px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+.preview-container {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: #000; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 20px;
+}
+.preview-image {
+    max-width: 100%; max-height: 70%; object-fit: contain;
+    border-radius: 4px; margin-bottom: 15px;
+}
+.preview-code {
+    font-family: monospace; font-size: 1.2em;
+    padding: 10px 20px; background: rgba(255,255,255,0.1);
+    border-radius: 4px; color: #fff;
+}
+.processing-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; z-index: 1000;
+}
 `;
 document.head.appendChild(style);

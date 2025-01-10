@@ -1,3 +1,4 @@
+// routes/ocrRoutes.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -10,6 +11,7 @@ const upload = multer({
     }
 });
 
+// استدعاء نقطة النهاية
 router.post('/api/ocr', upload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
@@ -18,11 +20,11 @@ router.post('/api/ocr', upload.single('image'), async (req, res) => {
 
         const imageBuffer = req.file.buffer;
         const recognizedText = await ocrService.recognizeText(imageBuffer);
-        
-        res.json({ text: recognizedText });
+
+        return res.json({ text: recognizedText });
     } catch (error) {
         console.error('OCR Error:', error);
-        res.status(500).json({ error: 'Failed to process image' });
+        return res.status(500).json({ error: 'Failed to process image' });
     }
 });
 
