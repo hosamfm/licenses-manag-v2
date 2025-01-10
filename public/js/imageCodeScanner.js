@@ -7,28 +7,8 @@ class ImageCodeScanner {
     }
 
     setupUI() {
-        this.container = document.createElement('div');
-        this.container.className = 'image-code-scanner-container';
-        
-        // زر رفع ملف
-        this.uploadButton = document.createElement('button');
-        this.uploadButton.className = 'btn btn-outline-secondary';
-        this.uploadButton.innerHTML = '<i class="fas fa-upload"></i>';
-        this.uploadButton.title = 'تحميل صورة';
-
-        // حقل إدخال ملف مخفي
-        this.fileInput = document.createElement('input');
-        this.fileInput.type = 'file';
-        this.fileInput.accept = 'image/*';
-        this.fileInput.style.display = 'none';
-        
-        // ربط الأحداث
-        this.uploadButton.addEventListener('click', () => this.fileInput.click());
-        this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-        
-        // إضافة العناصر
-        this.container.appendChild(this.uploadButton);
-        this.container.appendChild(this.fileInput);
+        // لا نحتاج لإنشاء أي أزرار إضافية
+        // سنستخدم الزر الموجود في القالب
     }
 
     async startCamera() {
@@ -196,13 +176,7 @@ class ImageCodeScanner {
     }
 
     async handleFileSelect(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        try {
-            await this.processImage(file);
-        } catch (err) {
-            this.onError(err.message);
-        }
+        // لا يوجد استخدام لهذا الأسلوب الآن
     }
 
     async processImage(imageData) {
@@ -236,35 +210,18 @@ class ImageCodeScanner {
 
     mount(element) {
         if (!element) return;
-        this.setupUI();
-
-        // نضيف زر "الكاميرا" بجانب زر الرفع (اختياري)
-        // يمكنك الاكتفاء بالـ uploadButton لوحده إن أردت
-        const cameraButton = document.createElement('button');
-        cameraButton.className = 'btn btn-outline-secondary ms-1';
-        cameraButton.innerHTML = '<i class="fas fa-camera"></i>';
-        cameraButton.title = 'التقاط صورة';
-        cameraButton.addEventListener('click', () => this.startCamera());
-
-        this.container.insertBefore(cameraButton, this.uploadButton);
-
-        // ضع عناصر الواجهة بعد زر "التقاط الكود" الأساسي
-        element.insertAdjacentElement('afterend', this.container);
-
-        // حفظ مرجع الحقل الهدف
-        // (يفترض أنه في نفس .input-group التي تحوي الزر)
+        
+        // حفظ مرجع حقل الإدخال
         this.targetInput = this.targetInput || element.closest('.input-group').querySelector('input');
+        
+        // ربط حدث النقر على الزر الموجود بفتح الكاميرا
+        element.addEventListener('click', () => this.startCamera());
     }
 }
 
-// إضافة بعض الأنماط (CSS) إن لم تكن موجودة
+// نحتفظ فقط بالأنماط المتعلقة بالكاميرا والمعاينة
 const style = document.createElement('style');
 style.textContent = `
-.image-code-scanner-container {
-    display: inline-flex;
-    gap: 5px;
-    margin-right: 5px;
-}
 .camera-container {
     position: relative;
     width: 100%;
