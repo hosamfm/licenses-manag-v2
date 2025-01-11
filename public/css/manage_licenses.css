@@ -354,6 +354,53 @@ body {
     font-weight: 600;
 }
 
+/* تنسيق قسم معلومات الترخيص في نوافذ الفواتير */
+.license-info-section {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+}
+
+.license-info-section h6 {
+    color: var(--primary-blue);
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.license-info-section p {
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.license-info-section strong {
+    color: var(--primary-teal);
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
+.license-info-section .invoice-features-list {
+    list-style: none;
+    padding-right: 1.25rem;
+    margin: 0;
+}
+
+.license-info-section .invoice-features-list li {
+    position: relative;
+    padding: 0.25rem 0;
+    font-size: 0.95rem;
+}
+
+.license-info-section .invoice-features-list li::before {
+    content: "•";
+    color: var(--primary-teal);
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+    margin-left: 0.5rem;
+}
+
 #licenseRequestsTable {
     display: none;
 }
