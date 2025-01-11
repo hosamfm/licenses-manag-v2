@@ -84,11 +84,31 @@ const licenseRequestSchema = new mongoose.Schema({
   },
   customerInvoice: {
     number: String,
-    date: Date
+    date: Date,
+    addedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    lastModifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    addedAt: Date,
+    lastModifiedAt: Date
   },
   supplierInvoice: {
     number: String,
-    date: Date
+    date: Date,
+    addedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    lastModifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    addedAt: Date,
+    lastModifiedAt: Date
   }
 }, { timestamps: true });
 

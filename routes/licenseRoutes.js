@@ -331,47 +331,97 @@ router.get('/details/:id', async (req, res) => {
     }
 });
 
-router.post('/customer-invoice', async (req, res) => {
+router.post('/customer-invoice', [
+    isAuthenticated,
+    body('licenseId').notEmpty().withMessage('License ID is required'),
+    body('invoiceNumber').notEmpty().withMessage('Invoice Number is required'),
+    body('invoiceDate').notEmpty().withMessage('Invoice Date is required')
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
     try {
         const { licenseId, invoiceNumber, invoiceDate } = req.body;
+        const userId = req.session.userId;
         
         const licenseRequest = await LicenseRequest.findById(licenseId);
+        
         if (!licenseRequest) {
-            return res.status(404).json({ message: 'طلب الترخيص غير موجود' });
+            return res.status(404).json({ success: false, message: 'License request not found' });
         }
 
+        // التحقق من وجود فاتورة مسبقًا
+        const isExistingInvoice = licenseRequest.customerInvoice && licenseRequest.customerInvoice.number;
+
+        // تحديث معلومات الفاتورة
         licenseRequest.customerInvoice = {
             number: invoiceNumber,
-            date: invoiceDate
+            date: new Date(invoiceDate),
+            addedBy: isExistingInvoice ? licenseRequest.customerInvoice.addedBy : userId,
+            lastModifiedBy: userId,
+            addedAt: isExistingInvoice ? licenseRequest.customerInvoice.addedAt : new Date(),
+            lastModifiedAt: new Date()
         };
 
         await licenseRequest.save();
-        res.json({ message: 'تم حفظ فاتورة العميل بنجاح' });
+
+        return res.status(200).json({ 
+            success: true, 
+            message: 'تم إضافة فاتورة العميل بنجاح',
+            invoice: licenseRequest.customerInvoice 
+        });
     } catch (error) {
-        console.error('Error saving customer invoice:', error);
-        res.status(500).json({ message: 'حدث خطأ أثناء حفظ فاتورة العميل' });
+        console.error('Error adding customer invoice:', error);
+        return res.status(500).json({ success: false, message: 'حدث خطأ أثناء إضافة الفاتورة' });
     }
 });
 
-router.post('/supplier-invoice', async (req, res) => {
+router.post('/supplier-invoice', [
+    isAuthenticated,
+    body('licenseId').notEmpty().withMessage('License ID is required'),
+    body('invoiceNumber').notEmpty().withMessage('Invoice Number is required'),
+    body('invoiceDate').notEmpty().withMessage('Invoice Date is required')
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
     try {
         const { licenseId, invoiceNumber, invoiceDate } = req.body;
+        const userId = req.session.userId;
         
         const licenseRequest = await LicenseRequest.findById(licenseId);
+        
         if (!licenseRequest) {
-            return res.status(404).json({ message: 'طلب الترخيص غير موجود' });
+            return res.status(404).json({ success: false, message: 'License request not found' });
         }
 
+        // التحقق من وجود فاتورة مسبقًا
+        const isExistingInvoice = licenseRequest.supplierInvoice && licenseRequest.supplierInvoice.number;
+
+        // تحديث معلومات الفاتورة
         licenseRequest.supplierInvoice = {
             number: invoiceNumber,
-            date: invoiceDate
+            date: new Date(invoiceDate),
+            addedBy: isExistingInvoice ? licenseRequest.supplierInvoice.addedBy : userId,
+            lastModifiedBy: userId,
+            addedAt: isExistingInvoice ? licenseRequest.supplierInvoice.addedAt : new Date(),
+            lastModifiedAt: new Date()
         };
 
         await licenseRequest.save();
-        res.json({ message: 'تم حفظ فاتورة المورد بنجاح' });
+
+        return res.status(200).json({ 
+            success: true, 
+            message: 'تم إضافة فاتورة المورد بنجاح',
+            invoice: licenseRequest.supplierInvoice 
+        });
     } catch (error) {
-        console.error('Error saving supplier invoice:', error);
-        res.status(500).json({ message: 'حدث خطأ أثناء حفظ فاتورة المورد' });
+        console.error('Error adding supplier invoice:', error);
+        return res.status(500).json({ success: false, message: 'حدث خطأ أثناء إضافة الفاتورة' });
     }
 });
 
