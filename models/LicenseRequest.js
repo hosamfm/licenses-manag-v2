@@ -81,6 +81,14 @@ const licenseRequestSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Supplier',
     required: false
+  },
+  customerInvoice: {
+    number: String,
+    date: Date
+  },
+  supplierInvoice: {
+    number: String,
+    date: Date
   }
 }, { timestamps: true });
 

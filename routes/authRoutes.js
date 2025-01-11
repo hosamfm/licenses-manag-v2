@@ -283,7 +283,10 @@ router.get('/api/users/list', isAuthenticated, checkRole(['admin', 'supervisor',
 
     // تحديد المستخدمين بناءً على دور المستخدم الحالي
     if (req.session.userRole === 'supervisor') {
-      query.supervisor = req.session.userId;
+      query.$or = [
+        { _id: req.session.userId }, // إضافة المشرف نفسه
+        { supervisor: req.session.userId } // إضافة المرؤوسين
+      ];
     } else if (req.session.userRole === 'supplier') {
       query.supervisor = req.session.userId;
     }

@@ -52,15 +52,64 @@ $(document).ready(function() {
             });
     };
 
-    const updateModalWithLicenseDetails = (license) => {
+    // دالة لتنسيق التاريخ للعرض
+    const formatDate = (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleDateString('en-GB', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+    };
+
+    // دالة لتنسيق التاريخ لحقل التاريخ في النموذج
+    const formatDateForInput = (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '';
+        return d.toISOString().split('T')[0];
+    };
+
+    const updateModalWithLicenseDetails = async (license) => {
+        // تحديث معلومات الترخيص الأساسية
         $('#modalLicenseeName').text(license.licenseeName);
-        $('#modalSerialNumber').text(license.serialNumber);
+        $('#modalSerialNumber').text(license.serialNumber || 'N/A');
         $('#modalRegistrationCode').text(license.registrationCode);
         $('#modalActivationCode').text(license.activationCode || 'N/A');
         $('#modalFeaturesCode').text(license.featuresCode);
-        $('#modalExpirationDate').text(license.expirationDate ? new Date(license.expirationDate).toLocaleDateString() : 'N/A');
+        $('#modalExpirationDate').text(formatDate(license.expirationDate));
 
-        // Fetch and display features
+        // تحديث معلومات الفواتير - فقط للمدير
+        const customerInvoiceInfo = $('#customerInvoiceInfo');
+        const supplierInvoiceInfo = $('#supplierInvoiceInfo');
+
+        if (userRole === 'admin') {
+            // فاتورة العميل
+            if (license.customerInvoice && license.customerInvoice.number) {
+                $('#modalCustomerInvoiceNumber').text(license.customerInvoice.number);
+                $('#modalCustomerInvoiceDate').text(formatDate(license.customerInvoice.date));
+                customerInvoiceInfo.show();
+            } else {
+                customerInvoiceInfo.hide();
+            }
+
+            // فاتورة المورد
+            if (license.supplierInvoice && license.supplierInvoice.number) {
+                $('#modalSupplierInvoiceNumber').text(license.supplierInvoice.number);
+                $('#modalSupplierInvoiceDate').text(formatDate(license.supplierInvoice.date));
+                supplierInvoiceInfo.show();
+            } else {
+                supplierInvoiceInfo.hide();
+            }
+        } else {
+            // إخفاء معلومات الفواتير لغير المدير
+            customerInvoiceInfo.hide();
+            supplierInvoiceInfo.hide();
+        }
+
+        // عرض الميزات
         fetchFeatureDetails(license.featuresCode).then(data => {
             const featuresList = $('#modalFeaturesList');
             featuresList.empty();
@@ -70,7 +119,7 @@ $(document).ready(function() {
                     featuresList.append(listItem);
                 });
             } else {
-                featuresList.append($('<li>').text('No features available'));
+                featuresList.append($('<li>').text('لا توجد ميزات'));
             }
         });
     };
@@ -98,24 +147,27 @@ $(document).ready(function() {
                     licenseRequestsTable.empty();
                 }
 
-                if (requests.length === 0) {
-                    $(window).off('scroll', handleScroll);
-                }
-
-                if (!Array.isArray(requests)) {
-                    throw new Error('Unexpected response format');
-                }
-
-                requests.forEach((licenseRequest, index) => {
+                requests.forEach(licenseRequest => {
                     const row = $('<tr>', {
                         id: `license-request-${licenseRequest._id}`,
                         'data-created-by': licenseRequest.userId._id,
                         'data-supervisor': licenseRequest.userId.supervisor
                     });
 
+                    // تلوين الصف بناءً على حالة الفواتير
+                    if (licenseRequest.status === 'Approved') {
+                        if (licenseRequest.customerInvoice && licenseRequest.supplierInvoice) {
+                            row.addClass('table-success');
+                        } else if (licenseRequest.customerInvoice || licenseRequest.supplierInvoice) {
+                            row.addClass('table-warning');
+                        } else {
+                            row.addClass('table-danger');
+                        }
+                    }
+
                     $('<td>', {
                         class: 'text-center',
-                        text: (page - 1) * limit + index + 1
+                        text: (page - 1) * limit + requests.indexOf(licenseRequest) + 1
                     }).appendTo(row);
 
                     if (['admin', 'supervisor', 'supplier'].includes(userRole)) {
@@ -164,13 +216,38 @@ $(document).ready(function() {
                     const actionsCell = $('<td>', {
                         class: 'text-center'
                     });
+
                     if (licenseRequest.status === 'Approved') {
+                        // زر عرض معلومات الترخيص
                         $('<button>', {
                             class: 'btn btn-success btn-sm mb-1 view-license-info',
-                            'data-id': licenseRequest.finalLicense || licenseRequest._id, // تعديل هنا لاستخدام المعرف الصحيح
+                            'data-id': licenseRequest.finalLicense || licenseRequest._id,
                             text: 'عرض معلومات الترخيص'
                         }).appendTo(actionsCell);
+
+                        // أزرار الفواتير - تظهر فقط للمدير
+                        if (userRole === 'admin') {
+                            // إذا لم يتم إصدار فاتورة العميل
+                            if (!licenseRequest.customerInvoice) {
+                                $('<button>', {
+                                    class: 'btn btn-primary btn-sm mb-1 ms-1 customer-invoice-btn',
+                                    'data-id': licenseRequest._id,
+                                    text: 'فاتورة العميل'
+                                }).appendTo(actionsCell);
+                            }
+
+                            // إذا لم يتم إصدار فاتورة المورد
+                            if (!licenseRequest.supplierInvoice) {
+                                $('<button>', {
+                                    class: 'btn btn-info btn-sm mb-1 ms-1 supplier-invoice-btn',
+                                    'data-id': licenseRequest._id,
+                                    text: 'فاتورة المورد'
+                                }).appendTo(actionsCell);
+                            }
+                        }
                     }
+
+                    // زر الحذف للمدير
                     if (userRole === 'admin' && licenseRequest.status === 'Pending') {
                         $('<button>', {
                             class: 'btn btn-danger btn-sm mb-1 delete-license-request',
@@ -178,6 +255,7 @@ $(document).ready(function() {
                             text: 'حذف'
                         }).appendTo(actionsCell);
                     }
+
                     actionsCell.appendTo(row);
 
                     licenseRequestsTable.append(row);
@@ -324,6 +402,202 @@ $(document).ready(function() {
                 fetchLicenseRequests(currentPage, searchQuery, selectedUserId, startDate, endDate);
             }
         });
+
+        // معالجة فاتورة العميل
+        $(document).on('click', '.customer-invoice-btn', async function() {
+            const licenseId = $(this).data('id');
+            $('#customerInvoiceLicenseId').val(licenseId);
+            
+            try {
+                // أولاً نحصل على بيانات الطلب للحصول على معرف الترخيص المصروف
+                const requestResponse = await fetch(`/licenses/details/${licenseId}`);
+                const requestData = await requestResponse.json();
+                
+                if (!requestData.finalLicense) {
+                    throw new Error('لم يتم العثور على ترخيص مصروف لهذا الطلب');
+                }
+
+                // ثم نحصل على بيانات الترخيص المصروف
+                const licenseResponse = await fetch(`/licenses/details/${requestData.finalLicense}`);
+                const licenseData = await licenseResponse.json();
+                
+                // عرض تفاصيل الترخيص
+                $('#customerInvoiceLicenseeName').text(licenseData.licenseeName);
+                $('#customerInvoiceSerialNumber').text(licenseData.serialNumber || 'N/A');
+                $('#customerInvoiceRegistrationCode').text(licenseData.registrationCode);
+                $('#customerInvoiceActivationCode').text(licenseData.activationCode || 'N/A');
+                $('#customerInvoiceFeaturesCode').text(licenseData.featuresCode);
+                $('#customerInvoiceExpirationDate').text(formatDate(licenseData.expirationDate));
+
+                // عرض الميزات
+                fetchFeatureDetails(licenseData.featuresCode).then(featureData => {
+                    const featuresList = $('#customerInvoiceFeaturesList');
+                    featuresList.empty();
+                    if (featureData.features && featureData.features.length > 0) {
+                        featureData.features.forEach(feature => {
+                            const listItem = $('<li>').text(feature.name);
+                            featuresList.append(listItem);
+                        });
+                    } else {
+                        featuresList.append($('<li>').text('لا توجد ميزات'));
+                    }
+                });
+                
+                // عرض بيانات الفاتورة إن وجدت
+                if (requestData.customerInvoice) {
+                    $('#customerInvoiceNumber').val(requestData.customerInvoice.number);
+                    $('#customerInvoiceDate').val(formatDateForInput(requestData.customerInvoice.date));
+                } else {
+                    $('#customerInvoiceNumber').val('');
+                    $('#customerInvoiceDate').val('');
+                }
+                
+                $('#customerInvoiceModal').modal('show');
+            } catch (error) {
+                console.error('Error:', error);
+                alert(error.message || 'حدث خطأ أثناء جلب بيانات الترخيص');
+            }
+        });
+
+        // معالجة فاتورة المورد
+        $(document).on('click', '.supplier-invoice-btn', async function() {
+            const licenseId = $(this).data('id');
+            $('#supplierInvoiceLicenseId').val(licenseId);
+            
+            try {
+                // أولاً نحصل على بيانات الطلب للحصول على معرف الترخيص المصروف
+                const requestResponse = await fetch(`/licenses/details/${licenseId}`);
+                const requestData = await requestResponse.json();
+                
+                if (!requestData.finalLicense) {
+                    throw new Error('لم يتم العثور على ترخيص مصروف لهذا الطلب');
+                }
+
+                // ثم نحصل على بيانات الترخيص المصروف
+                const licenseResponse = await fetch(`/licenses/details/${requestData.finalLicense}`);
+                const licenseData = await licenseResponse.json();
+                
+                // عرض تفاصيل الترخيص
+                $('#supplierInvoiceLicenseeName').text(licenseData.licenseeName);
+                $('#supplierInvoiceSerialNumber').text(licenseData.serialNumber || 'N/A');
+                $('#supplierInvoiceRegistrationCode').text(licenseData.registrationCode);
+                $('#supplierInvoiceActivationCode').text(licenseData.activationCode || 'N/A');
+                $('#supplierInvoiceFeaturesCode').text(licenseData.featuresCode);
+                $('#supplierInvoiceExpirationDate').text(formatDate(licenseData.expirationDate));
+
+                // عرض الميزات
+                fetchFeatureDetails(licenseData.featuresCode).then(featureData => {
+                    const featuresList = $('#supplierInvoiceFeaturesList');
+                    featuresList.empty();
+                    if (featureData.features && featureData.features.length > 0) {
+                        featureData.features.forEach(feature => {
+                            const listItem = $('<li>').text(feature.name);
+                            featuresList.append(listItem);
+                        });
+                    } else {
+                        featuresList.append($('<li>').text('لا توجد ميزات'));
+                    }
+                });
+                
+                // عرض بيانات الفاتورة إن وجدت
+                if (requestData.supplierInvoice) {
+                    $('#supplierInvoiceNumber').val(requestData.supplierInvoice.number);
+                    $('#supplierInvoiceDate').val(formatDateForInput(requestData.supplierInvoice.date));
+                } else {
+                    $('#supplierInvoiceNumber').val('');
+                    $('#supplierInvoiceDate').val('');
+                }
+                
+                $('#supplierInvoiceModal').modal('show');
+            } catch (error) {
+                console.error('Error:', error);
+                alert(error.message || 'حدث خطأ أثناء جلب بيانات الترخيص');
+            }
+        });
+
+        // حفظ فاتورة العميل
+        $('#customerInvoiceForm').on('submit', async function(e) {
+            e.preventDefault();
+            const licenseId = $('#customerInvoiceLicenseId').val();
+            const invoiceNumber = $('#customerInvoiceNumber').val();
+            const invoiceDate = $('#customerInvoiceDate').val();
+
+            try {
+                const response = await fetch('/licenses/customer-invoice', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        licenseId,
+                        invoiceNumber,
+                        invoiceDate
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('فشل في حفظ فاتورة العميل');
+                }
+
+                // إخفاء النافذة المنبثقة
+                $('#customerInvoiceModal').modal('hide');
+
+                // إزالة زر فاتورة العميل من الصف
+                const row = $(`#license-request-${licenseId}`);
+                row.find('.customer-invoice-btn').remove();
+
+                // تحديث لون الصف
+                updateRowInvoiceStatus(row);
+
+                // عرض رسالة نجاح
+                showAlert('success', 'تم حفظ فاتورة العميل بنجاح');
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('danger', 'حدث خطأ أثناء حفظ فاتورة العميل');
+            }
+        });
+
+        // حفظ فاتورة المورد
+        $('#supplierInvoiceForm').on('submit', async function(e) {
+            e.preventDefault();
+            const licenseId = $('#supplierInvoiceLicenseId').val();
+            const invoiceNumber = $('#supplierInvoiceNumber').val();
+            const invoiceDate = $('#supplierInvoiceDate').val();
+
+            try {
+                const response = await fetch('/licenses/supplier-invoice', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        licenseId,
+                        invoiceNumber,
+                        invoiceDate
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('فشل في حفظ فاتورة المورد');
+                }
+
+                // إخفاء النافذة المنبثقة
+                $('#supplierInvoiceModal').modal('hide');
+
+                // إزالة زر فاتورة المورد من الصف
+                const row = $(`#license-request-${licenseId}`);
+                row.find('.supplier-invoice-btn').remove();
+
+                // تحديث لون الصف
+                updateRowInvoiceStatus(row);
+
+                // عرض رسالة نجاح
+                showAlert('success', 'تم حفظ فاتورة المورد بنجاح');
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('danger', 'حدث خطأ أثناء حفظ فاتورة المورد');
+            }
+        });
     };
 
     // Flatpickr setup
@@ -405,4 +679,54 @@ $(document).ready(function() {
     // Initial load
     fetchLicenseRequests(currentPage);
     $(window).on('scroll', handleScroll);
+
+    // تلوين الصفوف بناءً على حالة الفواتير
+    const updateRowColor = (row, license) => {
+        // نتحقق أولاً من أن الطلب معتمد
+        if (license.status === 'Approved') {
+            if (license.customerInvoice && license.supplierInvoice) {
+                row.classList.add('table-success'); // تم إصدار جميع الفواتير
+            } else if (license.customerInvoice || license.supplierInvoice) {
+                row.classList.add('table-warning'); // تم إصدار فاتورة واحدة فقط
+            } else {
+                row.classList.add('table-danger'); // لم يتم إصدار أي فاتورة
+            }
+        }
+    };
+
+    const displayLicenseDetails = (details, containerId) => {
+        const container = document.getElementById(containerId);
+        container.innerHTML = `
+            <div class="mb-4">
+                <p><strong>اسم المرخص له:</strong> ${details.licenseeName}</p>
+                <p><strong>كود التسجيل:</strong> ${details.registrationCode}</p>
+                <p><strong>كود الميزات:</strong> ${details.featuresCode}</p>
+            </div>
+        `;
+    };
+
+    $(document).on('click', '.view-customer-invoice', function() {
+        const invoice = JSON.parse($(this).data('invoice'));
+        $('#customerInvoiceNumber').val(invoice.number);
+        $('#customerInvoiceDate').val(formatDateForInput(invoice.date));
+        $('#customerInvoiceModal').modal('show');
+    });
+
+    $(document).on('click', '.view-supplier-invoice', function() {
+        const invoice = JSON.parse($(this).data('invoice'));
+        $('#supplierInvoiceNumber').val(invoice.number);
+        $('#supplierInvoiceDate').val(formatDateForInput(invoice.date));
+        $('#supplierInvoiceModal').modal('show');
+    });
+
+    // تعيين التاريخ الافتراضي عند فتح نوافذ الفواتير
+    $('#customerInvoiceModal').on('show.bs.modal', function (event) {
+        const today = new Date().toISOString().split('T')[0];
+        $('#customerInvoiceDate').val(today);
+    });
+
+    $('#supplierInvoiceModal').on('show.bs.modal', function (event) {
+        const today = new Date().toISOString().split('T')[0];
+        $('#supplierInvoiceDate').val(today);
+    });
 });

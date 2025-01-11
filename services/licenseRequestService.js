@@ -21,8 +21,13 @@ async function fetchLicenseRequests(userId, userRole, filters = {}) {
     if (filters.userName && (userRole === 'admin' || userRole === 'supervisor'|| userRole === 'supplier')) {
       const users = await User.find({ username: new RegExp(filters.userName, 'i') }, '_id');
       const userIds = users.map(user => user._id);
-      if (query.userId) {
-        query.userId = { $in: userIds.filter(id => query.userId.$in.includes(id)) };
+      
+      if (userRole === 'supervisor') {
+        // للمشرف: نتأكد من أن المستخدم المختار إما المشرف نفسه أو أحد مرؤوسيه
+        const subordinates = await User.find({ supervisor: userId }).select('_id');
+        const allowedIds = [userId, ...subordinates.map(sub => sub._id.toString())];
+        const filteredUserIds = userIds.filter(id => allowedIds.includes(id.toString()));
+        query.userId = { $in: filteredUserIds };
       } else {
         query.userId = { $in: userIds };
       }

@@ -73,6 +73,10 @@
                             <td class="text-center"><%= request.status %></td>
                             <td class="text-center">
                                 <button class="btn btn-success btn-sm mb-1 view-license-info" data-id="<%= request._id %>">عرض معلومات الترخيص</button>
+                                <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                                    <button class="btn btn-primary btn-sm mb-1 customer-invoice-btn" data-id="<%= request._id %>">فاتورة العميل</button>
+                                    <button class="btn btn-info btn-sm mb-1 supplier-invoice-btn" data-id="<%= request._id %>">فاتورة المورد</button>
+                                <% } %>
                             </td>
                         </tr>
                     <% }) %>
@@ -119,37 +123,112 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
             <div class="modal-body">
-                <div class="info-row">
-                    <span class="info-label">اسم المرخص له:</span>
-                    <span class="info-value" id="modalLicenseeName"></span>
+                <div class="license-details">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>المرخص له:</strong> <span id="modalLicenseeName"></span></p>
+                            <p><strong>الرقم التسلسلي:</strong> <span id="modalSerialNumber"></span></p>
+                            <p><strong>كود التسجيل:</strong> <span id="modalRegistrationCode"></span></p>
+                            <p><strong>كود التفعيل:</strong> <span id="modalActivationCode"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>كود الميزات:</strong> <span id="modalFeaturesCode"></span></p>
+                            <p><strong>تاريخ الانتهاء:</strong> <span id="modalExpirationDate"></span></p>
+                            <div>
+                                <h6 class="almarai-bold">المزايا:</h6>
+                                <ul id="modalFeaturesList" class="almarai-regular"></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- قسم الفواتير -->
+                    <div id="modalInvoicesSection" class="mt-4">
+                        <h6 class="almarai-bold mb-3">معلومات الفواتير</h6>
+                        <!-- فاتورة العميل -->
+                        <div id="customerInvoiceInfo" class="mb-3" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+                                <div>
+                                    <strong class="text-primary">فاتورة العميل:</strong>
+                                    <span>رقم: <span id="modalCustomerInvoiceNumber"></span></span>
+                                    <span class="mx-2">|</span>
+                                    <span>تاريخ: <span id="modalCustomerInvoiceDate"></span></span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- فاتورة المورد -->
+                        <div id="supplierInvoiceInfo" class="mb-3" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+                                <div>
+                                    <strong class="text-info">فاتورة المورد:</strong>
+                                    <span>رقم: <span id="modalSupplierInvoiceNumber"></span></span>
+                                    <span class="mx-2">|</span>
+                                    <span>تاريخ: <span id="modalSupplierInvoiceDate"></span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">الرقم التسلسلي:</span>
-                    <span class="info-value" id="modalSerialNumber"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">كود التسجيل:</span>
-                    <span class="info-value" id="modalRegistrationCode"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">كود التفعيل:</span>
-                    <span class="info-value" id="modalActivationCode"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">كود الميزات:</span>
-                    <span class="info-value" id="modalFeaturesCode"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">تاريخ الانتهاء:</span>
-                    <span class="info-value" id="modalExpirationDate"></span>
-                </div>
-                <hr>
-                <h6 class="almarai-bold">المزايا:</h6>
-                <ul id="modalFeaturesList" class="almarai-regular"></ul>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary baloo" data-bs-dismiss="modal" style="margin-left: 10px;">إغلاق</button>
-                <button type="button" class="btn btn-primary baloo" id="copyButton" style="margin-left: 10px;">نسخ</button>
+                <button type="button" class="btn btn-secondary baloo" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary baloo" id="copyButton">نسخ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة فاتورة العميل -->
+<div class="modal fade" id="customerInvoiceModal" tabindex="-1" aria-labelledby="customerInvoiceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="customerInvoiceModalLabel">فاتورة العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <form id="customerInvoiceForm">
+                    <div class="mb-3">
+                        <label for="customerInvoiceNumber" class="form-label">رقم الفاتورة</label>
+                        <input type="text" class="form-control" id="customerInvoiceNumber" name="number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="customerInvoiceDate" class="form-label">تاريخ الفاتورة</label>
+                        <input type="date" class="form-control" id="customerInvoiceDate" name="date" required>
+                    </div>
+                    <input type="hidden" id="customerInvoiceLicenseId" name="licenseId">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="submit" form="customerInvoiceForm" class="btn btn-primary">حفظ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة فاتورة المورد -->
+<div class="modal fade" id="supplierInvoiceModal" tabindex="-1" aria-labelledby="supplierInvoiceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="supplierInvoiceModalLabel">فاتورة المورد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <form id="supplierInvoiceForm">
+                    <div class="mb-3">
+                        <label for="supplierInvoiceNumber" class="form-label">رقم الفاتورة</label>
+                        <input type="text" class="form-control" id="supplierInvoiceNumber" name="number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="supplierInvoiceDate" class="form-label">تاريخ الفاتورة</label>
+                        <input type="date" class="form-control" id="supplierInvoiceDate" name="date" required>
+                    </div>
+                    <input type="hidden" id="supplierInvoiceLicenseId" name="licenseId">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="submit" form="supplierInvoiceForm" class="btn btn-primary">حفظ</button>
             </div>
         </div>
     </div>

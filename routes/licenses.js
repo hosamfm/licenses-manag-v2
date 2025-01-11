@@ -3,11 +3,12 @@ const mongoose = require('mongoose');
 const router = express.Router();
 const Feature = require('../models/Feature');
 const LicenseRequest = require('../models/LicenseRequest');
+const User = require('../models/User'); 
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 const telegramService = require('../services/telegramService');
 
 // نقطة النهاية لتحميل طلبات التراخيص بالصفحات
-router.get('/api/license-requests', async (req, res) => {
+router.get('/api/license-requests', isAuthenticated, async (req, res) => {
     const { page = 1, limit = 50, searchQuery, selectedUserId, startDate, endDate } = req.query;
     const { userId, userRole } = req.session;
 

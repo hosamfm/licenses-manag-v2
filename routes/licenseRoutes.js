@@ -281,16 +281,97 @@ router.post('/update-license-data', [isAuthenticated, checkRole(['admin'])], asy
     }
 });
 
-router.get('/details/:id', [isAuthenticated, checkRole(['admin', 'supervisor', 'representative', 'supplier'])], async (req, res) => {
+router.get('/details/:id', async (req, res) => {
     try {
-        const license = await License.findById(req.params.id);
-        if (!license) {
-            return res.status(404).json({ error: 'License not found' });
+        let licenseData;
+        let invoiceData = {};
+
+        // البحث في جدول التراخيص
+        const license = await License.findById(req.params.id)
+            .populate('supplierId', 'name');
+
+        if (license) {
+            // إذا وجدنا الترخيص، نبحث عن طلب الترخيص المرتبط به
+            const licenseRequest = await LicenseRequest.findOne({ finalLicense: license._id });
+            if (licenseRequest) {
+                // نأخذ معلومات الفواتير من الطلب
+                invoiceData = {
+                    customerInvoice: licenseRequest.customerInvoice,
+                    supplierInvoice: licenseRequest.supplierInvoice
+                };
+            }
+            licenseData = license;
+        } else {
+            // إذا لم نجد الترخيص، نبحث في الطلبات
+            const licenseRequest = await LicenseRequest.findById(req.params.id)
+                .populate('userId', 'name email');
+
+            if (!licenseRequest) {
+                return res.status(404).json({ message: 'لم يتم العثور على الترخيص' });
+            }
+
+            licenseData = licenseRequest;
+            // نأخذ معلومات الفواتير من الطلب مباشرة
+            invoiceData = {
+                customerInvoice: licenseRequest.customerInvoice,
+                supplierInvoice: licenseRequest.supplierInvoice
+            };
         }
-        res.json(license);
+
+        // دمج بيانات الترخيص مع بيانات الفواتير
+        const responseData = {
+            ...licenseData.toObject(),
+            ...invoiceData
+        };
+
+        res.json(responseData);
     } catch (error) {
-        console.error('Error fetching license details:', error.message, error.stack);
-        res.status(500).json({ error: 'Failed to fetch license details' });
+        console.error('Error fetching license details:', error);
+        res.status(500).json({ message: 'حدث خطأ أثناء جلب تفاصيل الترخيص' });
+    }
+});
+
+router.post('/customer-invoice', async (req, res) => {
+    try {
+        const { licenseId, invoiceNumber, invoiceDate } = req.body;
+        
+        const licenseRequest = await LicenseRequest.findById(licenseId);
+        if (!licenseRequest) {
+            return res.status(404).json({ message: 'طلب الترخيص غير موجود' });
+        }
+
+        licenseRequest.customerInvoice = {
+            number: invoiceNumber,
+            date: invoiceDate
+        };
+
+        await licenseRequest.save();
+        res.json({ message: 'تم حفظ فاتورة العميل بنجاح' });
+    } catch (error) {
+        console.error('Error saving customer invoice:', error);
+        res.status(500).json({ message: 'حدث خطأ أثناء حفظ فاتورة العميل' });
+    }
+});
+
+router.post('/supplier-invoice', async (req, res) => {
+    try {
+        const { licenseId, invoiceNumber, invoiceDate } = req.body;
+        
+        const licenseRequest = await LicenseRequest.findById(licenseId);
+        if (!licenseRequest) {
+            return res.status(404).json({ message: 'طلب الترخيص غير موجود' });
+        }
+
+        licenseRequest.supplierInvoice = {
+            number: invoiceNumber,
+            date: invoiceDate
+        };
+
+        await licenseRequest.save();
+        res.json({ message: 'تم حفظ فاتورة المورد بنجاح' });
+    } catch (error) {
+        console.error('Error saving supplier invoice:', error);
+        res.status(500).json({ message: 'حدث خطأ أثناء حفظ فاتورة المورد' });
     }
 });
 
@@ -324,8 +405,8 @@ router.get('/license-details', isAuthenticated, async (req, res) => {
     try {
         const { registrationCode } = req.query;
         
-        // البحث في جدول الطلبات
-        const request = await LicenseRequest.findOne({ 
+        // البحث عن الترخيص في جدول الطلبات
+        const request = await mongoose.connection.db.collection('licenserequests').findOne({ 
             registrationCode: registrationCode.toUpperCase(),
             requestType: 'New License',
             status: { $in: ['Pending', 'Approved'] }
@@ -341,8 +422,8 @@ router.get('/license-details', isAuthenticated, async (req, res) => {
             featuresCode: request.featuresCode
         });
     } catch (error) {
-        console.error('Error fetching license details:', error.message, error.stack);
-        res.status(500).json({ error: 'Failed to fetch license details' });
+        console.error('Error fetching license details:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
