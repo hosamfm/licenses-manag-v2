@@ -157,22 +157,30 @@ router.get('/licenses/license-details', [isAuthenticated], async (req, res) => {
             return res.status(400).json({ error: 'Registration code is required' });
         }
 
-        // البحث عن الترخيص في جدول الطلبات
-        const licenseRequest = await mongoose.connection.db.collection('licenserequests').findOne({ 
-            registrationCode: registrationCode.toUpperCase(),
-            status: 'Approved'
+        // البحث أولاً في التراخيص المفعلة
+        let license = await mongoose.connection.db.collection('licenses').findOne({ 
+            registrationCode: registrationCode.toUpperCase()
         });
 
-        if (!licenseRequest) {
+        // إذا لم يتم العثور على الترخيص في licenses، ابحث في licenserequests
+        if (!license) {
+            license = await mongoose.connection.db.collection('licenserequests').findOne({ 
+                registrationCode: registrationCode.toUpperCase(),
+                status: { $in: ['Pending', 'Approved'] }
+            });
+        }
+
+        if (!license) {
             return res.status(404).json({ error: 'License not found' });
         }
 
         // إرجاع تفاصيل الترخيص
         res.json({
-            licenseeName: licenseRequest.licenseeName,
-            registrationCode: licenseRequest.registrationCode,
-            featuresCode: licenseRequest.featuresCode,
-            exists: true
+            licenseeName: license.licenseeName,
+            registrationCode: license.registrationCode,
+            featuresCode: license.featuresCode,
+            exists: true,
+            status: license.status || 'Active' // 'Active' for licenses collection, actual status for requests
         });
     } catch (error) {
         console.error('Error fetching license details:', error);
