@@ -585,12 +585,31 @@ $(document).ready(function() {
             }
         });
 
+        // دالة لعرض التنبيهات
+        const showAlert = (type, message) => {
+            const alertDiv = $('<div>')
+                .addClass(`alert alert-${type} alert-dismissible fade show`)
+                .attr('role', 'alert')
+                .html(`
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `);
+            
+            // إضافة التنبيه في أعلى الصفحة
+            $('.container').prepend(alertDiv);
+            
+            // إخفاء التنبيه تلقائياً بعد 5 ثواني
+            setTimeout(() => {
+                alertDiv.alert('close');
+            }, 5000);
+        };
+
         // حفظ فاتورة العميل
         $('#customerInvoiceForm').on('submit', async function(e) {
             e.preventDefault();
             const licenseId = $('#customerInvoiceLicenseId').val();
             const invoiceNumber = $('#customerInvoiceNumber').val();
-            const invoiceDate = $('#customerInvoiceDate').val();
+            const invoiceDate = $('#customerInvoiceDate')[0]._flatpickr.selectedDates[0].toISOString();
 
             try {
                 const response = await fetch('/licenses/customer-invoice', {
@@ -606,7 +625,8 @@ $(document).ready(function() {
                 });
 
                 if (!response.ok) {
-                    throw new Error('فشل في حفظ فاتورة العميل');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'فشل في حفظ فاتورة العميل');
                 }
 
                 // إخفاء النافذة المنبثقة
@@ -617,13 +637,14 @@ $(document).ready(function() {
                 row.find('.customer-invoice-btn').remove();
 
                 // تحديث لون الصف
-                updateRowInvoiceStatus(row);
+                const license = await fetchLicenseDetails(licenseId);
+                updateRowColor(row[0], license);
 
                 // عرض رسالة نجاح
                 showAlert('success', 'تم حفظ فاتورة العميل بنجاح');
             } catch (error) {
                 console.error('Error:', error);
-                showAlert('danger', 'حدث خطأ أثناء حفظ فاتورة العميل');
+                showAlert('danger', error.message || 'حدث خطأ أثناء حفظ فاتورة العميل');
             }
         });
 
@@ -632,7 +653,7 @@ $(document).ready(function() {
             e.preventDefault();
             const licenseId = $('#supplierInvoiceLicenseId').val();
             const invoiceNumber = $('#supplierInvoiceNumber').val();
-            const invoiceDate = $('#supplierInvoiceDate').val();
+            const invoiceDate = $('#supplierInvoiceDate')[0]._flatpickr.selectedDates[0].toISOString();
 
             try {
                 const response = await fetch('/licenses/supplier-invoice', {
@@ -648,7 +669,8 @@ $(document).ready(function() {
                 });
 
                 if (!response.ok) {
-                    throw new Error('فشل في حفظ فاتورة المورد');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'فشل في حفظ فاتورة المورد');
                 }
 
                 // إخفاء النافذة المنبثقة
@@ -659,144 +681,149 @@ $(document).ready(function() {
                 row.find('.supplier-invoice-btn').remove();
 
                 // تحديث لون الصف
-                updateRowInvoiceStatus(row);
+                const license = await fetchLicenseDetails(licenseId);
+                updateRowColor(row[0], license);
 
                 // عرض رسالة نجاح
                 showAlert('success', 'تم حفظ فاتورة المورد بنجاح');
             } catch (error) {
                 console.error('Error:', error);
-                showAlert('danger', 'حدث خطأ أثناء حفظ فاتورة المورد');
+                showAlert('danger', error.message || 'حدث خطأ أثناء حفظ فاتورة المورد');
             }
         });
-    };
 
-    // Flatpickr setup
-    flatpickr('#dateFilterBtn', {
-        mode: 'range',
-        dateFormat: 'Y-m-d',
-        onChange: function(selectedDates, dateStr, instance) {
-            if (selectedDates.length === 2) {
-                $('#filterStartDate').val(selectedDates[0].toISOString().split('T')[0]);
-                $('#filterEndDate').val(selectedDates[1].toISOString().split('T')[0]);
-                currentPage = 1; // Reset to the first page
-                const searchQuery = $('#searchQuery').val();
-                const selectedUserId = $('#filterUserName').val();
-                fetchLicenseRequests(currentPage, searchQuery, selectedUserId, selectedDates[0].toISOString().split('T')[0], selectedDates[1].toISOString().split('T')[0]);
+        // Flatpickr setup
+        flatpickr('#dateFilterBtn', {
+            mode: 'range',
+            dateFormat: 'Y-m-d',
+            onChange: function(selectedDates, dateStr, instance) {
+                if (selectedDates.length === 2) {
+                    $('#filterStartDate').val(selectedDates[0].toISOString().split('T')[0]);
+                    $('#filterEndDate').val(selectedDates[1].toISOString().split('T')[0]);
+                    currentPage = 1; // Reset to the first page
+                    const searchQuery = $('#searchQuery').val();
+                    const selectedUserId = $('#filterUserName').val();
+                    fetchLicenseRequests(currentPage, searchQuery, selectedUserId, selectedDates[0].toISOString().split('T')[0], selectedDates[1].toISOString().split('T')[0]);
+                }
             }
+        });
+
+        // Dynamic search and filter functionality
+        const searchQueryInput = $('#searchQuery');
+        const filterUserNameSelect = $('#filterUserName');
+        const filterStartDateInput = $('#filterStartDate');
+        const filterEndDateInput = $('#filterEndDate');
+
+        const loadUsers = async (searchTerm = '') => {
+            try {
+                const response = await fetch(`/api/users/list${searchTerm ? `?search=${encodeURIComponent(searchTerm)}` : ''}`);
+                if (!response.ok) throw new Error('Failed to fetch users');
+                const users = await response.json();
+                
+                const select = $('#filterUserName');
+                select.find('option:not(:first)').remove();
+                
+                users.forEach(user => {
+                    const displayName = user.full_name || user.username;
+                    const companyInfo = user.company_name ? ` (${user.company_name})` : '';
+                    select.append($('<option>', {
+                        value: user._id,
+                        text: displayName + companyInfo
+                    }));
+                });
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        };
+
+        // تحميل المستخدمين عند تحميل الصفحة
+        if ($('#filterUserName').length) {
+            loadUsers();
         }
-    });
 
-    // Dynamic search and filter functionality
-    const searchQueryInput = $('#searchQuery');
-    const filterUserNameSelect = $('#filterUserName');
-    const filterStartDateInput = $('#filterStartDate');
-    const filterEndDateInput = $('#filterEndDate');
+        // إضافة خاصية البحث في القائمة المنسدلة
+        let searchTimeout;
+        $('#filterUserName').on('keyup', function() {
+            clearTimeout(searchTimeout);
+            const searchTerm = $(this).val();
+            searchTimeout = setTimeout(() => loadUsers(searchTerm), 300);
+        });
 
-    const loadUsers = async (searchTerm = '') => {
-        try {
-            const response = await fetch(`/api/users/list${searchTerm ? `?search=${encodeURIComponent(searchTerm)}` : ''}`);
-            if (!response.ok) throw new Error('Failed to fetch users');
-            const users = await response.json();
-            
-            const select = $('#filterUserName');
-            select.find('option:not(:first)').remove();
-            
-            users.forEach(user => {
-                const displayName = user.full_name || user.username;
-                const companyInfo = user.company_name ? ` (${user.company_name})` : '';
-                select.append($('<option>', {
-                    value: user._id,
-                    text: displayName + companyInfo
-                }));
-            });
-        } catch (error) {
-            console.error('Error loading users:', error);
-        }
+        const performSearch = () => {
+            currentPage = 1;
+            const searchQuery = searchQueryInput.val();
+            const selectedUserId = filterUserNameSelect.val();
+            const startDate = $('#filterStartDate').val();
+            const endDate = $('#filterEndDate').val();
+
+            fetchLicenseRequests(currentPage, searchQuery, selectedUserId, startDate, endDate)
+                .then(updateUI)
+                .catch(error => {
+                    console.error('Error performing search:', error);
+                    alert('حدث خطأ أثناء البحث');
+                });
+        };
+
+        // Event listeners for search inputs
+        searchQueryInput.on('input', debounce(performSearch, 500));
+        filterUserNameSelect.on('change', performSearch);
+
+        // Initial load
+        fetchLicenseRequests(currentPage);
+        $(window).on('scroll', handleScroll);
+
+        // تلوين الصفوف بناءً على حالة الفواتير
+        const updateRowColor = (row, license) => {
+            // نتحقق أولاً من أن الطلب معتمد
+            if (license.status === 'Approved') {
+                if (license.customerInvoice && license.supplierInvoice) {
+                    row.classList.add('table-success'); // تم إصدار جميع الفواتير
+                } else if (license.customerInvoice || license.supplierInvoice) {
+                    row.classList.add('table-warning'); // تم إصدار فاتورة واحدة فقط
+                } else {
+                    row.classList.add('table-danger'); // لم يتم إصدار أي فاتورة
+                }
+            }
+        };
+
+        const displayLicenseDetails = (details, containerId) => {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `
+                <div class="mb-4">
+                    <p><strong>اسم المرخص له:</strong> ${details.licenseeName}</p>
+                    <p><strong>كود التسجيل:</strong> ${details.registrationCode}</p>
+                    <p><strong>كود الميزات:</strong> ${details.featuresCode}</p>
+                </div>
+            `;
+        };
+
+        $(document).on('click', '.view-customer-invoice', function() {
+            const invoice = JSON.parse($(this).data('invoice'));
+            $('#customerInvoiceNumber').val(invoice.number);
+            $('#customerInvoiceDate').val(formatDateForInput(invoice.date));
+            $('#customerInvoiceModal').modal('show');
+        });
+
+        $(document).on('click', '.view-supplier-invoice', function() {
+            const invoice = JSON.parse($(this).data('invoice'));
+            $('#supplierInvoiceNumber').val(invoice.number);
+            $('#supplierInvoiceDate').val(formatDateForInput(invoice.date));
+            $('#supplierInvoiceModal').modal('show');
+        });
+
+        // تعيين التاريخ الافتراضي عند فتح نوافذ الفواتير
+        $('#customerInvoiceModal').on('show.bs.modal', function (event) {
+            const today = new Date().toISOString().split('T')[0];
+            $('#customerInvoiceDate').val(today);
+        });
+
+        $('#supplierInvoiceModal').on('show.bs.modal', function (event) {
+            const today = new Date().toISOString().split('T')[0];
+            $('#supplierInvoiceDate').val(today);
+        });
     };
-
-    // تحميل المستخدمين عند تحميل الصفحة
-    if ($('#filterUserName').length) {
-        loadUsers();
-    }
-
-    // إضافة خاصية البحث في القائمة المنسدلة
-    let searchTimeout;
-    $('#filterUserName').on('keyup', function() {
-        clearTimeout(searchTimeout);
-        const searchTerm = $(this).val();
-        searchTimeout = setTimeout(() => loadUsers(searchTerm), 300);
-    });
-
-    const performSearch = () => {
-        currentPage = 1;
-        const searchQuery = searchQueryInput.val();
-        const selectedUserId = filterUserNameSelect.val();
-        const startDate = $('#filterStartDate').val();
-        const endDate = $('#filterEndDate').val();
-
-        fetchLicenseRequests(currentPage, searchQuery, selectedUserId, startDate, endDate)
-            .then(updateUI)
-            .catch(error => {
-                console.error('Error performing search:', error);
-                alert('حدث خطأ أثناء البحث');
-            });
-    };
-
-    // Event listeners for search inputs
-    searchQueryInput.on('input', debounce(performSearch, 500));
-    filterUserNameSelect.on('change', performSearch);
 
     // Initial load
     fetchLicenseRequests(currentPage);
     $(window).on('scroll', handleScroll);
-
-    // تلوين الصفوف بناءً على حالة الفواتير
-    const updateRowColor = (row, license) => {
-        // نتحقق أولاً من أن الطلب معتمد
-        if (license.status === 'Approved') {
-            if (license.customerInvoice && license.supplierInvoice) {
-                row.classList.add('table-success'); // تم إصدار جميع الفواتير
-            } else if (license.customerInvoice || license.supplierInvoice) {
-                row.classList.add('table-warning'); // تم إصدار فاتورة واحدة فقط
-            } else {
-                row.classList.add('table-danger'); // لم يتم إصدار أي فاتورة
-            }
-        }
-    };
-
-    const displayLicenseDetails = (details, containerId) => {
-        const container = document.getElementById(containerId);
-        container.innerHTML = `
-            <div class="mb-4">
-                <p><strong>اسم المرخص له:</strong> ${details.licenseeName}</p>
-                <p><strong>كود التسجيل:</strong> ${details.registrationCode}</p>
-                <p><strong>كود الميزات:</strong> ${details.featuresCode}</p>
-            </div>
-        `;
-    };
-
-    $(document).on('click', '.view-customer-invoice', function() {
-        const invoice = JSON.parse($(this).data('invoice'));
-        $('#customerInvoiceNumber').val(invoice.number);
-        $('#customerInvoiceDate').val(formatDateForInput(invoice.date));
-        $('#customerInvoiceModal').modal('show');
-    });
-
-    $(document).on('click', '.view-supplier-invoice', function() {
-        const invoice = JSON.parse($(this).data('invoice'));
-        $('#supplierInvoiceNumber').val(invoice.number);
-        $('#supplierInvoiceDate').val(formatDateForInput(invoice.date));
-        $('#supplierInvoiceModal').modal('show');
-    });
-
-    // تعيين التاريخ الافتراضي عند فتح نوافذ الفواتير
-    $('#customerInvoiceModal').on('show.bs.modal', function (event) {
-        const today = new Date().toISOString().split('T')[0];
-        $('#customerInvoiceDate').val(today);
-    });
-
-    $('#supplierInvoiceModal').on('show.bs.modal', function (event) {
-        const today = new Date().toISOString().split('T')[0];
-        $('#supplierInvoiceDate').val(today);
-    });
 });

@@ -2,6 +2,8 @@
 <html lang="ar" dir="rtl">
 <%- include('partials/_head.ejs') %>
 <link rel="stylesheet" href="/css/manage_licenses.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
 <body>
 <%- include('partials/_header.ejs') %>
 
@@ -192,7 +194,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="customerInvoiceDate" class="form-label">تاريخ الفاتورة</label>
-                        <input type="date" class="form-control" id="customerInvoiceDate" name="date" required>
+                        <input type="text" class="form-control datepicker" id="customerInvoiceDate" name="date" required readonly>
                     </div>
                     <!-- إضافة قسم معلومات الترخيص -->
                     <div class="license-info-section mt-4 p-3 bg-light rounded">
@@ -241,7 +243,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="supplierInvoiceDate" class="form-label">تاريخ الفاتورة</label>
-                        <input type="date" class="form-control" id="supplierInvoiceDate" name="date" required>
+                        <input type="text" class="form-control datepicker" id="supplierInvoiceDate" name="date" required readonly>
                     </div>
                     <!-- إضافة قسم معلومات الترخيص -->
                     <div class="license-info-section mt-4 p-3 bg-light rounded">
@@ -289,6 +291,37 @@
             alert('تم نسخ المعلومات بنجاح');
         }, function(err) {
             console.error('حدث خطأ أثناء النسخ: ', err);
+        });
+    });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ar.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // تهيئة مكتبة flatpickr للتواريخ
+        const dateConfig = {
+            locale: 'ar',
+            dateFormat: 'Y-m-d',
+            defaultDate: 'today',
+            disableMobile: true,
+            theme: 'material_blue',
+            altInput: true,
+            altFormat: 'd/m/Y',
+        };
+        
+        const datePickers = flatpickr('.datepicker', dateConfig);
+
+        // تعيين التاريخ الحالي عند فتح النوافذ المنبثقة
+        $('#customerInvoiceModal').on('show.bs.modal', function () {
+            const today = new Date();
+            $('#customerInvoiceDate')[0]._flatpickr.setDate(today);
+        });
+
+        $('#supplierInvoiceModal').on('show.bs.modal', function () {
+            const today = new Date();
+            $('#supplierInvoiceDate')[0]._flatpickr.setDate(today);
         });
     });
 </script>
