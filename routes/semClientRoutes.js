@@ -44,6 +44,9 @@ router.get('/api/users', isAuthenticated, async (req, res) => {
 // API لإنشاء عميل جديد
 router.post('/api/sem-clients', isAuthenticated, semClientController.createSemClient);
 
+// API للحصول على إحصائيات العملاء
+router.get('/api/sem-clients-stats', isAuthenticated, semClientController.getClientStats);
+
 // API للحصول على تفاصيل عميل
 router.get('/api/sem-clients/:clientId', isAuthenticated, semClientController.getSemClientDetails);
 

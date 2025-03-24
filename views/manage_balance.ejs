@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<%- include('partials/_head.ejs') %>
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        z-index: 100;
+        position: relative;
+    }
+    
+    .card {
+        margin-bottom: 20px;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    
+    .bg-light {
+        background-color: rgba(0, 0, 0, 0.03) !important;
+    }
+</style>
+<body>
+<%- include('partials/_header') %>
+
+<div class="container">
+    <div class="page-header">
+        <h2 class="almarai-bold">إدارة الرصيد</h2>
+    </div>
+            
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0 almarai-bold">إضافة رصيد</h5>
+                </div>
+                <div class="card-body">
+                    <form id="addBalanceForm">
+                        <div class="mb-3">
+                            <label for="clientSelect" class="form-label">اختر العميل</label>
+                            <select class="form-select" id="clientSelect" required>
+                                <option value="">-- اختر العميل --</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="amountInput" class="form-label">قيمة الرصيد</label>
+                            <input type="number" class="form-control" id="amountInput" min="1" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="notesInput" class="form-label">ملاحظات</label>
+                            <textarea class="form-control" id="notesInput" rows="2"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">إضافة الرصيد</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0 almarai-bold">إحصائيات الرصيد</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 text-center">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h5 class="card-title text-primary">إجمالي الرصيد</h5>
+                                    <h3 id="totalDeposits" class="almarai-bold">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-center">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h5 class="card-title text-danger">إجمالي الرسائل</h5>
+                                    <h3 id="totalUsage" class="almarai-bold">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- جدول عمليات الرصيد -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0 almarai-bold">سجل عمليات الرصيد</h5>
+            <div class="input-group" style="width: 300px;">
+                <input type="text" id="searchTransactions" class="form-control" placeholder="البحث...">
+                <button class="btn btn-outline-secondary" type="button">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>العميل</th>
+                            <th>النوع</th>
+                            <th>القيمة</th>
+                            <th>التاريخ</th>
+                            <th>المستخدم</th>
+                            <th>ملاحظات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsTableBody">
+                        <!-- سيتم إضافة الصفوف بواسطة JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <nav>
+                <ul class="pagination justify-content-center" id="paginationControls">
+                    <!-- أزرار التنقل بين الصفحات -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- إضافة سكريبت JavaScript -->
+<script src="/js/manage_balance.js"></script>
+
+<%- include('partials/_footer') %>
+</body>
+</html>

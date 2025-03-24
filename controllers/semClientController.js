@@ -262,3 +262,38 @@ exports.deleteSemClient = async (req, res) => {
         return res.status(500).json({ message: 'حدث خطأ أثناء حذف العميل', error: error.message });
     }
 };
+
+/**
+ * الحصول على إحصائيات العملاء والرصيد
+ */
+exports.getClientStats = async (req, res) => {
+    try {
+        // جلب جميع العملاء مع مجموع الرصيد
+        const clients = await SemClient.find().select('name balance');
+        let totalBalance = 0;
+        
+        // حساب إجمالي الرصيد
+        clients.forEach(client => {
+            totalBalance += client.balance || 0;
+        });
+        
+        // جلب إحصائيات الرسائل المرسلة
+        const totalMessages = await SemMessage.countDocuments();
+        
+        return res.status(200).json({
+            success: true,
+            stats: {
+                clientCount: clients.length,
+                totalBalance,
+                totalMessages
+            }
+        });
+    } catch (error) {
+        logger.error('Error getting SEM client stats', error);
+        return res.status(500).json({
+            success: false,
+            message: 'حدث خطأ أثناء جلب إحصائيات العملاء',
+            error: error.message
+        });
+    }
+};

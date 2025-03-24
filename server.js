@@ -17,6 +17,7 @@ const priceReaderLicenseRoutes = require('./routes/priceReaderLicense');
 const ocrRoutes = require('./routes/ocrRoutes'); // إضافة استيراد مسارات OCR
 const semClientRoutes = require('./routes/semClientRoutes'); // استيراد مسارات إدارة عملاء SEM
 const messageRoutes = require('./routes/messageRoutes'); // استيراد مسارات إرسال الرسائل
+const balanceRoutes = require('./routes/balanceRoutes'); // إضافة مسارات الرصيد
 
 if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
   console.error("Error: config environment variables not set. Please create/edit .env configuration file.");
@@ -86,6 +87,7 @@ app.use(priceReaderLicenseRoutes);
 app.use(ocrRoutes);
 app.use(semClientRoutes); // إضافة مسارات عملاء SEM
 app.use(messageRoutes); // إضافة مسارات إرسال الرسائل
+app.use('/', balanceRoutes); // إضافة مسارات الرصيد
 
 app.get("/", isAuthenticated, async (req, res) => {
   try {
