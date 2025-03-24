@@ -15,6 +15,8 @@ const { startTelegramBot } = require('./services/telegramService'); // استي�
 const telegramMessagesRoutes = require('./routes/telegramMessages');
 const priceReaderLicenseRoutes = require('./routes/priceReaderLicense');
 const ocrRoutes = require('./routes/ocrRoutes'); // إضافة استيراد مسارات OCR
+const semClientRoutes = require('./routes/semClientRoutes'); // استيراد مسارات إدارة عملاء SEM
+const messageRoutes = require('./routes/messageRoutes'); // استيراد مسارات إرسال الرسائل
 
 if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
   console.error("Error: config environment variables not set. Please create/edit .env configuration file.");
@@ -66,12 +68,8 @@ app.use((req, res, next) => {
     res.locals.originalUrl = req.originalUrl;
     if (!sess.views) {
       sess.views = 1;
-      console.log("Session created at: ", new Date().toISOString());
     } else {
       sess.views++;
-      console.log(
-        `Session accessed again at: ${new Date().toISOString()}, Views: ${sess.views}, User ID: ${sess.userId || '(unauthenticated)'}`,
-      );
     }
   }
   next();
@@ -86,6 +84,8 @@ app.use(settingsRoutes);
 app.use('/telegram', telegramMessagesRoutes);
 app.use(priceReaderLicenseRoutes);
 app.use(ocrRoutes);
+app.use(semClientRoutes); // إضافة مسارات عملاء SEM
+app.use(messageRoutes); // إضافة مسارات إرسال الرسائل
 
 app.get("/", isAuthenticated, async (req, res) => {
   try {

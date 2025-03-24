@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<%- include('partials/_head.ejs') %>
+<link rel="stylesheet" href="/css/manage_licenses.css">
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        z-index: 100;
+        position: relative;
+    }
+    
+    .page-header .btn {
+        z-index: 100;
+    }
+</style>
+<body>
+<%- include('partials/_header.ejs') %>
+
+<div class="container">
+    <div class="page-header">
+        <h2 class="almarai-bold">إدارة عملاء خدمة الرسائل</h2>
+        <a href="/sem-clients/create" class="btn btn-primary almarai-regular">
+            <i class="fas fa-plus ml-1"></i> إضافة عميل جديد
+        </a>
+    </div>
+
+    <div class="summary-section mb-3">
+        <div class="summary-card">
+            <p>إجمالي العملاء: <span id="totalClients">0</span></p>
+        </div>
+        <div class="summary-card">
+            <p>العملاء النشطين: <span id="activeClients">0</span></p>
+        </div>
+        <div class="summary-card">
+            <p>العملاء المعلقين: <span id="suspendedClients">0</span></p>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="filter-section mb-3">
+            <div class="search-group">
+                <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                    <select id="filterUserName" class="form-select almarai-regular" style="max-width: 200px;">
+                        <option value="">اختر المستخدم</option>
+                    </select>
+                <% } %>
+                <input type="text" name="searchQuery" id="searchQuery" class="form-control almarai-regular" placeholder="بحث عن عميل" style="max-width: 300px;">
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-bordered align-middle">
+                <thead class="table-primary">
+                    <tr>
+                        <th class="text-center text-white almarai-bold">رقم</th>
+                        <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                            <th class="text-center text-white almarai-bold">منشئ الحساب</th>
+                        <% } %>
+                        <th class="text-center text-white almarai-bold">اسم العميل</th>
+                        <th class="text-center text-white almarai-bold">البريد الإلكتروني</th>
+                        <th class="text-center text-white almarai-bold">رقم الهاتف</th>
+                        <th class="text-center text-white almarai-bold">الشركة</th>
+                        <th class="text-center text-white almarai-bold">الحالة</th>
+                        <th class="text-center text-white almarai-bold">الرسائل المرسلة</th>
+                        <th class="text-center text-white almarai-bold">تاريخ الإنشاء</th>
+                        <th class="text-center text-white almarai-bold">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="clientsTableBody">
+                    <!-- سيتم تحميل البيانات ديناميكيًا -->
+                </tbody>
+            </table>
+            
+            <div id="paginationControls" class="pagination-container mt-3">
+                <!-- أزرار التنقل بين الصفحات -->
+            </div>
+            
+            <div id="noDataMessage" class="no-data-message" style="display: none;">
+                <p class="text-center almarai-bold">لا توجد بيانات لعرضها</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لعرض تفاصيل العميل -->
+<div class="modal fade" id="clientDetailsModal" tabindex="-1" aria-labelledby="clientDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="clientDetailsModalLabel">تفاصيل العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modal-client-id">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الاسم:</strong>
+                                <span id="modal-client-name"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>البريد الإلكتروني:</strong>
+                                <span id="modal-client-email"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>رقم الهاتف:</strong>
+                                <span id="modal-client-phone"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الشركة:</strong>
+                                <span id="modal-client-company"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>مفتاح API:</strong>
+                                <div class="api-key-container">
+                                    <span id="modal-client-api-key"></span>
+                                    <button id="copyApiKeyBtn" class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الحد اليومي:</strong>
+                                <span id="modal-client-daily-limit"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الحد الشهري:</strong>
+                                <span id="modal-client-monthly-limit"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <button id="regenerateApiKeysBtn" class="btn btn-warning almarai-regular">
+                                إعادة توليد مفتاح API
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h5 class="almarai-bold">إحصائيات الرسائل</h5>
+                            <div class="message-stats">
+                                <div class="stats-container" id="messageStatsContainer">
+                                    <!-- سيتم تحميل الإحصائيات ديناميكيًا -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary almarai-regular" id="editClientBtn">تعديل</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لتعديل تفاصيل العميل -->
+<div class="modal fade" id="editClientModal" tabindex="-1" aria-labelledby="editClientModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editClientModalLabel">تعديل بيانات العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editClientForm">
+                    <input type="hidden" id="edit-client-id">
+                    <div class="mb-3">
+                        <label for="edit-client-name" class="form-label">الاسم</label>
+                        <input type="text" class="form-control almarai-regular" id="edit-client-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-client-email" class="form-label">البريد الإلكتروني</label>
+                        <input type="email" class="form-control almarai-regular" id="edit-client-email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-client-phone" class="form-label">رقم الهاتف</label>
+                        <input type="text" class="form-control almarai-regular" id="edit-client-phone" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-client-company" class="form-label">الشركة</label>
+                        <input type="text" class="form-control almarai-regular" id="edit-client-company">
+                    </div>
+                    <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                        <div class="mb-3">
+                            <label for="edit-client-status" class="form-label">الحالة</label>
+                            <select class="form-select almarai-regular" id="edit-client-status">
+                                <option value="active">نشط</option>
+                                <option value="inactive">غير نشط</option>
+                                <option value="suspended">معلق</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-client-daily-limit" class="form-label">الحد اليومي للرسائل</label>
+                            <input type="number" class="form-control almarai-regular" id="edit-client-daily-limit" min="1">
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-client-monthly-limit" class="form-label">الحد الشهري للرسائل</label>
+                            <input type="number" class="form-control almarai-regular" id="edit-client-monthly-limit" min="1">
+                        </div>
+                    <% } %>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary almarai-regular" id="saveClientBtn">حفظ التغييرات</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة تأكيد الحذف -->
+<div class="modal fade" id="deleteClientModal" tabindex="-1" aria-labelledby="deleteClientModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteClientModalLabel">تأكيد الحذف</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p>هل أنت متأكد من رغبتك في حذف هذا العميل؟</p>
+                <p class="text-danger">هذا الإجراء لا يمكن التراجع عنه.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-danger almarai-regular" id="confirmDeleteBtn">تأكيد الحذف</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لتأكيد إعادة توليد مفاتيح API -->
+<div class="modal fade" id="regenerateKeysModal" tabindex="-1" aria-labelledby="regenerateKeysModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="regenerateKeysModalLabel">تأكيد إعادة توليد المفاتيح</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p>هل أنت متأكد من رغبتك في إعادة توليد مفاتيح API؟</p>
+                <p class="text-warning">سيتم إبطال المفاتيح القديمة ولن تعمل أي طلبات API تستخدمها. يجب على العميل تحديث المفاتيح في تطبيقه.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-warning almarai-regular" id="confirmRegenerateKeysBtn">تأكيد إعادة التوليد</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لعرض المفاتيح الجديدة -->
+<div class="modal fade" id="newKeysModal" tabindex="-1" aria-labelledby="newKeysModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newKeysModalLabel">مفتاح API الجديد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>تنبيه: </strong>احفظ هذا المفتاح في مكان آمن.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">مفتاح API الجديد:</label>
+                    <div class="api-key-container">
+                        <input type="text" class="form-control almarai-regular" id="new-api-key" readonly>
+                        <button id="copyNewApiKeyBtn" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary almarai-regular" data-bs-dismiss="modal">تم</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/_footer.ejs') %>
+
+<script src="/js/manage_sem_clients.js"></script>
+</body>
+</html>

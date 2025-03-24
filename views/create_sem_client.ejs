@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<%- include('partials/_head.ejs') %>
+<body>
+<%- include('partials/_header.ejs') %>
+
+<div class="container">
+    <div class="page-header">
+        <h2 class="almarai-bold">إضافة عميل جديد لخدمة الرسائل</h2>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <form id="createClientForm">
+                        <div class="mb-3">
+                            <label for="name" class="form-label almarai-bold">اسم العميل *</label>
+                            <input type="text" class="form-control almarai-regular" id="name" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="email" class="form-label almarai-bold">البريد الإلكتروني *</label>
+                            <input type="email" class="form-control almarai-regular" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="phone" class="form-label almarai-bold">رقم الهاتف *</label>
+                            <input type="text" class="form-control almarai-regular" id="phone" name="phone" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="company" class="form-label almarai-bold">اسم الشركة</label>
+                            <input type="text" class="form-control almarai-regular" id="company" name="company">
+                        </div>
+                        
+                        <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="dailyLimit" class="form-label almarai-bold">الحد اليومي للرسائل</label>
+                                <input type="number" class="form-control almarai-regular" id="dailyLimit" name="dailyLimit" value="100" min="1">
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="monthlyLimit" class="form-label almarai-bold">الحد الشهري للرسائل</label>
+                                <input type="number" class="form-control almarai-regular" id="monthlyLimit" name="monthlyLimit" value="3000" min="1">
+                            </div>
+                        </div>
+                        <% } %>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            سيتم إنشاء مفتاح API تلقائياً عند إنشاء حساب العميل
+                        </div>
+                        
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg almarai-bold">
+                                <i class="fas fa-plus-circle me-2"></i> إنشاء عميل جديد
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لمفاتيح API -->
+<div class="modal fade" id="newClientKeysModal" tabindex="-1" aria-labelledby="newClientKeysModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title almarai-bold" id="newClientKeysModalLabel">مفاتيح API للعميل الجديد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i> تنبيه: احفظ هذا المفتاح في مكان آمن.
+                </div>
+                
+                <div class="mb-3">
+                    <label for="client-api-key" class="form-label almarai-bold">مفتاح API:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control almarai-regular" id="client-api-key" readonly>
+                        <button class="btn btn-outline-secondary" type="button" id="copyApiKeyBtn">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary almarai-regular" id="addAnotherClientBtn">إضافة عميل آخر</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/_footer.ejs') %>
+
+<script src="/js/create_sem_client.js"></script>
+</body>
+</html>
