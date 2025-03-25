@@ -219,6 +219,7 @@ class SemySmsProvider extends ISmsProvider {
                 isPremium: response.is_pay === 1,
                 premiumType: response.type_premium,
                 premiumEndDate: response.date_end_premium,
+                balance: response.messages_premium || 0, // إضافة حقل رصيد الحساب
                 messagesPremium: response.messages_premium,
                 rawResponse: response
             };

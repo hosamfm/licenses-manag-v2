@@ -216,7 +216,14 @@
           <% } %>
           
           <div>
-            <small class="text-muted">آخر تحديث: <%= new Date(settings.updatedAt).toLocaleString('ar-SA') %></small>
+            <small class="text-muted">آخر تحديث: <%= 
+              new Date(settings.updatedAt).getFullYear() + "-" +
+              String(new Date(settings.updatedAt).getMonth() + 1).padStart(2, '0') + "-" +
+              String(new Date(settings.updatedAt).getDate()).padStart(2, '0') + " " +
+              String(new Date(settings.updatedAt).getHours()).padStart(2, '0') + ":" +
+              String(new Date(settings.updatedAt).getMinutes()).padStart(2, '0') + ":" +
+              String(new Date(settings.updatedAt).getSeconds()).padStart(2, '0')
+            %></small>
           </div>
         </div>
         
@@ -251,7 +258,14 @@
                     <%= message.clientId ? message.clientId.name : 'مستخدم غير معروف' %>
                   </div>
                   <div class="message-time">
-                    <%= new Date(message.createdAt).toLocaleString('ar-SA') %>
+                    <%= 
+                      new Date(message.createdAt).getFullYear() + "-" +
+                      String(new Date(message.createdAt).getMonth() + 1).padStart(2, '0') + "-" +
+                      String(new Date(message.createdAt).getDate()).padStart(2, '0') + " " +
+                      String(new Date(message.createdAt).getHours()).padStart(2, '0') + ":" +
+                      String(new Date(message.createdAt).getMinutes()).padStart(2, '0') + ":" +
+                      String(new Date(message.createdAt).getSeconds()).padStart(2, '0')
+                    %>
                   </div>
                 </div>
                 <div class="message-recipient mb-2">
