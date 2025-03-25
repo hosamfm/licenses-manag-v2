@@ -9,33 +9,55 @@ const logger = require('../services/loggerService');
  */
 exports.handleStatusUpdate = async (req, res) => {
     try {
-        // سجل الطلب الوارد للتتبع
+        // سجل الطلب الوارد للتتبع بشكل تفصيلي
         logger.info('smsWebhookController', 'استلام تحديث حالة من webhook', {
-            body: req.body
+            body: req.body,
+            headers: req.headers,
+            method: req.method,
+            query: req.query
         });
 
-        // استخراج المعلومات من الطلب
-        const { id, phone, is_send, send_date, is_delivered, delivered_date, msg } = req.body;
+        // استخراج المعلومات من الطلب - قد تكون في body أو query
+        const data = { ...req.query, ...req.body };
+        
+        // تسجيل البيانات المستخرجة للتحقق
+        logger.info('smsWebhookController', 'البيانات المستخرجة من الطلب', data);
+
+        // استخراج معرف الرسالة (قد يكون بأسماء مختلفة)
+        const id = data.id || data.message_id || data.messageId || null;
 
         if (!id) {
-            logger.warn('smsWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة', req.body);
-            return res.status(400).json({ success: false, error: 'معرف الرسالة مطلوب' });
+            logger.warn('smsWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة', data);
+            // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
+            return res.status(200).json({ 
+                success: false, 
+                error: 'معرف الرسالة مطلوب',
+                received: data 
+            });
         }
 
         // البحث عن الرسالة في قاعدة البيانات
         const message = await SemMessage.findOne({ messageId: id });
 
         if (!message) {
-            logger.warn('smsWebhookController', `لم يتم العثور على رسالة بالمعرف ${id}`, req.body);
-            return res.status(404).json({ success: false, error: 'الرسالة غير موجودة' });
+            logger.warn('smsWebhookController', `لم يتم العثور على رسالة بالمعرف ${id}`, data);
+            return res.status(200).json({ 
+                success: false, 
+                error: 'الرسالة غير موجودة',
+                messageId: id
+            });
         }
 
         // تحديد حالة الرسالة بناءً على المعلومات الواردة
         let statusChanged = false;
         let newStatus = message.status;
+        const is_send = data.is_send || data.status === 'sent' || data.status === 'delivered';
+        const is_delivered = data.is_delivered || data.status === 'delivered';
+        const send_date = data.send_date || data.sent_date || data.date;
+        const delivered_date = data.delivered_date || data.delivery_date;
 
         // إذا تم إرسال الرسالة أو تسليمها، نعتبرها مرسلة
-        if (is_delivered === '1' || is_send === '1') {
+        if (is_delivered === '1' || is_delivered === true || is_send === '1' || is_send === true) {
             newStatus = 'sent';
             statusChanged = message.status !== 'sent';
             
@@ -54,19 +76,25 @@ exports.handleStatusUpdate = async (req, res) => {
             logger.info('smsWebhookController', `تم تحديث حالة الرسالة ${id}`, {
                 from: message.status,
                 to: newStatus,
-                phone
+                phone: data.phone || 'غير معروف'
             });
         }
 
         // إرسال استجابة نجاح
         res.json({
             success: true,
-            message: 'تم تحديث حالة الرسالة بنجاح',
+            message: 'تم معالجة طلب webhook بنجاح',
             messageId: id,
-            status: newStatus
+            status: newStatus,
+            statusChanged: statusChanged
         });
     } catch (error) {
         logger.error('smsWebhookController', 'خطأ في معالجة webhook', error);
-        res.status(500).json({ success: false, error: 'حدث خطأ أثناء معالجة الطلب' });
+        // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
+        res.status(200).json({ 
+            success: false, 
+            error: 'حدث خطأ أثناء معالجة الطلب',
+            errorMessage: error.message
+        });
     }
 };
