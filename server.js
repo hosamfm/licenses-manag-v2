@@ -29,6 +29,26 @@ const port = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// إضافة دعم تنسيق multipart/form-data لطلبات webhook
+const multer = require('multer');
+const upload = multer();
+
+// إضافة طبقة وسيطة خاصة لمسار webhook
+app.use('/api/sms/webhook/status-update', upload.any(), (req, res, next) => {
+  // تحويل بيانات الملفات وحقول multipart إلى body
+  if (req.files && req.files.length > 0) {
+    console.log('تم استلام ملفات من webhook:', req.files.length);
+  }
+  
+  // دمج البيانات من حقول multipart إلى req.body
+  const webhookData = { ...req.body };
+  console.log('تم استلام بيانات من الحقول:', webhookData);
+  
+  // استكمال الطلب
+  next();
+});
+
 app.use(express.static("public"));
 
 app.set("view engine", "ejs");
