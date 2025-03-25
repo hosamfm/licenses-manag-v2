@@ -9,6 +9,8 @@ const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const telegramService = require('../services/telegramService');
+const smsSettingsController = require('../controllers/smsSettingsController');
+const smsWebhookController = require('../controllers/smsWebhookController');
 
 function handleError(req, res, error, message, redirectPath) {
   console.error(message, error.message, error.stack);
@@ -173,5 +175,14 @@ router.post('/settings/save-telegram-bot-token', [isAuthenticated, checkRole(['a
     handleError(req, res, error, 'Failed to save TELEGRAM_BOT_TOKEN.', '/settings');
   }
 });
+
+// مسارات خدمة الرسائل القصيرة SMS
+router.get('/admin/sms-settings', [isAuthenticated, checkRole(['admin'])], smsSettingsController.showSmsSettings);
+router.post('/admin/sms-settings/save', [isAuthenticated, checkRole(['admin'])], smsSettingsController.saveSmsSettings);
+router.post('/admin/sms-settings/update-pending', [isAuthenticated, checkRole(['admin'])], smsSettingsController.updatePendingMessages);
+router.get('/admin/sms-monitor', [isAuthenticated, checkRole(['admin'])], smsSettingsController.showSmsMonitor);
+
+// مسار webhook لاستقبال تحديثات حالة الرسائل من مزود الخدمة - لا يتطلب مصادقة
+router.post('/api/sms/webhook/status-update', smsWebhookController.handleStatusUpdate);
 
 module.exports = router;

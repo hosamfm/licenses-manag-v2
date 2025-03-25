@@ -2,6 +2,44 @@ const SemClient = require('../models/SemClient');
 const SemMessage = require('../models/SemMessage');
 const logger = require('../services/loggerService');
 const BalanceTransaction = require('../models/BalanceTransaction');
+const SmsManager = require('../services/sms/SmsManager');
+const SmsSettings = require('../models/SmsSettings');
+const SmsStatusService = require('../services/sms/SmsStatusService');
+
+/**
+ * تهيئة مدير خدمة الرسائل
+ * @private
+ */
+async function _initializeSmsManager() {
+    try {
+        // التحقق مما إذا كان مدير الرسائل قد تم تهيئته بالفعل
+        if (SmsManager.initialized) {
+            return true;
+        }
+
+        // الحصول على إعدادات SMS النشطة
+        const settings = await SmsSettings.getActiveSettings();
+        
+        if (!settings) {
+            logger.error('messageController', 'لا يمكن العثور على إعدادات SMS النشطة');
+            return false;
+        }
+
+        // تهيئة مدير خدمة الرسائل
+        const config = settings.getProviderConfig();
+        const initialized = await SmsManager.initialize(config);
+        
+        if (!initialized) {
+            logger.error('messageController', 'فشل في تهيئة مدير خدمة الرسائل');
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        logger.error('messageController', 'خطأ في تهيئة مدير خدمة الرسائل', error);
+        return false;
+    }
+}
 
 /**
  * إرسال رسالة باستخدام مفتاح API
@@ -35,11 +73,6 @@ exports.sendMessage = async (req, res) => {
             return res.status(429).send("5"); // كود خطأ 5: تجاوز الحد الشهري
         }
 
-        // التحقق من وجود رصيد كافٍ
-        // حساب عدد النقاط المطلوبة بناءً على طول الرسالة
-        // الرسائل العربية: كل 70 حرف = رسالة واحدة
-        // الرسائل اللاتينية: كل 160 حرف = رسالة واحدة
-        
         // التحقق إذا كانت الرسالة تحتوي على حروف عربية
         const containsArabic = /[\u0600-\u06FF]/.test(msg);
         const maxLength = containsArabic ? 70 : 160;
@@ -56,6 +89,13 @@ exports.sendMessage = async (req, res) => {
             return res.status(402).send("7"); // كود خطأ 7: رصيد غير كافٍ
         }
 
+        // تهيئة مدير خدمة الرسائل
+        const smsManagerInitialized = await _initializeSmsManager();
+        if (!smsManagerInitialized) {
+            logger.error('فشل في تهيئة خدمة الرسائل');
+            return res.status(500).send("6"); // خطأ في النظام
+        }
+
         // إنشاء سجل للرسالة
         const newMessage = new SemMessage({
             clientId: client._id,
@@ -67,21 +107,32 @@ exports.sendMessage = async (req, res) => {
         // حفظ الرسالة في قاعدة البيانات
         await newMessage.save();
 
-        // هنا ستكون الشيفرة الفعلية لإرسال الرسالة SMS عبر خدمة خارجية
-        // للتبسيط، سنفترض أن الرسالة تم إرسالها بنجاح
+        // إرسال الرسالة فعلياً باستخدام SmsManager
+        const smsResult = await SmsManager.sendSms(phone, msg);
 
-        // تحديث حالة الرسالة
-        newMessage.status = 'sent';
-        newMessage.sentAt = new Date();
-        newMessage.messageId = 'MSG_' + Date.now();
+        if (!smsResult.success) {
+            // فشل في إرسال الرسالة
+            newMessage.status = 'failed';
+            newMessage.errorMessage = smsResult.error || 'فشل في إرسال الرسالة';
+            await newMessage.save();
+            
+            logger.error(`فشل في إرسال رسالة للعميل ${client.name} إلى ${phone}`, {
+                error: smsResult.error
+            });
+            return res.status(500).send("6"); // كود خطأ 6: خطأ في النظام
+        }
+
+        // تم إرسال الرسالة بنجاح، تحديث المعلومات
+        newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
+        newMessage.messageId = smsResult.messageId;
+        if (smsResult.status === 'delivered') {
+            newMessage.sentAt = new Date();
+        }
         await newMessage.save();
 
         // زيادة عدد الرسائل المرسلة للعميل
         client.messagesSent += 1;
-        await client.save();
-
-        logger.info(`تم إرسال رسالة بنجاح للعميل ${client.name} إلى ${phone}`);
-
+        
         // خصم الرصيد بناءً على طول الرسالة
         client.balance -= requiredPoints;
         await client.save();
@@ -95,6 +146,8 @@ exports.sendMessage = async (req, res) => {
             performedBy: client._id // استخدام معرف العميل نفسه كمنفذ للعملية
         });
         await transaction.save();
+
+        logger.info(`تم إرسال رسالة للعميل ${client.name} إلى ${phone} بنجاح`);
 
         // إعادة استجابة نجاح مبسطة (رقم فقط)
         return res.status(200).send("1");
@@ -130,6 +183,96 @@ exports.checkBalance = async (req, res) => {
     } catch (error) {
         logger.error('خطأ في التحقق من الرصيد:', error);
         return res.status(500).send("6");
+    }
+};
+
+/**
+ * التحقق من رصيد حساب SemySMS
+ * متاح فقط للمدراء
+ */
+exports.checkSmsProviderBalance = async (req, res) => {
+    try {
+        // التحقق من وجود المستخدم وأنه أدمن فقط
+        const userRole = req.session.userRole;
+        if (userRole !== 'admin') {
+            logger.warn(`محاولة وصول غير مصرح به لرصيد مزود الخدمة من قبل مستخدم غير مدير`);
+            return res.status(403).json({
+                success: false,
+                message: 'غير مصرح لك بالوصول إلى هذه البيانات'
+            });
+        }
+        
+        // تهيئة مدير خدمة الرسائل
+        const smsManagerInitialized = await _initializeSmsManager();
+        if (!smsManagerInitialized) {
+            return res.status(500).json({
+                success: false,
+                message: 'فشل في تهيئة خدمة الرسائل'
+            });
+        }
+        
+        // الحصول على رصيد الحساب
+        const balanceResult = await SmsManager.checkAccountBalance();
+        
+        if (!balanceResult.success) {
+            return res.status(500).json({
+                success: false,
+                message: `فشل في التحقق من رصيد الحساب: ${balanceResult.error}`
+            });
+        }
+        
+        return res.status(200).json({
+            success: true,
+            balance: balanceResult.balance,
+            provider: balanceResult.provider || 'semysms'
+        });
+    } catch (error) {
+        logger.error('خطأ في التحقق من رصيد مزود الخدمة:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'حدث خطأ أثناء التحقق من رصيد مزود الخدمة'
+        });
+    }
+};
+
+/**
+ * تحديث حالة الرسائل المعلقة
+ * متاح فقط للمدراء
+ */
+exports.updatePendingMessagesStatus = async (req, res) => {
+    try {
+        // التحقق من وجود المستخدم وأنه أدمن فقط
+        const userRole = req.session.userRole;
+        if (userRole !== 'admin') {
+            logger.warn(`محاولة وصول غير مصرح به لتحديث حالة الرسائل من قبل مستخدم غير مدير`);
+            return res.status(403).json({
+                success: false,
+                message: 'غير مصرح لك بالوصول إلى هذه الوظيفة'
+            });
+        }
+        
+        // تهيئة مدير خدمة الرسائل
+        const smsManagerInitialized = await _initializeSmsManager();
+        if (!smsManagerInitialized) {
+            return res.status(500).json({
+                success: false,
+                message: 'فشل في تهيئة خدمة الرسائل'
+            });
+        }
+        
+        // تحديث حالة الرسائل المعلقة
+        const updateResult = await SmsStatusService.updatePendingMessagesStatus();
+        
+        return res.status(200).json({
+            success: updateResult.success,
+            ...updateResult
+        });
+    } catch (error) {
+        logger.error('خطأ في تحديث حالة الرسائل المعلقة:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'حدث خطأ أثناء تحديث حالة الرسائل'
+        });
     }
 };
 

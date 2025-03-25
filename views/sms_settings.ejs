@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('partials/_head') %>
+  <title>إعدادات خدمة الرسائل القصيرة</title>
+  <style>
+    .container {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    .section-title {
+      border-bottom: 2px solid #f0f0f0;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    .status-card {
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .status-card h5 {
+      margin-bottom: 15px;
+      font-weight: bold;
+      color: #333;
+    }
+    .status-success {
+      background-color: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+    .status-warning {
+      background-color: #fff3cd;
+      border-color: #ffeeba;
+      color: #856404;
+    }
+    .status-danger {
+      background-color: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+    }
+    .status-info {
+      background-color: #d1ecf1;
+      border-color: #bee5eb;
+      color: #0c5460;
+    }
+    .stat-box {
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: center;
+      background-color: #f8f9fa;
+    }
+    .stat-box h4 {
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #007bff;
+    }
+    .stat-box p {
+      color: #6c757d;
+      margin-bottom: 0;
+    }
+    .device-card {
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+      background-color: white;
+    }
+    .device-card.active {
+      border-color: #28a745;
+      border-width: 2px;
+    }
+    .device-card .badge {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/_header') %>
+  <div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1>إعدادات خدمة الرسائل القصيرة</h1>
+      <div>
+        <a href="/admin/sms-monitor" class="btn btn-info ml-2">
+          <i class="fas fa-chart-line"></i> مراقبة الرسائل
+        </a>
+        <a href="/settings" class="btn btn-secondary">
+          <i class="fas fa-arrow-right"></i> العودة لإعدادات النظام
+        </a>
+      </div>
+    </div>
+    
+    <% if (flashMessages.error) { %>
+      <div class="alert alert-danger"><%= flashMessages.error %></div>
+    <% } %>
+    <% if (flashMessages.success) { %>
+      <div class="alert alert-success"><%= flashMessages.success %></div>
+    <% } %>
+
+    <div class="row">
+      <!-- حالة خدمة الرسائل -->
+      <div class="col-md-4">
+        <div class="section-title">
+          <h3>حالة الخدمة</h3>
+        </div>
+        
+        <!-- رصيد الحساب -->
+        <div class="status-card <%= accountBalance.success ? (accountBalance.balance > 10 ? 'status-success' : 'status-warning') : 'status-danger' %>">
+          <h5>
+            <i class="fas fa-wallet"></i>
+            رصيد الحساب
+          </h5>
+          <% if (accountBalance.success) { %>
+            <p class="mb-0 font-weight-bold">
+              <%= accountBalance.balance %> رسالة
+            </p>
+            <% if (accountBalance.balance < 10) { %>
+              <small class="text-danger">الرصيد منخفض، يرجى إعادة التعبئة</small>
+            <% } %>
+          <% } else { %>
+            <p class="mb-0 text-danger">
+              تعذر الحصول على رصيد الحساب
+              <% if (accountBalance.error) { %>
+                <br>
+                <small><%= accountBalance.error %></small>
+              <% } %>
+            </p>
+          <% } %>
+        </div>
+        
+        <!-- حالة الرسائل -->
+        <div class="status-card status-info">
+          <h5>
+            <i class="fas fa-envelope"></i>
+            حالة الرسائل
+          </h5>
+          <div class="row text-center">
+            <div class="col-4">
+              <div class="font-weight-bold"><%= messageStats.pending %></div>
+              <small>معلقة</small>
+            </div>
+            <div class="col-4">
+              <div class="font-weight-bold"><%= messageStats.sent %></div>
+              <small>مرسلة</small>
+            </div>
+            <div class="col-4">
+              <div class="font-weight-bold"><%= messageStats.failed %></div>
+              <small>فاشلة</small>
+            </div>
+          </div>
+          <% if (messageStats.pending > 0) { %>
+            <div class="text-center mt-3">
+              <form action="/admin/sms-settings/update-pending" method="POST">
+                <button type="submit" class="btn btn-sm btn-warning">
+                  <i class="fas fa-sync"></i> تحديث حالة الرسائل المعلقة
+                </button>
+              </form>
+            </div>
+          <% } %>
+        </div>
+      </div>
+      
+      <!-- إعدادات مزود الخدمة -->
+      <div class="col-md-8">
+        <div class="section-title">
+          <h3>إعدادات مزود الخدمة</h3>
+        </div>
+        
+        <form action="/admin/sms-settings/save" method="POST">
+          <div class="card mb-4">
+            <div class="card-body">
+              <div class="mb-3">
+                <label for="provider" class="form-label">مزود خدمة الرسائل</label>
+                <select id="provider" name="provider" class="form-select">
+                  <option value="semysms" <%= settings.provider === 'semysms' ? 'selected' : '' %>>SemySMS</option>
+                  <!-- يمكن إضافة مزودين آخرين هنا في المستقبل -->
+                </select>
+              </div>
+              
+              <!-- إعدادات SemySMS -->
+              <div id="semysms-settings" class="provider-settings">
+                <div class="mb-3">
+                  <label for="semysms_token" class="form-label">توكن API</label>
+                  <div class="input-group">
+                    <input type="text" id="semysms_token" name="semysms_token" class="form-control" value="<%= settings.config.semysms.token %>">
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('semysms_token')">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                  <small class="form-text text-muted">يمكنك الحصول على التوكن من إعدادات حساب SemySMS الخاص بك.</small>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="semysms_device" class="form-label">اختيار الجهاز</label>
+                  <select id="semysms_device" name="semysms_device" class="form-select">
+                    <option value="active" <%= settings.config.semysms.device === 'active' ? 'selected' : '' %>>الجهاز النشط</option>
+                    <% if (devicesList && devicesList.length > 0) { %>
+                      <% devicesList.forEach(device => { %>
+                        <option value="<%= device.id %>" <%= settings.config.semysms.device === device.id ? 'selected' : '' %>>
+                          <%= device.name %> (<%= device.number %>)
+                        </option>
+                      <% }); %>
+                    <% } %>
+                  </select>
+                  <small class="form-text text-muted">اختر "الجهاز النشط" للإرسال من خلال أي جهاز متصل، أو اختر جهازًا محددًا.</small>
+                </div>
+
+                <hr>
+                <h5 class="mb-3">إعدادات WebHook</h5>
+                
+                <div class="alert alert-info">
+                  <i class="fas fa-info-circle"></i>
+                  خدمة WebHook تسمح لمزود SemySMS بإرسال تحديثات حالة الرسائل تلقائيًا إلى النظام، مما يضمن تحديث الحالة فور تغييرها.
+                </div>
+                
+                <div class="mb-3">
+                  <label for="semysms_webhook" class="form-label">عنوان WebHook للتحديثات التلقائية</label>
+                  <div class="input-group">
+                    <input type="text" id="semysms_webhook" name="semysms_webhook" class="form-control" 
+                      value="<%= settings.config.semysms.webhookUrl || webhookUrl %>" readonly>
+                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('semysms_webhook')">
+                      <i class="fas fa-copy"></i>
+                    </button>
+                  </div>
+                  <small class="form-text text-muted">انسخ هذا الرابط وضعه في إعدادات WebHook في لوحة تحكم SemySMS.</small>
+                </div>
+                
+                <div class="mb-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="semysms_sent_webhook" name="semysms_sent_webhook" 
+                      <%= settings.config.semysms.enableSentWebhook ? 'checked' : '' %>>
+                    <label class="form-check-label" for="semysms_sent_webhook">
+                      تفعيل WebHook لحالة "تم الإرسال"
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="semysms_delivered_webhook" name="semysms_delivered_webhook" 
+                      <%= settings.config.semysms.enableDeliveredWebhook ? 'checked' : '' %>>
+                    <label class="form-check-label" for="semysms_delivered_webhook">
+                      تفعيل WebHook لحالة "تم التسليم"
+                    </label>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="semysms_add_plus" name="semysms_add_plus" 
+                      <%= settings.config.semysms.addPlusPrefix ? 'checked' : '' %>>
+                    <label class="form-check-label" for="semysms_add_plus">
+                      إضافة علامة + تلقائيًا قبل أرقام الهواتف
+                    </label>
+                    <small class="form-text text-muted d-block">فعّل هذا الخيار إذا كنت ترغب في إضافة علامة + تلقائيًا قبل أرقام الهواتف. يفضل تعطيله للأرقام المحلية.</small>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="text-center">
+                <button type="submit" class="btn btn-primary">
+                  <i class="fas fa-save"></i> حفظ الإعدادات
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+        
+        <!-- عرض الأجهزة المتوفرة -->
+        <% if (devicesList && devicesList.length > 0) { %>
+          <div class="section-title">
+            <h3>الأجهزة المتوفرة</h3>
+          </div>
+          
+          <div class="row">
+            <% devicesList.forEach(device => { %>
+              <div class="col-md-6">
+                <div class="device-card <%= device.status === 'active' ? 'active' : '' %>">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="mb-0"><%= device.name %></h5>
+                    <span class="badge <%= device.status === 'active' ? 'bg-success' : 'bg-secondary' %>">
+                      <%= device.status === 'active' ? 'متصل' : 'غير متصل' %>
+                    </span>
+                  </div>
+                  <p class="mb-1"><strong>رقم الهاتف:</strong> <%= device.number %></p>
+                  <p class="mb-1"><strong>الطراز:</strong> <%= device.model || 'غير معروف' %></p>
+                  <p class="mb-0"><strong>المعرف:</strong> <%= device.id %></p>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        <% } else { %>
+          <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            لا توجد أجهزة متصلة أو تعذر الحصول على قائمة الأجهزة.
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function togglePasswordVisibility(inputId) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+      } else {
+        input.type = 'password';
+      }
+    }
+    
+    function copyToClipboard(elementId) {
+      const input = document.getElementById(elementId);
+      input.select();
+      document.execCommand('copy');
+      alert('تم نسخ العنوان بنجاح!');
+    }
+  </script>
+
+  <%- include('partials/_footer') %>
+</body>
+</html>
