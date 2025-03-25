@@ -51,6 +51,31 @@ exports.handleStatusUpdate = async (req, res) => {
         // تحديد حالة الرسالة بناءً على المعلومات الواردة
         let statusChanged = false;
         let newStatus = message.status;
+        
+        // التحقق من وجود بيانات حالة في الطلب
+        const hasStatusData = data.is_send || data.is_delivered || data.status || 
+                             (data.send_date && data.send_date.trim() !== '') || 
+                             (data.delivered_date && data.delivered_date.trim() !== '');
+        
+        // إذا كانت جميع قيم الحالة فارغة، قد يكون هذا مجرد إشعار متوسط من الخدمة
+        if (!hasStatusData) {
+            logger.info('smsWebhookController', 'تم استلام إشعار متوسط بدون معلومات تحديث الحالة', {
+                messageId: id,
+                phone: data.phone || 'غير معروف'
+            });
+            
+            // إرسال استجابة نجاح بدون تحديث الحالة
+            return res.json({
+                success: true,
+                message: 'تم استلام الإشعار المتوسط',
+                messageId: id,
+                status: message.status,
+                statusChanged: false,
+                note: 'لم يتم تقديم معلومات لتحديث الحالة'
+            });
+        }
+
+        // استخراج معلومات الحالة من البيانات الواردة
         const is_send = data.is_send || data.status === 'sent' || data.status === 'delivered';
         const is_delivered = data.is_delivered || data.status === 'delivered';
         const send_date = data.send_date || data.sent_date || data.date;
