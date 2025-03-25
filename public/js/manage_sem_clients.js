@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     function loadClientsData() {
         // إظهار مؤشر التحميل
-        document.getElementById('clientsTableBody').innerHTML = '<tr><td colspan="10" class="text-center">جاري التحميل...</td></tr>';
+        document.getElementById('clientsTableBody').innerHTML = '<tr><td colspan="11" class="text-center">جاري التحميل...</td></tr>';
         
         // بناء عنوان URL مع المعلمات
         let url = `/api/sem-clients?page=${currentPage}`;
@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Error loading clients:', error);
-                document.getElementById('clientsTableBody').innerHTML = '<tr><td colspan="10" class="text-center text-danger">حدث خطأ أثناء تحميل البيانات</td></tr>';
+                document.getElementById('clientsTableBody').innerHTML = '<tr><td colspan="11" class="text-center text-danger">حدث خطأ أثناء تحميل البيانات</td></tr>';
                 showToast('حدث خطأ أثناء تحميل بيانات العملاء', 'error');
             });
     }
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const showUserColumn = document.getElementById('filterUserName') !== null;
         
         if (data.docs.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="10" class="text-center">لا توجد بيانات لعرضها</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="11" class="text-center">لا توجد بيانات لعرضها</td></tr>';
             document.getElementById('noDataMessage').style.display = 'block';
             return;
         }
@@ -217,6 +217,12 @@ document.addEventListener('DOMContentLoaded', function() {
             statusCell.appendChild(statusBadge);
             row.appendChild(statusCell);
             
+            // الرصيد
+            const balanceCell = document.createElement('td');
+            balanceCell.className = 'text-center';
+            balanceCell.textContent = client.balance ? client.balance.toFixed(2) : '0.00';
+            row.appendChild(balanceCell);
+            
             // الرسائل المرسلة
             const messagesCell = document.createElement('td');
             messagesCell.className = 'text-center';
@@ -260,6 +266,19 @@ document.addEventListener('DOMContentLoaded', function() {
             deleteBtn.title = 'حذف';
             deleteBtn.addEventListener('click', () => confirmDelete(client._id));
             actionsCell.appendChild(deleteBtn);
+            
+            // إضافة زر عرض سجل الرسائل (للأدمن فقط)
+            const userRole = document.querySelector('.navbar').dataset.userRole;
+            if (userRole === 'admin') {
+                const messagesBtn = document.createElement('button');
+                messagesBtn.className = 'btn btn-sm btn-success mx-1';
+                messagesBtn.innerHTML = '<i class="fas fa-envelope"></i>';
+                messagesBtn.title = 'سجل الرسائل';
+                messagesBtn.addEventListener('click', () => {
+                    window.location.href = `/client_messages?id=${client._id}`;
+                });
+                actionsCell.appendChild(messagesBtn);
+            }
             
             row.appendChild(actionsCell);
             tableBody.appendChild(row);
@@ -386,6 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('modal-client-phone').textContent = data.client.phone;
                 document.getElementById('modal-client-company').textContent = data.client.company || '-';
                 document.getElementById('modal-client-api-key').textContent = data.client.apiKey;
+                document.getElementById('modal-client-balance').textContent = data.client.balance ? data.client.balance.toFixed(2) : '0.00';
                 
                 document.getElementById('modal-client-daily-limit').textContent = data.client.dailyLimit;
                 document.getElementById('modal-client-monthly-limit').textContent = data.client.monthlyLimit;

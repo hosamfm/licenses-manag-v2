@@ -154,6 +154,20 @@ router.post('/auth/logout', (req, res) => {
   });
 });
 
+router.get('/auth/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      console.error('Error during session destruction:', err.message, err.stack);
+      if (req.session) {
+        req.flash('error', 'Error logging out');
+      }
+      return res.status(500).redirect('/');
+    }
+    res.clearCookie('connect.sid', { path: '/' });
+    res.redirect('/auth/login');
+  });
+});
+
 router.post('/auth/verify-telegram', async (req, res) => {
   try {
     const { temp_code } = req.body;

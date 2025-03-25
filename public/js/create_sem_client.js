@@ -14,6 +14,11 @@ document.addEventListener('DOMContentLoaded', function() {
         createClientForm.reset();
     });
     
+    // زر العودة إلى قائمة العملاء
+    document.getElementById('goToClientsListBtn').addEventListener('click', function() {
+        window.location.href = '/sem-clients/manage';
+    });
+    
     // نسخ مفتاح API
     document.getElementById('copyApiKeyBtn').addEventListener('click', function() {
         copyToClipboard(document.getElementById('client-api-key').value);

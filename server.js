@@ -89,6 +89,25 @@ app.use(semClientRoutes); // إضافة مسارات عملاء SEM
 app.use(messageRoutes); // إضافة مسارات إرسال الرسائل
 app.use('/', balanceRoutes); // إضافة مسارات الرصيد
 
+// مسار لعرض صفحة سجل رسائل العميل
+app.get('/client_messages', isAuthenticated, async (req, res) => {
+    try {
+        // التأكد من أن المستخدم هو مدير أو مشرف
+        if (!['admin', 'supervisor'].includes(req.session.userRole)) {
+            return res.redirect('/sem-clients');
+        }
+        
+        // تقديم صفحة سجل الرسائل
+        res.render('client_messages', {
+            title: 'سجل رسائل العميل',
+            session: req.session
+        });
+    } catch (error) {
+        console.error('خطأ في عرض صفحة سجل الرسائل:', error);
+        res.redirect('/sem-clients');
+    }
+});
+
 app.get("/", isAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId);

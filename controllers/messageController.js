@@ -132,3 +132,76 @@ exports.checkBalance = async (req, res) => {
         return res.status(500).send("6");
     }
 };
+
+/**
+ * الحصول على سجل رسائل عميل معين - متاح فقط للأدمن
+ */
+exports.getClientMessages = async (req, res) => {
+    try {
+        // التحقق من وجود المستخدم وأنه أدمن فقط
+        const userRole = req.session.userRole;
+        if (userRole !== 'admin') {
+            logger.warn(`محاولة وصول غير مصرح به للرسائل من قبل مستخدم غير مدير`);
+            return res.status(403).json({
+                success: false,
+                message: 'غير مصرح لك بالوصول إلى هذه البيانات'
+            });
+        }
+
+        const clientId = req.params.clientId;
+        if (!clientId) {
+            return res.status(400).json({
+                success: false,
+                message: 'معرف العميل مطلوب'
+            });
+        }
+
+        // التحقق من وجود العميل
+        const client = await SemClient.findById(clientId);
+        if (!client) {
+            return res.status(404).json({
+                success: false,
+                message: 'العميل غير موجود'
+            });
+        }
+
+        // الحصول على الصفحة الحالية والحجم
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // الحصول على إجمالي عدد الرسائل للعميل
+        const totalMessages = await SemMessage.countDocuments({ clientId });
+
+        // الحصول على رسائل العميل مع ترتيبها من الأحدث إلى الأقدم
+        const messages = await SemMessage.find({ clientId })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        // إعداد بيانات الصفحات
+        const totalPages = Math.ceil(totalMessages / limit);
+        
+        return res.status(200).json({
+            success: true,
+            messages,
+            pagination: {
+                page: page,
+                totalPages,
+                totalMessages,
+                limit
+            },
+            client: {
+                id: client._id,
+                name: client.name
+            }
+        });
+
+    } catch (error) {
+        logger.error('خطأ في الحصول على رسائل العميل:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'حدث خطأ أثناء معالجة الطلب'
+        });
+    }
+};

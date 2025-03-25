@@ -1,4 +1,4 @@
-<nav class="navbar navbar-expand-lg sticky-top">
+<nav class="navbar navbar-expand-lg sticky-top" data-user-role="<%= session.userRole %>">
     <div class="container-fluid px-3 px-lg-4">
         <!-- Logo & Brand -->
         <a class="navbar-brand d-flex align-items-center" href="/">
@@ -35,12 +35,6 @@
                         <a class="nav-link" href="/licenses/manage">
                             <i class="fas fa-tasks"></i>
                             <span>إدارة التراخيص</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <%= (typeof activeLink !== 'undefined' && activeLink === 'sem-clients') ? 'active' : '' %>" href="/sem-clients/manage">
-                            <i class="fas fa-users"></i>
-                            <span>إدارة عملاء الرسائل</span>
                         </a>
                     </li>
                     <% if (session.userRole === 'admin' || session.userRole === 'supervisor' || session.userRole === 'supplier') { %>

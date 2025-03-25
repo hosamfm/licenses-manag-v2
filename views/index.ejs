@@ -242,6 +242,13 @@
                             <p>عرض وإدارة جميع طلبات التراخيص</p>
                         </div>
                     </a>
+                    <a href="/sem-clients/manage" class="action-card">
+                        <i class="fas fa-comments"></i>
+                        <div>
+                            <h3>إدارة عملاء الرسائل</h3>
+                            <p>عرض وإدارة حسابات عملاء خدمة الرسائل</p>
+                        </div>
+                    </a>
                 <% } %>
                 <% if (session.userRole === 'admin' || session.userRole === 'supervisor' || session.userRole === 'supplier') { %>
                     <a href="/licenses/admin/user-management" class="action-card">

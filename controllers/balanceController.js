@@ -4,10 +4,20 @@ const User = require('../models/User');
 const logger = require('../services/loggerService');
 
 /**
- * إضافة رصيد لعميل محدد
+ * إضافة رصيد لعميل محدد - متاح فقط للمدير
  */
 exports.addBalance = async (req, res) => {
     try {
+        // التحقق من دور المستخدم (يجب أن يكون مدير)
+        const userRole = req.session.userRole;
+        if (userRole !== 'admin') {
+            logger.warn(`محاولة إضافة رصيد من قبل مستخدم غير مدير`);
+            return res.status(403).json({
+                success: false,
+                message: 'غير مصرح لك بإضافة رصيد'
+            });
+        }
+        
         const { clientId, amount, notes } = req.body;
         const userId = req.session.userId;
 
