@@ -9,30 +9,24 @@ const logger = require('../services/loggerService');
  */
 exports.handleStatusUpdate = async (req, res) => {
     try {
-        // سجل الطلب الوارد للتتبع بشكل تفصيلي
+        // سجل الحد الأدنى من المعلومات عن الطلب الوارد
         logger.info('smsWebhookController', 'استلام تحديث حالة من webhook', {
-            body: req.body,
-            headers: req.headers,
             method: req.method,
-            query: req.query
+            contentType: req.headers['content-type']
         });
 
         // استخراج المعلومات من الطلب - قد تكون في body أو query
         const data = { ...req.query, ...req.body };
-        
-        // تسجيل البيانات المستخرجة للتحقق
-        logger.info('smsWebhookController', 'البيانات المستخرجة من الطلب', data);
 
         // استخراج معرف الرسالة (قد يكون بأسماء مختلفة)
         const id = data.id || data.message_id || data.messageId || null;
 
         if (!id) {
-            logger.warn('smsWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة', data);
+            logger.warn('smsWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة');
             // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
             return res.status(200).json({ 
                 success: false, 
-                error: 'معرف الرسالة مطلوب',
-                received: data 
+                error: 'معرف الرسالة مطلوب'
             });
         }
 
@@ -40,7 +34,7 @@ exports.handleStatusUpdate = async (req, res) => {
         const message = await SemMessage.findOne({ messageId: id });
 
         if (!message) {
-            logger.warn('smsWebhookController', `لم يتم العثور على رسالة بالمعرف ${id}`, data);
+            logger.warn('smsWebhookController', `لم يتم العثور على رسالة بالمعرف ${id}`);
             return res.status(200).json({ 
                 success: false, 
                 error: 'الرسالة غير موجودة',
@@ -59,19 +53,13 @@ exports.handleStatusUpdate = async (req, res) => {
         
         // إذا كانت جميع قيم الحالة فارغة، قد يكون هذا مجرد إشعار متوسط من الخدمة
         if (!hasStatusData) {
-            logger.info('smsWebhookController', 'تم استلام إشعار متوسط بدون معلومات تحديث الحالة', {
-                messageId: id,
-                phone: data.phone || 'غير معروف'
-            });
-            
             // إرسال استجابة نجاح بدون تحديث الحالة
             return res.json({
                 success: true,
                 message: 'تم استلام الإشعار المتوسط',
                 messageId: id,
                 status: message.status,
-                statusChanged: false,
-                note: 'لم يتم تقديم معلومات لتحديث الحالة'
+                statusChanged: false
             });
         }
 
@@ -118,8 +106,7 @@ exports.handleStatusUpdate = async (req, res) => {
         // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
         res.status(200).json({ 
             success: false, 
-            error: 'حدث خطأ أثناء معالجة الطلب',
-            errorMessage: error.message
+            error: 'حدث خطأ أثناء معالجة الطلب'
         });
     }
 };

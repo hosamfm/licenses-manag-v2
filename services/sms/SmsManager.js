@@ -37,8 +37,6 @@ class SmsManager {
      */
     async initialize(settings = {}) {
         try {
-            logger.info('SmsManager', 'تهيئة مدير خدمة الرسائل', { providerName: settings.provider });
-
             // التحقق من وجود مزود خدمة محدد
             if (!settings.provider) {
                 throw new Error('لم يتم تحديد مزود خدمة الرسائل في الإعدادات');
@@ -63,8 +61,6 @@ class SmsManager {
             this.activeProvider = provider;
             this.activeProviderName = providerName;
             this.initialized = true;
-
-            logger.info('SmsManager', 'تم تهيئة مدير خدمة الرسائل بنجاح', { provider: providerName });
             
             return true;
         } catch (error) {
@@ -90,11 +86,6 @@ class SmsManager {
         }
 
         try {
-            logger.info('SmsManager', 'إرسال رسالة SMS', {
-                provider: this.activeProviderName,
-                phone: phoneNumber.substring(0, 4) + '****' // إخفاء معظم الرقم للخصوصية في السجلات
-            });
-
             return await this.activeProvider.sendSms(phoneNumber, message, options);
         } catch (error) {
             logger.error('SmsManager', 'خطأ في إرسال الرسالة', error);

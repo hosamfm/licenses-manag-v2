@@ -37,7 +37,6 @@ class SemySmsProvider extends ISmsProvider {
             }
 
             this.initialized = true;
-            logger.info('SemySmsProvider', 'تم تهيئة مزود خدمة SemySMS بنجاح');
             
             return true;
         } catch (error) {
