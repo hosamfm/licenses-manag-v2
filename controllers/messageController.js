@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const SemClient = require('../models/SemClient');
 const SemMessage = require('../models/SemMessage');
 const logger = require('../services/loggerService');
@@ -468,7 +469,10 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
         
         return { smsSent, whatsappSent };
     } catch (error) {
-        logger.error(`خطأ أثناء معالجة الرسالة في الخلفية`, error);
+        logger.error(`خطأ أثناء معالجة الرسالة في الخلفية`, {
+            error: error.message || 'خطأ غير معروف',
+            stack: error.stack
+        });
         // حفظ الخطأ في سجل الرسالة
         try {
             message.status = 'failed';
@@ -668,7 +672,10 @@ exports.sendMessage = async (req, res) => {
                 try {
                     await processChannelFallback(message, client, formattedPhone, msg, useWhatsappFirst);
                 } catch (error) {
-                    logger.error(`خطأ أثناء معالجة الرسالة في الخلفية للعميل ${client.name}`, error);
+                    logger.error(`خطأ أثناء معالجة الرسالة في الخلفية للعميل ${client.name}`, {
+                        error: error.message || 'خطأ غير معروف',
+                        stack: error.stack
+                    });
                 }
             });
             
@@ -937,7 +944,10 @@ exports.sendMessage = async (req, res) => {
             return res.status(200).send("1");
         }
     } catch (error) {
-        logger.error('خطأ في إرسال الرسالة:', error);
+        logger.error('خطأ في إرسال الرسالة', {
+            error: error.message || 'خطأ غير معروف',
+            stack: error.stack
+        });
         return res.status(500).send("6");
     }
 };
@@ -965,7 +975,10 @@ exports.checkBalance = async (req, res) => {
         return res.status(200).send(client.balance.toString());
 
     } catch (error) {
-        logger.error('خطأ في التحقق من الرصيد:', error);
+        logger.error('خطأ في التحقق من الرصيد', {
+            error: error.message || 'خطأ غير معروف',
+            stack: error.stack
+        });
         return res.status(500).send("6");
     }
 };
@@ -1011,7 +1024,10 @@ exports.checkSmsProviderBalance = async (req, res) => {
             provider: balanceResult.provider || 'semysms'
         });
     } catch (error) {
-        logger.error('خطأ في التحقق من رصيد مزود الخدمة:', error);
+        logger.error('خطأ في التحقق من رصيد مزود الخدمة', {
+            error: error.message || 'خطأ غير معروف',
+            stack: error.stack
+        });
         return res.status(500).json({
             success: false,
             message: 'حدث خطأ أثناء التحقق من رصيد مزود الخدمة'
@@ -1052,7 +1068,10 @@ exports.updatePendingMessagesStatus = async (req, res) => {
             ...updateResult
         });
     } catch (error) {
-        logger.error('خطأ في تحديث حالة الرسائل المعلقة:', error);
+        logger.error('خطأ في تحديث حالة الرسائل المعلقة', {
+            error: error.message || 'خطأ غير معروف',
+            stack: error.stack
+        });
         return res.status(500).json({
             success: false,
             message: 'حدث خطأ أثناء تحديث حالة الرسائل'
@@ -1125,7 +1144,10 @@ exports.getClientMessages = async (req, res) => {
         });
 
     } catch (error) {
-        logger.error('خطأ في الحصول على رسائل العميل:', error);
+        logger.error('خطأ في الحصول على رسائل العميل', {
+            error: error.message || 'خطأ غير معروف',
+            stack: error.stack
+        });
         return res.status(500).json({
             success: false,
             message: 'حدث خطأ أثناء معالجة الطلب'
