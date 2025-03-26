@@ -452,8 +452,8 @@ exports.sendMessage = async (req, res) => {
             });
             await balanceTransaction.save();
             
-            // إرجاع استجابة نجاح بمعرف الرسالة
-            return res.status(200).send(newMessage._id.toString());
+            // إرجاع استجابة نجاح
+            return res.status(200).send("1");
         } else {
             // لم يتم إرسال الرسالة بنجاح عبر أي وسيلة
             logger.error(`فشل في إرسال الرسالة للعميل ${client.name} إلى ${formattedPhone}`, {
