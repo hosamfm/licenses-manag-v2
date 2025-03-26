@@ -642,7 +642,7 @@ exports.sendMessage = async (req, res) => {
             logger.info(`تجهيز رسالة للعميل ${client.name} عبر القناة المفضلة (${preferredChannel})`);
             
             // إنشاء سجل الرسالة الآن بعد تحديد القناة المفضلة
-            const newMessage = new SemMessage({
+            const message = new SemMessage({
                 clientId: client._id,
                 recipients: [formattedPhone],
                 originalRecipients: [phone],
@@ -652,7 +652,7 @@ exports.sendMessage = async (req, res) => {
             });
             
             // حفظ الرسالة في قاعدة البيانات
-            await newMessage.save();
+            await message.save();
             
             // تحديد ترتيب الإرسال بناءً على القناة المفضلة
             const useWhatsappFirst = preferredChannel === 'whatsapp' || (preferredChannel === 'none' && Math.random() < 0.5);
@@ -663,7 +663,7 @@ exports.sendMessage = async (req, res) => {
             // نبدأ عملية الإرسال في الخلفية دون انتظار نتيجتها
             setImmediate(async () => {
                 try {
-                    await processChannelFallback(newMessage, client, formattedPhone, msg, useWhatsappFirst);
+                    await processChannelFallback(message, client, formattedPhone, msg, useWhatsappFirst);
                 } catch (error) {
                     logger.error(`خطأ أثناء معالجة الرسالة في الخلفية للعميل ${client.name}`, error);
                 }
@@ -677,7 +677,7 @@ exports.sendMessage = async (req, res) => {
             logger.info(`إرسال رسالة للعميل ${client.name} عبر واتساب فقط حسب الإعدادات`);
             
             // إنشاء سجل الرسالة الآن لقناة الواتساب فقط
-            const newMessage = new SemMessage({
+            const message = new SemMessage({
                 clientId: client._id,
                 recipients: [formattedPhone],
                 originalRecipients: [phone],
@@ -687,15 +687,15 @@ exports.sendMessage = async (req, res) => {
             });
             
             // حفظ الرسالة في قاعدة البيانات
-            await newMessage.save();
+            await message.save();
             
             // إرسال عبر الواتساب
             const whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
             
             if (whatsappResult.success) {
-                newMessage.status = 'sent';
-                newMessage.messageId = newMessage._id.toString();
-                newMessage.externalMessageId = whatsappResult.externalMessageId;
+                message.status = 'sent';
+                message.messageId = message._id.toString();
+                message.externalMessageId = whatsappResult.externalMessageId;
                 
                 let deviceId = null;
                 if (whatsappResult.rawResponse) {
@@ -705,25 +705,25 @@ exports.sendMessage = async (req, res) => {
                 }
                 
                 // تخزين بيانات مزود الخدمة
-                newMessage.providerData = {
+                message.providerData = {
                     provider: 'semysms_whatsapp',
                     lastUpdate: new Date(),
                     device: deviceId,
                     rawResponse: whatsappResult.rawResponse
                 };
                 
-                await newMessage.save();
+                await message.save();
                 
                 logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
                     data: {
-                        internalId: newMessage.messageId,
-                        externalId: newMessage.externalMessageId,
+                        internalId: message.messageId,
+                        externalId: message.externalMessageId,
                         deviceId: deviceId
                     }
                 });
                 
                 // انتظار تحديث حالة الرسالة لمدة 30 ثانية
-                const statusResult = await waitForMessageStatus(newMessage._id.toString(), 30000);
+                const statusResult = await waitForMessageStatus(message._id.toString(), 30000);
                 
                 if (statusResult.success) {
                     // تم تسليم الرسالة بنجاح - لا داعي لاستخدام القناة الثانية
@@ -736,7 +736,7 @@ exports.sendMessage = async (req, res) => {
                     const smsResult = await SmsManager.sendSms(formattedPhone, msg);
                     
                     if (smsResult.success) {
-                        newMessage.externalMessageId = `${newMessage.externalMessageId},${smsResult.externalMessageId}`;
+                        message.externalMessageId = `${message.externalMessageId},${smsResult.externalMessageId}`;
                         
                         let deviceId = null;
                         if (smsResult.rawResponse) {
@@ -746,7 +746,7 @@ exports.sendMessage = async (req, res) => {
                         }
                         
                         // تخزين بيانات كلا المزودين
-                        newMessage.providerData = {
+                        message.providerData = {
                             provider: 'semysms_both',
                             lastUpdate: new Date(),
                             device: deviceId,
@@ -754,7 +754,7 @@ exports.sendMessage = async (req, res) => {
                             rawWhatsappResponse: whatsappResult.rawResponse
                         };
                         
-                        await newMessage.save();
+                        await message.save();
                         
                         logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح (كقناة بديلة)`);
                     } else {
@@ -774,7 +774,7 @@ exports.sendMessage = async (req, res) => {
             logger.info(`إرسال رسالة للعميل ${client.name} عبر SMS فقط حسب الإعدادات`);
             
             // إنشاء سجل الرسالة الآن لقناة SMS فقط
-            const newMessage = new SemMessage({
+            const message = new SemMessage({
                 clientId: client._id,
                 recipients: [formattedPhone],
                 originalRecipients: [phone],
@@ -784,18 +784,18 @@ exports.sendMessage = async (req, res) => {
             });
             
             // حفظ الرسالة في قاعدة البيانات
-            await newMessage.save();
+            await message.save();
             
             // إرسال عبر SMS
             const smsResult = await SmsManager.sendSms(formattedPhone, msg);
             
             if (smsResult.success) {
-                newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
-                newMessage.messageId = newMessage._id.toString();
-                newMessage.externalMessageId = smsResult.externalMessageId;
+                message.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
+                message.messageId = message._id.toString();
+                message.externalMessageId = smsResult.externalMessageId;
                 
                 if (smsResult.status === 'delivered') {
-                    newMessage.sentAt = new Date();
+                    message.sentAt = new Date();
                 }
                 
                 let deviceId = null;
@@ -805,25 +805,25 @@ exports.sendMessage = async (req, res) => {
                              (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
                 }
                 
-                newMessage.providerData = {
+                message.providerData = {
                     provider: 'semysms',
                     lastUpdate: new Date(),
                     device: deviceId,
                     rawResponse: smsResult.rawResponse
                 };
                 
-                await newMessage.save();
+                await message.save();
                 
                 logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
                     data: {
-                        internalId: newMessage.messageId,
-                        externalId: newMessage.externalMessageId,
+                        internalId: message.messageId,
+                        externalId: message.externalMessageId,
                         deviceId: deviceId
                     }
                 });
                 
                 // انتظار تحديث حالة الرسالة لمدة 30 ثانية
-                const statusResult = await waitForMessageStatus(newMessage._id.toString(), 30000);
+                const statusResult = await waitForMessageStatus(message._id.toString(), 30000);
                 
                 if (statusResult.success) {
                     // تم تسليم الرسالة بنجاح - لا داعي لاستخدام القناة الثانية
@@ -836,7 +836,7 @@ exports.sendMessage = async (req, res) => {
                     const whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
                     
                     if (whatsappResult.success) {
-                        newMessage.externalMessageId = `${newMessage.externalMessageId},${whatsappResult.externalMessageId}`;
+                        message.externalMessageId = `${message.externalMessageId},${whatsappResult.externalMessageId}`;
                         
                         let deviceId = null;
                         if (whatsappResult.rawResponse) {
@@ -846,7 +846,7 @@ exports.sendMessage = async (req, res) => {
                         }
                         
                         // تخزين بيانات كلا المزودين
-                        newMessage.providerData = {
+                        message.providerData = {
                             provider: 'semysms_both',
                             lastUpdate: new Date(),
                             device: deviceId,
@@ -854,7 +854,7 @@ exports.sendMessage = async (req, res) => {
                             rawWhatsappResponse: whatsappResult.rawResponse
                         };
                         
-                        await newMessage.save();
+                        await message.save();
                         
                         logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح (كقناة بديلة)`);
                     } else {
@@ -871,13 +871,24 @@ exports.sendMessage = async (req, res) => {
         }
         // حالة الفشل: قنوات مفعلة ولكن مدراء الخدمات غير متاحين
         else {
+            // إنشاء سجل للرسالة فقط لتسجيل الخطأ
+            const errorMessage = new SemMessage({
+                clientId: client._id,
+                recipients: [formattedPhone],
+                originalRecipients: [phone],
+                content: msg,
+                status: 'failed',
+                errorMessage: 'لم تتوفر أي قناة إرسال صالحة'
+            });
+            await errorMessage.save();
+            
             logger.error(`فشل في إرسال رسالة للعميل ${client.name} بسبب عدم توفر قنوات إرسال صالحة (تمت تهيئة: SMS=${smsManagerInitialized}, واتساب=${whatsappManagerInitialized})`);
             
             return res.status(500).send("6"); // خطأ في النظام
         }
 
         // تحديث رصيد العميل إذا تم إرسال الرسالة بنجاح
-        if (newMessage.status === 'sent' || newMessage.status === 'pending') {
+        if (message.status === 'sent' || message.status === 'pending') {
             // حساب عدد الرسائل المطلوبة
             const containsArabic = /[\u0600-\u06FF]/.test(msg);
             const maxLength = containsArabic ? 70 : 160;
@@ -888,15 +899,15 @@ exports.sendMessage = async (req, res) => {
             
             // خصم نقطة واحدة لكل رسالة SMS و 0.25 نقطة لكل رسالة واتساب
             let pointsToDeduct = 0;
-            if (newMessage.providerData.provider === 'semysms') pointsToDeduct += requiredPoints; // 1 نقطة لكل رسالة SMS
-            if (newMessage.providerData.provider === 'semysms_whatsapp') pointsToDeduct += (requiredPoints * 0.25); // 0.25 نقطة لكل رسالة واتساب
+            if (message.providerData.provider === 'semysms') pointsToDeduct += requiredPoints; // 1 نقطة لكل رسالة SMS
+            if (message.providerData.provider === 'semysms_whatsapp') pointsToDeduct += (requiredPoints * 0.25); // 0.25 نقطة لكل رسالة واتساب
             
             client.balance -= pointsToDeduct;
             
             // إضافة رسالة واحدة لكل قناة إرسال ناجحة بدلاً من استخدام النقاط
             let sentMessagesCount = 0;
-            if (newMessage.providerData.provider === 'semysms') sentMessagesCount += 1; // إضافة 1 لكل رسالة SMS مرسلة
-            if (newMessage.providerData.provider === 'semysms_whatsapp') sentMessagesCount += 1; // إضافة 1 لكل رسالة واتساب مرسلة
+            if (message.providerData.provider === 'semysms') sentMessagesCount += 1; // إضافة 1 لكل رسالة SMS مرسلة
+            if (message.providerData.provider === 'semysms_whatsapp') sentMessagesCount += 1; // إضافة 1 لكل رسالة واتساب مرسلة
             
             client.messagesSent += sentMessagesCount;
             await client.save();
@@ -906,12 +917,12 @@ exports.sendMessage = async (req, res) => {
                 clientId: client._id,
                 type: 'usage',
                 amount: pointsToDeduct,
-                description: `خصم رصيد لإرسال رسالة ${newMessage.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
+                description: `خصم رصيد لإرسال رسالة ${message.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
                 balanceBefore: client.balance + pointsToDeduct,
                 balanceAfter: client.balance,
                 status: 'complete',
-                relatedMessageId: newMessage._id,
-                notes: `خصم رصيد لإرسال رسالة ${newMessage.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
+                relatedMessageId: message._id,
+                notes: `خصم رصيد لإرسال رسالة ${message.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
                 performedBy: process.env.SYSTEM_USER_ID || '6418180ac9e8dffece88d5a6' // استخدام معرف المستخدم النظامي
             });
             await balanceTransaction.save();
