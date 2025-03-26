@@ -447,7 +447,8 @@ exports.sendMessage = async (req, res) => {
                 amount: -pointsToDeduct,
                 balanceAfter: client.balance,
                 type: 'usage',
-                description: `إرسال رسالة ${smsSent && whatsappSent ? 'عبر SMS وواتساب' : (smsSent ? 'عبر SMS' : 'عبر واتساب')}`
+                description: `إرسال رسالة ${smsSent && whatsappSent ? 'عبر SMS وواتساب' : (smsSent ? 'عبر SMS' : 'عبر واتساب')}`,
+                performedBy: client._id // إضافة حقل performedBy المطلوب
             });
             await balanceTransaction.save();
             
