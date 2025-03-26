@@ -198,17 +198,47 @@ router.post('/auth/verify-telegram', async (req, res) => {
 
 router.get('/licenses/admin/user-management', [isAuthenticated, checkRole(['admin', 'supervisor', 'supplier'])], async (req, res) => {
   try {
-    let users;
+    let users, usersWithPermissions, usersWithoutPermissions;
+    
     if (req.session.userRole === 'admin') {
-      users = await User.find({});
-    } else if (req.session.userRole === 'supervisor') {
-      users = await User.find({ supervisor: req.session.userId });
-    } else if (req.session.userRole === 'supplier') {
-      users = await User.find({ supervisor: req.session.userId });
+      // إذا كان المستخدم مسؤول، اجلب جميع المستخدمين
+      users = await User.find({}).populate('supervisor');
+      
+      // اجلب المستخدمين الذين لديهم صلاحيات
+      usersWithPermissions = users.filter(user => 
+        user.user_role !== 'no_permissions'
+      );
+      
+      // اجلب المستخدمين بدون صلاحيات
+      usersWithoutPermissions = users.filter(user => 
+        user.user_role === 'no_permissions'
+      );
+    } else if (req.session.userRole === 'supervisor' || req.session.userRole === 'supplier') {
+      // إذا كان المستخدم مشرف أو مورد، اجلب المستخدمين المرتبطين به فقط
+      users = await User.find({ supervisor: req.session.userId }).populate('supervisor');
+      
+      // اجلب المستخدمين الذين لديهم صلاحيات
+      usersWithPermissions = users.filter(user => 
+        user.user_role !== 'no_permissions'
+      );
+      
+      // اجلب المستخدمين بدون صلاحيات
+      usersWithoutPermissions = users.filter(user => 
+        user.user_role === 'no_permissions'
+      );
     }
+    
     const supervisors = await User.find({ user_role: 'supervisor' });
     const suppliers = await User.find({ user_role: 'supplier' });
-    res.render('user_management', { users, supervisors, suppliers, req });
+    
+    res.render('user_management', {
+      users,
+      usersWithPermissions,
+      usersWithoutPermissions,
+      supervisors,
+      suppliers,
+      req
+    });
   } catch (error) {
     console.error('Error navigating to user management page:', error.message, error.stack);
     req.flash('error', 'Error navigating to user management page');
@@ -321,6 +351,95 @@ router.get('/api/users/list', isAuthenticated, checkRole(['admin', 'supervisor',
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء جلب قائمة المستخدمين' });
+  }
+});
+
+// طريق لعرض بيانات المستخدم من أجل التعديل
+router.get('/licenses/admin/user-management/edit/:userId', [isAuthenticated, checkRole(['admin', 'supervisor', 'supplier'])], async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // التحقق من صلاحية الوصول
+    if (req.session.userRole !== 'admin') {
+      // للمشرفين والموردين، التحقق من أن المستخدم ضمن قائمة مندوبيهم
+      const user = await User.findById(userId);
+      if (!user || user.supervisor?.toString() !== req.session.userId) {
+        req.flash('error', 'غير مسموح بالوصول لهذا المستخدم');
+        return res.redirect('/licenses/admin/user-management');
+      }
+    }
+    
+    // جلب بيانات المستخدم
+    const user = await User.findById(userId).populate('supervisor');
+    
+    if (!user) {
+      req.flash('error', 'المستخدم غير موجود');
+      return res.redirect('/licenses/admin/user-management');
+    }
+    
+    const supervisors = await User.find({ user_role: 'supervisor' });
+    const suppliers = await User.find({ user_role: 'supplier' });
+    
+    res.render('edit_user', { user, supervisors, suppliers, req });
+  } catch (error) {
+    console.error('Error getting user data for editing:', error.message, error.stack);
+    req.flash('error', 'حدث خطأ أثناء محاولة عرض بيانات المستخدم');
+    res.redirect('/licenses/admin/user-management');
+  }
+});
+
+// طريق لتحديث بيانات المستخدم
+router.post('/licenses/admin/user-management/update', [isAuthenticated, checkRole(['admin', 'supervisor', 'supplier'])], async (req, res) => {
+  try {
+    const { 
+      userId, username, fullName, phoneNumber, 
+      companyName, userRole, account_status, supervisorId 
+    } = req.body;
+    
+    // التحقق من صلاحية الوصول
+    if (req.session.userRole !== 'admin') {
+      // للمشرفين والموردين، التحقق من أن المستخدم ضمن قائمة مندوبيهم
+      const user = await User.findById(userId);
+      if (!user || user.supervisor?.toString() !== req.session.userId) {
+        req.flash('error', 'غير مسموح بتعديل هذا المستخدم');
+        return res.redirect('/licenses/admin/user-management');
+      }
+      
+      // للمشرفين والموردين، لا يمكنهم تغيير الصلاحيات
+      if (userRole && userRole !== user.user_role) {
+        req.flash('error', 'غير مسموح بتغيير صلاحيات المستخدم');
+        return res.redirect('/licenses/admin/user-management');
+      }
+    }
+    
+    // إعداد بيانات التحديث
+    const updateData = {
+      username,
+      full_name: fullName,
+      phone_number: phoneNumber,
+      company_name: companyName,
+      account_status
+    };
+    
+    // إضافة الصلاحيات إذا تم توفيرها وكان المستخدم مسؤول
+    if (userRole && req.session.userRole === 'admin') {
+      updateData.user_role = userRole;
+    }
+    
+    // إضافة المشرف إذا تم توفيره وكان المستخدم ممثل
+    if (supervisorId && req.session.userRole === 'admin') {
+      updateData.supervisor = supervisorId;
+    }
+    
+    // تحديث بيانات المستخدم
+    await User.findByIdAndUpdate(userId, updateData);
+    
+    req.flash('success', 'تم تحديث بيانات المستخدم بنجاح');
+    res.redirect('/licenses/admin/user-management');
+  } catch (error) {
+    console.error('Error updating user:', error.message, error.stack);
+    req.flash('error', 'حدث خطأ أثناء تحديث بيانات المستخدم');
+    res.redirect('/licenses/admin/user-management');
   }
 });
 
