@@ -71,13 +71,22 @@ exports.saveSmsSettings = async (req, res) => {
             semysms_add_plus
         } = req.body;
         
+        // تسجيل القيم قبل المعالجة
+        logger.debug('smsSettingsController', 'قيم الإعدادات المستلمة', {
+            provider,
+            semysms_device,
+            currentDeviceInSettings: (await SmsSettings.getActiveSettings()).config.semysms.device
+        });
+        
         // الحصول على الإعدادات الحالية
         let settings = await SmsSettings.getActiveSettings();
         
         // تحديث الإعدادات
         settings.provider = provider || 'semysms';
         settings.config.semysms.token = semysms_token || '';
-        settings.config.semysms.device = semysms_device || 'active';
+        
+        // تأكد من حفظ معرف الجهاز كسلسلة نصية
+        settings.config.semysms.device = semysms_device ? String(semysms_device) : 'active';
         
         // تعيين إعدادات WebHook
         settings.config.semysms.enableSentWebhook = semysms_sent_webhook === 'on';
@@ -92,11 +101,20 @@ exports.saveSmsSettings = async (req, res) => {
         
         settings.updatedBy = req.session.userId;
         
+        // حفظ الإعدادات
         await settings.save();
         
+        // تسجيل القيم بعد الحفظ للتأكد من تطبيق التغييرات
         logger.info('smsSettingsController', 'تم حفظ إعدادات SMS', {
             provider: settings.provider,
+            deviceId: settings.config.semysms.device,
             updatedBy: req.session.userId
+        });
+        
+        // التأكد من أن الإعدادات حُفظت بالفعل في قاعدة البيانات
+        const updatedSettings = await SmsSettings.findById(settings._id);
+        logger.debug('smsSettingsController', 'الإعدادات بعد الحفظ من قاعدة البيانات', {
+            deviceIdAfterSave: updatedSettings.config.semysms.device
         });
         
         req.flash('success', 'تم حفظ إعدادات SMS بنجاح');

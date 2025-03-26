@@ -204,8 +204,11 @@
                     <option value="active" <%= settings.config.semysms.device === 'active' ? 'selected' : '' %>>الجهاز النشط</option>
                     <% if (devicesList && devicesList.length > 0) { %>
                       <% devicesList.forEach(device => { %>
-                        <option value="<%= device.id %>" <%= settings.config.semysms.device === device.id ? 'selected' : '' %>>
-                          <%= device.name %> (<%= device.number %>) - <%= device.id %>
+                        <option value="<%= device.id %>" <%= String(settings.config.semysms.device) === String(device.id) ? 'selected' : '' %>>
+                          <%= device.device_name || device.name %> 
+                          (<%= device.number || 'بدون رقم' %>) - 
+                          <%= (device.power == 1 && device.is_work == 1) ? '✅ متصل ومفعل' : (device.power == 1 ? '🟡 متصل لكن غير مفعل' : '❌ غير متصل') %> - 
+                          <%= device.id %>
                         </option>
                       <% }); %>
                     <% } %>
@@ -263,29 +266,37 @@
         
         <!-- عرض الأجهزة المتوفرة -->
         <% if (devicesList && devicesList.length > 0) { %>
-          <div class="section-title">
+          <div class="section-title mt-4">
             <h3>الأجهزة المتوفرة</h3>
           </div>
           
           <div class="row">
             <% devicesList.forEach(device => { %>
               <div class="col-md-6">
-                <div class="device-card <%= device.status === 'active' ? 'active' : '' %>">
+                <div class="device-card <%= (device.power == 1 && device.is_work == 1) ? 'active' : '' %>">
                   <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h5 class="mb-0"><%= device.name %></h5>
-                    <span class="badge <%= device.status === 'active' ? 'bg-success' : 'bg-secondary' %>">
-                      <%= device.status === 'active' ? 'متصل' : 'غير متصل' %>
+                    <h5 class="mb-0"><%= device.device_name || device.name %></h5>
+                    <span class="badge <%= (device.power == 1 && device.is_work == 1) ? 'bg-success' : (device.power == 1 ? 'bg-warning' : 'bg-secondary') %>">
+                      <%= (device.power == 1 && device.is_work == 1) ? 'متصل ومفعل' : (device.power == 1 ? 'متصل لكن غير مفعل' : 'غير متصل') %>
                     </span>
                   </div>
-                  <p class="mb-1"><strong>رقم الهاتف:</strong> <%= device.number %></p>
-                  <p class="mb-1"><strong>الطراز:</strong> <%= device.model || 'غير معروف' %></p>
+                  <p class="mb-1"><strong>رقم الهاتف:</strong> <%= device.number || 'غير متوفر' %></p>
+                  <p class="mb-1"><strong>الطراز:</strong> <%= device.manufacturer || '' %> <%= device.device_name || device.model || 'غير معروف' %></p>
+                  <p class="mb-1"><strong>إصدار Android:</strong> <%= device.android_version || 'غير معروف' %></p>
+                  <% if (device.bat) { %>
+                  <p class="mb-1"><strong>البطارية:</strong> <%= device.bat %>%</p>
+                  <% } %>
+                  <p class="mb-1"><strong>آخر نشاط:</strong> <%= device.date_last_active ? new Date(device.date_last_active).toLocaleString() : 'غير معروف' %></p>
                   <p class="mb-0"><strong>المعرف:</strong> <%= device.id %></p>
+                  <% if (device.type === 1 || device.type === 2) { %>
+                  <div class="mt-2 badge bg-info">يدعم الواتس أب</div>
+                  <% } %>
                 </div>
               </div>
             <% }); %>
           </div>
         <% } else { %>
-          <div class="alert alert-warning">
+          <div class="alert alert-warning mt-4">
             <i class="fas fa-exclamation-triangle"></i>
             لا توجد أجهزة متصلة أو تعذر الحصول على قائمة الأجهزة.
           </div>
