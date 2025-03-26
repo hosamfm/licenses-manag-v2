@@ -18,6 +18,13 @@ exports.handleStatusUpdate = async (req, res) => {
             contentType: req.headers['content-type']
         });
         
+        // التعامل مع تفريغ الملفات المرفقة إذا وجدت
+        if (req.files && req.files.length > 0) {
+            logger.debug('whatsappWebhookController', `تم استلام ${req.files.length} ملفات مرفقة`, {
+                fileNames: req.files.map(f => f.fieldname)
+            });
+        }
+        
         // التحقق من نوع المحتوى وتحليله بطريقة مناسبة
         let data = {};
         
@@ -38,20 +45,26 @@ exports.handleStatusUpdate = async (req, res) => {
             logger.debug('whatsappWebhookController', 'بيانات webhook كاملة', data);
             
             // في بعض حالات multipart/form-data، قد تكون البيانات في req.files
-            if (req.files && Object.keys(req.files).length > 0) {
-                for (const fieldName in req.files) {
+            if (req.files && req.files.length > 0) {
+                for (const file of req.files) {
                     try {
                         // محاولة تحليل البيانات كـ JSON إذا كانت نصية
-                        if (req.files[fieldName].buffer) {
-                            const fieldValue = req.files[fieldName].buffer.toString('utf8');
+                        if (file.buffer) {
+                            const fieldValue = file.buffer.toString('utf8');
                             try {
-                                data[fieldName] = JSON.parse(fieldValue);
+                                const jsonData = JSON.parse(fieldValue);
+                                data = { ...data, ...jsonData };
+                                logger.debug('whatsappWebhookController', `تم تحليل ملف ${file.fieldname} كـ JSON`, jsonData);
                             } catch (e) {
-                                data[fieldName] = fieldValue;
+                                // إذا لم تكن JSON، نخزن النص كما هو
+                                data[file.fieldname] = fieldValue;
+                                logger.debug('whatsappWebhookController', `الملف ${file.fieldname} ليس JSON صالح`, {
+                                    preview: fieldValue.substring(0, 100)
+                                });
                             }
                         }
                     } catch (error) {
-                        logger.error('whatsappWebhookController', `خطأ في تحليل الحقل ${fieldName}`, error);
+                        logger.error('whatsappWebhookController', `خطأ في تحليل الملف ${file.fieldname}`, error);
                     }
                 }
             }
@@ -60,8 +73,20 @@ exports.handleStatusUpdate = async (req, res) => {
             data = { ...req.query, ...req.body };
         }
         
-        // تسجيل البيانات الواردة كاملة للتشخيص
+        // تسجيل البيانات المستلمة كاملة للتشخيص
         logger.debug('whatsappWebhookController', 'بيانات webhook بعد التحليل', data);
+        
+        // طباعة جميع المفاتيح والقيم الموجودة في الطلب للتشخيص - تعليق هذا بعد حل المشكلة
+        logger.info('whatsappWebhookController', 'جميع مفاتيح البيانات الواردة', {
+            keys: Object.keys(data),
+            bodyKeys: req.body ? Object.keys(req.body) : [],
+            queryKeys: req.query ? Object.keys(req.query) : [],
+            filesKeys: req.files ? req.files.map(f => f.fieldname) : [],
+            bodyValues: req.body ? JSON.stringify(req.body).substring(0, 500) : '',
+            hasDeviceId: data.device_id !== undefined || data.id_device !== undefined || data.device !== undefined || data.deviceId !== undefined,
+            hasPhone: data.phone !== undefined || data.recipient !== undefined || data.to !== undefined || data.number !== undefined,
+            hasStatus: data.status !== undefined || data.is_delivered !== undefined || data.is_send !== undefined
+        });
         
         // التحقق من وجود البيانات في شكل سلسلة نصية JSON
         if (typeof data === 'string' || (req.body && typeof req.body === 'string')) {
@@ -92,8 +117,66 @@ exports.handleStatusUpdate = async (req, res) => {
         const phone = data.phone || data.recipient || data.to || data.number || null;
 
         // استخراج الحالة من البيانات إذا كانت متوفرة
-        const status = data.status || (data.is_delivered === "1" ? "delivered" : (data.is_delivered === "0" && data.is_send === "1" ? "sent" : null));
-
+        const status = data.status || 
+                      (data.is_delivered === "1" || data.is_delivered === 1 ? "delivered" : 
+                      (data.is_delivered === "0" && (data.is_send === "1" || data.is_send === 1) ? "sent" : 
+                      (data.is_send === "0" || data.is_send === 0 ? "failed" : 
+                      (data.delivered === "1" || data.delivered === 1 ? "delivered" : null))));
+        
+        // فحص البيانات المخصصة للواتساب - أحياناً تأتي في تنسيقات مختلفة
+        if (data.Delivered === "1" || data.Delivered === 1 || 
+            data.delivered === "1" || data.delivered === 1) {
+            data.is_delivered = "1";
+        }
+        
+        if (data.Sent === "1" || data.Sent === 1 || 
+            data.sent === "1" || data.sent === 1 || 
+            data.is_send === "1" || data.is_send === 1) {
+            data.is_send = "1";
+        }
+        
+        // التحقق من وجود messageStatus (عند استخدام واجهة META)
+        if (data.messageStatus) {
+            if (data.messageStatus === "read" || data.messageStatus === "delivered" || 
+                data.messageStatus === "DELIVERED" || data.messageStatus === "READ") {
+                data.is_delivered = "1";
+                data.is_send = "1";
+            } else if (data.messageStatus === "sent" || data.messageStatus === "SENT") {
+                data.is_send = "1";
+                data.is_delivered = "0";
+            } else if (data.messageStatus === "failed" || data.messageStatus === "FAILED") {
+                data.is_send = "0";
+            }
+        }
+        
+        // التحقق من حقول خاصة بـ SemySMS WhatsApp إذا كان الطلب مرسلاً بتنسيق form-data
+        if (req.body) {
+            // يتم أحياناً إرسال بيانات كمفاتيح منفصلة
+            if (req.body.status || req.body.Status) {
+                const statusValue = req.body.status || req.body.Status;
+                data.status = statusValue;
+                
+                if (statusValue.toLowerCase() === "delivered" || statusValue.toLowerCase() === "read") {
+                    data.is_delivered = "1";
+                    data.is_send = "1";
+                } else if (statusValue.toLowerCase() === "sent") {
+                    data.is_send = "1";
+                    data.is_delivered = "0";
+                } else if (statusValue.toLowerCase() === "failed") {
+                    data.is_send = "0";
+                }
+            }
+            
+            // التحقق من وجود مفاتيح is_sent أو is_delivered في الطلب
+            if (req.body.is_delivered === "1" || req.body.isDelivered === "1" || req.body.delivered === "1") {
+                data.is_delivered = "1";
+            }
+            
+            if (req.body.is_send === "1" || req.body.is_sent === "1" || req.body.sent === "1") {
+                data.is_send = "1";
+            }
+        }
+        
         // تسجيل بيانات الرسالة المستخرجة لأغراض التشخيص
         logger.info('whatsappWebhookController', 'بيانات الرسالة المستخرجة من webhook', {
             externalId: id,
