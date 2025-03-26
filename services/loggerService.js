@@ -11,7 +11,8 @@ class LoggerService {
      * @param {Object} data بيانات إضافية (اختياري)
      */
     info(module, message, data = {}) {
-        this.log('INFO', module, message, data);
+        // تم تعطيل تسجيل المعلومات لمنع تسرب البيانات الحساسة
+        // تم الاحتفاظ بالدالة للتوافق مع الكود الحالي
     }
 
     /**
@@ -21,7 +22,8 @@ class LoggerService {
      * @param {Object} data بيانات إضافية (اختياري)
      */
     warn(module, message, data = {}) {
-        this.log('WARN', module, message, data);
+        // تم تعطيل تسجيل التحذيرات لمنع تسرب البيانات الحساسة
+        // تم الاحتفاظ بالدالة للتوافق مع الكود الحالي
     }
 
     /**
@@ -36,10 +38,40 @@ class LoggerService {
         if (error instanceof Error) {
             logData = {
                 message: error.message,
-                stack: error.stack,
-                ...error
+                stack: error.stack
             };
         } else {
+            // إزالة البيانات الحساسة المحتملة مثل أرقام الهواتف والرسائل
+            if (error.cleanPhone) {
+                // إخفاء جزء من رقم الهاتف للحفاظ على الخصوصية
+                const phoneLength = error.cleanPhone.length;
+                if (phoneLength > 4) {
+                    error.cleanPhone = '****' + error.cleanPhone.substr(phoneLength - 4);
+                } else {
+                    error.cleanPhone = '****';
+                }
+            }
+            
+            if (error.phone) {
+                // إخفاء جزء من رقم الهاتف للحفاظ على الخصوصية
+                const phoneLength = error.phone.length;
+                if (phoneLength > 4) {
+                    error.phone = '****' + error.phone.substr(phoneLength - 4);
+                } else {
+                    error.phone = '****';
+                }
+            }
+            
+            if (error.message) {
+                // إخفاء محتوى الرسالة لمنع تسرب البيانات الحساسة
+                error.message = '[محتوى الرسالة محجوب]';
+            }
+            
+            if (error.msg) {
+                // إخفاء محتوى الرسالة لمنع تسرب البيانات الحساسة
+                error.msg = '[محتوى الرسالة محجوب]';
+            }
+            
             logData = error;
         }
         
@@ -53,10 +85,8 @@ class LoggerService {
      * @param {Object} data بيانات إضافية (اختياري)
      */
     debug(module, message, data = {}) {
-        // يتم تسجيل رسائل التصحيح فقط في وضع التطوير
-        if (process.env.NODE_ENV === 'development') {
-            this.log('DEBUG', module, message, data);
-        }
+        // تم تعطيل تسجيل رسائل التصحيح لمنع تسرب البيانات الحساسة
+        // تم الاحتفاظ بالدالة للتوافق مع الكود الحالي
     }
 
     /**
@@ -73,17 +103,13 @@ class LoggerService {
             timestamp,
             level,
             module,
-            message,
-            data
+            message
         };
 
-        // في بيئة الإنتاج، يمكن تخزين السجلات في ملف أو قاعدة بيانات
-        // هنا نستخدم console.log للبساطة
-        
+        // إضافة البيانات فقط في حالة الخطأ
         if (level === 'ERROR') {
-            console.error(JSON.stringify(logEntry, null, process.env.NODE_ENV === 'development' ? 2 : 0));
-        } else {
-            console.log(JSON.stringify(logEntry, null, process.env.NODE_ENV === 'development' ? 2 : 0));
+            logEntry.data = data;
+            console.error(JSON.stringify(logEntry, null, 0));
         }
     }
 }

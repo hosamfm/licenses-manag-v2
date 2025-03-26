@@ -94,6 +94,14 @@ exports.sendMessage = async (req, res) => {
             return res.status(400).send("2"); // كود خطأ 2: بيانات غير مكتملة
         }
 
+        // تسجيل البيانات المستلمة للتشخيص
+        logger.debug('messageController', 'بيانات الطلب المستلمة', {
+            receivedPhone: phone,
+            phoneType: typeof phone,
+            urlEncoded: encodeURIComponent(phone),
+            urlDecoded: decodeURIComponent(phone)
+        });
+
         // التحقق من صحة مفتاح API
         const client = await SemClient.validateApiCredentials(token);
         if (!client) {
@@ -101,13 +109,39 @@ exports.sendMessage = async (req, res) => {
             return res.status(401).send("3"); // كود خطأ 3: مفتاح API غير صالح
         }
 
+        // معالجة أولية لرقم الهاتف
+        let processedPhone = phone;
+        
+        // إذا كان الرقم يبدأ بمسافة، نقوم بإزالتها
+        if (typeof processedPhone === 'string') {
+            processedPhone = processedPhone.trim();
+            
+            // إذا كان الرقم يحتوي على "+ " (علامة + متبوعة بمسافة)
+            if (processedPhone.includes('+ ')) {
+                processedPhone = processedPhone.replace('+ ', '+');
+            }
+            
+            // إذا كان الرقم لا يبدأ بـ + ولكنه يبدأ برقم، نضيف +
+            if (!processedPhone.startsWith('+') && /^\d/.test(processedPhone)) {
+                processedPhone = '+' + processedPhone;
+            }
+            
+            // التأكد من أن الرقم لا يحتوي على مسافات
+            processedPhone = processedPhone.replace(/\s+/g, '');
+        }
+        
+        // تسجيل الرقم بعد المعالجة الأولية
+        logger.debug('messageController', 'رقم الهاتف بعد المعالجة الأولية', {
+            processedPhone: processedPhone
+        });
+
         // تنسيق رقم الهاتف باستخدام الخدمة المركزية
-        const formattedPhoneResult = phoneFormatService.formatPhoneNumber(phone);
+        const formattedPhoneResult = phoneFormatService.formatPhoneNumber(processedPhone);
         
         // إنشاء سجل للرسالة حتى في حالة فشل التنسيق
         const newMessage = new SemMessage({
             clientId: client._id,
-            recipients: [phone],
+            recipients: [processedPhone], // استخدام الرقم المعالج أولياً
             content: msg,
             status: 'pending'
         });
@@ -118,7 +152,7 @@ exports.sendMessage = async (req, res) => {
             newMessage.errorMessage = formattedPhoneResult.error;
             await newMessage.save();
             
-            logger.warn(`فشل في إرسال رسالة للعميل ${client.name} بسبب رقم هاتف غير صالح: ${phone}`, {
+            logger.warn(`فشل في إرسال رسالة للعميل ${client.name} بسبب رقم هاتف غير صالح: ${processedPhone}`, {
                 error: formattedPhoneResult.error
             });
             return res.status(400).send("8"); // كود خطأ 8: رقم هاتف غير صالح
