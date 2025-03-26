@@ -39,26 +39,49 @@ exports.handleStatusUpdate = async (req, res) => {
             });
         }
 
-        // البحث عن الرسالة في قاعدة البيانات
-        // البحث أولاً بالمعرف الكامل
-        let message = await SemMessage.findOne({ messageId: id });
+        // تحسين آلية البحث عن الرسالة
+        let message = null;
         
-        // إذا لم يتم العثور على الرسالة، نحاول باستخدام startsWith للتعامل مع الأنظمة التي تضيف بادئات للمعرفات
+        // محاولة 1: البحث بالمعرف الدقيق
+        message = await SemMessage.findOne({ messageId: id });
+        
+        // محاولة 2: البحث بمعرف SemySMS المُضمّن في حقل MessageId
         if (!message) {
             message = await SemMessage.findOne({ 
                 messageId: { $regex: new RegExp(`${id}$`) } 
             });
         }
-
-        // محاولة ثالثة باستخدام معرفات مختلفة للتوافق مع أنظمة متعددة
-        if (!message && data.phone) {
-            // البحث عن أحدث رسالة لهذا الرقم
+        
+        // محاولة 3: البحث بمعرف مخزن في حقل externalMessageId
+        if (!message) {
             message = await SemMessage.findOne({ 
-                recipient: { $regex: data.phone.replace(/\+/g, '\\+') } 
+                externalMessageId: id 
+            });
+        }
+        
+        // محاولة 4: البحث بمعرف SemySMS كجزء من معرف الرسالة
+        if (!message) {
+            message = await SemMessage.findOne({ 
+                messageId: { $regex: new RegExp(id, 'i') } 
+            });
+        }
+
+        // محاولة 5: البحث باستخدام رقم الهاتف إذا توفر
+        if (!message && data.phone) {
+            // تنظيف رقم الهاتف من الأحرف الخاصة للبحث
+            const cleanPhone = data.phone.replace(/[^\d]/g, '');
+            
+            // البحث عن أحدث رسالة مرسلة إلى هذا الرقم
+            message = await SemMessage.findOne({ 
+                recipient: { $regex: cleanPhone }
             }).sort({ createdAt: -1 });
             
             if (message) {
+                // تحديث السجل لمراقبة هذه الحالة
                 logger.info('smsWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`);
+                
+                // تخزين معرف SemySMS في الرسالة للمستقبل
+                message.externalMessageId = id;
             }
         }
 
@@ -95,14 +118,15 @@ exports.handleStatusUpdate = async (req, res) => {
             });
         }
 
-        // استخراج معلومات الحالة من البيانات الواردة
-        const is_send = data.is_send || data.status === 'sent' || data.status === 'delivered';
-        const is_delivered = data.is_delivered || data.status === 'delivered';
-        const send_date = data.send_date || data.sent_date || data.date;
-        const delivered_date = data.delivered_date || data.delivery_date;
+        // استخراج معلومات الحالة من البيانات الواردة بشكل موسع
+        const is_send = data.is_send || data.status === 'sent' || data.status === 'delivered' || data.status === 'success';
+        const is_delivered = data.is_delivered || data.status === 'delivered' || data.status === 'success';
+        const send_date = data.send_date || data.sent_date || data.date || new Date();
+        const delivered_date = data.delivered_date || data.delivery_date || send_date;
 
-        // إذا تم إرسال الرسالة أو تسليمها، نعتبرها مرسلة
-        if (is_delivered === '1' || is_delivered === true || is_send === '1' || is_send === true) {
+        // إذا تم إرسال الرسالة أو تسليمها، نعتبرها مرسلة (تحويل القيم إلى منطقية)
+        if (is_delivered === '1' || is_delivered === 1 || is_delivered === true || 
+            is_send === '1' || is_send === 1 || is_send === true) {
             newStatus = 'sent';
             statusChanged = message.status !== 'sent';
             
@@ -116,6 +140,12 @@ exports.handleStatusUpdate = async (req, res) => {
         // إذا تغيرت الحالة، نحفظ التغييرات
         if (statusChanged) {
             message.status = newStatus;
+            
+            // إذا لم يكن لدينا معرف خارجي مخزن، نحفظه الآن
+            if (!message.externalMessageId && id) {
+                message.externalMessageId = id;
+            }
+            
             await message.save();
             
             logger.info('smsWebhookController', `تم تحديث حالة الرسالة ${id}`, {
