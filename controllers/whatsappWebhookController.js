@@ -370,8 +370,9 @@ exports.handleStatusUpdate = async (req, res) => {
             // البحث عن الرسالة في جدول SemMessage باستخدام externalMessageId المطابق
             const semMessage = await SemMessage.findOne({
                 $or: [
-                    { 'whatsappData.messageId': message.messageId },
-                    { 'whatsappData.externalMessageId': message.externalMessageId }
+                    { messageId: message.messageId },
+                    { externalMessageId: message.externalMessageId },
+                    { "providerData.whatsappMessageId": message._id.toString() }
                 ]
             });
 
@@ -382,7 +383,41 @@ exports.handleStatusUpdate = async (req, res) => {
                 semMessage.status = newStatus;
                 await semMessage.save();
             } else {
-                logger.warn('whatsappWebhookController', `لم يتم العثور على رسالة في جدول SemMessage متصلة برسالة واتساب ${message.messageId}`);
+                // محاولة البحث عن الرسالة بطرق إضافية
+                const alternativeSearch = await SemMessage.findOne({
+                    $or: [
+                        // البحث بناءً على رقم الهاتف والوقت القريب
+                        { 
+                            recipients: { $in: [message.phoneNumber] },
+                            createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+                        },
+                        // البحث بناءً على محتوى الرسالة مطابق
+                        {
+                            content: message.message,
+                            createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+                        }
+                    ]
+                }).sort({ createdAt: -1 }); // الأحدث أولاً
+                
+                if (alternativeSearch) {
+                    logger.info('whatsappWebhookController', `تم العثور على رسالة في جدول SemMessage من خلال البحث البديل بمعرف ${alternativeSearch._id}، تحديث الحالة من ${alternativeSearch.status} إلى ${newStatus}`);
+                    
+                    // حفظ العلاقة لتسهيل البحث في المستقبل
+                    alternativeSearch.externalMessageId = message.externalMessageId;
+                    if (!alternativeSearch.providerData) {
+                        alternativeSearch.providerData = {};
+                    }
+                    alternativeSearch.providerData.whatsappMessageId = message._id.toString();
+                    
+                    // تحديث الحالة
+                    alternativeSearch.status = newStatus;
+                    await alternativeSearch.save();
+                } else {
+                    logger.warn('whatsappWebhookController', `لم يتم العثور على رسالة في جدول SemMessage متصلة برسالة واتساب ${message._id}`, {
+                        whatsappExternalId: message.externalMessageId,
+                        phoneNumber: message.phoneNumber
+                    });
+                }
             }
         } catch (error) {
             logger.error('whatsappWebhookController', `خطأ أثناء تحديث حالة الرسالة في جدول SemMessage`, error);
