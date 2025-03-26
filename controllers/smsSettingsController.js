@@ -160,8 +160,9 @@ exports.showSmsMonitor = async (req, res) => {
         // الحصول على إحصائيات الرسائل
         const pendingCount = await require('../models/SemMessage').countDocuments({ status: 'pending' });
         const sentCount = await require('../models/SemMessage').countDocuments({ status: 'sent' });
+        const deliveredCount = await require('../models/SemMessage').countDocuments({ status: 'delivered' });
         const failedCount = await require('../models/SemMessage').countDocuments({ status: 'failed' });
-        const totalCount = pendingCount + sentCount + failedCount;
+        const totalCount = pendingCount + sentCount + deliveredCount + failedCount;
         
         // الحصول على آخر 10 رسائل
         const recentMessages = await require('../models/SemMessage')
@@ -182,6 +183,7 @@ exports.showSmsMonitor = async (req, res) => {
             messageStats: {
                 pending: pendingCount,
                 sent: sentCount,
+                delivered: deliveredCount,
                 failed: failedCount,
                 total: totalCount
             },

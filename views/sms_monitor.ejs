@@ -129,7 +129,7 @@
 
     <!-- معلومات الحالة العامة -->
     <div class="row mb-4">
-      <div class="col-md-3">
+      <div class="col-md">
         <div class="stats-card blue">
           <div class="stats-icon">
             <i class="fas fa-envelope"></i>
@@ -138,7 +138,7 @@
           <p>إجمالي الرسائل</p>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col-md">
         <div class="stats-card green">
           <div class="stats-icon">
             <i class="fas fa-check-circle"></i>
@@ -147,7 +147,16 @@
           <p>الرسائل المرسلة</p>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col-md">
+        <div class="stats-card teal" style="border-top: 4px solid #20c997;">
+          <div class="stats-icon">
+            <i class="fas fa-check-double"></i>
+          </div>
+          <h3><%= messageStats.delivered %></h3>
+          <p>الرسائل المسلّمة</p>
+        </div>
+      </div>
+      <div class="col-md">
         <div class="stats-card yellow">
           <div class="stats-icon">
             <i class="fas fa-clock"></i>
@@ -156,7 +165,7 @@
           <p>الرسائل المعلقة</p>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col-md">
         <div class="stats-card red">
           <div class="stats-icon">
             <i class="fas fa-times-circle"></i>
