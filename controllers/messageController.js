@@ -211,287 +211,257 @@ exports.sendMessage = async (req, res) => {
         let smsResult = null;
         let whatsappResult = null;
 
-        // تحديد وسيلة الإرسال المفضلة
-        // تغيير المنطق ليكون أكثر وضوحاً: سنحاول أولاً استخدام القناة المفضلة للعميل
-        // وفقط إذا فشلت، سنحاول استخدام القناة البديلة
+        // تنفيذ منطق الإرسال حسب قنوات الاتصال المفعلة للعميل
         
-        // تحديد القناة المفضلة للعميل (يمكن إضافتها للعميل في المستقبل)
-        const preferWhatsapp = client.messagingChannels?.preferWhatsapp === true;
-        
-        // إرسال عبر القناة المفضلة أولاً
-        if (preferWhatsapp) {
-            // الواتساب هو الخيار المفضل
-            if (canSendWhatsapp && whatsappManagerInitialized) {
-                whatsappResult = await WhatsappManager.sendWhatsapp(phone, msg, { clientId: client._id });
+        // الحالة 1: واتساب فقط
+        if (canSendWhatsapp && !canSendSms && whatsappManagerInitialized) {
+            logger.info(`إرسال رسالة للعميل ${client.name} عبر واتساب فقط حسب الإعدادات`);
+            
+            whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
+            
+            if (whatsappResult.success) {
+                whatsappSent = true;
+                newMessage.status = 'sent';
+                newMessage.messageId = newMessage._id.toString();
+                newMessage.externalMessageId = whatsappResult.externalMessageId;
                 
-                if (whatsappResult.success) {
-                    whatsappSent = true;
-                    newMessage.status = 'sent';
-                    newMessage.messageId = newMessage._id.toString();
-                    newMessage.externalMessageId = whatsappResult.externalMessageId;
-                    
-                    // استخراج معرف الجهاز
-                    let deviceId = null;
-                    if (whatsappResult.rawResponse) {
-                        deviceId = whatsappResult.rawResponse.id_device || 
-                                  whatsappResult.rawResponse.device_id || 
-                                  (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
-                    }
-                    
-                    // حفظ بيانات مزود الخدمة
-                    newMessage.providerData = {
-                        provider: 'semysms_whatsapp',
-                        lastUpdate: new Date(),
-                        device: deviceId,
-                        rawResponse: whatsappResult.rawResponse
-                    };
-                    
-                    await newMessage.save();
-                    
-                    logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
-                        data: {
-                            internalId: newMessage.messageId,
-                            externalId: newMessage.externalMessageId,
-                            deviceId: newMessage.providerData?.device || null
-                        }
-                    });
-                } else {
-                    whatsappError = whatsappResult.error || 'فشل في إرسال رسالة الواتساب';
-                    
-                    // إذا فشل الواتساب، نحاول SMS كخيار ثانٍ
-                    if (canSendSms && smsManagerInitialized) {
-                        smsResult = await SmsManager.sendSms(phone, msg);
-                        
-                        if (smsResult.success) {
-                            smsSent = true;
-                            newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
-                            newMessage.messageId = newMessage._id.toString();
-                            newMessage.externalMessageId = smsResult.externalMessageId;
-                            
-                            if (smsResult.status === 'delivered') {
-                                newMessage.sentAt = new Date();
-                            }
-                            
-                            let deviceId = null;
-                            if (smsResult.rawResponse) {
-                                deviceId = smsResult.rawResponse.id_device || 
-                                          smsResult.rawResponse.device_id || 
-                                          (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
-                            }
-                            
-                            newMessage.providerData = {
-                                provider: 'semysms',
-                                lastUpdate: new Date(),
-                                device: deviceId,
-                                rawResponse: smsResult.rawResponse
-                            };
-                            
-                            await newMessage.save();
-                            
-                            logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح بعد فشل الواتساب`, {
-                                data: {
-                                    internalId: newMessage.messageId,
-                                    externalId: newMessage.externalMessageId,
-                                    deviceId: deviceId
-                                }
-                            });
-                        } else {
-                            smsError = smsResult.error || 'فشل في إرسال الرسالة SMS';
-                        }
-                    }
+                // استخراج معرف الجهاز
+                let deviceId = null;
+                if (whatsappResult.rawResponse) {
+                    deviceId = whatsappResult.rawResponse.id_device || 
+                              whatsappResult.rawResponse.device_id || 
+                              (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
                 }
-            } else if (canSendSms && smsManagerInitialized) {
-                // الواتساب غير متاح، نستخدم SMS
-                smsResult = await SmsManager.sendSms(phone, msg);
                 
-                if (smsResult.success) {
-                    smsSent = true;
-                    newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
-                    newMessage.messageId = newMessage._id.toString();
-                    newMessage.externalMessageId = smsResult.externalMessageId;
-                    
-                    if (smsResult.status === 'delivered') {
-                        newMessage.sentAt = new Date();
-                    }
-                    
-                    let deviceId = null;
-                    if (smsResult.rawResponse) {
-                        deviceId = smsResult.rawResponse.id_device || 
-                                  smsResult.rawResponse.device_id || 
-                                  (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
-                    }
-                    
-                    newMessage.providerData = {
-                        provider: 'semysms',
-                        lastUpdate: new Date(),
-                        device: deviceId,
-                        rawResponse: smsResult.rawResponse
-                    };
-                    
-                    await newMessage.save();
-                    
-                    logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح (الواتساب غير متاح)`, {
-                        data: {
-                            internalId: newMessage.messageId,
-                            externalId: newMessage.externalMessageId,
-                            deviceId: deviceId
-                        }
-                    });
-                } else {
-                    smsError = smsResult.error || 'فشل في إرسال الرسالة SMS';
-                }
-            }
-        } else {
-            // SMS هو الخيار المفضل (الحالة الافتراضية)
-            if (canSendSms && smsManagerInitialized) {
-                smsResult = await SmsManager.sendSms(phone, msg);
+                // حفظ بيانات مزود الخدمة
+                newMessage.providerData = {
+                    provider: 'semysms_whatsapp',
+                    lastUpdate: new Date(),
+                    device: deviceId,
+                    rawResponse: whatsappResult.rawResponse
+                };
                 
-                if (smsResult.success) {
-                    smsSent = true;
-                    newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
-                    newMessage.messageId = newMessage._id.toString();
-                    newMessage.externalMessageId = smsResult.externalMessageId;
-                    
-                    if (smsResult.status === 'delivered') {
-                        newMessage.sentAt = new Date();
-                    }
-                    
-                    let deviceId = null;
-                    if (smsResult.rawResponse) {
-                        deviceId = smsResult.rawResponse.id_device || 
-                                  smsResult.rawResponse.device_id || 
-                                  (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
-                    }
-                    
-                    newMessage.providerData = {
-                        provider: 'semysms',
-                        lastUpdate: new Date(),
-                        device: deviceId,
-                        rawResponse: smsResult.rawResponse
-                    };
-                    
-                    await newMessage.save();
-                    
-                    logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
-                        data: {
-                            internalId: newMessage.messageId,
-                            externalId: newMessage.externalMessageId,
-                            deviceId: deviceId
-                        }
-                    });
-                } else {
-                    smsError = smsResult.error || 'فشل في إرسال الرسالة SMS';
-                    
-                    // إذا فشل SMS، نحاول الواتساب كخيار ثانٍ
-                    if (canSendWhatsapp && whatsappManagerInitialized) {
-                        whatsappResult = await WhatsappManager.sendWhatsapp(phone, msg, { clientId: client._id });
-                        
-                        if (whatsappResult.success) {
-                            whatsappSent = true;
-                            newMessage.status = 'sent';
-                            newMessage.messageId = newMessage._id.toString();
-                            newMessage.externalMessageId = whatsappResult.externalMessageId;
-                            
-                            let deviceId = null;
-                            if (whatsappResult.rawResponse) {
-                                deviceId = whatsappResult.rawResponse.id_device || 
-                                          whatsappResult.rawResponse.device_id || 
-                                          (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
-                            }
-                            
-                            newMessage.providerData = {
-                                provider: 'semysms_whatsapp',
-                                lastUpdate: new Date(),
-                                device: deviceId,
-                                rawResponse: whatsappResult.rawResponse
-                            };
-                            
-                            await newMessage.save();
-                            
-                            logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح بعد فشل SMS`, {
-                                data: {
-                                    internalId: newMessage.messageId,
-                                    externalId: newMessage.externalMessageId,
-                                    deviceId: newMessage.providerData?.device || null
-                                }
-                            });
-                        } else {
-                            whatsappError = whatsappResult.error || 'فشل في إرسال رسالة الواتساب';
-                        }
-                    }
-                }
-            } else if (canSendWhatsapp && whatsappManagerInitialized) {
-                // SMS غير متاح، نستخدم الواتساب
-                whatsappResult = await WhatsappManager.sendWhatsapp(phone, msg, { clientId: client._id });
+                await newMessage.save();
                 
-                if (whatsappResult.success) {
-                    whatsappSent = true;
-                    newMessage.status = 'sent';
-                    newMessage.messageId = newMessage._id.toString();
-                    newMessage.externalMessageId = whatsappResult.externalMessageId;
-                    
-                    let deviceId = null;
-                    if (whatsappResult.rawResponse) {
-                        deviceId = whatsappResult.rawResponse.id_device || 
-                                  whatsappResult.rawResponse.device_id || 
-                                  (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
+                logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
+                    data: {
+                        internalId: newMessage.messageId,
+                        externalId: newMessage.externalMessageId,
+                        deviceId: newMessage.providerData?.device || null
                     }
-                    
-                    newMessage.providerData = {
-                        provider: 'semysms_whatsapp',
-                        lastUpdate: new Date(),
-                        device: deviceId,
-                        rawResponse: whatsappResult.rawResponse
-                    };
-                    
-                    await newMessage.save();
-                    
-                    logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح (SMS غير متاح)`, {
-                        data: {
-                            internalId: newMessage.messageId,
-                            externalId: newMessage.externalMessageId,
-                            deviceId: newMessage.providerData?.device || null
-                        }
-                    });
-                } else {
-                    whatsappError = whatsappResult.error || 'فشل في إرسال رسالة الواتساب';
-                }
+                });
+            } else {
+                whatsappError = whatsappResult.error || 'فشل في إرسال رسالة الواتساب';
+                
+                newMessage.status = 'failed';
+                newMessage.errorMessage = whatsappError;
+                await newMessage.save();
+                
+                logger.error(`فشل في إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone}`, {
+                    error: whatsappError
+                });
             }
         }
-
-        // التحقق مما إذا تم إرسال أي رسالة بنجاح
-        if (!smsSent && !whatsappSent) {
-            // فشل في إرسال أي رسالة
+        // الحالة 2: SMS فقط
+        else if (canSendSms && !canSendWhatsapp && smsManagerInitialized) {
+            logger.info(`إرسال رسالة للعميل ${client.name} عبر SMS فقط حسب الإعدادات`);
+            
+            smsResult = await SmsManager.sendSms(formattedPhone, msg);
+            
+            if (smsResult.success) {
+                smsSent = true;
+                newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
+                newMessage.messageId = newMessage._id.toString();
+                newMessage.externalMessageId = smsResult.externalMessageId;
+                
+                if (smsResult.status === 'delivered') {
+                    newMessage.sentAt = new Date();
+                }
+                
+                let deviceId = null;
+                if (smsResult.rawResponse) {
+                    deviceId = smsResult.rawResponse.id_device || 
+                              smsResult.rawResponse.device_id || 
+                              (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
+                }
+                
+                newMessage.providerData = {
+                    provider: 'semysms',
+                    lastUpdate: new Date(),
+                    device: deviceId,
+                    rawResponse: smsResult.rawResponse
+                };
+                
+                await newMessage.save();
+                
+                logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
+                    data: {
+                        internalId: newMessage.messageId,
+                        externalId: newMessage.externalMessageId,
+                        deviceId: deviceId
+                    }
+                });
+            } else {
+                smsError = smsResult.error || 'فشل في إرسال الرسالة SMS';
+                
+                newMessage.status = 'failed';
+                newMessage.errorMessage = smsError;
+                await newMessage.save();
+                
+                logger.error(`فشل في إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone}`, {
+                    error: smsError
+                });
+            }
+        }
+        // الحالة 3: كلا الوسيلتين (واتساب و SMS)
+        else if (canSendSms && canSendWhatsapp && smsManagerInitialized && whatsappManagerInitialized) {
+            logger.info(`إرسال رسالة للعميل ${client.name} عبر كلتا القناتين (واتساب وSMS) حسب الإعدادات`);
+            
+            // إرسال عبر واتساب
+            whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
+            
+            if (whatsappResult.success) {
+                whatsappSent = true;
+                
+                // لا نحدث حالة الرسالة بعد لأننا سنرسل عبر SMS أيضًا
+                let deviceId = null;
+                if (whatsappResult.rawResponse) {
+                    deviceId = whatsappResult.rawResponse.id_device || 
+                            whatsappResult.rawResponse.device_id || 
+                            (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
+                }
+                
+                // تخزين نجاح إرسال الواتساب
+                logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح (جزء 1/2)`, {
+                    data: {
+                        externalId: whatsappResult.externalMessageId,
+                        deviceId: deviceId
+                    }
+                });
+            } else {
+                whatsappError = whatsappResult.error || 'فشل في إرسال رسالة الواتساب';
+                logger.warn(`فشل في إرسال رسالة واتساب للعميل ${client.name} (سيتم المحاولة عبر SMS أيضًا)`, {
+                    error: whatsappError
+                });
+            }
+            
+            // إرسال عبر SMS بغض النظر عن نتيجة الواتساب
+            smsResult = await SmsManager.sendSms(formattedPhone, msg);
+            
+            if (smsResult.success) {
+                smsSent = true;
+                
+                logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح (جزء 2/2)`);
+            } else {
+                smsError = smsResult.error || 'فشل في إرسال الرسالة SMS';
+                logger.warn(`فشل في إرسال رسالة SMS للعميل ${client.name}`, {
+                    error: smsError
+                });
+            }
+            
+            // تحديث حالة الرسالة الإجمالية بناءً على نتائج القناتين
+            if (whatsappSent || smsSent) {
+                newMessage.status = 'sent';
+                newMessage.messageId = newMessage._id.toString();
+                
+                // استخدام معرف الرسالة من القناة الناجحة
+                if (smsSent) {
+                    newMessage.externalMessageId = smsResult.externalMessageId;
+                    
+                    if (smsResult.status === 'delivered') {
+                        newMessage.sentAt = new Date();
+                    }
+                    
+                    let deviceId = null;
+                    if (smsResult.rawResponse) {
+                        deviceId = smsResult.rawResponse.id_device || 
+                                smsResult.rawResponse.device_id || 
+                                (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
+                    }
+                    
+                    // تخزين بيانات كلا المزودين
+                    newMessage.providerData = {
+                        provider: whatsappSent ? 'semysms_both' : 'semysms',
+                        lastUpdate: new Date(),
+                        device: deviceId,
+                        rawSmsResponse: smsResult.rawResponse,
+                        rawWhatsappResponse: whatsappSent ? whatsappResult.rawResponse : null
+                    };
+                } else {
+                    // تم إرسال واتساب فقط
+                    newMessage.externalMessageId = whatsappResult.externalMessageId;
+                    
+                    let deviceId = null;
+                    if (whatsappResult.rawResponse) {
+                        deviceId = whatsappResult.rawResponse.id_device || 
+                                whatsappResult.rawResponse.device_id || 
+                                (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
+                    }
+                    
+                    newMessage.providerData = {
+                        provider: 'semysms_whatsapp',
+                        lastUpdate: new Date(),
+                        device: deviceId,
+                        rawResponse: whatsappResult.rawResponse
+                    };
+                }
+                
+                await newMessage.save();
+                
+                logger.info(`تم إرسال رسالة للعميل ${client.name} باستخدام ${smsSent && whatsappSent ? 'كلتا القناتين' : (smsSent ? 'SMS فقط' : 'واتساب فقط')}`);
+            } else {
+                // فشلت كلتا القناتين
+                newMessage.status = 'failed';
+                newMessage.errorMessage = `فشل في إرسال الرسالة عبر كلتا القناتين: واتساب (${whatsappError}) و SMS (${smsError})`;
+                await newMessage.save();
+                
+                logger.error(`فشل في إرسال رسالة للعميل ${client.name} عبر جميع القنوات المتاحة`);
+            }
+        }
+        // حالة الفشل: قنوات مفعلة ولكن مدراء الخدمات غير متاحين
+        else {
             newMessage.status = 'failed';
-            newMessage.errorMessage = `${smsError || 'SMS غير مفعل'} | ${whatsappError || 'الواتساب غير مفعل'}`;
+            newMessage.errorMessage = 'لم تتوفر أي قناة إرسال صالحة';
             await newMessage.save();
             
-            logger.error(`فشل في إرسال رسالة للعميل ${client.name} إلى ${formattedPhone}`, {
-                smsError, whatsappError
-            });
-            return res.status(500).send("6"); // كود خطأ 6: خطأ في النظام
+            logger.error(`فشل في إرسال رسالة للعميل ${client.name} بسبب عدم توفر قنوات إرسال صالحة (تمت تهيئة: SMS=${smsManagerInitialized}, واتساب=${whatsappManagerInitialized})`);
+            
+            return res.status(500).send("6"); // خطأ في النظام
         }
 
-        // زيادة عدد الرسائل المرسلة للعميل
-        client.messagesSent += 1;
-        
-        // خصم الرصيد بناءً على طول الرسالة (يتم خصم نقاط واحدة فقط حتى لو تم إرسال الرسالة بأكثر من طريقة)
-        client.balance -= requiredPoints;
-        await client.save();
-
-        // تسجيل عملية استخدام الرصيد
-        const transaction = new BalanceTransaction({
-            clientId: client._id,
-            amount: requiredPoints,
-            type: 'usage',
-            notes: `إرسال رسالة (${messageCount} رسائل) إلى ${formattedPhone}${smsSent && whatsappSent ? ' عبر SMS وواتساب' : (smsSent ? ' عبر SMS' : ' عبر واتساب')}`,
-            performedBy: client._id // استخدام معرف العميل نفسه كمنفذ للعملية
-        });
-        await transaction.save();
-
-        // إعادة استجابة نجاح مبسطة (رقم فقط)
-        return res.status(200).send("1");
-
+        // تحديث رصيد العميل إذا تم إرسال الرسالة بنجاح
+        if (smsSent || whatsappSent) {
+            // خصم نقطة واحدة لكل وسيلة إرسال ناجحة
+            let pointsToDeduct = 0;
+            if (smsSent) pointsToDeduct += requiredPoints;
+            if (whatsappSent) pointsToDeduct += requiredPoints;
+            
+            client.balance -= pointsToDeduct;
+            client.messagesSent += pointsToDeduct;
+            await client.save();
+            
+            // تسجيل عملية خصم الرصيد
+            const balanceTransaction = new BalanceTransaction({
+                clientId: client._id,
+                messageId: newMessage._id,
+                amount: -pointsToDeduct,
+                balanceAfter: client.balance,
+                type: 'usage',
+                description: `إرسال رسالة ${smsSent && whatsappSent ? 'عبر SMS وواتساب' : (smsSent ? 'عبر SMS' : 'عبر واتساب')}`
+            });
+            await balanceTransaction.save();
+            
+            // إرجاع استجابة نجاح بمعرف الرسالة
+            return res.status(200).send(newMessage._id.toString());
+        } else {
+            // لم يتم إرسال الرسالة بنجاح عبر أي وسيلة
+            logger.error(`فشل في إرسال الرسالة للعميل ${client.name} إلى ${formattedPhone}`, {
+                smsError: smsError,
+                whatsappError: whatsappError
+            });
+            
+            return res.status(500).send("6"); // خطأ في النظام
+        }
     } catch (error) {
         logger.error('خطأ في إرسال الرسالة:', error);
         return res.status(500).send("6");
