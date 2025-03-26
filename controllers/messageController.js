@@ -435,7 +435,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
             const maxLength = containsArabic ? 70 : 160;
             const messageCount = Math.ceil(msgContent.length / maxLength);
             
-            // خصم نقطة واحدة لكل رسالة SMS و 0.25 نقطة لكل رسالة واتساب
+            // نقطة واحدة لكل رسالة SMS و 0.25 نقطة لكل رسالة واتساب
             let pointsToDeduct = 0;
             if (smsSent) pointsToDeduct += messageCount; // 1 نقطة لكل رسالة SMS
             if (whatsappSent) pointsToDeduct += (messageCount * 0.25); // 0.25 نقطة لكل رسالة واتساب
@@ -450,16 +450,18 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
             client.messagesSent += sentMessagesCount;
             await client.save();
             
-            // تسجيل عملية خصم الرصيد
+            // تسجيل عملية استخدام الرصيد
             const balanceTransaction = new BalanceTransaction({
                 clientId: client._id,
-                type: 'deduct',
+                type: 'usage',
                 amount: pointsToDeduct,
                 description: `خصم رصيد لإرسال رسالة ${smsSent && whatsappSent ? 'SMS وواتساب' : (smsSent ? 'SMS' : 'واتساب')}`,
                 balanceBefore: client.balance + pointsToDeduct,
                 balanceAfter: client.balance,
                 status: 'complete',
-                relatedMessageId: message._id
+                relatedMessageId: message._id,
+                notes: `خصم رصيد لإرسال رسالة ${smsSent && whatsappSent ? 'SMS وواتساب' : (smsSent ? 'SMS' : 'واتساب')}`,
+                performedBy: process.env.SYSTEM_USER_ID || '6418180ac9e8dffece88d5a6' // استخدام معرف المستخدم النظامي
             });
             await balanceTransaction.save();
         }
@@ -873,16 +875,18 @@ exports.sendMessage = async (req, res) => {
             client.messagesSent += sentMessagesCount;
             await client.save();
             
-            // تسجيل عملية خصم الرصيد
+            // تسجيل عملية استخدام الرصيد
             const balanceTransaction = new BalanceTransaction({
                 clientId: client._id,
-                type: 'deduct',
+                type: 'usage',
                 amount: pointsToDeduct,
                 description: `خصم رصيد لإرسال رسالة ${newMessage.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
                 balanceBefore: client.balance + pointsToDeduct,
                 balanceAfter: client.balance,
                 status: 'complete',
-                relatedMessageId: newMessage._id
+                relatedMessageId: newMessage._id,
+                notes: `خصم رصيد لإرسال رسالة ${newMessage.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
+                performedBy: process.env.SYSTEM_USER_ID || '6418180ac9e8dffece88d5a6' // استخدام معرف المستخدم النظامي
             });
             await balanceTransaction.save();
         }
