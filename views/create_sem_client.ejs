@@ -48,6 +48,24 @@
                         </div>
                         <% } %>
                         
+                        <div class="mb-3">
+                            <label class="form-label almarai-bold">طرق الإرسال المتاحة للعميل</label>
+                            <div class="d-flex gap-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="smsChannel" name="messagingChannels.sms" checked>
+                                    <label class="form-check-label almarai-regular" for="smsChannel">
+                                        <i class="fas fa-sms me-1"></i> رسائل SMS
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="whatsappChannel" name="messagingChannels.whatsapp">
+                                    <label class="form-check-label almarai-regular" for="whatsappChannel">
+                                        <i class="fab fa-whatsapp me-1"></i> رسائل واتساب
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
                             سيتم إنشاء مفتاح API تلقائياً عند إنشاء حساب العميل

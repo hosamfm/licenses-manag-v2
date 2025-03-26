@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <%- include('partials/_head') %>
-  <title>إعدادات خدمة الرسائل القصيرة</title>
+  <title>إعدادات خدمة الواتس أب</title>
   <style>
     .container {
       background-color: white;
@@ -83,10 +83,10 @@
   <%- include('partials/_header') %>
   <div class="container mt-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1>إعدادات خدمة الرسائل القصيرة</h1>
+      <h1>إعدادات خدمة الواتس أب</h1>
       <div>
-        <a href="/admin/sms-monitor" class="btn btn-info ml-2">
-          <i class="fas fa-chart-line"></i> مراقبة الرسائل
+        <a href="/admin/whatsapp-monitor" class="btn btn-info ml-2">
+          <i class="fas fa-chart-line"></i> مراقبة رسائل الواتس أب
         </a>
         <a href="/settings" class="btn btn-secondary">
           <i class="fas fa-arrow-right"></i> العودة لإعدادات النظام
@@ -102,7 +102,7 @@
     <% } %>
 
     <div class="row">
-      <!-- حالة خدمة الرسائل -->
+      <!-- حالة خدمة الواتس أب -->
       <div class="col-md-4">
         <div class="section-title">
           <h3>حالة الخدمة</h3>
@@ -135,26 +135,30 @@
         <!-- حالة الرسائل -->
         <div class="status-card status-info">
           <h5>
-            <i class="fas fa-envelope"></i>
-            حالة الرسائل
+            <i class="fas fa-comment-dots"></i>
+            حالة رسائل الواتس أب
           </h5>
           <div class="row text-center">
-            <div class="col-4">
+            <div class="col-3">
               <div class="font-weight-bold"><%= messageStats.pending %></div>
               <small>معلقة</small>
             </div>
-            <div class="col-4">
+            <div class="col-3">
               <div class="font-weight-bold"><%= messageStats.sent %></div>
               <small>مرسلة</small>
             </div>
-            <div class="col-4">
+            <div class="col-3">
+              <div class="font-weight-bold"><%= messageStats.delivered %></div>
+              <small>مستلمة</small>
+            </div>
+            <div class="col-3">
               <div class="font-weight-bold"><%= messageStats.failed %></div>
               <small>فاشلة</small>
             </div>
           </div>
           <% if (messageStats.pending > 0) { %>
             <div class="text-center mt-3">
-              <form action="/admin/sms-settings/update-pending" method="POST">
+              <form action="/admin/whatsapp-settings/update-pending" method="POST">
                 <button type="submit" class="btn btn-sm btn-warning">
                   <i class="fas fa-sync"></i> تحديث حالة الرسائل المعلقة
                 </button>
@@ -170,11 +174,11 @@
           <h3>إعدادات مزود الخدمة</h3>
         </div>
         
-        <form action="/admin/sms-settings/save" method="POST">
+        <form action="/admin/whatsapp-settings/save" method="POST">
           <div class="card mb-4">
             <div class="card-body">
               <div class="mb-3">
-                <label for="provider" class="form-label">مزود خدمة الرسائل</label>
+                <label for="provider" class="form-label">مزود خدمة الواتس أب</label>
                 <select id="provider" name="provider" class="form-select">
                   <option value="semysms" <%= settings.provider === 'semysms' ? 'selected' : '' %>>SemySMS</option>
                   <!-- يمكن إضافة مزودين آخرين هنا في المستقبل -->
@@ -207,6 +211,7 @@
                     <% } %>
                   </select>
                   <small class="form-text text-muted">اختر "الجهاز النشط" للإرسال من خلال أي جهاز متصل، أو اختر جهازًا محددًا.</small>
+                  <small class="form-text text-info">ملاحظة: <strong>تأكد من اختيار جهاز يدعم الواتس أب</strong> للإرسال بشكل صحيح.</small>
                 </div>
 
                 <hr>
@@ -214,7 +219,7 @@
                 
                 <div class="alert alert-info">
                   <i class="fas fa-info-circle"></i>
-                  خدمة WebHook تسمح لمزود SemySMS بإرسال تحديثات حالة الرسائل تلقائيًا إلى النظام، مما يضمن تحديث الحالة فور تغييرها.
+                  خدمة WebHook تسمح لمزود SemySMS بإرسال تحديثات حالة رسائل الواتس أب تلقائيًا إلى النظام، مما يضمن تحديث الحالة فور تغييرها.
                 </div>
                 
                 <div class="mb-3">
@@ -243,17 +248,6 @@
                     <label class="form-check-label" for="semysms_delivered_webhook">
                       تفعيل WebHook لحالة "تم التسليم"
                     </label>
-                  </div>
-                </div>
-
-                <div class="mb-3">
-                  <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="semysms_add_plus" name="semysms_add_plus" 
-                      <%= settings.config.semysms.addPlusPrefix ? 'checked' : '' %>>
-                    <label class="form-check-label" for="semysms_add_plus">
-                      إضافة علامة + تلقائيًا قبل أرقام الهواتف
-                    </label>
-                    <small class="form-text text-muted d-block">فعّل هذا الخيار إذا كنت ترغب في إضافة علامة + تلقائيًا قبل أرقام الهواتف. يفضل تعطيله للأرقام المحلية.</small>
                   </div>
                 </div>
               </div>

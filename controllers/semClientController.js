@@ -60,7 +60,7 @@ exports.getSemClients = async (req, res) => {
  */
 exports.createSemClient = async (req, res) => {
     try {
-        const { name, email, phone, company, dailyLimit, monthlyLimit } = req.body;
+        const { name, email, phone, company, dailyLimit, monthlyLimit, messagingChannels } = req.body;
         const { userId } = req.session;
         
         // التحقق من البريد الإلكتروني
@@ -81,7 +81,11 @@ exports.createSemClient = async (req, res) => {
             apiKey,
             userId,
             dailyLimit: dailyLimit || 100,
-            monthlyLimit: monthlyLimit || 3000
+            monthlyLimit: monthlyLimit || 3000,
+            messagingChannels: {
+                sms: messagingChannels?.sms ?? true,
+                whatsapp: messagingChannels?.whatsapp ?? false
+            }
         });
         
         await newClient.save();
@@ -92,7 +96,8 @@ exports.createSemClient = async (req, res) => {
                 _id: newClient._id,
                 name: newClient.name,
                 email: newClient.email,
-                apiKey: newClient.apiKey
+                apiKey: newClient.apiKey,
+                messagingChannels: newClient.messagingChannels
             }
         });
     } catch (error) {
@@ -143,7 +148,7 @@ exports.getSemClientDetails = async (req, res) => {
 exports.updateSemClient = async (req, res) => {
     try {
         const { clientId } = req.params;
-        const { name, email, phone, company, status, dailyLimit, monthlyLimit } = req.body;
+        const { name, email, phone, company, status, dailyLimit, monthlyLimit, messagingChannels } = req.body;
         const { userId, userRole } = req.session;
         
         const client = await SemClient.findById(clientId);
@@ -172,6 +177,14 @@ exports.updateSemClient = async (req, res) => {
         client.email = email || client.email;
         client.phone = phone || client.phone;
         client.company = company || client.company;
+        
+        // تحديث قنوات الرسائل
+        if (messagingChannels) {
+            client.messagingChannels = {
+                sms: messagingChannels.sms !== undefined ? messagingChannels.sms : client.messagingChannels.sms,
+                whatsapp: messagingChannels.whatsapp !== undefined ? messagingChannels.whatsapp : client.messagingChannels.whatsapp
+            };
+        }
         
         // الحقول التي يمكن فقط للمدير أو المشرف تغييرها
         if (userRole === 'admin' || userRole === 'supervisor') {

@@ -23,6 +23,16 @@ const semClientSchema = new mongoose.Schema({
         required: false,
         trim: true
     },
+    messagingChannels: {
+        sms: {
+            type: Boolean,
+            default: true
+        },
+        whatsapp: {
+            type: Boolean,
+            default: false
+        }
+    },
     apiKey: {
         type: String,
         required: true,

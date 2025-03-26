@@ -11,6 +11,8 @@ const mongoose = require('mongoose');
 const telegramService = require('../services/telegramService');
 const smsSettingsController = require('../controllers/smsSettingsController');
 const smsWebhookController = require('../controllers/smsWebhookController');
+const whatsappSettingsController = require('../controllers/whatsappSettingsController');
+const whatsappWebhookController = require('../controllers/whatsappWebhookController');
 
 function handleError(req, res, error, message, redirectPath) {
   console.error(message, error.message, error.stack);
@@ -184,5 +186,14 @@ router.get('/admin/sms-monitor', [isAuthenticated, checkRole(['admin'])], smsSet
 
 // مسار webhook لاستقبال تحديثات حالة الرسائل من مزود الخدمة - لا يتطلب مصادقة
 router.post('/api/sms/webhook/status-update', smsWebhookController.handleStatusUpdate);
+
+// مسارات خدمة الواتس أب
+router.get('/admin/whatsapp-settings', [isAuthenticated, checkRole(['admin'])], whatsappSettingsController.showWhatsappSettings);
+router.post('/admin/whatsapp-settings/save', [isAuthenticated, checkRole(['admin'])], whatsappSettingsController.saveWhatsappSettings);
+router.post('/admin/whatsapp-settings/update-pending', [isAuthenticated, checkRole(['admin'])], whatsappSettingsController.updatePendingMessages);
+router.get('/admin/whatsapp-monitor', [isAuthenticated, checkRole(['admin'])], whatsappSettingsController.showWhatsappMonitor);
+
+// مسار webhook لاستقبال تحديثات حالة رسائل الواتس أب من مزود الخدمة - لا يتطلب مصادقة
+router.post('/api/whatsapp/webhook/status-update', whatsappWebhookController.handleStatusUpdate);
 
 module.exports = router;
