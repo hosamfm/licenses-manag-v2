@@ -31,12 +31,16 @@ exports.handleStatusUpdate = async (req, res) => {
             id = id.split('_').pop();
         }
 
-        if (!id) {
-            logger.warn('whatsappWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة', data);
+        // استخراج معرف الجهاز إذا كان موجوداً في البيانات
+        const deviceId = data.device_id || data.id_device || data.device || null;
+
+        // إذا كان معرف الرسالة غير موجود، نسجل تحذيراً ونرسل استجابة مناسبة
+        if (!id && !deviceId) {
+            logger.warn('whatsappWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة أو معرف الجهاز', data);
             // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
             return res.status(200).json({ 
                 success: false, 
-                error: 'معرف الرسالة مطلوب'
+                error: 'معرف الرسالة أو معرف الجهاز مطلوب'
             });
         }
 
@@ -44,28 +48,54 @@ exports.handleStatusUpdate = async (req, res) => {
         let message = null;
         
         // محاولة 1: البحث باستخدام externalMessageId (الموصى به)
-        message = await WhatsappMessage.findOne({ externalMessageId: id });
+        if (id) {
+            message = await WhatsappMessage.findOne({ externalMessageId: id });
+        }
         
         // محاولة 2: البحث بمعرف MongoDB
-        if (!message) {
+        if (!message && id) {
             message = await WhatsappMessage.findOne({ messageId: id });
         }
         
         // محاولة 3: البحث بمعرف SemySMS المُضمّن في حقل MessageId
-        if (!message) {
+        if (!message && id) {
             message = await WhatsappMessage.findOne({ 
                 messageId: { $regex: new RegExp(`${id}$`) } 
             });
         }
         
         // محاولة 4: البحث بمعرف SemySMS كجزء من معرف الرسالة
-        if (!message) {
+        if (!message && id) {
             message = await WhatsappMessage.findOne({ 
                 messageId: { $regex: new RegExp(id, 'i') } 
             });
         }
 
-        // محاولة 5: البحث باستخدام رقم الهاتف إذا توفر
+        // محاولة 5: البحث باستخدام معرف الجهاز والرقم إذا توفر
+        if (!message && deviceId && data.phone) {
+            // تنظيف رقم الهاتف من الأحرف الخاصة للبحث
+            const cleanPhone = data.phone.replace(/[^\d]/g, '');
+            
+            // البحث عن أحدث رسالة مرسلة إلى هذا الرقم باستخدام هذا الجهاز
+            message = await WhatsappMessage.findOne({ 
+                recipient: { $regex: cleanPhone },
+                'providerData.device': deviceId
+            }).sort({ createdAt: -1 });
+            
+            if (message) {
+                // تحديث السجل لمراقبة هذه الحالة
+                logger.info('whatsappWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`, {
+                    deviceId: deviceId
+                });
+                
+                // تخزين معرف SemySMS في الرسالة للمستقبل إذا كان متوفراً
+                if (id) {
+                    message.externalMessageId = id;
+                }
+            }
+        }
+
+        // محاولة 6: البحث باستخدام رقم الهاتف فقط كملاذ أخير
         if (!message && data.phone) {
             // تنظيف رقم الهاتف من الأحرف الخاصة للبحث
             const cleanPhone = data.phone.replace(/[^\d]/g, '');
@@ -79,20 +109,29 @@ exports.handleStatusUpdate = async (req, res) => {
                 // تحديث السجل لمراقبة هذه الحالة
                 logger.info('whatsappWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`);
                 
-                // تخزين معرف SemySMS في الرسالة للمستقبل
-                message.externalMessageId = id;
+                // تخزين معرف SemySMS في الرسالة للمستقبل إذا كان متوفراً
+                if (id) {
+                    message.externalMessageId = id;
+                }
+                
+                // تخزين معرف الجهاز إذا كان متوفراً
+                if (deviceId && message.providerData) {
+                    message.providerData.device = deviceId;
+                }
             }
         }
 
         if (!message) {
-            logger.warn('whatsappWebhookController', `لم يتم العثور على رسالة بالمعرف ${id}`, {
-                searchId: id,
+            logger.warn('whatsappWebhookController', `لم يتم العثور على رسالة مطابقة`, {
+                searchId: id || 'غير محدد',
+                deviceId: deviceId || 'غير محدد',
                 phone: data.phone || 'غير محدد'
             });
             return res.status(200).json({ 
                 success: false, 
                 error: 'الرسالة غير موجودة',
-                messageId: id
+                messageId: id,
+                deviceId: deviceId
             });
         }
 
@@ -115,6 +154,7 @@ exports.handleStatusUpdate = async (req, res) => {
                 success: true,
                 message: 'تم استلام الإشعار المتوسط',
                 messageId: id,
+                deviceId: deviceId,
                 status: message.status,
                 statusChanged: false
             });
@@ -163,6 +203,14 @@ exports.handleStatusUpdate = async (req, res) => {
                 message.externalMessageId = id;
             }
             
+            // تخزين معرف الجهاز إذا كان متوفراً
+            if (deviceId && message.providerData) {
+                if (!message.providerData) {
+                    message.providerData = {};
+                }
+                message.providerData.device = deviceId;
+            }
+            
             // تخزين بيانات إضافية من مزود الخدمة
             message.providerData = {
                 ...message.providerData,
@@ -172,7 +220,9 @@ exports.handleStatusUpdate = async (req, res) => {
             
             await message.save();
             
-            logger.info('whatsappWebhookController', `تم تحديث حالة الرسالة ${id}`, {
+            logger.info('whatsappWebhookController', `تم تحديث حالة الرسالة`, {
+                messageId: id || message.messageId,
+                deviceId: deviceId || 'غير معروف',
                 from: message.status,
                 to: newStatus,
                 phone: data.phone || message.recipient || 'غير معروف'
@@ -185,6 +235,7 @@ exports.handleStatusUpdate = async (req, res) => {
             message: `تم استلام التحديث بنجاح`,
             statusChanged,
             messageId: id,
+            deviceId: deviceId,
             newStatus
         });
     } catch (error) {
@@ -192,7 +243,7 @@ exports.handleStatusUpdate = async (req, res) => {
         // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
         return res.status(200).json({ 
             success: false, 
-            error: 'خطأ في معالجة التحديث'
+            error: 'حدث خطأ أثناء معالجة الطلب'
         });
     }
 };
