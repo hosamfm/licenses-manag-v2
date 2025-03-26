@@ -175,6 +175,14 @@
                         </div>
                     </div>
                     <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <div class="detail-item">
+                                <strong>القناة المفضلة للإرسال:</strong>
+                                <span id="modal-client-preferred-channel"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
                         <div class="col-12 mb-3">
                             <button id="regenerateApiKeysBtn" class="btn btn-warning almarai-regular">
                                 إعادة توليد مفتاح API
@@ -245,6 +253,18 @@
                                 </label>
                             </div>
                         </div>
+                    </div>
+                    
+                    <div class="mb-3 edit-preferred-channel-container" style="display: none;">
+                        <label for="edit-preferred-channel" class="form-label">القناة المفضلة للإرسال</label>
+                        <select class="form-select almarai-regular" id="edit-preferred-channel">
+                            <option value="none" selected>بلا (افتراضي)</option>
+                            <option value="sms" class="edit-sms-option" style="display: none;">رسائل SMS</option>
+                            <option value="whatsapp" class="edit-whatsapp-option" style="display: none;">رسائل واتساب</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            حدد القناة المفضلة للإرسال في حال تفعيل أكثر من قناة
+                        </small>
                     </div>
                     
                     <% if (['admin', 'supervisor'].includes(session.userRole)) { %>

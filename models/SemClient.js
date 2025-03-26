@@ -33,6 +33,11 @@ const semClientSchema = new mongoose.Schema({
             default: false
         }
     },
+    preferredChannel: {
+        type: String,
+        enum: ['none', 'sms', 'whatsapp'],
+        default: 'none'
+    },
     apiKey: {
         type: String,
         required: true,

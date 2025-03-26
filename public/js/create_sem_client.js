@@ -25,6 +25,35 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast('تم نسخ مفتاح API بنجاح');
     });
     
+    // التعامل مع تغيير خيارات قنوات الإرسال وإظهار قائمة القناة المفضلة
+    document.getElementById('smsChannel').addEventListener('change', updatePreferredChannelOptions);
+    document.getElementById('whatsappChannel').addEventListener('change', updatePreferredChannelOptions);
+    
+    // تحديث خيارات القناة المفضلة بناءً على القنوات المختارة
+    function updatePreferredChannelOptions() {
+        const smsChecked = document.getElementById('smsChannel').checked;
+        const whatsappChecked = document.getElementById('whatsappChannel').checked;
+        const preferredChannelContainer = document.querySelector('.preferred-channel-container');
+        const smsOption = document.querySelector('.sms-option');
+        const whatsappOption = document.querySelector('.whatsapp-option');
+        const preferredChannelSelect = document.getElementById('preferredChannel');
+        
+        // إظهار قائمة القناة المفضلة فقط عند اختيار أكثر من قناة
+        if (smsChecked && whatsappChecked) {
+            preferredChannelContainer.style.display = 'block';
+            smsOption.style.display = 'block';
+            whatsappOption.style.display = 'block';
+        } else {
+            // إخفاء القائمة وإعادة تعيين القيمة إلى 'none'
+            preferredChannelContainer.style.display = 'none';
+            preferredChannelSelect.value = 'none';
+            
+            // إخفاء الخيارات غير المتاحة
+            smsOption.style.display = smsChecked ? 'block' : 'none';
+            whatsappOption.style.display = whatsappChecked ? 'block' : 'none';
+        }
+    }
+    
     /**
      * إنشاء عميل جديد
      */
@@ -38,7 +67,8 @@ document.addEventListener('DOMContentLoaded', function() {
             messagingChannels: {
                 sms: document.getElementById('smsChannel').checked,
                 whatsapp: document.getElementById('whatsappChannel').checked
-            }
+            },
+            preferredChannel: document.getElementById('preferredChannel').value
         };
         
         // الحدود - قد تكون غير متاحة للمستخدمين العاديين

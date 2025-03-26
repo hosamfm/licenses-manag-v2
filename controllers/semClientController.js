@@ -148,7 +148,7 @@ exports.getSemClientDetails = async (req, res) => {
 exports.updateSemClient = async (req, res) => {
     try {
         const { clientId } = req.params;
-        const { name, email, phone, company, status, dailyLimit, monthlyLimit, messagingChannels } = req.body;
+        const { name, email, phone, company, status, dailyLimit, monthlyLimit, messagingChannels, preferredChannel } = req.body;
         const { userId, userRole } = req.session;
         
         const client = await SemClient.findById(clientId);
@@ -184,6 +184,11 @@ exports.updateSemClient = async (req, res) => {
                 sms: messagingChannels.sms !== undefined ? messagingChannels.sms : client.messagingChannels.sms,
                 whatsapp: messagingChannels.whatsapp !== undefined ? messagingChannels.whatsapp : client.messagingChannels.whatsapp
             };
+        }
+        
+        // تحديث القناة المفضلة
+        if (preferredChannel !== undefined) {
+            client.preferredChannel = preferredChannel;
         }
         
         // الحقول التي يمكن فقط للمدير أو المشرف تغييرها

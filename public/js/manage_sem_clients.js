@@ -66,6 +66,10 @@ document.addEventListener('DOMContentLoaded', function() {
         regenerateApiKeys(selectedClientId);
     });
 
+    // التعامل مع تغيير خيارات قنوات الإرسال وإظهار قائمة القناة المفضلة في نافذة التعديل
+    document.getElementById('edit-sms-channel').addEventListener('change', updateEditPreferredChannelOptions);
+    document.getElementById('edit-whatsapp-channel').addEventListener('change', updateEditPreferredChannelOptions);
+
     /**
      * تحميل قائمة المستخدمين للفلتر
      */
@@ -414,6 +418,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('modal-client-no-channels').style.display = 'inline-block';
                 }
                 
+                // عرض القناة المفضلة
+                const preferredChannelElement = document.getElementById('modal-client-preferred-channel');
+                if (data.client.preferredChannel && data.client.preferredChannel !== 'none') {
+                    if (data.client.preferredChannel === 'sms') {
+                        preferredChannelElement.textContent = 'رسائل SMS';
+                    } else if (data.client.preferredChannel === 'whatsapp') {
+                        preferredChannelElement.textContent = 'رسائل واتساب';
+                    }
+                } else {
+                    preferredChannelElement.textContent = 'بلا (افتراضي)';
+                }
+                
                 // عرض إحصائيات الرسائل
                 renderMessageStats(data.messageStats, data.dailyStats);
                 
@@ -513,6 +529,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
+     * تحديث خيارات القناة المفضلة في نافذة التعديل
+     */
+    function updateEditPreferredChannelOptions() {
+        const smsChecked = document.getElementById('edit-sms-channel').checked;
+        const whatsappChecked = document.getElementById('edit-whatsapp-channel').checked;
+        const preferredChannelContainer = document.querySelector('.edit-preferred-channel-container');
+        const smsOption = document.querySelector('.edit-sms-option');
+        const whatsappOption = document.querySelector('.edit-whatsapp-option');
+        const preferredChannelSelect = document.getElementById('edit-preferred-channel');
+        
+        // إظهار قائمة القناة المفضلة فقط عند اختيار أكثر من قناة
+        if (smsChecked && whatsappChecked) {
+            preferredChannelContainer.style.display = 'block';
+            smsOption.style.display = 'block';
+            whatsappOption.style.display = 'block';
+        } else {
+            // إخفاء القائمة وإعادة تعيين القيمة إلى 'none'
+            preferredChannelContainer.style.display = 'none';
+            preferredChannelSelect.value = 'none';
+            
+            // إخفاء الخيارات غير المتاحة
+            smsOption.style.display = smsChecked ? 'block' : 'none';
+            whatsappOption.style.display = whatsappChecked ? 'block' : 'none';
+        }
+    }
+
+    /**
      * فتح مودال تعديل العميل
      */
     function openEditModal(clientId) {
@@ -541,6 +584,13 @@ document.addEventListener('DOMContentLoaded', function() {
             smsChannelCheckbox.checked = true;
             whatsappChannelCheckbox.checked = false;
         }
+        
+        // تعبئة القناة المفضلة
+        const preferredChannelSelect = document.getElementById('edit-preferred-channel');
+        preferredChannelSelect.value = client.preferredChannel || 'none';
+        
+        // تحديث ظهور خيار القناة المفضلة
+        updateEditPreferredChannelOptions();
         
         // الحقول الخاصة بالمدير أو المشرف
         const statusSelect = document.getElementById('edit-client-status');
@@ -576,10 +626,11 @@ document.addEventListener('DOMContentLoaded', function() {
             messagingChannels: {
                 sms: document.getElementById('edit-sms-channel').checked,
                 whatsapp: document.getElementById('edit-whatsapp-channel').checked
-            }
+            },
+            preferredChannel: document.getElementById('edit-preferred-channel').value
         };
         
-        // إضافة الحقول الخاصة بالمدير أو المشرف
+        // الحقول الخاصة بالمدير أو المشرف
         const statusSelect = document.getElementById('edit-client-status');
         const dailyLimitInput = document.getElementById('edit-client-daily-limit');
         const monthlyLimitInput = document.getElementById('edit-client-monthly-limit');

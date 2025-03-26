@@ -66,6 +66,18 @@
                             </div>
                         </div>
                         
+                        <div class="mb-3 preferred-channel-container" style="display: none;">
+                            <label for="preferredChannel" class="form-label almarai-bold">القناة المفضلة للإرسال</label>
+                            <select class="form-select almarai-regular" id="preferredChannel" name="preferredChannel">
+                                <option value="none" selected>بلا (افتراضي)</option>
+                                <option value="sms" class="sms-option" style="display: none;">رسائل SMS</option>
+                                <option value="whatsapp" class="whatsapp-option" style="display: none;">رسائل واتساب</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                حدد القناة المفضلة للإرسال في حال تفعيل أكثر من قناة
+                            </small>
+                        </div>
+                        
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
                             سيتم إنشاء مفتاح API تلقائياً عند إنشاء حساب العميل
