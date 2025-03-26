@@ -144,11 +144,23 @@ class SemySmsProvider extends ISmsProvider {
                 throw new Error(response.message || 'خطأ غير معروف من SemySMS API');
             }
             
-            return {
+            // إضافة معلومات إضافية للاستجابة
+            const result = {
                 success: true,
-                messageId: response.msgId,
-                status: response.result
+                messageId: options.messageRecordId || null, // استخدام معرف السجل المحلي كمعرف داخلي
+                externalMessageId: response.id || response.msgId, // استخدام المعرف الصحيح من API
+                status: response.result || 'sent',
+                rawResponse: response
             };
+            
+            // تسجيل نجاح الإرسال مع المعرفات
+            logger.info('SemySmsProvider', 'تم إرسال رسالة SMS بنجاح', { 
+                messageId: result.messageId,
+                externalMessageId: result.externalMessageId,
+                phone: phoneNumber 
+            });
+            
+            return result;
         } catch (error) {
             logger.error('SemySmsProvider', 'فشل في إرسال رسالة SMS', { 
                 error: error.message, 
@@ -198,25 +210,37 @@ class SemySmsProvider extends ISmsProvider {
                 return {
                     success: true,
                     messageId,
+                    externalMessageId: message.id, // إضافة معرف SemySMS الخارجي
                     status,
-                    details: {
-                        phone: message.phone,
-                        sentAt: message.send,
-                        deliveredAt: message.delivered,
-                        content: message.msg
-                    },
+                    is_delivered: message.is_delivered === 1,
+                    is_sent: message.is_send === 1,
+                    is_error: message.is_error === 1 || message.is_error_send === 1,
+                    is_failed: message.is_error === 1 || message.is_error_send === 1,
+                    is_cancelled: message.is_cancel === 1,
+                    delivered_date: message.is_delivered === 1 ? new Date(message.delivered_time * 1000) : null,
+                    sent_date: message.is_send === 1 ? new Date(message.send_time * 1000) : null,
+                    error: message.is_error === 1 ? message.error_text : null,
                     rawResponse: message
                 };
-            } else {
-                return {
-                    success: false,
-                    error: 'الرسالة غير موجودة'
-                };
             }
-        } catch (error) {
-            logger.error('SemySmsProvider', 'فشل في التحقق من حالة الرسالة', error);
+            
+            // الرسالة غير موجودة في النظام
             return {
                 success: false,
+                messageId,
+                status: 'unknown',
+                error: 'الرسالة غير موجودة في نظام SemySMS'
+            };
+        } catch (error) {
+            logger.error('SemySmsProvider', 'فشل في التحقق من حالة الرسالة', {
+                error: error.message,
+                messageId
+            });
+            
+            return {
+                success: false,
+                messageId,
+                status: 'unknown',
                 error: error.message
             };
         }

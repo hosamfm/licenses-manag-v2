@@ -21,7 +21,8 @@ exports.handleStatusUpdate = async (req, res) => {
         // تسجيل البيانات الواردة كاملة للتشخيص
         logger.debug('smsWebhookController', 'بيانات webhook كاملة', data);
 
-        // استخراج معرف الرسالة (قد يكون بأسماء مختلفة)
+        // استخراج معرف الرسالة حسب توثيق SemySMS (الحقل الرئيسي id)
+        // مع دعم أسماء حقول بديلة للتوافق مع مختلف إصدارات API
         let id = data.id || data.message_id || data.messageId || null;
         
         // التعامل مع المعرفات الرقمية والنصية
@@ -42,20 +43,18 @@ exports.handleStatusUpdate = async (req, res) => {
         // تحسين آلية البحث عن الرسالة
         let message = null;
         
-        // محاولة 1: البحث بالمعرف الدقيق
-        message = await SemMessage.findOne({ messageId: id });
+        // محاولة 1: البحث باستخدام externalMessageId (الموصى به)
+        message = await SemMessage.findOne({ externalMessageId: id });
         
-        // محاولة 2: البحث بمعرف SemySMS المُضمّن في حقل MessageId
+        // محاولة 2: البحث بمعرف MongoDB
+        if (!message) {
+            message = await SemMessage.findOne({ messageId: id });
+        }
+        
+        // محاولة 3: البحث بمعرف SemySMS المُضمّن في حقل MessageId
         if (!message) {
             message = await SemMessage.findOne({ 
                 messageId: { $regex: new RegExp(`${id}$`) } 
-            });
-        }
-        
-        // محاولة 3: البحث بمعرف مخزن في حقل externalMessageId
-        if (!message) {
-            message = await SemMessage.findOne({ 
-                externalMessageId: id 
             });
         }
         
@@ -102,9 +101,12 @@ exports.handleStatusUpdate = async (req, res) => {
         let newStatus = message.status;
         
         // التحقق من وجود بيانات حالة في الطلب
-        const hasStatusData = data.is_send || data.is_delivered || data.status || 
-                             (data.send_date && data.send_date.trim() !== '') || 
-                             (data.delivered_date && data.delivered_date.trim() !== '');
+        // وفقاً لتوثيق SemySMS، الحقول الرئيسية هي is_send و is_delivered و send_date و delivered_date
+        const hasStatusData = data.is_send !== undefined || 
+                             data.is_delivered !== undefined || 
+                             data.status || 
+                             data.send_date || 
+                             data.delivered_date;
         
         // إذا كانت جميع قيم الحالة فارغة، قد يكون هذا مجرد إشعار متوسط من الخدمة
         if (!hasStatusData) {
@@ -118,22 +120,37 @@ exports.handleStatusUpdate = async (req, res) => {
             });
         }
 
-        // استخراج معلومات الحالة من البيانات الواردة بشكل موسع
-        const is_send = data.is_send || data.status === 'sent' || data.status === 'delivered' || data.status === 'success';
-        const is_delivered = data.is_delivered || data.status === 'delivered' || data.status === 'success';
-        const send_date = data.send_date || data.sent_date || data.date || new Date();
-        const delivered_date = data.delivered_date || data.delivery_date || send_date;
+        // استخراج معلومات الحالة من البيانات الواردة وفقاً لتوثيق SemySMS
+        // في التوثيق، is_send و is_delivered هما 0 أو 1
+        const is_send = data.is_send == 1 || data.is_send === '1' || 
+                       data.status === 'sent' || data.status === 'delivered';
+        const is_delivered = data.is_delivered == 1 || data.is_delivered === '1' || 
+                            data.status === 'delivered';
 
-        // إذا تم إرسال الرسالة أو تسليمها، نعتبرها مرسلة (تحويل القيم إلى منطقية)
-        if (is_delivered === '1' || is_delivered === 1 || is_delivered === true || 
-            is_send === '1' || is_send === 1 || is_send === true) {
-            newStatus = 'sent';
-            statusChanged = message.status !== 'sent';
-            
-            // تحديث وقت الإرسال إذا كان متوفرًا
-            if (statusChanged) {
-                message.sentAt = delivered_date ? new Date(delivered_date) : 
-                                send_date ? new Date(send_date) : new Date();
+        // معالجة التواريخ
+        let send_date = null;
+        if (data.send_date) {
+            send_date = new Date(data.send_date);
+        }
+
+        let delivered_date = null;
+        if (data.delivered_date) {
+            delivered_date = new Date(data.delivered_date);
+        }
+
+        // تحديث حالة الرسالة استنادًا إلى البيانات المستلمة
+        if (is_delivered) {
+            if (message.status !== 'delivered') {
+                newStatus = 'delivered';
+                statusChanged = true;
+                message.deliveredAt = delivered_date || new Date();
+            }
+        } 
+        else if (is_send && message.status !== 'delivered') {
+            if (message.status !== 'sent') {
+                newStatus = 'sent';
+                statusChanged = true;
+                message.sentAt = send_date || new Date();
             }
         }
 
@@ -146,6 +163,13 @@ exports.handleStatusUpdate = async (req, res) => {
                 message.externalMessageId = id;
             }
             
+            // تخزين بيانات إضافية من مزود الخدمة
+            message.providerData = {
+                ...message.providerData,
+                lastUpdate: new Date(),
+                webhookData: data
+            };
+            
             await message.save();
             
             logger.info('smsWebhookController', `تم تحديث حالة الرسالة ${id}`, {
@@ -156,17 +180,17 @@ exports.handleStatusUpdate = async (req, res) => {
         }
 
         // إرسال استجابة نجاح
-        res.json({
-            success: true,
-            message: 'تم معالجة طلب webhook بنجاح',
+        return res.status(200).json({ 
+            success: true, 
+            message: `تم استلام التحديث بنجاح`,
+            statusChanged,
             messageId: id,
-            status: newStatus,
-            statusChanged: statusChanged
+            newStatus
         });
     } catch (error) {
         logger.error('smsWebhookController', 'خطأ في معالجة webhook', error);
         // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
-        res.status(200).json({ 
+        return res.status(200).json({ 
             success: false, 
             error: 'حدث خطأ أثناء معالجة الطلب'
         });

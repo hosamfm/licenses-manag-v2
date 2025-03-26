@@ -26,6 +26,11 @@ const whatsappMessageSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    // معرف الرسالة الخارجي (من SemySMS أو أي مزود خدمة آخر)
+    externalMessageId: {
+        type: String,
+        default: null
+    },
     // حالة الرسالة
     status: {
         type: String,

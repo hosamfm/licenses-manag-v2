@@ -36,6 +36,15 @@ const semMessageSchema = new mongoose.Schema({
     },
     messageId: {
         type: String
+    },
+    // معرف الرسالة الخارجي من مزود الخدمة (SemySMS)
+    externalMessageId: {
+        type: String
+    },
+    // بيانات إضافية من مزود الخدمة
+    providerData: {
+        type: Object,
+        default: {}
     }
 }, {
     timestamps: true

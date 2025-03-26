@@ -144,11 +144,24 @@ class SemyWhatsappProvider extends IWhatsappProvider {
                 throw new Error(response.message || 'خطأ غير معروف من SemySMS API');
             }
             
-            return {
+            // إضافة معلومات إضافية للاستجابة
+            // وفقاً لتوثيق API، معرف الرسالة يكون في حقل id وليس msgId
+            const result = {
                 success: true,
-                messageId: response.msgId,
-                status: response.result
+                messageId: options.messageRecordId || null, // استخدام معرف السجل المحلي كمعرف داخلي
+                externalMessageId: response.id || response.msgId, // استخدام المعرف الصحيح من API
+                status: response.result || 'sent',
+                rawResponse: response
             };
+            
+            // تسجيل نجاح الإرسال مع المعرفات
+            logger.info('SemyWhatsappProvider', 'تم إرسال رسالة واتساب بنجاح', { 
+                messageId: result.messageId,
+                externalMessageId: result.externalMessageId,
+                phone: phoneNumber 
+            });
+            
+            return result;
         } catch (error) {
             logger.error('SemyWhatsappProvider', 'فشل في إرسال رسالة واتساب', { 
                 error: error.message, 
@@ -202,34 +215,40 @@ class SemyWhatsappProvider extends IWhatsappProvider {
                     status = 'pending';
                 }
                 
+                // إنشاء كائن النتيجة
                 return {
                     success: true,
                     messageId,
+                    externalMessageId: message.id, // إضافة معرف SemySMS الخارجي
                     status,
                     is_delivered,
                     is_sent,
                     is_failed,
-                    delivered_date: message.delivered,
-                    sent_date: message.send,
-                    error: message.is_error === 1 ? message.error_text || 'خطأ غير معروف' : null,
-                    details: {
-                        phone: message.phone,
-                        sentAt: message.send,
-                        deliveredAt: message.delivered,
-                        content: message.msg
-                    },
+                    is_cancelled: message.is_cancel === 1,
+                    delivered_date: is_delivered ? new Date(message.delivered_time * 1000) : null,
+                    sent_date: is_sent ? new Date(message.send_time * 1000) : null,
+                    error: is_failed ? message.error_text : null,
                     rawResponse: message
                 };
-            } else {
-                return {
-                    success: false,
-                    error: 'الرسالة غير موجودة'
-                };
             }
-        } catch (error) {
-            logger.error('SemyWhatsappProvider', 'فشل في التحقق من حالة الرسالة', error);
+            
+            // الرسالة غير موجودة في النظام
             return {
                 success: false,
+                messageId,
+                status: 'unknown',
+                error: 'الرسالة غير موجودة في نظام SemySMS'
+            };
+        } catch (error) {
+            logger.error('SemyWhatsappProvider', 'فشل في التحقق من حالة الرسالة', {
+                error: error.message,
+                messageId
+            });
+            
+            return {
+                success: false,
+                messageId,
+                status: 'unknown',
                 error: error.message
             };
         }

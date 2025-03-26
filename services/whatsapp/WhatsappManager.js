@@ -103,13 +103,20 @@ class WhatsappManager {
             
             // تحديث سجل الرسالة بنتيجة الإرسال
             if (result.success) {
-                messageRecord.messageId = result.messageId;
+                // حفظ معرف الرسالة الداخلي والخارجي
+                messageRecord.messageId = messageRecord._id.toString(); // استخدام معرف MongoDB كمعرف داخلي
+                messageRecord.externalMessageId = result.messageId; // حفظ معرف SemySMS كمعرف خارجي
                 messageRecord.status = 'sent';
-                messageRecord.providerResponse = result.rawResponse;
+                messageRecord.providerData = {
+                    ...messageRecord.providerData,
+                    provider: this.activeProviderName,
+                    lastUpdate: new Date(),
+                    rawResponse: result
+                };
                 await messageRecord.save();
             } else {
                 messageRecord.status = 'failed';
-                messageRecord.error = result.error;
+                messageRecord.errorMessage = result.error;
                 await messageRecord.save();
             }
 
@@ -145,8 +152,13 @@ class WhatsappManager {
                 messageId
             });
 
-            // البحث عن الرسالة في قاعدة البيانات
-            const messageRecord = await WhatsappMessage.findOne({ messageId });
+            // البحث عن الرسالة في قاعدة البيانات - نبحث بأي من المعرفين
+            let messageRecord = await WhatsappMessage.findOne({ 
+                $or: [
+                    { messageId: messageId },
+                    { externalMessageId: messageId }
+                ]
+            });
             
             if (!messageRecord) {
                 return {
@@ -155,8 +167,11 @@ class WhatsappManager {
                 };
             }
             
+            // نستخدم المعرف الخارجي للاستعلام من المزود
+            const externalId = messageRecord.externalMessageId || messageRecord.messageId;
+            
             // استعلام عن حالة الرسالة من المزود
-            const result = await this.activeProvider.checkMessageStatus(messageId);
+            const result = await this.activeProvider.checkMessageStatus(externalId);
             
             // تحديث حالة الرسالة في قاعدة البيانات
             if (result.success) {
@@ -166,9 +181,24 @@ class WhatsappManager {
                     messageRecord.deliveredAt = result.delivered_date || new Date();
                 }
                 
-                if (result.is_failed) {
-                    messageRecord.error = result.error || 'فشل في إيصال الرسالة';
+                if (result.is_sent && !messageRecord.sentAt) {
+                    messageRecord.sentAt = result.sent_date || new Date();
                 }
+                
+                if (result.is_failed) {
+                    messageRecord.errorMessage = result.error || 'فشل في إيصال الرسالة';
+                }
+                
+                // حفظ المعرف الخارجي إذا لم يكن موجوداً
+                if (!messageRecord.externalMessageId && externalId !== messageRecord.messageId) {
+                    messageRecord.externalMessageId = externalId;
+                }
+                
+                messageRecord.providerData = {
+                    ...messageRecord.providerData,
+                    lastStatusCheck: new Date(),
+                    statusResponse: result
+                };
                 
                 await messageRecord.save();
             }
