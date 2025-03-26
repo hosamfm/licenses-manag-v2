@@ -17,12 +17,21 @@ exports.handleStatusUpdate = async (req, res) => {
 
         // استخراج المعلومات من الطلب - قد تكون في body أو query
         const data = { ...req.query, ...req.body };
+        
+        // تسجيل البيانات الواردة كاملة للتشخيص
+        logger.debug('smsWebhookController', 'بيانات webhook كاملة', data);
 
         // استخراج معرف الرسالة (قد يكون بأسماء مختلفة)
-        const id = data.id || data.message_id || data.messageId || null;
+        let id = data.id || data.message_id || data.messageId || null;
+        
+        // التعامل مع المعرفات الرقمية والنصية
+        if (id && typeof id === 'string' && id.includes('_')) {
+            // بعض الأنظمة قد ترسل المعرف بتنسيق "deviceId_messageId"
+            id = id.split('_').pop();
+        }
 
         if (!id) {
-            logger.warn('smsWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة');
+            logger.warn('smsWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة', data);
             // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
             return res.status(200).json({ 
                 success: false, 
@@ -31,10 +40,33 @@ exports.handleStatusUpdate = async (req, res) => {
         }
 
         // البحث عن الرسالة في قاعدة البيانات
-        const message = await SemMessage.findOne({ messageId: id });
+        // البحث أولاً بالمعرف الكامل
+        let message = await SemMessage.findOne({ messageId: id });
+        
+        // إذا لم يتم العثور على الرسالة، نحاول باستخدام startsWith للتعامل مع الأنظمة التي تضيف بادئات للمعرفات
+        if (!message) {
+            message = await SemMessage.findOne({ 
+                messageId: { $regex: new RegExp(`${id}$`) } 
+            });
+        }
+
+        // محاولة ثالثة باستخدام معرفات مختلفة للتوافق مع أنظمة متعددة
+        if (!message && data.phone) {
+            // البحث عن أحدث رسالة لهذا الرقم
+            message = await SemMessage.findOne({ 
+                recipient: { $regex: data.phone.replace(/\+/g, '\\+') } 
+            }).sort({ createdAt: -1 });
+            
+            if (message) {
+                logger.info('smsWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`);
+            }
+        }
 
         if (!message) {
-            logger.warn('smsWebhookController', `لم يتم العثور على رسالة بالمعرف ${id}`);
+            logger.warn('smsWebhookController', `لم يتم العثور على رسالة بالمعرف ${id}`, {
+                searchId: id,
+                phone: data.phone || 'غير محدد'
+            });
             return res.status(200).json({ 
                 success: false, 
                 error: 'الرسالة غير موجودة',
@@ -89,7 +121,7 @@ exports.handleStatusUpdate = async (req, res) => {
             logger.info('smsWebhookController', `تم تحديث حالة الرسالة ${id}`, {
                 from: message.status,
                 to: newStatus,
-                phone: data.phone || 'غير معروف'
+                phone: data.phone || message.recipient || 'غير معروف'
             });
         }
 

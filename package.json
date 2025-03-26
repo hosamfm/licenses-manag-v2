@@ -201,6 +201,7 @@
     "just-extend": "^6.2.0",
     "kareem": "^2.6.3",
     "kruptein": "^3.0.6",
+    "libphonenumber-js": "^1.12.6",
     "locate-path": "^6.0.0",
     "lodash": "^4.17.21",
     "lodash.get": "^4.4.2",
