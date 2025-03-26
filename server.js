@@ -34,9 +34,18 @@ app.use(express.json());
 const multer = require('multer');
 const upload = multer();
 
-// إضافة طبقة وسيطة خاصة لمسار webhook
+// إضافة طبقة وسيطة خاصة لمسار webhook للرسائل القصيرة
 app.use('/api/sms/webhook/status-update', upload.any(), (req, res, next) => {
   // استكمال الطلب دون تسجيل
+  next();
+});
+
+// إضافة طبقة وسيطة خاصة لمسار webhook للواتساب
+app.use('/api/whatsapp/webhook/status-update', upload.any(), (req, res, next) => {
+  // تسجيل البيانات المستلمة للتشخيص إذا كانت موجودة
+  if (req.files && req.files.length > 0) {
+    console.log(`[Whatsapp Webhook] استلام ${req.files.length} ملفات`);
+  }
   next();
 });
 
