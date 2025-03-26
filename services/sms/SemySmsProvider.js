@@ -3,6 +3,8 @@
  */
 const ISmsProvider = require('./ISmsProvider');
 const logger = require('../loggerService');
+// استيراد خدمة تنسيق أرقام الهواتف - تصحيح المسار
+const phoneFormatService = require('../phoneFormatService');
 
 class SemySmsProvider extends ISmsProvider {
     /**
@@ -99,21 +101,35 @@ class SemySmsProvider extends ISmsProvider {
 
     /**
      * إرسال رسالة نصية قصيرة
-     * @param {string} phoneNumber رقم الهاتف المستلم (بالتنسيق الدولي)
+     * @param {string} phoneNumber رقم الهاتف المستلم
      * @param {string} message محتوى الرسالة
      * @param {Object} options خيارات إضافية (اختياري)
      * @returns {Promise<Object>} وعد يحتوي على نتيجة الإرسال
      */
     async sendSms(phoneNumber, message, options = {}) {
         try {
-            // التأكد من تنسيق رقم الهاتف
-            const formattedPhone = this._formatPhoneNumber(phoneNumber);
+            // استخدام خدمة التنسيق المركزية للحصول على الرقم والمعلمات
+            const phoneData = phoneFormatService.prepareForSms(phoneNumber);
             
-            // إعداد معلمات الطلب
+            if (!phoneData.isValid) {
+                return {
+                    success: false,
+                    error: 'رقم هاتف غير صالح'
+                };
+            }
+            
+            // تسجيل معلومات الإرسال
+            logger.debug('SemySmsProvider', 'إرسال رسالة SMS', { 
+                originalPhone: phoneNumber, 
+                formattedPhone: phoneData.formattedPhone,
+                apiPhone: phoneData.phoneForApi
+            });
+            
+            // إنشاء معلمات الطلب بدمج معلمات الجهاز مع معلمات الرقم
             const params = {
                 device: this.config.device,
-                phone: formattedPhone,
-                msg: message
+                msg: message,
+                ...phoneData.params  // إضافة معلمات الرقم من خدمة التنسيق
             };
             
             // إضافة المعلمات الاختيارية
@@ -121,24 +137,24 @@ class SemySmsProvider extends ISmsProvider {
                 params.priority = options.priority;
             }
             
-            // تعيين معلمة add_plus إلى 1 دائماً لضمان إضافة علامة + في جميع الحالات
-            params.add_plus = 1;
-            
             // إرسال الطلب إلى SemySMS API
             const response = await this._makeRequest('sms.php', params);
             
-            // التحقق من نجاح العملية
-            if (response.code === '0') {
-                return {
-                    success: true,
-                    messageId: response.id,
-                    rawResponse: response
-                };
-            } else {
-                throw new Error(`فشل في إرسال الرسالة، كود الخطأ: ${response.code}`);
+            if (response.status === 'error') {
+                throw new Error(response.message || 'خطأ غير معروف من SemySMS API');
             }
+            
+            return {
+                success: true,
+                messageId: response.msgId,
+                status: response.result
+            };
         } catch (error) {
-            logger.error('SemySmsProvider', 'فشل في إرسال الرسالة', error);
+            logger.error('SemySmsProvider', 'فشل في إرسال رسالة SMS', { 
+                error: error.message, 
+                phone: phoneNumber
+            });
+            
             return {
                 success: false,
                 error: error.message
@@ -265,39 +281,6 @@ class SemySmsProvider extends ISmsProvider {
                 error: error.message
             };
         }
-    }
-
-    /**
-     * تنسيق رقم الهاتف للإرسال
-     * @param {string} phoneNumber رقم الهاتف
-     * @returns {string} رقم الهاتف المنسق
-     * @private
-     */
-    _formatPhoneNumber(phoneNumber) {
-        // إزالة أي مسافات أو رموز خاصة
-        let formatted = phoneNumber.replace(/\s+/g, '');
-        
-        // التأكد من عدم وجود علامة + مكررة
-        if (formatted.startsWith('++')) {
-            formatted = '+' + formatted.substring(2);
-        }
-        
-        // الآن لنتعامل مع الرقم بناءً على الإعدادات
-        if (this.config.addPlusPrefix) {
-            // إذا كان الإعداد يتطلب علامة +
-            if (!formatted.startsWith('+')) {
-                // أضف علامة + فقط إذا لم تكن موجودة
-                formatted = '+' + formatted;
-            }
-        } else {
-            // إذا كان الإعداد لا يتطلب علامة +
-            if (formatted.startsWith('+')) {
-                // إزالة علامة + إذا كانت موجودة
-                formatted = formatted.substring(1);
-            }
-        }
-        
-        return formatted;
     }
 }
 

@@ -9,6 +9,8 @@ const SmsStatusService = require('../services/sms/SmsStatusService');
 const WhatsappManager = require('../services/whatsapp/WhatsappManager');
 const WhatsappSettings = require('../models/WhatsappSettings');
 const WhatsappMessage = require('../models/WhatsappMessage');
+// استيراد خدمة تنسيق أرقام الهواتف
+const phoneFormatService = require('../services/phoneFormatService');
 
 /**
  * تهيئة مدير خدمة الرسائل
@@ -81,80 +83,6 @@ async function _initializeWhatsappManager() {
 }
 
 /**
- * تنسيق رقم الهاتف للإرسال بالصيغة الدولية
- * @param {string} phone رقم الهاتف المراد تنسيقه
- * @returns {Object} كائن يحتوي على الرقم المنسق وحالة الصلاحية
- * @private
- */
-function _formatPhoneNumber(phone) {
-    // إزالة المسافات والأقواس والواصلات
-    let formattedPhone = phone.replace(/\s+/g, '').replace(/[()-]/g, '');
-    
-    // التحقق من صحة الرقم (يجب أن يكون أكثر من 6 أرقام ويتكون من أرقام فقط)
-    const isBasicallyValid = /^\+?[0-9]{7,}$/.test(formattedPhone);
-    
-    if (!isBasicallyValid) {
-        return {
-            isValid: false,
-            phone: formattedPhone,
-            error: 'رقم الهاتف غير صالح، يجب أن يحتوي على 7 أرقام على الأقل'
-        };
-    }
-    
-    // إذا كان الرقم يبدأ بعلامة + فهو بالفعل بالصيغة الدولية
-    if (formattedPhone.startsWith('+')) {
-        return {
-            isValid: true,
-            phone: formattedPhone
-        };
-    }
-    
-    // التعامل مع الأرقام الليبية
-    if (formattedPhone.startsWith('09') || formattedPhone.startsWith('9')) {
-        // إذا كان يبدأ بـ 09، نزيل الـ 0 ونضيف مفتاح ليبيا
-        if (formattedPhone.startsWith('09')) {
-            formattedPhone = `+218${formattedPhone.substring(1)}`;
-        } 
-        // إذا كان يبدأ بـ 9 مباشرة، نضيف مفتاح ليبيا
-        else if (formattedPhone.startsWith('9')) {
-            formattedPhone = `+218${formattedPhone}`;
-        }
-        
-        return {
-            isValid: true,
-            phone: formattedPhone
-        };
-    }
-    
-    // التعامل مع الأرقام التي تبدأ بـ 00 (الصيغة الدولية بدون +)
-    if (formattedPhone.startsWith('00')) {
-        formattedPhone = `+${formattedPhone.substring(2)}`;
-        return {
-            isValid: true,
-            phone: formattedPhone
-        };
-    }
-    
-    // إذا كان الرقم يبدأ بـ 0 (ربما رقم محلي)
-    if (formattedPhone.startsWith('0')) {
-        // نفترض أنه رقم ليبي محلي
-        formattedPhone = `+218${formattedPhone.substring(1)}`;
-        return {
-            isValid: true,
-            phone: formattedPhone
-        };
-    }
-    
-    // إذا وصلنا إلى هنا، لا يمكننا تحديد تنسيق الرقم بشكل مؤكد
-    // نعيد خطأ لعدم القدرة على تنسيق الرقم
-    return {
-        isValid: false,
-        phone: formattedPhone,
-        error: 'لا يمكن تحديد صيغة الرقم، يرجى استخدام الصيغة الدولية مع علامة +'
-    };
-}
-
-/**
  * إرسال رسالة باستخدام مفتاح API
  */
 exports.sendMessage = async (req, res) => {
@@ -173,8 +101,8 @@ exports.sendMessage = async (req, res) => {
             return res.status(401).send("3"); // كود خطأ 3: مفتاح API غير صالح
         }
 
-        // تنسيق رقم الهاتف
-        const formattedPhoneResult = _formatPhoneNumber(phone);
+        // تنسيق رقم الهاتف باستخدام الخدمة المركزية
+        const formattedPhoneResult = phoneFormatService.formatPhoneNumber(phone);
         
         // إنشاء سجل للرسالة حتى في حالة فشل التنسيق
         const newMessage = new SemMessage({
@@ -196,7 +124,7 @@ exports.sendMessage = async (req, res) => {
             return res.status(400).send("8"); // كود خطأ 8: رقم هاتف غير صالح
         }
         
-        // استخدام الرقم المنسق
+        // الآن لدينا رقم صحيح - نحفظ الرقم المنسق
         const formattedPhone = formattedPhoneResult.phone;
         
         // تحديث الرقم في سجل الرسالة
@@ -292,7 +220,8 @@ exports.sendMessage = async (req, res) => {
         // إرسال رسالة SMS إذا كان مسموحًا ومهيأ
         if (canSendSms && smsManagerInitialized) {
             // إرسال الرسالة فعلياً باستخدام SmsManager
-            smsResult = await SmsManager.sendSms(formattedPhone, msg);
+            // نستخدم الرقم الأصلي، وسيتم تنسيقه داخليًا
+            smsResult = await SmsManager.sendSms(phone, msg);
 
             if (smsResult.success) {
                 smsSent = true;
@@ -314,8 +243,9 @@ exports.sendMessage = async (req, res) => {
 
         // إرسال رسالة واتساب إذا كان مسموحًا ومهيأ
         if (canSendWhatsapp && whatsappManagerInitialized) {
-            // إرسال الرسالة فعلياً باستخدام WhatsappManager
-            whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
+            // إرسال رسالة الواتساب
+            // نستخدم الرقم الأصلي، وسيتم تنسيقه داخليًا
+            whatsappResult = await WhatsappManager.sendWhatsapp(phone, msg, { clientId: client._id });
 
             if (whatsappResult.success) {
                 whatsappSent = true;

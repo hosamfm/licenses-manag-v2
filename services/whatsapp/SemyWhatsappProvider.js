@@ -3,6 +3,8 @@
  */
 const IWhatsappProvider = require('./IWhatsappProvider');
 const logger = require('../loggerService');
+// استيراد خدمة تنسيق أرقام الهواتف - تصحيح المسار
+const phoneFormatService = require('../phoneFormatService');
 
 class SemyWhatsappProvider extends IWhatsappProvider {
     /**
@@ -98,75 +100,64 @@ class SemyWhatsappProvider extends IWhatsappProvider {
     }
 
     /**
-     * تنسيق رقم الهاتف للإرسال
-     * @param {string} phoneNumber رقم الهاتف المراد تنسيقه
-     * @returns {string} الرقم بعد التنسيق
-     * @private
-     */
-    _formatPhoneNumber(phoneNumber) {
-        // إزالة المسافات وعلامات الترقيم
-        let formatted = phoneNumber.replace(/\s+/g, '').replace(/[()-]/g, '');
-        
-        // التأكد من عدم وجود علامة + مكررة
-        if (formatted.startsWith('++')) {
-            formatted = formatted.substring(1); // إزالة علامة + واحدة فقط
-        }
-        
-        // نحتفظ بالرقم بالصيغة التي تم استلامها دون أي تعديل إضافي
-        return formatted;
-    }
-
-    /**
      * إرسال رسالة واتساب
-     * @param {string} phoneNumber رقم الهاتف المستلم (بالتنسيق الدولي)
+     * @param {string} phoneNumber رقم الهاتف المستلم
      * @param {string} message محتوى الرسالة
      * @param {Object} options خيارات إضافية (اختياري)
      * @returns {Promise<Object>} وعد يحتوي على نتيجة الإرسال
      */
     async sendWhatsapp(phoneNumber, message, options = {}) {
         try {
-            // تنسيق الرقم للتأكد من عدم وجود علامة + مكررة
-            const formattedPhone = this._formatPhoneNumber(phoneNumber);
+            // استخدام خدمة التنسيق المركزية للحصول على الرقم والمعلمات
+            const phoneData = phoneFormatService.prepareForWhatsapp(phoneNumber);
             
-            // إعداد معلمات الطلب
-            const params = {
-                device: this.config.device,
-                phone: formattedPhone,
-                msg: message,
-                whatsapp: 1 // تفعيل الواتساب
-            };
-            
-            // إضافة المعلمات الاختيارية
-            if (options.priority) {
-                params.priority = options.priority;
+            if (!phoneData.isValid) {
+                return {
+                    success: false,
+                    error: 'رقم هاتف غير صالح'
+                };
             }
             
-            // تعيين add_plus لـ 1 فقط إذا لم يكن الرقم يحتوي على + بالفعل
-            if (!formattedPhone.startsWith('+')) {
-                params.add_plus = 1;
-            } else {
-                params.add_plus = 0; // لا نضيف علامة + إذا كانت موجودة بالفعل
+            // تسجيل معلومات الإرسال
+            logger.debug('SemyWhatsappProvider', 'إرسال رسالة واتساب', { 
+                originalPhone: phoneNumber, 
+                formattedPhone: phoneData.formattedPhone,
+                apiPhone: phoneData.phoneForApi
+            });
+            
+            // إنشاء معلمات الطلب بدمج معلمات الجهاز مع معلمات الرقم
+            const params = {
+                device: this.config.device,
+                msg: message,
+                ...phoneData.params  // إضافة معلمات الرقم من خدمة التنسيق
+            };
+            
+            // إضافة المعلمات الاختيارية من الخيارات
+            if (options.clientId) {
+                params.clientId = options.clientId;
             }
             
             // إرسال الطلب إلى SemySMS API
             const response = await this._makeRequest('sms.php', params);
             
-            // التحقق من نجاح العملية
-            if (response.code === '0') {
-                return {
-                    success: true,
-                    messageId: response.id,
-                    rawResponse: response
-                };
-            } else {
-                throw new Error(`فشل في إرسال الرسالة، كود الخطأ: ${response.code}`);
+            if (response.status === 'error') {
+                throw new Error(response.message || 'خطأ غير معروف من SemySMS API');
             }
+            
+            return {
+                success: true,
+                messageId: response.msgId,
+                status: response.result
+            };
         } catch (error) {
-            logger.error('SemyWhatsappProvider', 'فشل في إرسال رسالة الواتساب', error);
+            logger.error('SemyWhatsappProvider', 'فشل في إرسال رسالة واتساب', { 
+                error: error.message, 
+                phone: phoneNumber
+            });
+            
             return {
                 success: false,
-                error: error.message,
-                rawError: error
+                error: error.message
             };
         }
     }
