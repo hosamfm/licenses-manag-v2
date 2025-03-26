@@ -100,6 +100,18 @@ exports.handleStatusUpdate = async (req, res) => {
             }
         }
         
+        // فحص القيم الفارغة والاعتبار أنها تشير إلى فشل في الإرسال في بعض الحالات
+        if (data.is_send === "" && data.is_delivered === "") {
+            // عندما تكون جميع الحقول فارغة، غالباً ما يشير ذلك إلى فشل في الإرسال أو رفض من الطرف الآخر
+            data.is_send = "0"; // نعتبرها فشل
+
+            logger.info('whatsappWebhookController', 'تم تفسير الحقول الفارغة كحالة فشل', {
+                externalId: data.id || data.message_id || data.messageId || data.msg_id || data.externalId || null,
+                deviceId: data.device_id || data.id_device || data.device || data.deviceId || null,
+                phone: data.phone || data.recipient || data.to || data.number || null
+            });
+        }
+        
         // استخراج معرف الرسالة حسب توثيق SemySMS (الحقل الرئيسي id)
         // مع دعم أسماء حقول بديلة للتوافق مع مختلف إصدارات API
         let id = data.id || data.message_id || data.messageId || data.msg_id || data.externalId || null;
@@ -335,6 +347,18 @@ exports.handleStatusUpdate = async (req, res) => {
         else if (data.is_send === "0" || data.is_send === 0) {
             newStatus = "failed";
             statusChanged = message.status !== "failed";
+        }
+        // 5. إذا كانت الحقول فارغة بشكل صريح، نعتبرها حالة فشل أيضًا
+        else if (data.is_send === "" && data.is_delivered === "") {
+            newStatus = "failed";
+            statusChanged = message.status !== "failed";
+            
+            logger.info('whatsappWebhookController', 'تم اعتبار الحقول الفارغة كحالة فشل عند تحديث الحالة', {
+                messageId: message.messageId,
+                externalId: message.externalMessageId,
+                oldStatus: message.status,
+                newStatus: newStatus
+            });
         }
 
         // إذا لم تتغير الحالة، نرسل استجابة إيجابية بدون تحديث
