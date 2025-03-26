@@ -68,7 +68,6 @@ exports.saveSmsSettings = async (req, res) => {
             semysms_device,
             semysms_sent_webhook,
             semysms_delivered_webhook,
-            semysms_add_plus
         } = req.body;
         
         // تسجيل القيم قبل المعالجة
@@ -92,8 +91,8 @@ exports.saveSmsSettings = async (req, res) => {
         settings.config.semysms.enableSentWebhook = semysms_sent_webhook === 'on';
         settings.config.semysms.enableDeliveredWebhook = semysms_delivered_webhook === 'on';
         
-        // تعيين إعدادات إضافة علامة + قبل الأرقام
-        settings.config.semysms.addPlusPrefix = semysms_add_plus === 'on';
+        // تعيين إعدادات إضافة علامة + قبل الأرقام - تم تعطيل هذا الخيار بشكل دائم لاستخدام خدمة تنسيق الأرقام المركزية
+        settings.config.semysms.addPlusPrefix = false;
         
         // حفظ رابط Webhook
         const webhookUrl = `${req.protocol}://${req.get('host')}/api/sms/webhook/status-update`;
