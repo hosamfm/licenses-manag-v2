@@ -317,6 +317,23 @@ exports.sendMessage = async (req, res) => {
         else if (canSendSms && canSendWhatsapp && smsManagerInitialized && whatsappManagerInitialized) {
             logger.info(`إرسال رسالة للعميل ${client.name} عبر كلتا القناتين (واتساب وSMS) حسب الإعدادات`);
             
+            // للتأكد من استخدام إعدادات مختلفة لكل قناة، نقوم بتهيئة كل مدير مرة أخرى قبل الإرسال
+            // 1. إعادة تهيئة مدير الواتساب للتأكد من استخدام معرف الجهاز الصحيح
+            const whatsappSettings = await WhatsappSettings.getActiveSettings();
+            const whatsappConfig = whatsappSettings.getProviderConfig();
+            await WhatsappManager.initialize(whatsappConfig);
+            
+            // 2. إعادة تهيئة مدير الرسائل SMS للتأكد من استخدام معرف الجهاز الصحيح
+            const smsSettings = await SmsSettings.getActiveSettings();
+            const smsConfig = smsSettings.getProviderConfig();
+            await SmsManager.initialize(smsConfig);
+            
+            // تسجيل معرفات الأجهزة المستخدمة لكل قناة للمساعدة في تشخيص المشكلات
+            logger.debug('messageController', 'معرفات الأجهزة المستخدمة', {
+                whatsappDevice: whatsappSettings.config.semysms.device,
+                smsDevice: smsSettings.config.semysms.device
+            });
+            
             // إرسال عبر واتساب
             whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
             
