@@ -12,16 +12,13 @@ const upload = multer();
  */
 exports.handleStatusUpdate = async (req, res) => {
     try {
-        // سجل الحد الأدنى من المعلومات عن الطلب الوارد
-        logger.info('whatsappWebhookController', 'استلام تحديث حالة من webhook', {
-            method: req.method,
-            contentType: req.headers['content-type']
-        });
-        
-        // التعامل مع تفريغ الملفات المرفقة إذا وجدت
-        if (req.files && req.files.length > 0) {
-            logger.debug('whatsappWebhookController', `تم استلام ${req.files.length} ملفات مرفقة`, {
-                fileNames: req.files.map(f => f.fieldname)
+        // سجل الحد الأدنى من المعلومات عن الطلب الوارد - فقط في حالة الأخطاء
+        if (req.headers['content-type'] && !req.headers['content-type'].includes('multipart/form-data') && 
+            !req.headers['content-type'].includes('application/json') && 
+            !req.headers['content-type'].includes('application/x-www-form-urlencoded')) {
+            logger.warn('whatsappWebhookController', 'استلام تحديث حالة من webhook بتنسيق غير متوقع', {
+                method: req.method,
+                contentType: req.headers['content-type']
             });
         }
         
@@ -30,19 +27,8 @@ exports.handleStatusUpdate = async (req, res) => {
         
         if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
             // معالجة البيانات بتنسيق multipart/form-data
-            // استخدام multer للتعامل مع هذا النوع
-            
-            // سجل البيانات الخام للتشخيص
-            logger.debug('whatsappWebhookController', 'استلام بيانات multipart/form-data', {
-                files: req.files ? Object.keys(req.files) : [],
-                body: req.body ? Object.keys(req.body) : []
-            });
-            
             // دمج جميع البيانات المتاحة
             data = { ...req.query, ...req.body };
-            
-            // طباعة البيانات المستلمة للتشخيص
-            logger.debug('whatsappWebhookController', 'بيانات webhook كاملة', data);
             
             // في بعض حالات multipart/form-data، قد تكون البيانات في req.files
             if (req.files && req.files.length > 0) {
@@ -54,13 +40,9 @@ exports.handleStatusUpdate = async (req, res) => {
                             try {
                                 const jsonData = JSON.parse(fieldValue);
                                 data = { ...data, ...jsonData };
-                                logger.debug('whatsappWebhookController', `تم تحليل ملف ${file.fieldname} كـ JSON`, jsonData);
                             } catch (e) {
                                 // إذا لم تكن JSON، نخزن النص كما هو
                                 data[file.fieldname] = fieldValue;
-                                logger.debug('whatsappWebhookController', `الملف ${file.fieldname} ليس JSON صالح`, {
-                                    preview: fieldValue.substring(0, 100)
-                                });
                             }
                         }
                     } catch (error) {
@@ -73,30 +55,18 @@ exports.handleStatusUpdate = async (req, res) => {
             data = { ...req.query, ...req.body };
         }
         
-        // تسجيل البيانات المستلمة كاملة للتشخيص
-        logger.debug('whatsappWebhookController', 'بيانات webhook بعد التحليل', data);
-        
-        // طباعة جميع المفاتيح والقيم الموجودة في الطلب للتشخيص - تعليق هذا بعد حل المشكلة
-        logger.info('whatsappWebhookController', 'جميع مفاتيح البيانات الواردة', {
-            keys: Object.keys(data),
-            bodyKeys: req.body ? Object.keys(req.body) : [],
-            queryKeys: req.query ? Object.keys(req.query) : [],
-            filesKeys: req.files ? req.files.map(f => f.fieldname) : [],
-            bodyValues: req.body ? JSON.stringify(req.body).substring(0, 500) : '',
-            hasDeviceId: data.device_id !== undefined || data.id_device !== undefined || data.device !== undefined || data.deviceId !== undefined,
-            hasPhone: data.phone !== undefined || data.recipient !== undefined || data.to !== undefined || data.number !== undefined,
-            hasStatus: data.status !== undefined || data.is_delivered !== undefined || data.is_send !== undefined
-        });
-        
         // التحقق من وجود البيانات في شكل سلسلة نصية JSON
         if (typeof data === 'string' || (req.body && typeof req.body === 'string')) {
             try {
-                // محاولة تحليل السلسلة النصية كـ JSON
-                const jsonData = JSON.parse(typeof data === 'string' ? data : req.body);
-                data = { ...data, ...jsonData };
-                logger.debug('whatsappWebhookController', 'تم تحليل البيانات النصية كـ JSON', data);
+                const jsonString = typeof data === 'string' ? data : req.body;
+                const jsonData = JSON.parse(jsonString);
+                data = jsonData;
             } catch (error) {
-                logger.warn('whatsappWebhookController', 'فشل في تحليل البيانات كـ JSON', error);
+                logger.error('whatsappWebhookController', `خطأ في تحليل البيانات كـ JSON`, {
+                    dataType: typeof data,
+                    dataPreview: typeof data === 'string' ? data.substring(0, 100) : null,
+                    error: error.message
+                });
             }
         }
         
@@ -104,24 +74,12 @@ exports.handleStatusUpdate = async (req, res) => {
         if (data.is_send === "" && data.is_delivered === "") {
             // عندما تكون جميع الحقول فارغة، غالباً ما يشير ذلك إلى فشل في الإرسال أو رفض من الطرف الآخر
             data.is_send = "0"; // نعتبرها فشل
-
-            logger.info('whatsappWebhookController', 'تم تفسير الحقول الفارغة كحالة فشل', {
-                externalId: data.id || data.message_id || data.messageId || data.msg_id || data.externalId || null,
-                deviceId: data.device_id || data.id_device || data.device || data.deviceId || null,
-                phone: data.phone || data.recipient || data.to || data.number || null
-            });
         }
         
         // استخراج معرف الرسالة حسب توثيق SemySMS (الحقل الرئيسي id)
         // مع دعم أسماء حقول بديلة للتوافق مع مختلف إصدارات API
         let id = data.id || data.message_id || data.messageId || data.msg_id || data.externalId || null;
         
-        // التعامل مع المعرفات الرقمية والنصية
-        if (id && typeof id === 'string' && id.includes('_')) {
-            // بعض الأنظمة قد ترسل المعرف بتنسيق "deviceId_messageId"
-            id = id.split('_').pop();
-        }
-
         // استخراج معرف الجهاز إذا كان موجوداً في البيانات
         const deviceId = data.device_id || data.id_device || data.device || data.deviceId || null;
 
@@ -189,13 +147,15 @@ exports.handleStatusUpdate = async (req, res) => {
             }
         }
         
-        // تسجيل بيانات الرسالة المستخرجة لأغراض التشخيص
-        logger.info('whatsappWebhookController', 'بيانات الرسالة المستخرجة من webhook', {
-            externalId: id,
-            deviceId,
-            phone,
-            status
-        });
+        // تسجيل بيانات الرسالة المستخرجة لأغراض التشخيص - فقط في حالة الأخطاء
+        if (!id || !deviceId || !phone) {
+            logger.warn('whatsappWebhookController', 'بيانات غير مكتملة من webhook', {
+                externalId: id,
+                deviceId,
+                phone,
+                status
+            });
+        }
 
         // إذا كان معرف الرسالة غير موجود، نسجل تحذيراً ونرسل استجابة مناسبة
         if (!id && !deviceId && !phone) {
@@ -246,11 +206,6 @@ exports.handleStatusUpdate = async (req, res) => {
             }).sort({ createdAt: -1 });
             
             if (message) {
-                // تحديث السجل لمراقبة هذه الحالة
-                logger.info('whatsappWebhookController', `تم العثور على رسالة لرقم الهاتف ${phone} بمعرف ${message.messageId}`, {
-                    deviceId: deviceId
-                });
-                
                 // تخزين معرف SemySMS في الرسالة للمستقبل إذا كان متوفراً
                 if (id) {
                     message.externalMessageId = id;
@@ -269,9 +224,6 @@ exports.handleStatusUpdate = async (req, res) => {
             }).sort({ createdAt: -1 });
             
             if (message) {
-                // تحديث السجل لمراقبة هذه الحالة
-                logger.info('whatsappWebhookController', `تم العثور على رسالة لرقم الهاتف ${phone} بمعرف ${message.messageId}`);
-                
                 // تخزين معرف SemySMS في الرسالة للمستقبل إذا كان متوفراً
                 if (id) {
                     message.externalMessageId = id;
@@ -316,7 +268,7 @@ exports.handleStatusUpdate = async (req, res) => {
 
         // إذا كانت البيانات المستلمة لا تحتوي على معلومات الحالة، نرسل استجابة إيجابية بدون تغيير
         if (!hasStatusData) {
-            logger.info('whatsappWebhookController', `استلام طلب webhook بدون معلومات حالة، لن يتم تحديث الحالة`, {
+            logger.warn('whatsappWebhookController', `استلام طلب webhook بدون معلومات حالة، لن يتم تحديث الحالة`, {
                 messageId: message.messageId,
                 currentStatus: message.status
             });
@@ -352,20 +304,11 @@ exports.handleStatusUpdate = async (req, res) => {
         else if (data.is_send === "" && data.is_delivered === "") {
             newStatus = "failed";
             statusChanged = message.status !== "failed";
-            
-            logger.info('whatsappWebhookController', 'تم اعتبار الحقول الفارغة كحالة فشل عند تحديث الحالة', {
-                messageId: message.messageId,
-                externalId: message.externalMessageId,
-                oldStatus: message.status,
-                newStatus: newStatus
-            });
         }
 
         // إذا لم تتغير الحالة، نرسل استجابة إيجابية بدون تحديث
         if (!statusChanged) {
-            logger.info('whatsappWebhookController', `لا يوجد تغيير في الحالة، الحالة الحالية: ${message.status}`, {
-                messageId: message.messageId
-            });
+            // لا نحتاج لتسجيل سجل هنا لتجنب كثرة السجلات
             return res.status(200).json({ 
                 success: true, 
                 info: 'تم استلام الطلب ولكن لم يتم تحديث الحالة لأنها لم تتغير',
@@ -401,7 +344,9 @@ exports.handleStatusUpdate = async (req, res) => {
             });
 
             if (semMessage) {
-                logger.info('whatsappWebhookController', `تم العثور على رسالة في جدول SemMessage بمعرف ${semMessage._id}، تحديث الحالة من ${semMessage.status} إلى ${newStatus}`);
+                logger.info('whatsappWebhookController', `تم تحديث حالة الرسالة من ${semMessage.status} إلى ${newStatus}`, {
+                    messageId: semMessage._id
+                });
                 
                 // تحديث حالة الرسالة
                 semMessage.status = newStatus;
@@ -424,7 +369,9 @@ exports.handleStatusUpdate = async (req, res) => {
                 }).sort({ createdAt: -1 }); // الأحدث أولاً
                 
                 if (alternativeSearch) {
-                    logger.info('whatsappWebhookController', `تم العثور على رسالة في جدول SemMessage من خلال البحث البديل بمعرف ${alternativeSearch._id}، تحديث الحالة من ${alternativeSearch.status} إلى ${newStatus}`);
+                    logger.info('whatsappWebhookController', `تم تحديث حالة الرسالة من ${alternativeSearch.status} إلى ${newStatus}`, {
+                        messageId: alternativeSearch._id
+                    });
                     
                     // حفظ العلاقة لتسهيل البحث في المستقبل
                     alternativeSearch.externalMessageId = message.externalMessageId;
