@@ -537,19 +537,17 @@ exports.sendMessage = async (req, res) => {
         // تنسيق رقم الهاتف باستخدام الخدمة المركزية
         const formattedPhoneResult = phoneFormatService.formatPhoneNumber(processedPhone);
         
-        // إنشاء سجل للرسالة حتى في حالة فشل التنسيق
-        const newMessage = new SemMessage({
-            clientId: client._id,
-            recipients: [processedPhone], // استخدام الرقم المعالج أولياً
-            content: msg,
-            status: 'pending'
-        });
-        
         // إذا كان الرقم غير صالح
         if (!formattedPhoneResult.isValid) {
-            newMessage.status = 'failed';
-            newMessage.errorMessage = formattedPhoneResult.error;
-            await newMessage.save();
+            // إنشاء سجل للرسالة فقط لتسجيل الخطأ
+            const errorMessage = new SemMessage({
+                clientId: client._id,
+                recipients: [processedPhone], // استخدام الرقم المعالج أولياً
+                content: msg,
+                status: 'failed',
+                errorMessage: formattedPhoneResult.error
+            });
+            await errorMessage.save();
             
             logger.warn(`فشل في إرسال رسالة للعميل ${client.name} بسبب رقم هاتف غير صالح: ${processedPhone}`, {
                 error: formattedPhoneResult.error
@@ -559,10 +557,6 @@ exports.sendMessage = async (req, res) => {
         
         // الآن لدينا رقم صحيح - نحفظ الرقم المنسق
         const formattedPhone = formattedPhoneResult.phone;
-        
-        // تحديث الرقم في سجل الرسالة
-        newMessage.recipients = [formattedPhone];
-        newMessage.originalRecipients = [phone]; // حفظ الرقم الأصلي
 
         // التحقق من الحدود اليومية والشهرية
         const withinDailyLimit = await client.checkDailyLimit();
@@ -599,9 +593,16 @@ exports.sendMessage = async (req, res) => {
 
         // إذا كانت قنوات الإرسال معطلة تمامًا
         if (!canSendSms && !canSendWhatsapp) {
-            newMessage.status = 'failed';
-            newMessage.errorMessage = 'لم يتم تفعيل أي قناة إرسال للعميل';
-            await newMessage.save();
+            // إنشاء سجل للرسالة فقط لتسجيل الخطأ
+            const errorMessage = new SemMessage({
+                clientId: client._id,
+                recipients: [formattedPhone],
+                originalRecipients: [phone],
+                content: msg,
+                status: 'failed',
+                errorMessage: 'لم يتم تفعيل أي قناة إرسال للعميل'
+            });
+            await errorMessage.save();
             
             logger.error(`محاولة إرسال رسالة للعميل ${client.name} لكن لم يتم تفعيل أي قناة إرسال`);
             return res.status(400).send("9"); // كود خطأ 9: لم يتم تفعيل قنوات إرسال
@@ -633,9 +634,6 @@ exports.sendMessage = async (req, res) => {
             return res.status(500).send("6"); // خطأ في النظام
         }
 
-        // حفظ الرسالة في قاعدة البيانات
-        await newMessage.save();
-
         // الحالة 3: كلا الوسيلتين (واتساب و SMS)
         if (canSendSms && canSendWhatsapp && smsManagerInitialized && whatsappManagerInitialized) {
             // تحديد القناة المفضلة للعميل
@@ -643,11 +641,17 @@ exports.sendMessage = async (req, res) => {
             
             logger.info(`تجهيز رسالة للعميل ${client.name} عبر القناة المفضلة (${preferredChannel})`);
             
-            // نقوم بإرسال القناة الأولى فورًا في عملية غير متزامنة ثم نرد على العميل بسرعة
+            // إنشاء سجل الرسالة الآن بعد تحديد القناة المفضلة
+            const newMessage = new SemMessage({
+                clientId: client._id,
+                recipients: [formattedPhone],
+                originalRecipients: [phone],
+                content: msg,
+                status: 'pending',
+                messageId: new mongoose.Types.ObjectId().toString()
+            });
             
-            // تهيئة الرسالة وحفظها
-            newMessage.messageId = newMessage._id.toString();
-            newMessage.status = 'pending';
+            // حفظ الرسالة في قاعدة البيانات
             await newMessage.save();
             
             // تحديد ترتيب الإرسال بناءً على القناة المفضلة
@@ -671,6 +675,19 @@ exports.sendMessage = async (req, res) => {
         // الحالة 1: واتساب فقط
         else if (canSendWhatsapp && !canSendSms && whatsappManagerInitialized) {
             logger.info(`إرسال رسالة للعميل ${client.name} عبر واتساب فقط حسب الإعدادات`);
+            
+            // إنشاء سجل الرسالة الآن لقناة الواتساب فقط
+            const newMessage = new SemMessage({
+                clientId: client._id,
+                recipients: [formattedPhone],
+                originalRecipients: [phone],
+                content: msg,
+                status: 'pending',
+                messageId: new mongoose.Types.ObjectId().toString()
+            });
+            
+            // حفظ الرسالة في قاعدة البيانات
+            await newMessage.save();
             
             // إرسال عبر الواتساب
             const whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
@@ -755,6 +772,19 @@ exports.sendMessage = async (req, res) => {
         // الحالة 2: SMS فقط
         else if (canSendSms && !canSendWhatsapp && smsManagerInitialized) {
             logger.info(`إرسال رسالة للعميل ${client.name} عبر SMS فقط حسب الإعدادات`);
+            
+            // إنشاء سجل الرسالة الآن لقناة SMS فقط
+            const newMessage = new SemMessage({
+                clientId: client._id,
+                recipients: [formattedPhone],
+                originalRecipients: [phone],
+                content: msg,
+                status: 'pending',
+                messageId: new mongoose.Types.ObjectId().toString()
+            });
+            
+            // حفظ الرسالة في قاعدة البيانات
+            await newMessage.save();
             
             // إرسال عبر SMS
             const smsResult = await SmsManager.sendSms(formattedPhone, msg);
@@ -841,10 +871,6 @@ exports.sendMessage = async (req, res) => {
         }
         // حالة الفشل: قنوات مفعلة ولكن مدراء الخدمات غير متاحين
         else {
-            newMessage.status = 'failed';
-            newMessage.errorMessage = 'لم تتوفر أي قناة إرسال صالحة';
-            await newMessage.save();
-            
             logger.error(`فشل في إرسال رسالة للعميل ${client.name} بسبب عدم توفر قنوات إرسال صالحة (تمت تهيئة: SMS=${smsManagerInitialized}, واتساب=${whatsappManagerInitialized})`);
             
             return res.status(500).send("6"); // خطأ في النظام
