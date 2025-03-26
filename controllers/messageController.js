@@ -440,9 +440,8 @@ exports.sendMessage = async (req, res) => {
                     const whatsappMessage = new WhatsappMessage({
                         clientId: client._id,
                         messageId: whatsappMessageId,
-                        externalMessageId: whatsappMessageId,
-                        recipient: formattedPhone,
-                        content: msg,
+                        phoneNumber: formattedPhone,
+                        message: msg,
                         status: 'sent',
                         providerData: {
                             provider: 'semysms_whatsapp',
@@ -712,10 +711,28 @@ exports.sendMessage = async (req, res) => {
                                 (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
                     }
                     
-                    // تخزين نجاح إرسال الواتساب
+                    // تخزين معلومات الرسالة مؤقتًا
+                    const whatsappMessageId = whatsappResult.externalMessageId;
+                    
+                    // إنشاء سجل لرسالة الواتساب
+                    const whatsappMessage = new WhatsappMessage({
+                        clientId: client._id,
+                        messageId: whatsappMessageId,
+                        phoneNumber: formattedPhone,
+                        message: msg,
+                        status: 'sent',
+                        providerData: {
+                            provider: 'semysms_whatsapp',
+                            device: deviceId,
+                            rawResponse: whatsappResult.rawResponse
+                        }
+                    });
+                    
+                    await whatsappMessage.save();
+                    
                     logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح (جزء 1/2)`, {
                         data: {
-                            externalId: whatsappResult.externalMessageId,
+                            externalId: whatsappMessageId,
                             deviceId: deviceId
                         }
                     });
