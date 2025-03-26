@@ -488,16 +488,15 @@ exports.sendMessage = async (req, res) => {
     try {
         const { token, phone, msg } = req.query;
 
-        // التحقق من توفر البيانات المطلوبة
+        // التحقق من توفر جميع المعلومات المطلوبة
         if (!token || !phone || !msg) {
+            logger.warn('محاولة إرسال رسالة بدون توفير جميع المعلومات المطلوبة');
             return res.status(400).send("2"); // كود خطأ 2: بيانات غير مكتملة
         }
-
-        // تسجيل البيانات المستلمة للتشخيص
-        logger.debug('messageController', 'بيانات الطلب المستلمة', {
-            receivedPhone: phone,
-            phoneType: typeof phone,
-            urlEncoded: encodeURIComponent(phone),
+        
+        logger.debug('messageController', 'استلام طلب إرسال رسالة', {
+            token: token ? token.substring(0, 4) + '...' : 'غير متوفر',
+            phone: phone,
             urlDecoded: decodeURIComponent(phone)
         });
 
@@ -634,6 +633,10 @@ exports.sendMessage = async (req, res) => {
             return res.status(500).send("6"); // خطأ في النظام
         }
 
+        // تعريف متغير message في نطاق الدالة الكامل
+        let message = null;
+        let messageWasSent = false;
+        
         // الحالة 3: كلا الوسيلتين (واتساب و SMS)
         if (canSendSms && canSendWhatsapp && smsManagerInitialized && whatsappManagerInitialized) {
             // تحديد القناة المفضلة للعميل
@@ -642,7 +645,7 @@ exports.sendMessage = async (req, res) => {
             logger.info(`تجهيز رسالة للعميل ${client.name} عبر القناة المفضلة (${preferredChannel})`);
             
             // إنشاء سجل الرسالة الآن بعد تحديد القناة المفضلة
-            const message = new SemMessage({
+            message = new SemMessage({
                 clientId: client._id,
                 recipients: [formattedPhone],
                 originalRecipients: [phone],
@@ -669,6 +672,7 @@ exports.sendMessage = async (req, res) => {
                 }
             });
             
+            messageWasSent = true;
             // إرسال رد فوري للعميل
             return res.status(200).send("1");
         }
@@ -677,7 +681,7 @@ exports.sendMessage = async (req, res) => {
             logger.info(`إرسال رسالة للعميل ${client.name} عبر واتساب فقط حسب الإعدادات`);
             
             // إنشاء سجل الرسالة الآن لقناة الواتساب فقط
-            const message = new SemMessage({
+            message = new SemMessage({
                 clientId: client._id,
                 recipients: [formattedPhone],
                 originalRecipients: [phone],
@@ -774,7 +778,7 @@ exports.sendMessage = async (req, res) => {
             logger.info(`إرسال رسالة للعميل ${client.name} عبر SMS فقط حسب الإعدادات`);
             
             // إنشاء سجل الرسالة الآن لقناة SMS فقط
-            const message = new SemMessage({
+            message = new SemMessage({
                 clientId: client._id,
                 recipients: [formattedPhone],
                 originalRecipients: [phone],
@@ -888,7 +892,7 @@ exports.sendMessage = async (req, res) => {
         }
 
         // تحديث رصيد العميل إذا تم إرسال الرسالة بنجاح
-        if (message.status === 'sent' || message.status === 'pending') {
+        if (message && (message.status === 'sent' || message.status === 'pending') && !messageWasSent) {
             // حساب عدد الرسائل المطلوبة
             const containsArabic = /[\u0600-\u06FF]/.test(msg);
             const maxLength = containsArabic ? 70 : 160;
@@ -899,15 +903,15 @@ exports.sendMessage = async (req, res) => {
             
             // خصم نقطة واحدة لكل رسالة SMS و 0.25 نقطة لكل رسالة واتساب
             let pointsToDeduct = 0;
-            if (message.providerData.provider === 'semysms') pointsToDeduct += requiredPoints; // 1 نقطة لكل رسالة SMS
-            if (message.providerData.provider === 'semysms_whatsapp') pointsToDeduct += (requiredPoints * 0.25); // 0.25 نقطة لكل رسالة واتساب
+            if (message.providerData && message.providerData.provider === 'semysms') pointsToDeduct += requiredPoints; // 1 نقطة لكل رسالة SMS
+            if (message.providerData && message.providerData.provider === 'semysms_whatsapp') pointsToDeduct += (requiredPoints * 0.25); // 0.25 نقطة لكل رسالة واتساب
             
             client.balance -= pointsToDeduct;
             
             // إضافة رسالة واحدة لكل قناة إرسال ناجحة بدلاً من استخدام النقاط
             let sentMessagesCount = 0;
-            if (message.providerData.provider === 'semysms') sentMessagesCount += 1; // إضافة 1 لكل رسالة SMS مرسلة
-            if (message.providerData.provider === 'semysms_whatsapp') sentMessagesCount += 1; // إضافة 1 لكل رسالة واتساب مرسلة
+            if (message.providerData && message.providerData.provider === 'semysms') sentMessagesCount += 1; // إضافة 1 لكل رسالة SMS مرسلة
+            if (message.providerData && message.providerData.provider === 'semysms_whatsapp') sentMessagesCount += 1; // إضافة 1 لكل رسالة واتساب مرسلة
             
             client.messagesSent += sentMessagesCount;
             await client.save();
@@ -917,19 +921,21 @@ exports.sendMessage = async (req, res) => {
                 clientId: client._id,
                 type: 'usage',
                 amount: pointsToDeduct,
-                description: `خصم رصيد لإرسال رسالة ${message.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
+                description: `خصم رصيد لإرسال رسالة ${message.providerData && message.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
                 balanceBefore: client.balance + pointsToDeduct,
                 balanceAfter: client.balance,
                 status: 'complete',
                 relatedMessageId: message._id,
-                notes: `خصم رصيد لإرسال رسالة ${message.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
+                notes: `خصم رصيد لإرسال رسالة ${message.providerData && message.providerData.provider === 'semysms' ? 'SMS' : 'واتساب'}`,
                 performedBy: process.env.SYSTEM_USER_ID || '6418180ac9e8dffece88d5a6' // استخدام معرف المستخدم النظامي
             });
             await balanceTransaction.save();
         }
         
-        // إرجاع استجابة نجاح
-        return res.status(200).send("1");
+        // إرجاع استجابة نجاح إذا لم يتم إرجاعها بالفعل
+        if (!messageWasSent) {
+            return res.status(200).send("1");
+        }
     } catch (error) {
         logger.error('خطأ في إرسال الرسالة:', error);
         return res.status(500).send("6");
