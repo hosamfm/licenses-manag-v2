@@ -105,15 +105,35 @@ class WhatsappManager {
             if (result.success) {
                 // حفظ معرف الرسالة الداخلي والخارجي
                 messageRecord.messageId = messageRecord._id.toString(); // استخدام معرف MongoDB كمعرف داخلي
-                messageRecord.externalMessageId = result.messageId; // حفظ معرف SemySMS كمعرف خارجي
+                
+                // استخدام المعرف الخارجي الصحيح من نتيجة إرسال الرسالة
+                messageRecord.externalMessageId = result.externalMessageId; // حفظ معرف SemySMS كمعرف خارجي
+                
                 messageRecord.status = 'sent';
+                
+                // استخراج معرف الجهاز من استجابة الAPI إذا وجد
+                let deviceId = null;
+                if (result.rawResponse) {
+                    deviceId = result.rawResponse.id_device || 
+                              result.rawResponse.device_id || 
+                              (result.rawResponse.device ? result.rawResponse.device : null);
+                }
+                
                 messageRecord.providerData = {
                     ...messageRecord.providerData,
                     provider: this.activeProviderName,
                     lastUpdate: new Date(),
+                    device: deviceId,  // حفظ معرف الجهاز إذا كان متوفراً
                     rawResponse: result
                 };
                 await messageRecord.save();
+                
+                // تسجيل معلومات الإرسال بالمعرفات الصحيحة
+                logger.info('WhatsappManager', 'تم حفظ معلومات الرسالة', {
+                    internalId: messageRecord.messageId,
+                    externalId: messageRecord.externalMessageId,
+                    deviceId: deviceId
+                });
             } else {
                 messageRecord.status = 'failed';
                 messageRecord.errorMessage = result.error;

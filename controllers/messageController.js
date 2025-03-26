@@ -226,16 +226,42 @@ exports.sendMessage = async (req, res) => {
             if (smsResult.success) {
                 smsSent = true;
                 newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
-                newMessage.messageId = smsResult.messageId;
+                
+                // تخزين المعرف الداخلي والخارجي
+                newMessage.messageId = newMessage._id.toString(); // استخدام معرف MongoDB كمعرف داخلي
+                newMessage.externalMessageId = smsResult.externalMessageId; // حفظ المعرف الخارجي من SemySMS
+                
                 if (smsResult.status === 'delivered') {
                     newMessage.sentAt = new Date();
                 }
                 
+                // استخراج معرف الجهاز من استجابة الAPI إذا وجد
+                let deviceId = null;
+                if (smsResult.rawResponse) {
+                    deviceId = smsResult.rawResponse.id_device || 
+                              smsResult.rawResponse.device_id || 
+                              (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
+                }
+                
+                // حفظ بيانات مزود الخدمة
+                newMessage.providerData = {
+                    provider: 'semysms',
+                    lastUpdate: new Date(),
+                    device: deviceId, // حفظ معرف الجهاز
+                    rawResponse: smsResult.rawResponse
+                };
+                
                 // حفظ معلومات الرسالة SMS في قاعدة البيانات
                 await newMessage.save();
                 
-                // تسجيل نجاح إرسال SMS
-                logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`);
+                // تسجيل معلومات إضافية لتسهيل عملية التشخيص
+                logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
+                    data: {
+                        internalId: newMessage.messageId,
+                        externalId: newMessage.externalMessageId,
+                        deviceId: deviceId
+                    }
+                });
             } else {
                 smsError = smsResult.error || 'فشل في إرسال الرسالة SMS';
             }
@@ -253,19 +279,42 @@ exports.sendMessage = async (req, res) => {
                 // إذا لم يتم إرسال SMS بنجاح، أو لم نحاول إرسال SMS، نستخدم الواتساب كوسيلة رئيسية
                 if (!smsSent) {
                     newMessage.status = 'sent'; // اعتبار الإرسال ناجحًا إذا تم عبر الواتساب
-                    newMessage.messageId = whatsappResult.messageId;
+                    
+                    // تخزين المعرفات بشكل صحيح
+                    newMessage.messageId = newMessage._id.toString(); // استخدام معرف MongoDB كمعرف داخلي
+                    newMessage.externalMessageId = whatsappResult.externalMessageId; // حفظ المعرف الخارجي
+                    
+                    // استخراج معرف الجهاز من استجابة الAPI إذا وجد
+                    let deviceId = null;
+                    if (whatsappResult.rawResponse) {
+                        deviceId = whatsappResult.rawResponse.id_device || 
+                                  whatsappResult.rawResponse.device_id || 
+                                  (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
+                    }
+                    
+                    // حفظ بيانات مزود الخدمة
+                    newMessage.providerData = {
+                        provider: 'semysms_whatsapp',
+                        lastUpdate: new Date(),
+                        device: deviceId, // حفظ معرف الجهاز
+                        rawResponse: whatsappResult.rawResponse
+                    };
+                    
                     await newMessage.save();
                 }
                 
-                // تسجيل نجاح إرسال واتساب
-                logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`);
+                // تسجيل معلومات إضافية لتسهيل عملية التشخيص
+                logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
+                    data: {
+                        internalId: newMessage.messageId || whatsappResult.messageRecordId,
+                        externalId: whatsappResult.externalMessageId,
+                        deviceId: newMessage.providerData?.device || null
+                    }
+                });
             } else {
                 whatsappError = whatsappResult.error || 'فشل في إرسال رسالة الواتساب';
             }
         }
-
-        // تحديث سجل الرسالة
-        await newMessage.save();
 
         // التحقق مما إذا تم إرسال أي رسالة بنجاح
         if (!smsSent && !whatsappSent) {
