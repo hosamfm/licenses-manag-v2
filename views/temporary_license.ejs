@@ -175,6 +175,7 @@
 
             const checkIcon = registrationCodeStatus.querySelector('.fa-check');
             const timesIcon = registrationCodeStatus.querySelector('.fa-times');
+            const spinner = registrationCodeStatus.querySelector('.fa-spinner');
 
             hideAllMessages();
 
@@ -186,13 +187,57 @@
                 return;
             }
 
-            showMessage(registrationCodeSuccess, 'كود التسجيل صالح للاستخدام', checkIcon);
-            submitBtn.disabled = false;
+            // إظهار مؤشر التحميل
+            spinner.classList.remove('d-none');
+
+            // التحقق من وجود الكود في قاعدة البيانات
+            window.checkRegistrationCode(registrationCode, 'Temporary License')
+                .then(result => {
+                    hideAllMessages();
+                    
+                    if (result.error) {
+                        showMessage(registrationCodeError, result.message || 'حدث خطأ أثناء التحقق من الكود', timesIcon);
+                        submitBtn.disabled = true;
+                    } else if (result.exists) {
+                        // إذا كان الكود موجوداً، نعرض رسالة تحذير لكن نسمح بإرسال الطلب
+                        showMessage(registrationCodeTemporaryError, 'تم طلب ترخيص مؤقت سابقا لهذا الجهاز ويمكنك إعادة طلبه', null);
+                        submitBtn.disabled = false;
+                        
+                        // جلب تفاصيل الترخيص السابق لملء اسم المرخص له
+                        fetch(`/licenses/license-details?registrationCode=${registrationCode}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.licenseeName) {
+                                    document.getElementById('licenseeName').value = data.licenseeName;
+                                }
+                            })
+                            .catch(error => console.error('Error fetching license details:', error));
+                    } else {
+                        showMessage(registrationCodeSuccess, 'كود التسجيل صالح للاستخدام', checkIcon);
+                        submitBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    hideAllMessages();
+                    showMessage(registrationCodeError, 'حدث خطأ أثناء التحقق من الكود', timesIcon);
+                    submitBtn.disabled = true;
+                });
         }
 
         registrationCodeInput.addEventListener('input', function() {
             this.value = this.value.toUpperCase();
-            validateRegistrationCode();
+            if (this.value.length >= 18) {
+                validateRegistrationCode();
+            } else {
+                hideAllMessages();
+                submitBtn.disabled = true;
+            }
+        });
+
+        registrationCodeInput.addEventListener('blur', function() {
+            if (this.value.trim()) {
+                validateRegistrationCode();
+            }
         });
 
         temporaryLicenseForm.addEventListener('submit', async function(event) {
