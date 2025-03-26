@@ -14,7 +14,7 @@ class SemySmsProvider extends ISmsProvider {
         this.config = {
             token: '',
             device: 'active',
-            addPlusPrefix: false // إضافة خيار للتحكم في إضافة علامة + قبل الرقم
+            addPlusPrefix: true // تغيير القيمة الافتراضية لإضافة علامة + قبل الرقم
         };
         this.initialized = false;
     }
@@ -34,6 +34,11 @@ class SemySmsProvider extends ISmsProvider {
             // التحقق من وجود التوكن
             if (!this.config.token) {
                 throw new Error('توكن API مطلوب');
+            }
+            
+            // التأكد من أن خيار إضافة علامة + مضبوط، إذا لم يتم تحديده في الإعدادات
+            if (this.config.addPlusPrefix === undefined) {
+                this.config.addPlusPrefix = true;
             }
 
             this.initialized = true;
@@ -116,12 +121,8 @@ class SemySmsProvider extends ISmsProvider {
                 params.priority = options.priority;
             }
             
-            if (options.add_plus) {
-                params.add_plus = options.add_plus;
-            } else {
-                // إعداد لإزالة علامة + إذا كانت الإعدادات تتطلب ذلك
-                params.add_plus = this.config.addPlusPrefix ? 1 : 0;
-            }
+            // تعيين معلمة add_plus إلى 1 دائماً لضمان إضافة علامة + في جميع الحالات
+            params.add_plus = 1;
             
             // إرسال الطلب إلى SemySMS API
             const response = await this._makeRequest('sms.php', params);
@@ -267,7 +268,7 @@ class SemySmsProvider extends ISmsProvider {
     }
 
     /**
-     * تنسيق رقم الهاتف للتوافق مع SemySMS
+     * تنسيق رقم الهاتف للإرسال
      * @param {string} phoneNumber رقم الهاتف
      * @returns {string} رقم الهاتف المنسق
      * @private
@@ -276,14 +277,24 @@ class SemySmsProvider extends ISmsProvider {
         // إزالة أي مسافات أو رموز خاصة
         let formatted = phoneNumber.replace(/\s+/g, '');
         
-        // إزالة علامة + إذا كانت موجودة
-        if (formatted.startsWith('+')) {
-            formatted = formatted.substring(1);
+        // التأكد من عدم وجود علامة + مكررة
+        if (formatted.startsWith('++')) {
+            formatted = '+' + formatted.substring(2);
         }
         
-        // إضافة علامة + فقط إذا كانت الإعدادات تتطلب ذلك
+        // الآن لنتعامل مع الرقم بناءً على الإعدادات
         if (this.config.addPlusPrefix) {
-            formatted = '+' + formatted;
+            // إذا كان الإعداد يتطلب علامة +
+            if (!formatted.startsWith('+')) {
+                // أضف علامة + فقط إذا لم تكن موجودة
+                formatted = '+' + formatted;
+            }
+        } else {
+            // إذا كان الإعداد لا يتطلب علامة +
+            if (formatted.startsWith('+')) {
+                // إزالة علامة + إذا كانت موجودة
+                formatted = formatted.substring(1);
+            }
         }
         
         return formatted;

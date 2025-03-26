@@ -171,12 +171,6 @@ document.addEventListener('DOMContentLoaded', function() {
             nameCell.textContent = client.name;
             row.appendChild(nameCell);
             
-            // البريد الإلكتروني
-            const emailCell = document.createElement('td');
-            emailCell.className = 'text-center';
-            emailCell.textContent = client.email;
-            row.appendChild(emailCell);
-            
             // رقم الهاتف
             const phoneCell = document.createElement('td');
             phoneCell.className = 'text-center';
@@ -228,16 +222,6 @@ document.addEventListener('DOMContentLoaded', function() {
             messagesCell.className = 'text-center';
             messagesCell.textContent = client.messagesSent || '0';
             row.appendChild(messagesCell);
-            
-            // تاريخ الإنشاء
-            const createdAtCell = document.createElement('td');
-            createdAtCell.className = 'created-at almarai-regular';
-            createdAtCell.textContent = new Date(client.createdAt).toLocaleDateString('en-GB', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-            });
-            row.appendChild(createdAtCell);
             
             // الإجراءات
             const actionsCell = document.createElement('td');
@@ -410,6 +394,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('modal-client-daily-limit').textContent = data.client.dailyLimit;
                 document.getElementById('modal-client-monthly-limit').textContent = data.client.monthlyLimit;
                 
+                // عرض قنوات الإرسال
+                if (data.client.messagingChannels) {
+                    const smsChannel = document.getElementById('modal-client-sms-channel');
+                    const whatsappChannel = document.getElementById('modal-client-whatsapp-channel');
+                    const noChannels = document.getElementById('modal-client-no-channels');
+                    
+                    smsChannel.style.display = data.client.messagingChannels.sms ? 'inline-block' : 'none';
+                    whatsappChannel.style.display = data.client.messagingChannels.whatsapp ? 'inline-block' : 'none';
+                    
+                    if (!data.client.messagingChannels.sms && !data.client.messagingChannels.whatsapp) {
+                        noChannels.style.display = 'inline-block';
+                    } else {
+                        noChannels.style.display = 'none';
+                    }
+                } else {
+                    document.getElementById('modal-client-sms-channel').style.display = 'none';
+                    document.getElementById('modal-client-whatsapp-channel').style.display = 'none';
+                    document.getElementById('modal-client-no-channels').style.display = 'inline-block';
+                }
+                
                 // عرض إحصائيات الرسائل
                 renderMessageStats(data.messageStats, data.dailyStats);
                 
@@ -525,6 +529,19 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('edit-client-phone').value = client.phone;
         document.getElementById('edit-client-company').value = client.company || '';
         
+        // تعبئة خيارات قنوات الإرسال
+        const smsChannelCheckbox = document.getElementById('edit-sms-channel');
+        const whatsappChannelCheckbox = document.getElementById('edit-whatsapp-channel');
+        
+        if (client.messagingChannels) {
+            smsChannelCheckbox.checked = client.messagingChannels.sms || false;
+            whatsappChannelCheckbox.checked = client.messagingChannels.whatsapp || false;
+        } else {
+            // إعدادات افتراضية إذا لم تكن متوفرة
+            smsChannelCheckbox.checked = true;
+            whatsappChannelCheckbox.checked = false;
+        }
+        
         // الحقول الخاصة بالمدير أو المشرف
         const statusSelect = document.getElementById('edit-client-status');
         const dailyLimitInput = document.getElementById('edit-client-daily-limit');
@@ -555,7 +572,11 @@ document.addEventListener('DOMContentLoaded', function() {
             name: document.getElementById('edit-client-name').value,
             email: document.getElementById('edit-client-email').value,
             phone: document.getElementById('edit-client-phone').value,
-            company: document.getElementById('edit-client-company').value
+            company: document.getElementById('edit-client-company').value,
+            messagingChannels: {
+                sms: document.getElementById('edit-sms-channel').checked,
+                whatsapp: document.getElementById('edit-whatsapp-channel').checked
+            }
         };
         
         // إضافة الحقول الخاصة بالمدير أو المشرف
@@ -665,12 +686,48 @@ document.addEventListener('DOMContentLoaded', function() {
      * نسخ نص إلى الحافظة
      */
     function copyToClipboard(text) {
-        const tempInput = document.createElement('input');
-        tempInput.value = text;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
+        // استخدام Clipboard API الحديثة
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showToast('تم نسخ النص بنجاح');
+                })
+                .catch(err => {
+                    console.error('فشل في نسخ النص: ', err);
+                    showToast('فشل في نسخ النص', 'error');
+                    // استخدام الطريقة البديلة القديمة كاحتياط
+                    fallbackCopyToClipboard(text);
+                });
+        } else {
+            // استخدام الطريقة القديمة للمتصفحات التي لا تدعم Clipboard API
+            fallbackCopyToClipboard(text);
+        }
+    }
+
+    /**
+     * نسخ نص إلى الحافظة باستخدام الطريقة القديمة
+     */
+    function fallbackCopyToClipboard(text) {
+        try {
+            const tempInput = document.createElement('input');
+            tempInput.style.position = 'fixed';
+            tempInput.style.opacity = '0';
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.focus();
+            tempInput.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            
+            if (successful) {
+                showToast('تم نسخ النص بنجاح');
+            } else {
+                showToast('فشل في نسخ النص', 'error');
+            }
+        } catch (err) {
+            console.error('فشل في نسخ النص: ', err);
+            showToast('فشل في نسخ النص', 'error');
+        }
     }
 
     /**

@@ -60,13 +60,11 @@
                             <th class="text-center text-white almarai-bold">منشئ الحساب</th>
                         <% } %>
                         <th class="text-center text-white almarai-bold">اسم العميل</th>
-                        <th class="text-center text-white almarai-bold">البريد الإلكتروني</th>
                         <th class="text-center text-white almarai-bold">رقم الهاتف</th>
                         <th class="text-center text-white almarai-bold">الشركة</th>
                         <th class="text-center text-white almarai-bold">الحالة</th>
                         <th class="text-center text-white almarai-bold">الرصيد</th>
                         <th class="text-center text-white almarai-bold">الرسائل المرسلة</th>
-                        <th class="text-center text-white almarai-bold">تاريخ الإنشاء</th>
                         <th class="text-center text-white almarai-bold">الإجراءات</th>
                     </tr>
                 </thead>
@@ -159,6 +157,24 @@
                         </div>
                     </div>
                     <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <div class="detail-item">
+                                <strong>قنوات الإرسال:</strong>
+                                <div id="modal-client-channels" class="mt-2">
+                                    <span id="modal-client-sms-channel" class="badge bg-secondary me-2" style="display: none;">
+                                        <i class="fas fa-sms me-1"></i> رسائل SMS
+                                    </span>
+                                    <span id="modal-client-whatsapp-channel" class="badge bg-success me-2" style="display: none;">
+                                        <i class="fab fa-whatsapp me-1"></i> رسائل واتساب
+                                    </span>
+                                    <span id="modal-client-no-channels" class="text-danger" style="display: none;">
+                                        لا توجد قنوات إرسال مفعلة
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
                         <div class="col-12 mb-3">
                             <button id="regenerateApiKeysBtn" class="btn btn-warning almarai-regular">
                                 إعادة توليد مفتاح API
@@ -212,6 +228,25 @@
                         <label for="edit-client-company" class="form-label">الشركة</label>
                         <input type="text" class="form-control almarai-regular" id="edit-client-company">
                     </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">طرق الإرسال المتاحة للعميل</label>
+                        <div class="d-flex gap-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit-sms-channel" name="edit-messagingChannels-sms">
+                                <label class="form-check-label almarai-regular" for="edit-sms-channel">
+                                    <i class="fas fa-sms me-1"></i> رسائل SMS
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit-whatsapp-channel" name="edit-messagingChannels-whatsapp">
+                                <label class="form-check-label almarai-regular" for="edit-whatsapp-channel">
+                                    <i class="fab fa-whatsapp me-1"></i> رسائل واتساب
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
                         <div class="mb-3">
                             <label for="edit-client-status" class="form-label">الحالة</label>

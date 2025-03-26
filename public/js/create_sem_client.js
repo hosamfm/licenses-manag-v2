@@ -34,7 +34,11 @@ document.addEventListener('DOMContentLoaded', function() {
             name: document.getElementById('name').value,
             email: document.getElementById('email').value,
             phone: document.getElementById('phone').value,
-            company: document.getElementById('company').value
+            company: document.getElementById('company').value,
+            messagingChannels: {
+                sms: document.getElementById('smsChannel').checked,
+                whatsapp: document.getElementById('whatsappChannel').checked
+            }
         };
         
         // الحدود - قد تكون غير متاحة للمستخدمين العاديين
@@ -67,6 +71,23 @@ document.addEventListener('DOMContentLoaded', function() {
             // إظهار مفتاح API الجديد
             document.getElementById('client-api-key').value = data.client.apiKey;
             
+            // عرض قنوات الإرسال في النافذة المنبثقة
+            let messagingChannelsText = '';
+            if (data.client.messagingChannels) {
+                const channels = [];
+                if (data.client.messagingChannels.sms) channels.push('SMS');
+                if (data.client.messagingChannels.whatsapp) channels.push('واتساب');
+                messagingChannelsText = channels.length > 0 ? 
+                    `<div class="mt-2 mb-2">قنوات الإرسال المتاحة: ${channels.join(' و ')}</div>` : 
+                    '';
+            }
+            
+            // إضافة معلومات قنوات الإرسال إلى النافذة المنبثقة
+            const alertElement = document.querySelector('.modal-body .alert-warning');
+            if (alertElement && messagingChannelsText) {
+                alertElement.insertAdjacentHTML('afterend', messagingChannelsText);
+            }
+            
             // عرض النافذة المنبثقة
             $('#newClientKeysModal').modal('show');
         })
@@ -88,12 +109,48 @@ document.addEventListener('DOMContentLoaded', function() {
      * نسخ نص إلى الحافظة
      */
     function copyToClipboard(text) {
-        const tempInput = document.createElement('input');
-        tempInput.value = text;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
+        // استخدام Clipboard API الحديثة
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showToast('تم نسخ النص بنجاح');
+                })
+                .catch(err => {
+                    console.error('فشل في نسخ النص: ', err);
+                    showToast('فشل في نسخ النص', 'error');
+                    // استخدام الطريقة البديلة القديمة كاحتياط
+                    fallbackCopyToClipboard(text);
+                });
+        } else {
+            // استخدام الطريقة القديمة للمتصفحات التي لا تدعم Clipboard API
+            fallbackCopyToClipboard(text);
+        }
+    }
+
+    /**
+     * نسخ نص إلى الحافظة باستخدام الطريقة القديمة
+     */
+    function fallbackCopyToClipboard(text) {
+        try {
+            const tempInput = document.createElement('input');
+            tempInput.style.position = 'fixed';
+            tempInput.style.opacity = '0';
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.focus();
+            tempInput.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            
+            if (successful) {
+                showToast('تم نسخ النص بنجاح');
+            } else {
+                showToast('فشل في نسخ النص', 'error');
+            }
+        } catch (err) {
+            console.error('فشل في نسخ النص: ', err);
+            showToast('فشل في نسخ النص', 'error');
+        }
     }
     
     /**

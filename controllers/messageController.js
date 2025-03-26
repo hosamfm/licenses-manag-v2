@@ -5,6 +5,10 @@ const BalanceTransaction = require('../models/BalanceTransaction');
 const SmsManager = require('../services/sms/SmsManager');
 const SmsSettings = require('../models/SmsSettings');
 const SmsStatusService = require('../services/sms/SmsStatusService');
+// إضافة مدير خدمة الواتساب
+const WhatsappManager = require('../services/whatsapp/WhatsappManager');
+const WhatsappSettings = require('../models/WhatsappSettings');
+const WhatsappMessage = require('../models/WhatsappMessage');
 
 /**
  * تهيئة مدير خدمة الرسائل
@@ -42,6 +46,115 @@ async function _initializeSmsManager() {
 }
 
 /**
+ * تهيئة مدير خدمة الواتساب
+ * @private
+ */
+async function _initializeWhatsappManager() {
+    try {
+        // التحقق مما إذا كان مدير الواتساب قد تم تهيئته بالفعل
+        if (WhatsappManager.initialized) {
+            return true;
+        }
+
+        // الحصول على إعدادات الواتساب النشطة
+        const settings = await WhatsappSettings.getActiveSettings();
+        
+        if (!settings) {
+            logger.error('messageController', 'لا يمكن العثور على إعدادات الواتساب النشطة');
+            return false;
+        }
+
+        // تهيئة مدير خدمة الواتساب
+        const config = settings.getProviderConfig();
+        const initialized = await WhatsappManager.initialize(config);
+        
+        if (!initialized) {
+            logger.error('messageController', 'فشل في تهيئة مدير خدمة الواتساب');
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        logger.error('messageController', 'خطأ في تهيئة مدير خدمة الواتساب', error);
+        return false;
+    }
+}
+
+/**
+ * تنسيق رقم الهاتف للإرسال بالصيغة الدولية
+ * @param {string} phone رقم الهاتف المراد تنسيقه
+ * @returns {Object} كائن يحتوي على الرقم المنسق وحالة الصلاحية
+ * @private
+ */
+function _formatPhoneNumber(phone) {
+    // إزالة المسافات والأقواس والواصلات
+    let formattedPhone = phone.replace(/\s+/g, '').replace(/[()-]/g, '');
+    
+    // التحقق من صحة الرقم (يجب أن يكون أكثر من 6 أرقام ويتكون من أرقام فقط)
+    const isBasicallyValid = /^\+?[0-9]{7,}$/.test(formattedPhone);
+    
+    if (!isBasicallyValid) {
+        return {
+            isValid: false,
+            phone: formattedPhone,
+            error: 'رقم الهاتف غير صالح، يجب أن يحتوي على 7 أرقام على الأقل'
+        };
+    }
+    
+    // إذا كان الرقم يبدأ بعلامة + فهو بالفعل بالصيغة الدولية
+    if (formattedPhone.startsWith('+')) {
+        return {
+            isValid: true,
+            phone: formattedPhone
+        };
+    }
+    
+    // التعامل مع الأرقام الليبية
+    if (formattedPhone.startsWith('09') || formattedPhone.startsWith('9')) {
+        // إذا كان يبدأ بـ 09، نزيل الـ 0 ونضيف مفتاح ليبيا
+        if (formattedPhone.startsWith('09')) {
+            formattedPhone = `+218${formattedPhone.substring(1)}`;
+        } 
+        // إذا كان يبدأ بـ 9 مباشرة، نضيف مفتاح ليبيا
+        else if (formattedPhone.startsWith('9')) {
+            formattedPhone = `+218${formattedPhone}`;
+        }
+        
+        return {
+            isValid: true,
+            phone: formattedPhone
+        };
+    }
+    
+    // التعامل مع الأرقام التي تبدأ بـ 00 (الصيغة الدولية بدون +)
+    if (formattedPhone.startsWith('00')) {
+        formattedPhone = `+${formattedPhone.substring(2)}`;
+        return {
+            isValid: true,
+            phone: formattedPhone
+        };
+    }
+    
+    // إذا كان الرقم يبدأ بـ 0 (ربما رقم محلي)
+    if (formattedPhone.startsWith('0')) {
+        // نفترض أنه رقم ليبي محلي
+        formattedPhone = `+218${formattedPhone.substring(1)}`;
+        return {
+            isValid: true,
+            phone: formattedPhone
+        };
+    }
+    
+    // إذا وصلنا إلى هنا، لا يمكننا تحديد تنسيق الرقم بشكل مؤكد
+    // نعيد خطأ لعدم القدرة على تنسيق الرقم
+    return {
+        isValid: false,
+        phone: formattedPhone,
+        error: 'لا يمكن تحديد صيغة الرقم، يرجى استخدام الصيغة الدولية مع علامة +'
+    };
+}
+
+/**
  * إرسال رسالة باستخدام مفتاح API
  */
 exports.sendMessage = async (req, res) => {
@@ -59,6 +172,36 @@ exports.sendMessage = async (req, res) => {
             logger.error(`محاولة استخدام مفتاح API غير صالح: ${token}`);
             return res.status(401).send("3"); // كود خطأ 3: مفتاح API غير صالح
         }
+
+        // تنسيق رقم الهاتف
+        const formattedPhoneResult = _formatPhoneNumber(phone);
+        
+        // إنشاء سجل للرسالة حتى في حالة فشل التنسيق
+        const newMessage = new SemMessage({
+            clientId: client._id,
+            recipients: [phone],
+            content: msg,
+            status: 'pending'
+        });
+        
+        // إذا كان الرقم غير صالح
+        if (!formattedPhoneResult.isValid) {
+            newMessage.status = 'failed';
+            newMessage.errorMessage = formattedPhoneResult.error;
+            await newMessage.save();
+            
+            logger.warn(`فشل في إرسال رسالة للعميل ${client.name} بسبب رقم هاتف غير صالح: ${phone}`, {
+                error: formattedPhoneResult.error
+            });
+            return res.status(400).send("8"); // كود خطأ 8: رقم هاتف غير صالح
+        }
+        
+        // استخدام الرقم المنسق
+        const formattedPhone = formattedPhoneResult.phone;
+        
+        // تحديث الرقم في سجل الرسالة
+        newMessage.recipients = [formattedPhone];
+        newMessage.originalRecipients = [phone]; // حفظ الرقم الأصلي
 
         // التحقق من الحدود اليومية والشهرية
         const withinDailyLimit = await client.checkDailyLimit();
@@ -89,51 +232,128 @@ exports.sendMessage = async (req, res) => {
             return res.status(402).send("7"); // كود خطأ 7: رصيد غير كافٍ
         }
 
-        // تهيئة مدير خدمة الرسائل
-        const smsManagerInitialized = await _initializeSmsManager();
-        if (!smsManagerInitialized) {
-            logger.error('فشل في تهيئة خدمة الرسائل');
-            return res.status(500).send("6"); // خطأ في النظام
+        // تحديد قنوات الإرسال المتاحة للعميل
+        const canSendSms = client.messagingChannels?.sms !== false; // افتراضيًا: نعم
+        const canSendWhatsapp = client.messagingChannels?.whatsapp === true; // افتراضيًا: لا
+
+        // إذا كانت قنوات الإرسال معطلة تمامًا
+        if (!canSendSms && !canSendWhatsapp) {
+            newMessage.status = 'failed';
+            newMessage.errorMessage = 'لم يتم تفعيل أي قناة إرسال للعميل';
+            await newMessage.save();
+            
+            logger.error(`محاولة إرسال رسالة للعميل ${client.name} لكن لم يتم تفعيل أي قناة إرسال`);
+            return res.status(400).send("9"); // كود خطأ 9: لم يتم تفعيل قنوات إرسال
         }
 
-        // إنشاء سجل للرسالة
-        const newMessage = new SemMessage({
-            clientId: client._id,
-            recipients: [phone],
-            content: msg,
-            status: 'pending'
-        });
+        // تهيئة مدير خدمة الرسائل SMS إذا كان مسموحًا
+        let smsManagerInitialized = false;
+        if (canSendSms) {
+            smsManagerInitialized = await _initializeSmsManager();
+            if (!smsManagerInitialized) {
+                logger.error('فشل في تهيئة خدمة الرسائل SMS');
+                // لا نريد إنهاء الطلب هنا، فقد يكون بإمكاننا إرسال واتساب
+            }
+        }
+
+        // تهيئة مدير خدمة الواتساب إذا كان مسموحًا
+        let whatsappManagerInitialized = false;
+        if (canSendWhatsapp) {
+            whatsappManagerInitialized = await _initializeWhatsappManager();
+            if (!whatsappManagerInitialized) {
+                logger.error('فشل في تهيئة خدمة الواتساب');
+                // لا نريد إنهاء الطلب هنا، فقد يكون بإمكاننا إرسال SMS
+            }
+        }
+
+        // التحقق مما إذا كانت أي من الخدمات متاحة
+        if (!smsManagerInitialized && !whatsappManagerInitialized) {
+            logger.error('فشل في تهيئة أي من خدمات الرسائل');
+            return res.status(500).send("6"); // خطأ في النظام
+        }
 
         // حفظ الرسالة في قاعدة البيانات
         await newMessage.save();
 
-        // إرسال الرسالة فعلياً باستخدام SmsManager
-        const smsResult = await SmsManager.sendSms(phone, msg);
+        // متغيرات لتتبع نتائج الإرسال
+        let smsSent = false;
+        let whatsappSent = false;
+        let smsError = null;
+        let whatsappError = null;
+        let smsResult = null;
+        let whatsappResult = null;
 
-        if (!smsResult.success) {
-            // فشل في إرسال الرسالة
+        // تحديد وسيلة الإرسال
+        // يمكن تغيير هذا المنطق حسب متطلباتك، مثلاً يمكن إرسال SMS فقط إذا فشل الواتساب
+        // أو العكس، أو إرسال الرسالة عبر كلتا الوسيلتين
+
+        // المنطق الحالي: استخدام كلتا الوسيلتين إذا كانتا متاحتين، لكن مع التأكد من إرسال كل وسيلة مرة واحدة فقط
+        
+        // إرسال رسالة SMS إذا كان مسموحًا ومهيأ
+        if (canSendSms && smsManagerInitialized) {
+            // إرسال الرسالة فعلياً باستخدام SmsManager
+            smsResult = await SmsManager.sendSms(formattedPhone, msg);
+
+            if (smsResult.success) {
+                smsSent = true;
+                newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
+                newMessage.messageId = smsResult.messageId;
+                if (smsResult.status === 'delivered') {
+                    newMessage.sentAt = new Date();
+                }
+                
+                // حفظ معلومات الرسالة SMS في قاعدة البيانات
+                await newMessage.save();
+                
+                // تسجيل نجاح إرسال SMS
+                logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`);
+            } else {
+                smsError = smsResult.error || 'فشل في إرسال الرسالة SMS';
+            }
+        }
+
+        // إرسال رسالة واتساب إذا كان مسموحًا ومهيأ
+        if (canSendWhatsapp && whatsappManagerInitialized) {
+            // إرسال الرسالة فعلياً باستخدام WhatsappManager
+            whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
+
+            if (whatsappResult.success) {
+                whatsappSent = true;
+                
+                // إذا لم يتم إرسال SMS بنجاح، أو لم نحاول إرسال SMS، نستخدم الواتساب كوسيلة رئيسية
+                if (!smsSent) {
+                    newMessage.status = 'sent'; // اعتبار الإرسال ناجحًا إذا تم عبر الواتساب
+                    newMessage.messageId = whatsappResult.messageId;
+                    await newMessage.save();
+                }
+                
+                // تسجيل نجاح إرسال واتساب
+                logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`);
+            } else {
+                whatsappError = whatsappResult.error || 'فشل في إرسال رسالة الواتساب';
+            }
+        }
+
+        // تحديث سجل الرسالة
+        await newMessage.save();
+
+        // التحقق مما إذا تم إرسال أي رسالة بنجاح
+        if (!smsSent && !whatsappSent) {
+            // فشل في إرسال أي رسالة
             newMessage.status = 'failed';
-            newMessage.errorMessage = smsResult.error || 'فشل في إرسال الرسالة';
+            newMessage.errorMessage = `${smsError || 'SMS غير مفعل'} | ${whatsappError || 'الواتساب غير مفعل'}`;
             await newMessage.save();
             
-            logger.error(`فشل في إرسال رسالة للعميل ${client.name} إلى ${phone}`, {
-                error: smsResult.error
+            logger.error(`فشل في إرسال رسالة للعميل ${client.name} إلى ${formattedPhone}`, {
+                smsError, whatsappError
             });
             return res.status(500).send("6"); // كود خطأ 6: خطأ في النظام
         }
 
-        // تم إرسال الرسالة بنجاح، تحديث المعلومات
-        newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
-        newMessage.messageId = smsResult.messageId;
-        if (smsResult.status === 'delivered') {
-            newMessage.sentAt = new Date();
-        }
-        await newMessage.save();
-
         // زيادة عدد الرسائل المرسلة للعميل
         client.messagesSent += 1;
         
-        // خصم الرصيد بناءً على طول الرسالة
+        // خصم الرصيد بناءً على طول الرسالة (يتم خصم نقاط واحدة فقط حتى لو تم إرسال الرسالة بأكثر من طريقة)
         client.balance -= requiredPoints;
         await client.save();
 
@@ -142,12 +362,10 @@ exports.sendMessage = async (req, res) => {
             clientId: client._id,
             amount: requiredPoints,
             type: 'usage',
-            notes: `إرسال رسالة (${messageCount} رسائل) إلى ${phone}`,
+            notes: `إرسال رسالة (${messageCount} رسائل) إلى ${formattedPhone}${smsSent && whatsappSent ? ' عبر SMS وواتساب' : (smsSent ? ' عبر SMS' : ' عبر واتساب')}`,
             performedBy: client._id // استخدام معرف العميل نفسه كمنفذ للعملية
         });
         await transaction.save();
-
-        logger.info(`تم إرسال رسالة للعميل ${client.name} إلى ${phone} بنجاح`);
 
         // إعادة استجابة نجاح مبسطة (رقم فقط)
         return res.status(200).send("1");
