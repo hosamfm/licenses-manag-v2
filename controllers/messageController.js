@@ -99,14 +99,40 @@ async function _checkMessageStatus(messageId, messageType, timeout = 30000) {
         // التحقق من نوع الرسالة وتنفيذ الاستعلام المناسب
         let message = null;
         if (messageType === 'whatsapp') {
-            message = await WhatsappMessage.findOne({ messageId });
+            // البحث باستخدام عدة معايير لضمان العثور على الرسالة
+            message = await WhatsappMessage.findOne({
+                $or: [
+                    { messageId: messageId },
+                    { externalMessageId: messageId },
+                    { '_id': messageId }
+                ]
+            }).sort({ createdAt: -1 });
+            
+            // إذا لم نجد الرسالة، نبحث عن أحدث رسالة واتساب
+            if (!message) {
+                logger.warn('messageController', `لم يتم العثور على رسالة واتساب بالمعرف ${messageId}، البحث عن أحدث رسالة`);
+                message = await WhatsappMessage.findOne().sort({ createdAt: -1 }).limit(1);
+            }
         } else if (messageType === 'sms') {
-            message = await SemMessage.findOne({ messageId });
+            // البحث باستخدام عدة معايير لضمان العثور على الرسالة
+            message = await SemMessage.findOne({
+                $or: [
+                    { messageId: messageId },
+                    { externalMessageId: messageId },
+                    { '_id': messageId }
+                ]
+            }).sort({ createdAt: -1 });
+            
+            // إذا لم نجد الرسالة، نبحث عن أحدث رسالة SMS
+            if (!message) {
+                logger.warn('messageController', `لم يتم العثور على رسالة SMS بالمعرف ${messageId}، البحث عن أحدث رسالة`);
+                message = await SemMessage.findOne().sort({ createdAt: -1 }).limit(1);
+            }
         }
         
         // إذا لم يتم العثور على الرسالة
         if (!message) {
-            logger.warn('messageController', `لم يتم العثور على الرسالة ${messageId} للتحقق من حالتها`);
+            logger.warn('messageController', `لم يتم العثور على رسالة ${messageId} للتحقق من حالتها`);
             return { 
                 success: false, 
                 status: null, 
@@ -114,7 +140,7 @@ async function _checkMessageStatus(messageId, messageType, timeout = 30000) {
             };
         }
         
-        logger.info('messageController', `تم التحقق من حالة الرسالة ${messageId}: ${message.status}`);
+        logger.info('messageController', `تم التحقق من حالة الرسالة ${messageType} ${message._id}: ${message.status}`);
         
         return {
             success: true,
@@ -313,11 +339,8 @@ exports.sendMessage = async (req, res) => {
             
             if (whatsappResult.success) {
                 whatsappSent = true;
-                newMessage.status = 'sent';
-                newMessage.messageId = newMessage._id.toString();
-                newMessage.externalMessageId = whatsappResult.externalMessageId;
                 
-                // استخراج معرف الجهاز
+                // لا نحدث حالة الرسالة بعد لأننا سنرسل عبر SMS أيضًا
                 let deviceId = null;
                 if (whatsappResult.rawResponse) {
                     deviceId = whatsappResult.rawResponse.id_device || 
@@ -325,21 +348,31 @@ exports.sendMessage = async (req, res) => {
                               (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
                 }
                 
-                // حفظ بيانات مزود الخدمة
-                newMessage.providerData = {
-                    provider: 'semysms_whatsapp',
-                    lastUpdate: new Date(),
-                    device: deviceId,
-                    rawResponse: whatsappResult.rawResponse
-                };
+                // تخزين معلومات الرسالة مؤقتًا
+                const whatsappMessageId = whatsappResult.externalMessageId;
                 
-                await newMessage.save();
+                // إنشاء سجل لرسالة الواتساب
+                const whatsappMessage = new WhatsappMessage({
+                    clientId: client._id,
+                    messageId: whatsappMessageId,
+                    externalMessageId: whatsappMessageId,
+                    phoneNumber: formattedPhone,
+                    message: msg,
+                    status: 'sent',
+                    providerData: {
+                        provider: 'semysms_whatsapp',
+                        device: deviceId,
+                        rawResponse: whatsappResult.rawResponse
+                    }
+                });
+                
+                await whatsappMessage.save();
                 
                 logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
                     data: {
-                        internalId: newMessage.messageId,
-                        externalId: newMessage.externalMessageId,
-                        deviceId: newMessage.providerData?.device || null
+                        internalId: whatsappMessage._id,
+                        externalId: whatsappMessageId,
+                        deviceId: deviceId
                     }
                 });
             } else {
@@ -362,35 +395,12 @@ exports.sendMessage = async (req, res) => {
             
             if (smsResult.success) {
                 smsSent = true;
-                newMessage.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
-                newMessage.messageId = newMessage._id.toString();
-                newMessage.externalMessageId = smsResult.externalMessageId;
-                
-                if (smsResult.status === 'delivered') {
-                    newMessage.sentAt = new Date();
-                }
-                
-                let deviceId = null;
-                if (smsResult.rawResponse) {
-                    deviceId = smsResult.rawResponse.id_device || 
-                            smsResult.rawResponse.device_id || 
-                            (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
-                }
-                
-                newMessage.providerData = {
-                    provider: 'semysms',
-                    lastUpdate: new Date(),
-                    device: deviceId,
-                    rawResponse: smsResult.rawResponse
-                };
-                
-                await newMessage.save();
                 
                 logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
                     data: {
-                        internalId: newMessage.messageId,
-                        externalId: newMessage.externalMessageId,
-                        deviceId: deviceId
+                        internalId: newMessage._id,
+                        externalId: smsResult.externalMessageId,
+                        deviceId: smsResult.rawResponse.id_device || smsResult.rawResponse.device_id
                     }
                 });
             } else {
@@ -440,6 +450,7 @@ exports.sendMessage = async (req, res) => {
                     const whatsappMessage = new WhatsappMessage({
                         clientId: client._id,
                         messageId: whatsappMessageId,
+                        externalMessageId: whatsappMessageId,
                         phoneNumber: formattedPhone,
                         message: msg,
                         status: 'sent',
@@ -466,12 +477,13 @@ exports.sendMessage = async (req, res) => {
                     await newMessage.save();
                     
                     logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} - الانتظار 30 ثانية للتحقق من حالة التسليم`, {
-                        messageId: whatsappMessageId,
+                        messageId: whatsappMessage._id,
+                        externalId: whatsappMessageId,
                         deviceId
                     });
                     
                     // 2. انتظار للتحقق من حالة التسليم
-                    const statusCheckResult = await _checkMessageStatus(whatsappMessageId, 'whatsapp');
+                    const statusCheckResult = await _checkMessageStatus(whatsappMessage._id.toString(), 'whatsapp', 30000);
                     
                     // 3. التحقق من النتيجة
                     if (statusCheckResult.success && (statusCheckResult.status === 'delivered' || statusCheckResult.status === 'read')) {
@@ -718,6 +730,7 @@ exports.sendMessage = async (req, res) => {
                     const whatsappMessage = new WhatsappMessage({
                         clientId: client._id,
                         messageId: whatsappMessageId,
+                        externalMessageId: whatsappMessageId,
                         phoneNumber: formattedPhone,
                         message: msg,
                         status: 'sent',
