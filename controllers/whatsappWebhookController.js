@@ -37,8 +37,31 @@ module.exports = {
                 }
             }
             
-            // التحقق من وجود رقم id في الطلب
-            const id = body.id || body.message_id || null;
+            // استخراج معرف الرسالة من طرق متعددة
+            let id = body.id || body.message_id || null;
+            
+            // البحث في عناوين الطلب والاستعلام إذا لم يوجد معرف في الجسم
+            if (!id) {
+                // البحث في معلمات الاستعلام
+                if (req.query && req.query.id) {
+                    id = req.query.id;
+                } else if (req.query && req.query.message_id) {
+                    id = req.query.message_id;
+                }
+                
+                // البحث في العناوين
+                if (!id && req.headers['x-message-id']) {
+                    id = req.headers['x-message-id'];
+                }
+            }
+            
+            // سجل للتشخيص
+            logger.debug('whatsappWebhookController', 'استلام طلب تحديث حالة', {
+                method: req.method,
+                id: id,
+                bodyKeys: Object.keys(body),
+                queryKeys: req.query ? Object.keys(req.query) : []
+            });
             
             if (!id) {
                 return res.status(200).json({
@@ -48,7 +71,12 @@ module.exports = {
             }
             
             // البحث عن الرسالة في قاعدة البيانات
-            const message = await WhatsappMessage.findOne({ message_id: id });
+            let message = await WhatsappMessage.findOne({ message_id: id });
+            
+            // إذا لم يتم العثور على الرسالة بـ message_id، حاول العثور عليها بـ externalMessageId
+            if (!message) {
+                message = await WhatsappMessage.findOne({ externalMessageId: id });
+            }
             
             if (!message) {
                 // لم يتم العثور على الرسالة، قد تكون هذه رسالة غير مسجلة في النظام
@@ -61,6 +89,15 @@ module.exports = {
             // تحديث حالة الرسالة
             let statusCode = body.status || body.stat;
             let statusDesc = '';
+            
+            // إذا كان هناك حقول is_send أو is_delivered
+            if (body.is_delivered === "1" || body.is_delivered === 1) {
+                statusCode = 3; // تم التسليم
+            } else if (body.is_send === "1" || body.is_send === 1) {
+                statusCode = 1; // تم الإرسال
+            } else if (body.is_send === "0" || body.is_send === 0) {
+                statusCode = 4; // فشل التسليم
+            }
             
             switch (statusCode) {
                 case 1:

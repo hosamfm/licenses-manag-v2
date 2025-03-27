@@ -42,10 +42,56 @@ app.use('/api/sms/webhook/status-update', upload.any(), (req, res, next) => {
 
 // إضافة طبقة وسيطة خاصة لمسار webhook للواتساب
 app.use('/api/whatsapp/webhook/status-update', upload.any(), (req, res, next) => {
-  // تسجيل البيانات المستلمة للتشخيص إذا كانت موجودة
+  // تفعيل سجل تشخيصي لفهم محتويات الطلب
+  console.log(`[Whatsapp Status Update] استلام طلب تحديث حالة واتس أب:`, {
+    method: req.method,
+    ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+    contentType: req.headers['content-type'],
+    hasBody: !!req.body && Object.keys(req.body).length > 0,
+    hasFiles: !!req.files && req.files.length > 0,
+    bodyKeys: req.body ? Object.keys(req.body) : []
+  });
+  
+  // معالجة البيانات الخام من الطلب
   if (req.files && req.files.length > 0) {
-    console.log(`[Whatsapp Webhook] استلام ${req.files.length} ملفات`);
+    console.log(`[Whatsapp Status Update] استلام ${req.files.length} ملفات`);
+    
+    // تحويل محتوى الملفات إلى حقول في الطلب
+    for (const file of req.files) {
+      try {
+        const fileContent = file.buffer.toString('utf8');
+        // محاولة تحليل المحتوى كـ JSON
+        try {
+          const jsonData = JSON.parse(fileContent);
+          // دمج البيانات مع req.body
+          req.body = { ...req.body, ...jsonData };
+        } catch (e) {
+          // إذا لم يكن JSON، تعامل معه كنص عادي
+          req.body[file.fieldname] = fileContent;
+        }
+      } catch (error) {
+        console.error(`[Whatsapp Status Update] خطأ في تحليل الملف: ${error.message}`);
+      }
+    }
   }
+  
+  // تحقق من وجود محتوى في URL query string
+  if (req.query && Object.keys(req.query).length > 0) {
+    console.log(`[Whatsapp Status Update] بيانات الاستعلام:`, req.query);
+    // دمج بيانات الاستعلام مع req.body
+    req.body = { ...req.body, ...req.query };
+  }
+  
+  // تحقق من وجود معلومات الحالة في req.body
+  if (req.body) {
+    // معالجة خاصة للبيانات المعروفة من SemySMS
+    if (req.body.id && (req.body.is_send !== undefined || req.body.status !== undefined)) {
+      console.log(`[Whatsapp Status Update] تم اكتشاف بيانات تحديث حالة صالحة، معرف الرسالة: ${req.body.id}`);
+    }
+  }
+  
+  // عرض بيانات الطلب النهائية
+  console.log(`[Whatsapp Status Update] بيانات الجسم النهائية:`, req.body);
   next();
 });
 
