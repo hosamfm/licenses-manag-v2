@@ -157,8 +157,10 @@ router.post('/settings/save-telegram-bot-token', [isAuthenticated, checkRole(['a
     if (global.bot) {
       global.bot.stopPolling()
         .then(() => {
+          console.log('Stopped existing bot polling instances.');
           global.bot = new TelegramBot(new_telegram_bot_token, { polling: true });
           telegramService.setupResponseListener(global.bot);
+          console.log('Telegram bot polling started successfully with new token.');
         })
         .catch((error) => {
           console.error('Error stopping existing bot polling instances:', error.message, error.stack);
@@ -166,6 +168,7 @@ router.post('/settings/save-telegram-bot-token', [isAuthenticated, checkRole(['a
     } else {
       global.bot = new TelegramBot(new_telegram_bot_token, { polling: true });
       telegramService.setupResponseListener(global.bot);
+      console.log('Telegram bot polling started successfully with new token.');
     }
 
     req.flash('success', 'TELEGRAM_BOT_TOKEN saved and bot reinitialized successfully.');
