@@ -5,8 +5,8 @@
 
 class LoggerService {
     constructor() {
-        // وضع تشخيصي مؤقت - يمكن تعطيله بعد حل المشكلة
-        this.TEMP_DEBUG_MODE = true;
+        // تشغيل جميع مستويات التسجيل بدون إخفاء البيانات
+        this.ENABLE_ALL_LOGS = true;
     }
     
     /**
@@ -16,11 +16,7 @@ class LoggerService {
      * @param {Object} data بيانات إضافية (اختياري)
      */
     info(module, message, data = {}) {
-        if (this.TEMP_DEBUG_MODE) {
-            // نسخة آمنة من البيانات لمنع تسرب المعلومات الحساسة
-            const sanitizedData = this.sanitizeData(data);
-            this.log('INFO', module, message, sanitizedData);
-        }
+        this.log('INFO', module, message, data);
     }
 
     /**
@@ -30,11 +26,7 @@ class LoggerService {
      * @param {Object} data بيانات إضافية (اختياري)
      */
     warn(module, message, data = {}) {
-        if (this.TEMP_DEBUG_MODE) {
-            // نسخة آمنة من البيانات لمنع تسرب المعلومات الحساسة
-            const sanitizedData = this.sanitizeData(data);
-            this.log('WARN', module, message, sanitizedData);
-        }
+        this.log('WARN', module, message, data);
     }
 
     /**
@@ -52,7 +44,8 @@ class LoggerService {
                 stack: error.stack
             };
         } else {
-            logData = this.sanitizeData(error);
+            // تسجيل البيانات كما هي بدون إخفاء
+            logData = error;
         }
         
         this.log('ERROR', module, message, logData);
@@ -65,67 +58,7 @@ class LoggerService {
      * @param {Object} data بيانات إضافية (اختياري)
      */
     debug(module, message, data = {}) {
-        if (this.TEMP_DEBUG_MODE) {
-            // نسخة آمنة من البيانات لمنع تسرب المعلومات الحساسة
-            const sanitizedData = this.sanitizeData(data);
-            this.log('DEBUG', module, message, sanitizedData);
-        }
-    }
-
-    /**
-     * إنشاء نسخة آمنة من البيانات بإزالة المعلومات الحساسة
-     * @private
-     * @param {Object} data البيانات المراد تنظيفها
-     * @returns {Object} نسخة آمنة من البيانات
-     */
-    sanitizeData(data) {
-        if (!data || typeof data !== 'object') {
-            return data;
-        }
-        
-        const sanitized = { ...data };
-        
-        // إخفاء أرقام الهواتف
-        if (sanitized.cleanPhone) {
-            const phoneLength = sanitized.cleanPhone.length;
-            if (phoneLength > 4) {
-                sanitized.cleanPhone = '****' + sanitized.cleanPhone.substr(phoneLength - 4);
-            } else {
-                sanitized.cleanPhone = '****';
-            }
-        }
-        
-        if (sanitized.phone) {
-            const phoneLength = sanitized.phone.length;
-            if (phoneLength > 4) {
-                sanitized.phone = '****' + sanitized.phone.substr(phoneLength - 4);
-            } else {
-                sanitized.phone = '****';
-            }
-        }
-        
-        // إخفاء محتوى الرسائل
-        if (sanitized.message && typeof sanitized.message === 'string') {
-            sanitized.message = '[محتوى الرسالة محجوب]';
-        }
-        
-        if (sanitized.msg && typeof sanitized.msg === 'string') {
-            sanitized.msg = '[محتوى الرسالة محجوب]';
-        }
-        
-        // إخفاء بيانات الجسم الخام
-        if (sanitized.body) {
-            sanitized.body = '[بيانات الجسم محجوبة]';
-        }
-        
-        if (sanitized.rawBody) {
-            sanitized.rawBody = '[بيانات الجسم الخام محجوبة]';
-        }
-        
-        // إبقاء مسار الطلب وطريقته وعناوين IP للتشخيص
-        // sanitized.path, sanitized.method, sanitized.ip تبقى كما هي
-        
-        return sanitized;
+        this.log('DEBUG', module, message, data);
     }
 
     /**
@@ -142,20 +75,17 @@ class LoggerService {
             timestamp,
             level,
             module,
-            message
+            message,
+            data
         };
-
-        // إضافة البيانات للسجل (مع جميع المستويات في وضع التشخيص)
-        if (level === 'ERROR' || this.TEMP_DEBUG_MODE) {
-            logEntry.data = data;
-            
-            if (level === 'ERROR') {
-                console.error(JSON.stringify(logEntry, null, 0));
-            } else if (level === 'WARN') {
-                console.warn(JSON.stringify(logEntry, null, 0));
-            } else {
-                console.log(JSON.stringify(logEntry, null, 0));
-            }
+        
+        // تسجيل جميع الرسائل إلى وحدة التحكم
+        if (level === 'ERROR') {
+            console.error(JSON.stringify(logEntry, null, 0));
+        } else if (level === 'WARN') {
+            console.warn(JSON.stringify(logEntry, null, 0));
+        } else {
+            console.log(JSON.stringify(logEntry, null, 0));
         }
     }
 }
