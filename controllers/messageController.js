@@ -387,6 +387,20 @@ exports.sendMessage = async (req, res) => {
     }
     
     /* معالجة رقم الهاتف وتنسيقه */
+    // تحميل إعدادات الدولة للعميل قبل تنسيق رقم الهاتف
+    if (client && client.defaultCountry) {
+      phoneFormatService.setDefaultCountry({
+        countryCode: client.defaultCountry.code,
+        countryAlpha2: client.defaultCountry.alpha2
+      });
+      
+      logger.debug('sendMessage', 'تم تحديث إعدادات كود الدولة من معلومات العميل', {
+        clientId: client._id,
+        countryCode: client.defaultCountry.code,
+        countryAlpha2: client.defaultCountry.alpha2
+      });
+    }
+    
     let processedPhone = phone.trim().replace('+ ', '+').replace(/\s+/g, '');
     if (!processedPhone.startsWith('+') && /^\d/.test(processedPhone)) {
       processedPhone = '+' + processedPhone;

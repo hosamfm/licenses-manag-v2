@@ -108,6 +108,11 @@ class SemyWhatsappProvider extends IWhatsappProvider {
      */
     async sendWhatsapp(phoneNumber, message, options = {}) {
         try {
+            // تحميل إعدادات العميل لكود الدولة إذا كان هناك معرف عميل
+            if (options.clientId) {
+                await this._loadClientCountrySettings(options.clientId);
+            }
+            
             // استخدام خدمة التنسيق المركزية للحصول على الرقم والمعلمات
             const phoneData = phoneFormatService.prepareForWhatsapp(phoneNumber);
             
@@ -305,6 +310,44 @@ class SemyWhatsappProvider extends IWhatsappProvider {
                 success: false,
                 error: error.message
             };
+        }
+    }
+
+    /**
+     * تحميل إعدادات كود الدولة من العميل
+     * @param {string} clientId معرف العميل
+     * @private
+     */
+    async _loadClientCountrySettings(clientId) {
+        try {
+            // تحميل نموذج العميل باستخدام require ديناميكي
+            // هذا يتجنب مشكلة الاعتماد الدائري (circular dependency)
+            const SemClient = require('../../models/SemClient');
+            
+            // البحث عن العميل وإعدادات كود الدولة الخاصة به
+            const client = await SemClient.findById(clientId);
+            
+            if (client && client.defaultCountry) {
+                // تحديث إعدادات كود الدولة الافتراضي في خدمة تنسيق الأرقام
+                const phoneFormatService = require('../phoneFormatService');
+                
+                phoneFormatService.setDefaultCountry({
+                    countryCode: client.defaultCountry.code,
+                    countryAlpha2: client.defaultCountry.alpha2
+                });
+                
+                logger.debug('SemyWhatsappProvider', 'تم تحديث كود الدولة الافتراضي من إعدادات العميل', {
+                    clientId,
+                    countryCode: client.defaultCountry.code,
+                    countryAlpha2: client.defaultCountry.alpha2
+                });
+            }
+        } catch (error) {
+            logger.error('SemyWhatsappProvider', 'فشل في تحميل إعدادات العميل لكود الدولة', {
+                clientId,
+                error: error.message
+            });
+            // لا نقوم برمي الخطأ هنا، بل نستمر باستخدام الإعدادات الافتراضية
         }
     }
 }

@@ -34,6 +34,65 @@
                             <input type="text" class="form-control almarai-regular" id="company" name="company">
                         </div>
                         
+                        <div class="mb-4">
+                            <label class="form-label almarai-bold">إعدادات كود الدولة الافتراضي</label>
+                            <div class="card p-3 bg-light">
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <label for="country-select" class="form-label">اختر الدولة</label>
+                                        <select class="form-select almarai-regular" id="country-select" name="countrySelect">
+                                            <!-- الدول العربية -->
+                                            <optgroup label="الدول العربية">
+                                                <option value="DZ|213|الجزائر">الجزائر (+213)</option>
+                                                <option value="BH|973|البحرين">البحرين (+973)</option>
+                                                <option value="KM|269|جزر القمر">جزر القمر (+269)</option>
+                                                <option value="DJ|253|جيبوتي">جيبوتي (+253)</option>
+                                                <option value="EG|20|مصر">مصر (+20)</option>
+                                                <option value="IQ|964|العراق">العراق (+964)</option>
+                                                <option value="JO|962|الأردن">الأردن (+962)</option>
+                                                <option value="KW|965|الكويت">الكويت (+965)</option>
+                                                <option value="LB|961|لبنان">لبنان (+961)</option>
+                                                <option value="LY|218|ليبيا" selected>ليبيا (+218)</option>
+                                                <option value="MR|222|موريتانيا">موريتانيا (+222)</option>
+                                                <option value="MA|212|المغرب">المغرب (+212)</option>
+                                                <option value="OM|968|سلطنة عمان">سلطنة عمان (+968)</option>
+                                                <option value="PS|970|فلسطين">فلسطين (+970)</option>
+                                                <option value="QA|974|قطر">قطر (+974)</option>
+                                                <option value="SA|966|السعودية">السعودية (+966)</option>
+                                                <option value="SO|252|الصومال">الصومال (+252)</option>
+                                                <option value="SD|249|السودان">السودان (+249)</option>
+                                                <option value="SY|963|سوريا">سوريا (+963)</option>
+                                                <option value="TN|216|تونس">تونس (+216)</option>
+                                                <option value="AE|971|الإمارات">الإمارات (+971)</option>
+                                                <option value="YE|967|اليمن">اليمن (+967)</option>
+                                            </optgroup>
+                                            <!-- دول أخرى -->
+                                            <optgroup label="دول أخرى">
+                                                <option value="TR|90|تركيا">تركيا (+90)</option>
+                                                <option value="SE|46|السويد">السويد (+46)</option>
+                                                <option value="DE|49|ألمانيا">ألمانيا (+49)</option>
+                                            </optgroup>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row d-none">
+                                    <div class="col-md-4">
+                                        <input type="hidden" id="countryCode" name="defaultCountry.code" value="218">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="hidden" id="countryAlpha2" name="defaultCountry.alpha2" value="LY">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="hidden" id="countryName" name="defaultCountry.name" value="ليبيا">
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    سيتم استخدام رمز الدولة المحدد عند تنسيق أرقام الهواتف لهذا العميل
+                                </div>
+                            </div>
+                        </div>
+                        
                         <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
                         <div class="row">
                             <div class="col-md-6 mb-3">

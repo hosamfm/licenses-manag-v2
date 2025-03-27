@@ -64,6 +64,24 @@ const semClientSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    // إعدادات كود الدولة الافتراضي
+    defaultCountry: {
+        code: {
+            type: String,
+            default: '218', // رمز ليبيا كافتراضي
+            trim: true
+        },
+        alpha2: {
+            type: String,
+            default: 'LY', // رمز ليبيا بحرفين كافتراضي
+            trim: true
+        },
+        name: {
+            type: String,
+            default: 'ليبيا', // اسم الدولة باللغة العربية
+            trim: true
+        }
+    },
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

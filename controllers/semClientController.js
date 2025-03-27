@@ -60,7 +60,7 @@ exports.getSemClients = async (req, res) => {
  */
 exports.createSemClient = async (req, res) => {
     try {
-        const { name, email, phone, company, dailyLimit, monthlyLimit, messagingChannels } = req.body;
+        const { name, email, phone, company, dailyLimit, monthlyLimit, messagingChannels, defaultCountry } = req.body;
         const { userId } = req.session;
         
         // التحقق من البريد الإلكتروني
@@ -87,6 +87,15 @@ exports.createSemClient = async (req, res) => {
                 whatsapp: messagingChannels?.whatsapp ?? false
             }
         });
+        
+        // إضافة إعدادات كود الدولة الافتراضي إذا وجدت
+        if (defaultCountry) {
+            newClient.defaultCountry = {
+                code: defaultCountry.code || '218',
+                alpha2: defaultCountry.alpha2 || 'LY',
+                name: defaultCountry.name || 'ليبيا'
+            };
+        }
         
         await newClient.save();
         
@@ -148,7 +157,7 @@ exports.getSemClientDetails = async (req, res) => {
 exports.updateSemClient = async (req, res) => {
     try {
         const { clientId } = req.params;
-        const { name, email, phone, company, status, dailyLimit, monthlyLimit, messagingChannels, preferredChannel } = req.body;
+        const { name, email, phone, company, status, dailyLimit, monthlyLimit, messagingChannels, preferredChannel, defaultCountry } = req.body;
         const { userId, userRole } = req.session;
         
         const client = await SemClient.findById(clientId);
@@ -189,6 +198,15 @@ exports.updateSemClient = async (req, res) => {
         // تحديث القناة المفضلة
         if (preferredChannel !== undefined) {
             client.preferredChannel = preferredChannel;
+        }
+        
+        // تحديث إعدادات كود الدولة الافتراضي
+        if (defaultCountry) {
+            client.defaultCountry = {
+                code: defaultCountry.code || client.defaultCountry.code,
+                alpha2: defaultCountry.alpha2 || client.defaultCountry.alpha2,
+                name: defaultCountry.name || client.defaultCountry.name
+            };
         }
         
         // الحقول التي يمكن فقط للمدير أو المشرف تغييرها

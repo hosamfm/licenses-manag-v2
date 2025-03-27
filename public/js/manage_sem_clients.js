@@ -70,6 +70,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('edit-sms-channel').addEventListener('change', updateEditPreferredChannelOptions);
     document.getElementById('edit-whatsapp-channel').addEventListener('change', updateEditPreferredChannelOptions);
 
+    // معالجة تغيير اختيار الدولة في نموذج التعديل
+    document.getElementById('edit-country-select').addEventListener('change', updateEditCountryFields);
+
     /**
      * تحميل قائمة المستخدمين للفلتر
      */
@@ -556,6 +559,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
+     * تحديث حقول الدولة المخفية عند تغيير اختيار الدولة في نموذج التعديل
+     */
+    function updateEditCountryFields() {
+        const countrySelect = document.getElementById('edit-country-select');
+        const selectedOption = countrySelect.value;
+        
+        if (selectedOption) {
+            // تقسيم القيمة المختارة بالصيغة "alpha2|code|name"
+            const [alpha2, code, name] = selectedOption.split('|');
+            
+            // تحديث الحقول المخفية
+            document.getElementById('edit-country-code').value = code;
+            document.getElementById('edit-country-alpha2').value = alpha2;
+            document.getElementById('edit-country-name').value = name;
+            
+            console.log(`تم تحديث إعدادات الدولة: ${name} (${alpha2}) +${code}`);
+        }
+    }
+
+    /**
      * فتح مودال تعديل العميل
      */
     function openEditModal(clientId) {
@@ -583,6 +606,38 @@ document.addEventListener('DOMContentLoaded', function() {
             // إعدادات افتراضية إذا لم تكن متوفرة
             smsChannelCheckbox.checked = true;
             whatsappChannelCheckbox.checked = false;
+        }
+        
+        // تعبئة إعدادات الدولة الافتراضية
+        if (client.defaultCountry) {
+            // الحقول المخفية
+            document.getElementById('edit-country-code').value = client.defaultCountry.code || '218';
+            document.getElementById('edit-country-alpha2').value = client.defaultCountry.alpha2 || 'LY';
+            document.getElementById('edit-country-name').value = client.defaultCountry.name || 'ليبيا';
+            
+            // تحديد الخيار المناسب في القائمة المنسدلة
+            const countrySelect = document.getElementById('edit-country-select');
+            const countryValue = `${client.defaultCountry.alpha2}|${client.defaultCountry.code}|${client.defaultCountry.name}`;
+            
+            // محاولة العثور على الخيار المطابق
+            let optionFound = false;
+            for (let i = 0; i < countrySelect.options.length; i++) {
+                if (countrySelect.options[i].value === countryValue) {
+                    countrySelect.selectedIndex = i;
+                    optionFound = true;
+                    break;
+                }
+            }
+            
+            // إذا لم يتم العثور على خيار مطابق، ابحث عن خيار برمز الدولة نفسه
+            if (!optionFound) {
+                for (let i = 0; i < countrySelect.options.length; i++) {
+                    if (countrySelect.options[i].value.includes(`|${client.defaultCountry.code}|`)) {
+                        countrySelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
         }
         
         // تعبئة القناة المفضلة
@@ -627,7 +682,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 sms: document.getElementById('edit-sms-channel').checked,
                 whatsapp: document.getElementById('edit-whatsapp-channel').checked
             },
-            preferredChannel: document.getElementById('edit-preferred-channel').value
+            preferredChannel: document.getElementById('edit-preferred-channel').value,
+            defaultCountry: {
+                code: document.getElementById('edit-country-code').value,
+                alpha2: document.getElementById('edit-country-alpha2').value,
+                name: document.getElementById('edit-country-name').value
+            }
         };
         
         // الحقول الخاصة بالمدير أو المشرف

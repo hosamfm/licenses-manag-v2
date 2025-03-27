@@ -29,6 +29,27 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('smsChannel').addEventListener('change', updatePreferredChannelOptions);
     document.getElementById('whatsappChannel').addEventListener('change', updatePreferredChannelOptions);
     
+    // معالجة تغيير اختيار الدولة
+    document.getElementById('country-select').addEventListener('change', updateCountryFields);
+    
+    // تحديث حقول الدولة المخفية عند تغيير اختيار الدولة
+    function updateCountryFields() {
+        const countrySelect = document.getElementById('country-select');
+        const selectedOption = countrySelect.value;
+        
+        if (selectedOption) {
+            // تقسيم القيمة المختارة بالصيغة "alpha2|code|name"
+            const [alpha2, code, name] = selectedOption.split('|');
+            
+            // تحديث الحقول المخفية
+            document.getElementById('countryCode').value = code;
+            document.getElementById('countryAlpha2').value = alpha2;
+            document.getElementById('countryName').value = name;
+            
+            console.log(`تم تحديث إعدادات الدولة: ${name} (${alpha2}) +${code}`);
+        }
+    }
+    
     // تحديث خيارات القناة المفضلة بناءً على القنوات المختارة
     function updatePreferredChannelOptions() {
         const smsChecked = document.getElementById('smsChannel').checked;
@@ -68,7 +89,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 sms: document.getElementById('smsChannel').checked,
                 whatsapp: document.getElementById('whatsappChannel').checked
             },
-            preferredChannel: document.getElementById('preferredChannel').value
+            preferredChannel: document.getElementById('preferredChannel').value,
+            defaultCountry: {
+                code: document.getElementById('countryCode').value,
+                alpha2: document.getElementById('countryAlpha2').value,
+                name: document.getElementById('countryName').value
+            }
         };
         
         // الحدود - قد تكون غير متاحة للمستخدمين العاديين
