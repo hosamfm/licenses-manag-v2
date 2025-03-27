@@ -5,8 +5,11 @@ const WhatsappMessage = require('../models/WhatsappMessage');
 const SemMessage = require('../models/SemMessage');
 const WhatsappIncomingMessage = require('../models/WhatsappIncomingMessage');
 const logger = require('../services/loggerService');
-const multer = require('multer');
-const upload = multer();
+const path = require('path');
+const fs = require('fs');
+const SemClient = require('../models/SemClient');
+const URLSearchParams = require('url').URLSearchParams;
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * معالجة التحديثات الواردة من SemySMS Webhook لرسائل الواتس أب
@@ -432,8 +435,8 @@ exports.handleIncomingMessage = async (req, res) => {
         method: req.method
     });
     
-    // حفظ الطلب الوارد كملف JSON للتشخيص
-    const requestUuid = uuidv4();
+    // تكوين بيانات الطلب بدون استخدام حفظ الملفات
+    const requestId = Date.now().toString();
     const reqData = {
         timestamp,
         ip: ipAddress,
@@ -441,19 +444,15 @@ exports.handleIncomingMessage = async (req, res) => {
         method: req.method,
         headers: req.headers,
         query: req.query,
-        body: req.body,
-        rawBody: req.rawBody || null,
-        files: req.files || null
+        body: req.body
     };
     
-    // حفظ بيانات الطلب للتحليل لاحقًا
-    try {
-        const filePath = path.join(__dirname, '../logs', `incoming_whatsapp_${requestUuid}.json`);
-        await saveToJSONFile(filePath, reqData);
-        logger.info('whatsappWebhookController', `تم حفظ بيانات الطلب الوارد`, { filePath });
-    } catch (error) {
-        logger.error('whatsappWebhookController', `فشل حفظ بيانات الطلب الوارد`, error);
-    }
+    logger.info('whatsappWebhookController', `معالجة طلب جديد رقم: ${requestId}`, { 
+        ip: ipAddress,
+        method: req.method,
+        path: req.path,
+        contentType
+    });
     
     // استخراج البيانات من الطلب الوارد
     let data = {};
