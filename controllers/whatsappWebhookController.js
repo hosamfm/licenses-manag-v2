@@ -89,36 +89,55 @@ module.exports = {
             // تحديث حالة الرسالة
             let statusCode = body.status || body.stat;
             let statusDesc = '';
+            let statusValue = 'pending'; // القيمة النصية لتخزينها في قاعدة البيانات
             
             // إذا كان هناك حقول is_send أو is_delivered
             if (body.is_delivered === "1" || body.is_delivered === 1) {
                 statusCode = 3; // تم التسليم
+                statusValue = 'delivered';
             } else if (body.is_send === "1" || body.is_send === 1) {
                 statusCode = 1; // تم الإرسال
+                statusValue = 'sent';
             } else if (body.is_send === "0" || body.is_send === 0) {
                 statusCode = 4; // فشل التسليم
+                statusValue = 'failed';
             }
             
+            // تعيين وصف الحالة بناءً على رمز الحالة
             switch (statusCode) {
                 case 1:
                     statusDesc = 'تم الإرسال';
+                    statusValue = 'sent';
                     break;
                 case 2:
                     statusDesc = 'استلمت من قبل الخادم';
+                    statusValue = 'sent';
                     break;
                 case 3:
                     statusDesc = 'تم التسليم';
+                    statusValue = 'delivered';
                     break;
                 case 4:
                     statusDesc = 'فشل التسليم';
+                    statusValue = 'failed';
                     break;
                 default:
                     statusDesc = 'حالة غير معروفة';
+                    statusValue = 'pending';
             }
             
-            message.status = statusCode;
+            // تحديث معلومات الرسالة
+            message.status = statusValue; // استخدام القيمة النصية المتوافقة مع نموذج البيانات
             message.status_description = statusDesc;
             message.updated_at = new Date();
+            
+            // تحديث حقول التاريخ إذا كانت متوفرة
+            if (statusValue === 'sent' && body.send_date) {
+                message.sentAt = new Date(body.send_date);
+            }
+            if (statusValue === 'delivered' && body.delivered_date) {
+                message.deliveredAt = new Date(body.delivered_date);
+            }
             
             await message.save();
             
@@ -127,9 +146,17 @@ module.exports = {
                 const semMessage = await SemMessage.findById(message.sem_message_id);
                 
                 if (semMessage) {
-                    semMessage.status = statusCode;
+                    semMessage.status = statusValue; // استخدام نفس القيمة النصية
                     semMessage.status_description = statusDesc;
                     semMessage.updated_at = new Date();
+                    
+                    // تحديث حقول التاريخ في SemMessage أيضاً
+                    if (statusValue === 'sent' && body.send_date) {
+                        semMessage.sentAt = new Date(body.send_date);
+                    }
+                    if (statusValue === 'delivered' && body.delivered_date) {
+                        semMessage.deliveredAt = new Date(body.delivered_date);
+                    }
                     
                     await semMessage.save();
                 }
