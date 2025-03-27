@@ -504,6 +504,63 @@ exports.handleIncomingMessage = async (req, res) => {
         let deviceId = data.id_device || data.device_id || data.device || null;
         let dir = data.dir || data.direction || null;
         
+        // لـ SemySMS يمكن أن تكون البيانات في أشكال غير متوقعة
+        // محاولة استخراج المعلومات من أي حقل يحتوي على كلمات دالة
+        if (!id || !phone || !msg) {
+            // البحث عن أي مفتاح يحتوي على كلمة 'id' وليس جزءًا من القائمة المعروفة
+            if (!id) {
+                const idKeys = Object.keys(data).filter(k => 
+                    k.toLowerCase().includes('id') && 
+                    !['id_device', 'device_id', 'deviceId'].includes(k)
+                );
+                if (idKeys.length > 0) {
+                    id = data[idKeys[0]];
+                }
+            }
+            
+            // البحث عن أي مفتاح يحتوي على 'phone' أو 'number'
+            if (!phone) {
+                const phoneKeys = Object.keys(data).filter(k => 
+                    k.toLowerCase().includes('phone') || 
+                    k.toLowerCase().includes('number') ||
+                    k.toLowerCase().includes('sender')
+                );
+                if (phoneKeys.length > 0) {
+                    phone = data[phoneKeys[0]];
+                }
+            }
+            
+            // البحث عن أي مفتاح يحتوي على 'msg' أو 'message' أو 'text'
+            if (!msg) {
+                const msgKeys = Object.keys(data).filter(k => 
+                    k.toLowerCase().includes('msg') || 
+                    k.toLowerCase().includes('message') || 
+                    k.toLowerCase().includes('text') ||
+                    k.toLowerCase().includes('content')
+                );
+                if (msgKeys.length > 0) {
+                    msg = data[msgKeys[0]];
+                }
+            }
+        }
+        
+        // في بعض حالات SemySMS، الرسالة قد تكون في كائن داخل البيانات أو مع اسم حقل مختلف
+        for (const key in data) {
+            const value = data[key];
+            if (typeof value === 'object' && value !== null) {
+                // استخراج البيانات من الكائنات الداخلية
+                if (!id && (value.id || value.message_id || value.messageId)) {
+                    id = value.id || value.message_id || value.messageId;
+                }
+                if (!phone && (value.phone || value.from || value.sender || value.number)) {
+                    phone = value.phone || value.from || value.sender || value.number;
+                }
+                if (!msg && (value.msg || value.message || value.text || value.content)) {
+                    msg = value.msg || value.message || value.text || value.content;
+                }
+            }
+        }
+        
         // تجميع البيانات التشخيصية
         const diagnosticInfo = {
             ip: ipAddress,
