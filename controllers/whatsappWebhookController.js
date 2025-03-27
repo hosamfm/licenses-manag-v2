@@ -418,6 +418,36 @@ exports.handleStatusUpdate = async (req, res) => {
  */
 exports.handleIncomingMessage = async (req, res) => {
     try {
+        // حفظ الطلب الوارد في ملف للتشخيص
+        const fs = require('fs');
+        const path = require('path');
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const logsPath = path.join(__dirname, '..', 'logs');
+        
+        // إنشاء مجلد السجلات إذا لم يكن موجودًا
+        if (!fs.existsSync(logsPath)) {
+            fs.mkdirSync(logsPath, { recursive: true });
+        }
+        
+        const reqData = {
+            timestamp,
+            ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+            path: req.path,
+            method: req.method,
+            headers: req.headers,
+            query: req.query,
+            body: req.body,
+            rawBody: req.rawBody || null,
+            files: req.files || null
+        };
+        
+        // حفظ الطلب في ملف نصي
+        fs.writeFileSync(
+            path.join(logsPath, `whatsapp-incoming-${timestamp}.json`),
+            JSON.stringify(reqData, null, 2)
+        );
+        
         // طباعة كاملة للطلب الوارد لأغراض التشخيص
         const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
         
