@@ -49,6 +49,36 @@ app.use('/api/whatsapp/webhook/status-update', upload.any(), (req, res, next) =>
   next();
 });
 
+// إضافة طبقة وسيطة خاصة لمسار webhook للرسائل الواردة من الواتساب
+app.use('/api/whatsapp/webhook/incoming-message', upload.any(), (req, res, next) => {
+  // معالجة البيانات الخام من الطلب
+  if (req.files && req.files.length > 0) {
+    console.log(`[Whatsapp Incoming] استلام ${req.files.length} ملفات`);
+    
+    // تحويل محتوى الملفات إلى حقول في الطلب
+    for (const file of req.files) {
+      try {
+        const fileContent = file.buffer.toString('utf8');
+        // محاولة تحليل المحتوى كـ JSON
+        try {
+          const jsonData = JSON.parse(fileContent);
+          // دمج البيانات مع req.body
+          req.body = { ...req.body, ...jsonData };
+        } catch (e) {
+          // إذا لم يكن JSON، تعامل معه كنص عادي
+          req.body[file.fieldname] = fileContent;
+        }
+      } catch (error) {
+        console.error(`[Whatsapp Incoming] خطأ في تحليل الملف: ${error.message}`);
+      }
+    }
+  }
+  
+  // عرض بيانات الطلب الواردة للتشخيص
+  console.log(`[Whatsapp Incoming] بيانات الجسم:`, req.body);
+  next();
+});
+
 app.use(express.static("public"));
 
 app.set("view engine", "ejs");
