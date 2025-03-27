@@ -106,7 +106,7 @@ class SemyWhatsappProvider extends IWhatsappProvider {
      * @param {Object} options خيارات إضافية (اختياري)
      * @returns {Promise<Object>} وعد يحتوي على نتيجة الإرسال
      */
-    async sendWhatsapp(phoneNumber, message, options = {}) {
+    async sendMessage(phoneNumber, message, options = {}) {
         try {
             // استخدام خدمة التنسيق المركزية للحصول على الرقم والمعلمات
             const phoneData = phoneFormatService.prepareForWhatsapp(phoneNumber);
@@ -122,12 +122,13 @@ class SemyWhatsappProvider extends IWhatsappProvider {
             logger.debug('SemyWhatsappProvider', 'إرسال رسالة واتساب', { 
                 originalPhone: phoneNumber, 
                 formattedPhone: phoneData.formattedPhone,
-                apiPhone: phoneData.phoneForApi
+                apiPhone: phoneData.phoneForApi,
+                device: this.config.device
             });
             
             // إنشاء معلمات الطلب بدمج معلمات الجهاز مع معلمات الرقم
             const params = {
-                device: this.config.device,
+                device: this.config.device, // التأكد من استخدام معرف الجهاز من الإعدادات
                 msg: message,
                 ...phoneData.params  // إضافة معلمات الرقم من خدمة التنسيق
             };

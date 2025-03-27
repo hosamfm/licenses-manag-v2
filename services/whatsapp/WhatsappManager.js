@@ -74,81 +74,67 @@ class WhatsappManager {
 
     /**
      * إرسال رسالة واتساب
-     * @param {string} phoneNumber رقم الهاتف المستلم
-     * @param {string} message محتوى الرسالة
-     * @param {Object} options خيارات إضافية
-     * @returns {Promise<Object>} نتيجة الإرسال
+     * @param {string} phoneNumber رقم الهاتف للمستلم
+     * @param {string} message نص الرسالة
+     * @param {Object} options خيارات إضافية للإرسال
+     * @returns {Promise<Object>} نتيجة عملية الإرسال
      */
     async sendWhatsapp(phoneNumber, message, options = {}) {
-        if (!this.initialized || !this.activeProvider) {
-            return { 
-                success: false, 
-                error: 'لم يتم تهيئة مدير خدمة الواتساب بعد' 
-            };
-        }
-
         try {
-            // إنشاء سجل للرسالة في قاعدة البيانات
-            const messageRecord = new WhatsappMessage({
-                clientId: options.clientId || null,
-                phoneNumber,
-                message,
-                status: 'pending'
-            });
-            
-            await messageRecord.save();
-
-            // إرسال الرسالة عبر المزود
-            const result = await this.activeProvider.sendWhatsapp(phoneNumber, message, options);
-            
-            // تحديث سجل الرسالة بنتيجة الإرسال
-            if (result.success) {
-                // حفظ معرف الرسالة الداخلي والخارجي
-                messageRecord.messageId = messageRecord._id.toString(); // استخدام معرف MongoDB كمعرف داخلي
-                
-                // استخدام المعرف الخارجي الصحيح من نتيجة إرسال الرسالة
-                messageRecord.externalMessageId = result.externalMessageId; // حفظ معرف SemySMS كمعرف خارجي
-                
-                messageRecord.status = 'sent';
-                
-                // استخراج معرف الجهاز من استجابة الAPI إذا وجد
-                let deviceId = null;
-                if (result.rawResponse) {
-                    deviceId = result.rawResponse.id_device || 
-                              result.rawResponse.device_id || 
-                              (result.rawResponse.device ? result.rawResponse.device : null);
-                }
-                
-                messageRecord.providerData = {
-                    ...messageRecord.providerData,
-                    provider: this.activeProviderName,
-                    lastUpdate: new Date(),
-                    device: deviceId,  // حفظ معرف الجهاز إذا كان متوفراً
-                    rawResponse: result
-                };
-                await messageRecord.save();
-                
-                // تسجيل معلومات الإرسال بالمعرفات الصحيحة
-                logger.info('WhatsappManager', 'تم حفظ معلومات الرسالة', {
-                    internalId: messageRecord.messageId,
-                    externalId: messageRecord.externalMessageId,
-                    deviceId: deviceId
-                });
-            } else {
-                messageRecord.status = 'failed';
-                messageRecord.errorMessage = result.error;
-                await messageRecord.save();
+            if (!this.initialized || !this.activeProvider) {
+                throw new Error('لم يتم تهيئة مدير خدمة الواتساب بشكل صحيح');
             }
 
-            // إضافة معرف الرسالة في قاعدة البيانات إلى النتيجة
-            result.messageRecordId = messageRecord._id;
+            const clientId = options.clientId || null;
+            
+            // إذا كانت هناك إعدادات خاصة بمعرف الجهاز، نستخدمها هنا
+            if (options.deviceId && this.config) {
+                // نقوم بنسخ الإعدادات الحالية وتعديل معرف الجهاز
+                const deviceConfig = { ...this.config };
+                deviceConfig.device = options.deviceId;
+                
+                // تحديث إعدادات المزود النشط مع معرف الجهاز الجديد
+                await this.activeProvider.initialize(deviceConfig);
+                
+                logger.debug('WhatsappManager', `استخدام معرف جهاز مخصص: ${options.deviceId}`);
+            }
+
+            // إرسال الرسالة باستخدام المزود النشط
+            const result = await this.activeProvider.sendMessage(phoneNumber, message);
+            
+            // التحقق مما إذا كان يجب إنشاء سجل في قاعدة البيانات
+            if (!options.skipWhatsappMessageRecord && clientId) {
+                try {
+                    // إنشاء سجل في جدول رسائل الواتساب
+                    const whatsappMessage = new WhatsappMessage({
+                        clientId: clientId,
+                        phoneNumber: phoneNumber,
+                        message: message,
+                        status: result.success ? 'sent' : 'failed',
+                        errorMessage: result.error || null,
+                        externalMessageId: result.externalMessageId || null,
+                        providerName: this.activeProviderName,
+                        providerData: result.rawResponse || {}
+                    });
+                    
+                    await whatsappMessage.save();
+                    
+                    logger.debug('WhatsappManager', 'تم إنشاء سجل لرسالة الواتساب', {
+                        messageId: whatsappMessage._id.toString()
+                    });
+                } catch (dbError) {
+                    logger.error('WhatsappManager', 'خطأ في حفظ سجل رسالة الواتساب', dbError);
+                }
+            }
             
             return result;
         } catch (error) {
-            logger.error('WhatsappManager', 'خطأ في إرسال رسالة الواتساب', error);
-            return { 
-                success: false, 
-                error: error.message 
+            logger.error('WhatsappManager', 'خطأ في إرسال رسالة واتساب', error);
+            
+            return {
+                success: false,
+                error: error.message || 'خطأ غير معروف في إرسال رسالة الواتساب',
+                rawResponse: null
             };
         }
     }
