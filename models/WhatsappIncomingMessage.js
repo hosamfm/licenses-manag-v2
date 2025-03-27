@@ -49,23 +49,23 @@ const whatsappIncomingMessageSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    // توقيت معالجة الرسالة
+    // تاريخ المعالجة
     processedAt: {
         type: Date,
         default: null
     },
-    // العميل المرتبط (إذا تم تحديده)
+    // معرف العميل (إذا تم ربط الرسالة بعميل)
     clientId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'SemClient',
         required: false
     },
-    // نتيجة المعالجة أو أي معلومات إضافية
+    // نتيجة معالجة الرسالة
     processingResult: {
         type: Object,
         default: {}
     },
-    // البيانات الخام المستلمة من مزود الخدمة
+    // البيانات الخام كما وردت في الطلب
     rawData: {
         type: Object,
         default: {}
@@ -74,43 +74,36 @@ const whatsappIncomingMessageSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// إضافة مؤشر فهرسة مركب للبحث السريع
-whatsappIncomingMessageSchema.index({ id: 1, phone: 1 }, { unique: true });
-
-// دالة لإنشاء تقرير بالرسائل المستلمة
-whatsappIncomingMessageSchema.statics.getReport = async function(options = {}) {
-    try {
-        const query = {};
-        if (options.startDate && options.endDate) {
-            query.createdAt = { 
-                $gte: new Date(options.startDate), 
-                $lte: new Date(options.endDate)
-            };
-        }
-        
-        if (options.processed !== undefined) {
-            query.processed = options.processed;
-        }
-
-        const report = await this.aggregate([
-            { $match: query },
-            {
-                $group: {
-                    _id: { 
-                        processed: '$processed',
-                        date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }
-                    },
-                    count: { $sum: 1 }
-                }
-            },
-            { $sort: { '_id.date': 1 } }
-        ]);
-
-        return report;
-    } catch (error) {
-        console.error('خطأ في الحصول على تقرير الرسائل المستلمة:', error);
-        throw error;
+/**
+ * دالة للبحث عن رسائل حسب رقم الهاتف
+ * @param {String} phone رقم الهاتف للبحث
+ * @param {Object} options خيارات إضافية للبحث
+ * @returns {Promise<Array>} وعد برسائل واتس أب مطابقة
+ */
+whatsappIncomingMessageSchema.statics.findByPhone = async function(phone, options = {}) {
+    const query = { phone: { $regex: phone.replace(/[^\d+]/g, '') } };
+    
+    // إضافة شروط البحث الإضافية
+    if (options.processed !== undefined) {
+        query.processed = options.processed;
     }
+    
+    // إضافة حدود زمنية إذا تم تحديدها
+    if (options.startDate) {
+        query.createdAt = { $gte: new Date(options.startDate) };
+    }
+    if (options.endDate) {
+        if (query.createdAt) {
+            query.createdAt.$lte = new Date(options.endDate);
+        } else {
+            query.createdAt = { $lte: new Date(options.endDate) };
+        }
+    }
+    
+    // تنفيذ البحث
+    return this.find(query)
+        .sort({ createdAt: options.sort || -1 })
+        .limit(options.limit || 100);
 };
 
 const WhatsappIncomingMessage = mongoose.model('WhatsappIncomingMessage', whatsappIncomingMessageSchema);
