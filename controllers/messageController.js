@@ -176,13 +176,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
             // استخدام الواتساب أولاً
             logger.info(`محاولة إرسال رسالة للعميل ${client.name} عبر واتساب (القناة الأولى)`);
             
-            // الحصول على معرف جهاز الواتساب من الإعدادات
-            const whatsappDeviceId = whatsappConfig.device || null;
-            
-            whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msgContent, { 
-                clientId: client._id,
-                deviceId: whatsappDeviceId // تمرير معرف جهاز الواتساب المحدد
-            });
+            whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msgContent, { clientId: client._id });
             
             if (whatsappResult.success) {
                 whatsappSent = true;
@@ -201,7 +195,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                 message.providerData = {
                     provider: 'semysms_whatsapp',
                     lastUpdate: new Date(),
-                    device: deviceId || whatsappDeviceId, // استخدام معرف الجهاز من الاستجابة أو من الإعدادات
+                    device: deviceId,
                     rawResponse: whatsappResult.rawResponse
                 };
                 
@@ -211,7 +205,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                     data: {
                         internalId: message.messageId,
                         externalId: message.externalMessageId,
-                        deviceId: deviceId || whatsappDeviceId
+                        deviceId: deviceId
                     }
                 });
                 
@@ -225,13 +219,8 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                     // لم يتم تسليم الرسالة بعد - محاولة استخدام SMS كقناة بديلة
                     logger.info(`لم يتم تأكيد تسليم رسالة الواتساب للعميل ${client.name} خلال المهلة المحددة (${statusResult.status})، جاري المحاولة عبر SMS`);
                     
-                    // الحصول على معرف جهاز SMS من الإعدادات
-                    const smsDeviceId = smsConfig.device || null;
-                    
                     // إرسال عبر SMS كقناة بديلة
-                    smsResult = await SmsManager.sendSms(formattedPhone, msgContent, {
-                        deviceId: smsDeviceId // تمرير معرف جهاز SMS المحدد
-                    });
+                    smsResult = await SmsManager.sendSms(formattedPhone, msgContent);
                     
                     if (smsResult.success) {
                         smsSent = true;
@@ -250,7 +239,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                         message.providerData = {
                             provider: 'semysms_both',
                             lastUpdate: new Date(),
-                            device: deviceId || smsDeviceId, // استخدام معرف الجهاز من الاستجابة أو من الإعدادات
+                            device: deviceId,
                             rawSmsResponse: smsResult.rawResponse,
                             rawWhatsappResponse: whatsappResult.rawResponse
                         };
@@ -271,13 +260,8 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                     error: whatsappError
                 });
                 
-                // الحصول على معرف جهاز SMS من الإعدادات
-                const smsDeviceId = smsConfig.device || null;
-                
                 // محاولة إرسال عبر SMS
-                smsResult = await SmsManager.sendSms(formattedPhone, msgContent, {
-                    deviceId: smsDeviceId // تمرير معرف جهاز SMS المحدد
-                });
+                smsResult = await SmsManager.sendSms(formattedPhone, msgContent);
                 
                 if (smsResult.success) {
                     smsSent = true;
@@ -299,7 +283,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                     message.providerData = {
                         provider: 'semysms',
                         lastUpdate: new Date(),
-                        device: deviceId || smsDeviceId, // استخدام معرف الجهاز من الاستجابة أو من الإعدادات
+                        device: deviceId,
                         rawResponse: smsResult.rawResponse
                     };
                     
@@ -320,12 +304,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
             // استخدام SMS أولاً
             logger.info(`محاولة إرسال رسالة للعميل ${client.name} عبر SMS (القناة الأولى)`);
             
-            // الحصول على معرف جهاز SMS من الإعدادات
-            const smsDeviceId = smsConfig.device || null;
-            
-            smsResult = await SmsManager.sendSms(formattedPhone, msgContent, {
-                deviceId: smsDeviceId // تمرير معرف جهاز SMS المحدد
-            });
+            smsResult = await SmsManager.sendSms(formattedPhone, msgContent);
             
             if (smsResult.success) {
                 smsSent = true;
@@ -347,7 +326,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                 message.providerData = {
                     provider: 'semysms',
                     lastUpdate: new Date(),
-                    device: deviceId || smsDeviceId, // استخدام معرف الجهاز من الاستجابة أو من الإعدادات
+                    device: deviceId,
                     rawResponse: smsResult.rawResponse
                 };
                 
@@ -357,7 +336,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                     data: {
                         internalId: message.messageId,
                         externalId: message.externalMessageId,
-                        deviceId: deviceId || smsDeviceId
+                        deviceId: deviceId
                     }
                 });
                 
@@ -371,14 +350,8 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                     // لم يتم تسليم الرسالة بعد - محاولة استخدام الواتساب كقناة بديلة
                     logger.info(`لم يتم تأكيد تسليم رسالة SMS للعميل ${client.name} خلال المهلة المحددة (${statusResult.status})، جاري المحاولة عبر الواتساب`);
                     
-                    // الحصول على معرف جهاز الواتساب من الإعدادات
-                    const whatsappDeviceId = whatsappConfig.device || null;
-                    
                     // إرسال عبر الواتساب كقناة بديلة
-                    whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msgContent, { 
-                        clientId: client._id,
-                        deviceId: whatsappDeviceId // تمرير معرف جهاز الواتساب المحدد
-                    });
+                    whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msgContent, { clientId: client._id });
                     
                     if (whatsappResult.success) {
                         whatsappSent = true;
@@ -397,7 +370,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                         message.providerData = {
                             provider: 'semysms_both',
                             lastUpdate: new Date(),
-                            device: deviceId || whatsappDeviceId, // استخدام معرف الجهاز من الاستجابة أو من الإعدادات
+                            device: deviceId,
                             rawSmsResponse: smsResult.rawResponse,
                             rawWhatsappResponse: whatsappResult.rawResponse
                         };
@@ -418,14 +391,8 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                     error: smsError
                 });
                 
-                // الحصول على معرف جهاز الواتساب من الإعدادات
-                const whatsappDeviceId = whatsappConfig.device || null;
-                
                 // محاولة إرسال عبر الواتساب
-                whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msgContent, { 
-                    clientId: client._id,
-                    deviceId: whatsappDeviceId // تمرير معرف جهاز الواتساب المحدد
-                });
+                whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msgContent, { clientId: client._id });
                 
                 if (whatsappResult.success) {
                     whatsappSent = true;
@@ -443,7 +410,7 @@ const processChannelFallback = async (message, client, formattedPhone, msgConten
                     message.providerData = {
                         provider: 'semysms_whatsapp',
                         lastUpdate: new Date(),
-                        device: deviceId || whatsappDeviceId, // استخدام معرف الجهاز من الاستجابة أو من الإعدادات
+                        device: deviceId,
                         rawResponse: whatsappResult.rawResponse
                     };
                     
@@ -527,7 +494,7 @@ exports.sendMessage = async (req, res) => {
 
         // التحقق من توفر جميع المعلومات المطلوبة
         if (!token || !phone || !msg) {
-            logger.warn('messageController', 'محاولة إرسال رسالة بدون توفير جميع المعلومات المطلوبة');
+            logger.warn('محاولة إرسال رسالة بدون توفير جميع المعلومات المطلوبة');
             return res.status(400).send("2"); // كود خطأ 2: بيانات غير مكتملة
         }
         
@@ -540,7 +507,7 @@ exports.sendMessage = async (req, res) => {
         // التحقق من صحة مفتاح API
         const client = await SemClient.validateApiCredentials(token);
         if (!client) {
-            logger.error(`messageController`, `محاولة استخدام مفتاح API غير صالح: ${token}`);
+            logger.error(`محاولة استخدام مفتاح API غير صالح: ${token}`);
             return res.status(401).send("3"); // كود خطأ 3: مفتاح API غير صالح
         }
 
@@ -585,7 +552,7 @@ exports.sendMessage = async (req, res) => {
             });
             await errorMessage.save();
             
-            logger.warn(`messageController`, `فشل في إرسال رسالة للعميل ${client.name} بسبب رقم هاتف غير صالح: ${processedPhone}`, {
+            logger.warn(`فشل في إرسال رسالة للعميل ${client.name} بسبب رقم هاتف غير صالح: ${processedPhone}`, {
                 error: formattedPhoneResult.error
             });
             return res.status(400).send("8"); // كود خطأ 8: رقم هاتف غير صالح
@@ -597,13 +564,13 @@ exports.sendMessage = async (req, res) => {
         // التحقق من الحدود اليومية والشهرية
         const withinDailyLimit = await client.checkDailyLimit();
         if (!withinDailyLimit) {
-            logger.warn(`messageController`, `العميل ${client.name} تجاوز الحد اليومي للرسائل`);
+            logger.warn(`العميل ${client.name} تجاوز الحد اليومي للرسائل`);
             return res.status(429).send("4"); // كود خطأ 4: تجاوز الحد اليومي
         }
 
         const withinMonthlyLimit = await client.checkMonthlyLimit();
         if (!withinMonthlyLimit) {
-            logger.warn(`messageController`, `العميل ${client.name} تجاوز الحد الشهري للرسائل`);
+            logger.warn(`العميل ${client.name} تجاوز الحد الشهري للرسائل`);
             return res.status(429).send("5"); // كود خطأ 5: تجاوز الحد الشهري
         }
 
@@ -619,7 +586,7 @@ exports.sendMessage = async (req, res) => {
         
         // التحقق من وجود رصيد كافٍ
         if (client.balance < requiredPoints) {
-            logger.warn(`messageController`, `العميل ${client.name} لا يملك رصيدًا كافيًا لإرسال الرسالة (مطلوب: ${requiredPoints}, متوفر: ${client.balance})`);
+            logger.warn(`العميل ${client.name} لا يملك رصيدًا كافيًا لإرسال الرسالة (مطلوب: ${requiredPoints}, متوفر: ${client.balance})`);
             return res.status(402).send("7"); // كود خطأ 7: رصيد غير كافٍ
         }
 
@@ -640,7 +607,7 @@ exports.sendMessage = async (req, res) => {
             });
             await errorMessage.save();
             
-            logger.error(`messageController`, `محاولة إرسال رسالة للعميل ${client.name} لكن لم يتم تفعيل أي قناة إرسال`);
+            logger.error(`محاولة إرسال رسالة للعميل ${client.name} لكن لم يتم تفعيل أي قناة إرسال`);
             return res.status(400).send("9"); // كود خطأ 9: لم يتم تفعيل قنوات إرسال
         }
 
@@ -649,7 +616,7 @@ exports.sendMessage = async (req, res) => {
         if (canSendSms) {
             smsManagerInitialized = await _initializeSmsManager();
             if (!smsManagerInitialized) {
-                logger.error('messageController', 'فشل في تهيئة خدمة الرسائل SMS');
+                logger.error('فشل في تهيئة خدمة الرسائل SMS');
                 // لا نريد إنهاء الطلب هنا، فقد يكون بإمكاننا إرسال واتساب
             }
         }
@@ -659,14 +626,14 @@ exports.sendMessage = async (req, res) => {
         if (canSendWhatsapp) {
             whatsappManagerInitialized = await _initializeWhatsappManager();
             if (!whatsappManagerInitialized) {
-                logger.error('messageController', 'فشل في تهيئة خدمة الواتساب');
+                logger.error('فشل في تهيئة خدمة الواتساب');
                 // لا نريد إنهاء الطلب هنا، فقد يكون بإمكاننا إرسال SMS
             }
         }
 
         // التحقق مما إذا كانت أي من الخدمات متاحة
         if (!smsManagerInitialized && !whatsappManagerInitialized) {
-            logger.error('messageController', 'فشل في تهيئة أي من خدمات الرسائل');
+            logger.error('فشل في تهيئة أي من خدمات الرسائل');
             return res.status(500).send("6"); // خطأ في النظام
         }
 
@@ -679,7 +646,7 @@ exports.sendMessage = async (req, res) => {
             // تحديد القناة المفضلة للعميل
             const preferredChannel = client.preferredChannel || 'none';
             
-            logger.info(`messageController`, `تجهيز رسالة للعميل ${client.name} عبر القناة المفضلة (${preferredChannel})`);
+            logger.info(`تجهيز رسالة للعميل ${client.name} عبر القناة المفضلة (${preferredChannel})`);
             
             // إنشاء سجل الرسالة الآن بعد تحديد القناة المفضلة
             message = new SemMessage({
@@ -698,14 +665,14 @@ exports.sendMessage = async (req, res) => {
             const useWhatsappFirst = preferredChannel === 'whatsapp' || (preferredChannel === 'none' && Math.random() < 0.5);
             
             // تسجيل الخيار المفضل
-            logger.info(`messageController`, `سيتم إرسال الرسالة أولاً عبر ${useWhatsappFirst ? 'واتساب' : 'SMS'} للعميل ${client.name}`);
+            logger.info(`سيتم إرسال الرسالة أولاً عبر ${useWhatsappFirst ? 'واتساب' : 'SMS'} للعميل ${client.name}`);
             
             // نبدأ عملية الإرسال في الخلفية دون انتظار نتيجتها
             setImmediate(async () => {
                 try {
                     await processChannelFallback(message, client, formattedPhone, msg, useWhatsappFirst);
                 } catch (error) {
-                    logger.error(`messageController`, `خطأ أثناء معالجة الرسالة في الخلفية للعميل ${client.name}`, {
+                    logger.error(`خطأ أثناء معالجة الرسالة في الخلفية للعميل ${client.name}`, {
                         error: error.message || 'خطأ غير معروف',
                         stack: error.stack
                     });
@@ -718,7 +685,7 @@ exports.sendMessage = async (req, res) => {
         }
         // الحالة 1: واتساب فقط
         else if (canSendWhatsapp && !canSendSms && whatsappManagerInitialized) {
-            logger.info(`messageController`, `إرسال رسالة للعميل ${client.name} عبر واتساب فقط حسب الإعدادات`);
+            logger.info(`إرسال رسالة للعميل ${client.name} عبر واتساب فقط حسب الإعدادات`);
             
             // إنشاء سجل الرسالة الآن لقناة الواتساب فقط
             message = new SemMessage({
@@ -734,10 +701,7 @@ exports.sendMessage = async (req, res) => {
             await message.save();
             
             // إرسال عبر الواتساب
-            const whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { 
-                clientId: client._id,
-                deviceId: whatsappConfig.device || null // تمرير معرف جهاز الواتساب المحدد
-            });
+            const whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
             
             if (whatsappResult.success) {
                 message.status = 'sent';
@@ -761,7 +725,7 @@ exports.sendMessage = async (req, res) => {
                 
                 await message.save();
                 
-                logger.info(`messageController`, `تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
+                logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
                     data: {
                         internalId: message.messageId,
                         externalId: message.externalMessageId,
@@ -774,36 +738,15 @@ exports.sendMessage = async (req, res) => {
                 
                 if (statusResult.success) {
                     // تم تسليم الرسالة بنجاح - لا داعي لاستخدام القناة الثانية
-                    logger.info(`messageController`, `تم تأكيد تسليم رسالة الواتساب بنجاح للعميل ${client.name}، لن يتم استخدام SMS`);
+                    logger.info(`تم تأكيد تسليم رسالة الواتساب بنجاح للعميل ${client.name}، لن يتم استخدام SMS`);
                 } else {
                     // لم يتم تسليم الرسالة بعد - محاولة استخدام SMS كقناة بديلة
-                    logger.info(`messageController`, `لم يتم تأكيد تسليم رسالة الواتساب للعميل ${client.name} خلال المهلة المحددة (${statusResult.status})، جاري المحاولة عبر SMS`);
+                    logger.info(`لم يتم تأكيد تسليم رسالة الواتساب للعميل ${client.name} خلال المهلة المحددة (${statusResult.status})، جاري المحاولة عبر SMS`);
                     
-                    // 1. حفظ رسالة الواتساب الأصلية في جدول WhatsappMessage قبل إرسال SMS
-                    try {
-                        const whatsappMessage = new WhatsappMessage({
-                            clientId: client._id,
-                            phoneNumber: formattedPhone, // تغيير من recipient إلى phoneNumber
-                            message: msg, // تغيير من content إلى message
-                            status: 'sent', // الرسالة تم إرسالها لكن لم يتم تأكيد تسليمها
-                            messageId: message._id.toString(),
-                            externalMessageId: message.externalMessageId,
-                            providerName: 'semysms',
-                            providerData: whatsappResult.rawResponse || {}
-                        });
-                        
-                        await whatsappMessage.save();
-                        logger.debug('MessageController', `تم حفظ رسالة الواتساب الأصلية في جدول WhatsappMessage قبل التبديل إلى SMS`);
-                    } catch (whatsappDbError) {
-                        logger.error('MessageController', 'خطأ في حفظ رسالة الواتساب في جدول WhatsappMessage', whatsappDbError);
-                    }
-                    
-                    // 2. إرسال عبر SMS كقناة بديلة
+                    // إرسال عبر SMS كقناة بديلة
                     const smsResult = await SmsManager.sendSms(formattedPhone, msg);
                     
                     if (smsResult.success) {
-                        message.status = smsResult.status === 'delivered' ? 'sent' : 'pending';
-                        message.messageId = message._id.toString();
                         message.externalMessageId = `${message.externalMessageId},${smsResult.externalMessageId}`;
                         
                         let deviceId = null;
@@ -813,7 +756,7 @@ exports.sendMessage = async (req, res) => {
                                     (smsResult.rawResponse.device ? smsResult.rawResponse.device : null);
                         }
                         
-                        // تحديث بيانات مزود الخدمة
+                        // تخزين بيانات كلا المزودين
                         message.providerData = {
                             provider: 'semysms_both',
                             lastUpdate: new Date(),
@@ -824,22 +767,22 @@ exports.sendMessage = async (req, res) => {
                         
                         await message.save();
                         
-                        logger.info(`messageController`, `تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح (كقناة بديلة)`);
+                        logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح (كقناة بديلة)`);
                     } else {
-                        logger.warn(`messageController`, `فشل في إرسال رسالة SMS للعميل ${client.name} (كقناة بديلة)`, {
+                        logger.warn(`فشل في إرسال رسالة SMS للعميل ${client.name} (كقناة بديلة)`, {
                             error: smsResult.error
                         });
                     }
                 }
             } else {
-                logger.error(`messageController`, `فشل في إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone}`, {
+                logger.error(`فشل في إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone}`, {
                     error: whatsappResult.error
                 });
             }
         }
         // الحالة 2: SMS فقط
         else if (canSendSms && !canSendWhatsapp && smsManagerInitialized) {
-            logger.info(`messageController`, `إرسال رسالة للعميل ${client.name} عبر SMS فقط حسب الإعدادات`);
+            logger.info(`إرسال رسالة للعميل ${client.name} عبر SMS فقط حسب الإعدادات`);
             
             // إنشاء سجل الرسالة الآن لقناة SMS فقط
             message = new SemMessage({
@@ -882,7 +825,7 @@ exports.sendMessage = async (req, res) => {
                 
                 await message.save();
                 
-                logger.info(`messageController`, `تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
+                logger.info(`تم إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone} بنجاح`, {
                     data: {
                         internalId: message.messageId,
                         externalId: message.externalMessageId,
@@ -895,20 +838,15 @@ exports.sendMessage = async (req, res) => {
                 
                 if (statusResult.success) {
                     // تم تسليم الرسالة بنجاح - لا داعي لاستخدام القناة الثانية
-                    logger.info(`messageController`, `تم تأكيد تسليم رسالة SMS بنجاح للعميل ${client.name}، لن يتم استخدام الواتساب`);
+                    logger.info(`تم تأكيد تسليم رسالة SMS بنجاح للعميل ${client.name}، لن يتم استخدام الواتساب`);
                 } else {
                     // لم يتم تسليم الرسالة بعد - محاولة استخدام الواتساب كقناة بديلة
-                    logger.info(`messageController`, `لم يتم تأكيد تسليم رسالة SMS للعميل ${client.name} خلال المهلة المحددة (${statusResult.status})، جاري المحاولة عبر الواتساب`);
+                    logger.info(`لم يتم تأكيد تسليم رسالة SMS للعميل ${client.name} خلال المهلة المحددة (${statusResult.status})، جاري المحاولة عبر الواتساب`);
                     
                     // إرسال عبر الواتساب كقناة بديلة
-                    const whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { 
-                        clientId: client._id,
-                        deviceId: whatsappConfig.device || null // تمرير معرف جهاز الواتساب المحدد
-                    });
+                    const whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msg, { clientId: client._id });
                     
                     if (whatsappResult.success) {
-                        message.status = 'sent';
-                        message.messageId = message._id.toString();
                         message.externalMessageId = `${message.externalMessageId},${whatsappResult.externalMessageId}`;
                         
                         let deviceId = null;
@@ -918,7 +856,7 @@ exports.sendMessage = async (req, res) => {
                                     (whatsappResult.rawResponse.device ? whatsappResult.rawResponse.device : null);
                         }
                         
-                        // تحديث بيانات مزود الخدمة
+                        // تخزين بيانات كلا المزودين
                         message.providerData = {
                             provider: 'semysms_both',
                             lastUpdate: new Date(),
@@ -929,15 +867,15 @@ exports.sendMessage = async (req, res) => {
                         
                         await message.save();
                         
-                        logger.info(`messageController`, `تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح (كقناة بديلة)`);
+                        logger.info(`تم إرسال رسالة واتساب للعميل ${client.name} إلى ${formattedPhone} بنجاح (كقناة بديلة)`);
                     } else {
-                        logger.warn(`messageController`, `فشل في إرسال رسالة واتساب للعميل ${client.name} (كقناة بديلة)`, {
+                        logger.warn(`فشل في إرسال رسالة واتساب للعميل ${client.name} (كقناة بديلة)`, {
                             error: whatsappResult.error
                         });
                     }
                 }
             } else {
-                logger.error(`messageController`, `فشل في إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone}`, {
+                logger.error(`فشل في إرسال رسالة SMS للعميل ${client.name} إلى ${formattedPhone}`, {
                     error: smsResult.error
                 });
             }
@@ -955,7 +893,7 @@ exports.sendMessage = async (req, res) => {
             });
             await errorMessage.save();
             
-            logger.error(`messageController`, `فشل في إرسال رسالة للعميل ${client.name} بسبب عدم توفر قنوات إرسال صالحة (تمت تهيئة: SMS=${smsManagerInitialized}, واتساب=${whatsappManagerInitialized})`);
+            logger.error(`فشل في إرسال رسالة للعميل ${client.name} بسبب عدم توفر قنوات إرسال صالحة (تمت تهيئة: SMS=${smsManagerInitialized}, واتساب=${whatsappManagerInitialized})`);
             
             return res.status(500).send("6"); // خطأ في النظام
         }
@@ -1006,7 +944,7 @@ exports.sendMessage = async (req, res) => {
             return res.status(200).send("1");
         }
     } catch (error) {
-        logger.error('messageController', 'خطأ في إرسال الرسالة', {
+        logger.error('خطأ في إرسال الرسالة', {
             error: error.message || 'خطأ غير معروف',
             stack: error.stack
         });
@@ -1029,7 +967,7 @@ exports.checkBalance = async (req, res) => {
         // التحقق من صحة مفتاح API
         const client = await SemClient.validateApiCredentials(token);
         if (!client) {
-            logger.error(`messageController`, `محاولة استخدام مفتاح API غير صالح: ${token}`);
+            logger.error(`محاولة استخدام مفتاح API غير صالح: ${token}`);
             return res.status(401).send("3"); // كود خطأ 3: مفتاح API غير صالح
         }
 
@@ -1037,7 +975,7 @@ exports.checkBalance = async (req, res) => {
         return res.status(200).send(client.balance.toString());
 
     } catch (error) {
-        logger.error('messageController', 'خطأ في التحقق من الرصيد', {
+        logger.error('خطأ في التحقق من الرصيد', {
             error: error.message || 'خطأ غير معروف',
             stack: error.stack
         });
@@ -1054,7 +992,7 @@ exports.checkSmsProviderBalance = async (req, res) => {
         // التحقق من وجود المستخدم وأنه أدمن فقط
         const userRole = req.session.userRole;
         if (userRole !== 'admin') {
-            logger.warn(`messageController`, `محاولة وصول غير مصرح به لرصيد مزود الخدمة من قبل مستخدم غير مدير`);
+            logger.warn(`محاولة وصول غير مصرح به لرصيد مزود الخدمة من قبل مستخدم غير مدير`);
             return res.status(403).json({
                 success: false,
                 message: 'غير مصرح لك بالوصول إلى هذه البيانات'
@@ -1086,7 +1024,7 @@ exports.checkSmsProviderBalance = async (req, res) => {
             provider: balanceResult.provider || 'semysms'
         });
     } catch (error) {
-        logger.error('messageController', 'خطأ في التحقق من رصيد مزود الخدمة', {
+        logger.error('خطأ في التحقق من رصيد مزود الخدمة', {
             error: error.message || 'خطأ غير معروف',
             stack: error.stack
         });
@@ -1106,7 +1044,7 @@ exports.updatePendingMessagesStatus = async (req, res) => {
         // التحقق من وجود المستخدم وأنه أدمن فقط
         const userRole = req.session.userRole;
         if (userRole !== 'admin') {
-            logger.warn(`messageController`, `محاولة وصول غير مصرح به لتحديث حالة الرسائل من قبل مستخدم غير مدير`);
+            logger.warn(`محاولة وصول غير مصرح به لتحديث حالة الرسائل من قبل مستخدم غير مدير`);
             return res.status(403).json({
                 success: false,
                 message: 'غير مصرح لك بالوصول إلى هذه الوظيفة'
@@ -1130,7 +1068,7 @@ exports.updatePendingMessagesStatus = async (req, res) => {
             ...updateResult
         });
     } catch (error) {
-        logger.error('messageController', 'خطأ في تحديث حالة الرسائل المعلقة', {
+        logger.error('خطأ في تحديث حالة الرسائل المعلقة', {
             error: error.message || 'خطأ غير معروف',
             stack: error.stack
         });
@@ -1149,7 +1087,7 @@ exports.getClientMessages = async (req, res) => {
         // التحقق من وجود المستخدم وأنه أدمن فقط
         const userRole = req.session.userRole;
         if (userRole !== 'admin') {
-            logger.warn(`messageController`, `محاولة وصول غير مصرح به للرسائل من قبل مستخدم غير مدير`);
+            logger.warn(`محاولة وصول غير مصرح به للرسائل من قبل مستخدم غير مدير`);
             return res.status(403).json({
                 success: false,
                 message: 'غير مصرح لك بالوصول إلى هذه البيانات'
@@ -1206,7 +1144,7 @@ exports.getClientMessages = async (req, res) => {
         });
 
     } catch (error) {
-        logger.error('messageController', 'خطأ في الحصول على رسائل العميل', {
+        logger.error('خطأ في الحصول على رسائل العميل', {
             error: error.message || 'خطأ غير معروف',
             stack: error.stack
         });
