@@ -88,21 +88,28 @@ class WhatsappManager {
         }
 
         try {
-            // إنشاء سجل للرسالة في قاعدة البيانات
-            const messageRecord = new WhatsappMessage({
-                clientId: options.clientId || null,
-                phoneNumber,
-                message,
-                status: 'pending'
-            });
+            let messageRecord = null;
             
-            await messageRecord.save();
+            // إنشاء سجل للرسالة في قاعدة البيانات إلا إذا تم طلب تخطي ذلك
+            if (!options.skipMessageRecord) {
+                messageRecord = new WhatsappMessage({
+                    clientId: options.clientId || null,
+                    phoneNumber,
+                    message,
+                    status: 'pending'
+                });
+                
+                await messageRecord.save();
+                logger.info('WhatsappManager', 'تم حفظ سجل الرسالة قبل الإرسال');
+            } else {
+                logger.info('WhatsappManager', 'تم تخطي حفظ سجل الرسالة (skipMessageRecord)');
+            }
 
             // إرسال الرسالة عبر المزود
             const result = await this.activeProvider.sendWhatsapp(phoneNumber, message, options);
             
-            // تحديث سجل الرسالة بنتيجة الإرسال
-            if (result.success) {
+            // تحديث سجل الرسالة بنتيجة الإرسال إذا تم إنشاؤه
+            if (result.success && messageRecord) {
                 // حفظ معرف الرسالة الداخلي والخارجي
                 messageRecord.messageId = messageRecord._id.toString(); // استخدام معرف MongoDB كمعرف داخلي
                 
@@ -134,14 +141,14 @@ class WhatsappManager {
                     externalId: messageRecord.externalMessageId,
                     deviceId: deviceId
                 });
-            } else {
+                
+                // إضافة معرف الرسالة في قاعدة البيانات إلى النتيجة
+                result.messageRecordId = messageRecord._id;
+            } else if (!result.success && messageRecord) {
                 messageRecord.status = 'failed';
                 messageRecord.errorMessage = result.error;
                 await messageRecord.save();
             }
-
-            // إضافة معرف الرسالة في قاعدة البيانات إلى النتيجة
-            result.messageRecordId = messageRecord._id;
             
             return result;
         } catch (error) {
