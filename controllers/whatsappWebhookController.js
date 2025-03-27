@@ -418,6 +418,39 @@ exports.handleStatusUpdate = async (req, res) => {
  */
 exports.handleIncomingMessage = async (req, res) => {
     try {
+        // طباعة كاملة للطلب الوارد لأغراض التشخيص
+        const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        
+        // سجل تفاصيل الطلب الوارد بالكامل
+        logger.info('whatsappWebhookController', '====== بيانات الطلب الوارد من SemySMS =====', {
+            ip: ipAddress,
+            path: req.path,
+            method: req.method,
+            headers: req.headers,
+            query: req.query,
+            body: req.body,
+            userAgent: req.headers['user-agent'] || 'غير محدد',
+            contentType: req.headers['content-type'] || 'غير محدد',
+            raw: req.rawBody || 'غير متوفر'
+        });
+        
+        // طباعة نص الطلب إذا كان بتنسيق غير JSON
+        if (req.body && typeof req.body === 'string') {
+            logger.info('whatsappWebhookController', 'نص الطلب الخام: ' + req.body);
+        }
+        
+        // إذا كانت البيانات في الملفات، نطبع تفاصيلها أيضًا
+        if (req.files) {
+            logger.info('whatsappWebhookController', 'ملفات الطلب: ', {
+                count: req.files.length,
+                details: req.files.map(f => ({
+                    fieldname: f.fieldname,
+                    size: f.size,
+                    contentType: f.mimetype
+                }))
+            });
+        }
+        
         // سجل الحد الأدنى من المعلومات عن الطلب الوارد
         logger.debug('whatsappWebhookController', 'استلام رسالة واردة من webhook', {
             method: req.method,
