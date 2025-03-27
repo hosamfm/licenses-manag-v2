@@ -417,237 +417,264 @@ exports.handleStatusUpdate = async (req, res) => {
  * معالجة الرسائل الواردة من SemySMS Webhook لرسائل الواتس أب
  */
 exports.handleIncomingMessage = async (req, res) => {
+    const timestamp = new Date().toISOString();
+    const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    const contentType = req.headers['content-type'] || 'Unknown';
+    
+    // تسجيل بداية استلام الطلب
+    logger.debug('whatsappWebhookController', '=== بداية معالجة رسالة واتس أب واردة جديدة ===', {
+        timestamp,
+        ip: ipAddress,
+        userAgent,
+        contentType,
+        url: req.url,
+        method: req.method
+    });
+    
+    // حفظ الطلب الوارد كملف JSON للتشخيص
+    const requestUuid = uuidv4();
+    const reqData = {
+        timestamp,
+        ip: ipAddress,
+        path: req.path,
+        method: req.method,
+        headers: req.headers,
+        query: req.query,
+        body: req.body,
+        rawBody: req.rawBody || null,
+        files: req.files || null
+    };
+    
+    // حفظ بيانات الطلب للتحليل لاحقًا
     try {
-        // استخراج بيانات الطلب لطباعتها في الاستجابة
-        const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-        const userAgent = req.headers['user-agent'] || 'غير محدد';
-        const contentType = req.headers['content-type'] || 'غير محدد';
+        const filePath = path.join(__dirname, '../logs', `incoming_whatsapp_${requestUuid}.json`);
+        await saveToJSONFile(filePath, reqData);
+        logger.info('whatsappWebhookController', `تم حفظ بيانات الطلب الوارد`, { filePath });
+    } catch (error) {
+        logger.error('whatsappWebhookController', `فشل حفظ بيانات الطلب الوارد`, error);
+    }
+    
+    // استخراج البيانات من الطلب الوارد
+    let data = {};
+    let rawData = {};
+    
+    // تسجيل بيانات الطلب الأولية
+    logger.debug('whatsappWebhookController', 'بيانات الطلب الأولية', {
+        contentType,
+        hasBody: !!req.body,
+        bodyType: typeof req.body,
+        hasQuery: !!req.query && Object.keys(req.query).length > 0,
+        hasFiles: !!req.files && Object.keys(req.files || {}).length > 0
+    });
+    
+    // استخراج البيانات بطريقة مرنة تدعم مختلف تنسيقات البيانات
+    let id = data.id || data.message_id || data.messageId || data.msg_id || null;
+    let date = data.date || data.timestamp || data.time || null;
+    let phone = data.phone || data.from || data.sender || data.number || null;
+    let msg = data.msg || data.message || data.text || data.content || null;
+    let type = data.type !== undefined ? data.type : 1;
+    let deviceId = data.id_device || data.device_id || data.device || null;
+    let dir = data.dir || data.direction || null;
+    
+    // تسجيل البيانات المستخرجة
+    logger.debug('whatsappWebhookController', 'البيانات المستخرجة من الطلب', {
+        extractedId: id,
+        extractedPhone: phone,
+        extractedMessage: msg ? 'تم العثور على نص الرسالة' : null,
+        extractedDate: date,
+        extractedType: type,
+        extractedDeviceId: deviceId,
+        extractedDir: dir
+    });
+    
+    // لـ SemySMS يمكن أن تكون البيانات في أشكال غير متوقعة
+    // محاولة استخراج المعلومات من أي حقل يحتوي على كلمات دالة
+    if (!id || !phone || !msg) {
+        logger.debug('whatsappWebhookController', 'محاولة استخراج البيانات من الحقول الأخرى', {
+            missingId: !id,
+            missingPhone: !phone,
+            missingMsg: !msg,
+            dataKeys: Object.keys(data)
+        });
         
-        // معالجة البيانات من مصادر مختلفة
-        let data = {};
-        let rawData = null;
-        
-        // حفظ البيانات الخام لإرجاعها في الاستجابة للتشخيص
-        if (req.rawBody) {
-            rawData = req.rawBody.toString();
-        } else if (typeof req.body === 'string') {
-            rawData = req.body;
-        }
-        
-        // التعامل مع مختلف أنواع المحتوى
-        if (contentType.includes('multipart/form-data')) {
-            // معالجة بيانات multipart/form-data
-            data = { ...req.query, ...req.body };
-            
-            // معالجة الملفات إذا كانت موجودة
-            if (req.files && req.files.length > 0) {
-                for (const file of req.files) {
-                    try {
-                        if (file.buffer) {
-                            const fieldValue = file.buffer.toString('utf8');
-                            try {
-                                const jsonData = JSON.parse(fieldValue);
-                                data = { ...data, ...jsonData };
-                            } catch (e) {
-                                data[file.fieldname] = fieldValue;
-                            }
-                        }
-                    } catch (error) {
-                        logger.error('whatsappWebhookController', `خطأ في تحليل الملف ${file.fieldname}`, error);
-                    }
-                }
-            }
-        } else if (contentType.includes('application/json')) {
-            // معالجة بيانات JSON
-            if (typeof req.body === 'object') {
-                data = req.body;
-            } else if (typeof req.body === 'string') {
-                try {
-                    data = JSON.parse(req.body);
-                } catch (e) {
-                    data = { rawText: req.body };
-                }
-            }
-        } else if (contentType.includes('application/x-www-form-urlencoded')) {
-            // معالجة بيانات النموذج العادية
-            data = { ...req.body };
-        } else {
-            // محاولة الجمع من جميع المصادر المحتملة
-            data = {
-                ...req.query,
-                ...req.body,
-            };
-            
-            // محاولة تحليل البيانات من الاستعلام
-            if (Object.keys(req.query).length === 1 && Object.keys(req.query)[0].includes('=')) {
-                try {
-                    // هذا قد يكون سلسلة استعلام غير مفككة
-                    const queryStr = Object.keys(req.query)[0];
-                    const params = new URLSearchParams(queryStr);
-                    
-                    // تحويل المعلمات إلى كائن
-                    for (const [key, value] of params.entries()) {
-                        data[key] = value;
-                    }
-                } catch (e) {
-                    // تجاهل الخطأ واستمر
-                }
+        // البحث عن أي مفتاح يحتوي على كلمة 'id' وليس جزءًا من القائمة المعروفة
+        if (!id) {
+            const idKeys = Object.keys(data).filter(k => 
+                k.toLowerCase().includes('id') && 
+                !['id_device', 'device_id', 'deviceId'].includes(k)
+            );
+            if (idKeys.length > 0) {
+                id = data[idKeys[0]];
             }
         }
         
-        // استخراج البيانات بطريقة مرنة تدعم مختلف تنسيقات البيانات
-        let id = data.id || data.message_id || data.messageId || data.msg_id || null;
-        let date = data.date || data.timestamp || data.time || null;
-        let phone = data.phone || data.from || data.sender || data.number || null;
-        let msg = data.msg || data.message || data.text || data.content || null;
-        let type = data.type !== undefined ? data.type : 1;
-        let deviceId = data.id_device || data.device_id || data.device || null;
-        let dir = data.dir || data.direction || null;
-        
-        // لـ SemySMS يمكن أن تكون البيانات في أشكال غير متوقعة
-        // محاولة استخراج المعلومات من أي حقل يحتوي على كلمات دالة
-        if (!id || !phone || !msg) {
-            // البحث عن أي مفتاح يحتوي على كلمة 'id' وليس جزءًا من القائمة المعروفة
-            if (!id) {
-                const idKeys = Object.keys(data).filter(k => 
-                    k.toLowerCase().includes('id') && 
-                    !['id_device', 'device_id', 'deviceId'].includes(k)
-                );
-                if (idKeys.length > 0) {
-                    id = data[idKeys[0]];
-                }
-            }
-            
-            // البحث عن أي مفتاح يحتوي على 'phone' أو 'number'
-            if (!phone) {
-                const phoneKeys = Object.keys(data).filter(k => 
-                    k.toLowerCase().includes('phone') || 
-                    k.toLowerCase().includes('number') ||
-                    k.toLowerCase().includes('sender')
-                );
-                if (phoneKeys.length > 0) {
-                    phone = data[phoneKeys[0]];
-                }
-            }
-            
-            // البحث عن أي مفتاح يحتوي على 'msg' أو 'message' أو 'text'
-            if (!msg) {
-                const msgKeys = Object.keys(data).filter(k => 
-                    k.toLowerCase().includes('msg') || 
-                    k.toLowerCase().includes('message') || 
-                    k.toLowerCase().includes('text') ||
-                    k.toLowerCase().includes('content')
-                );
-                if (msgKeys.length > 0) {
-                    msg = data[msgKeys[0]];
-                }
+        // البحث عن أي مفتاح يحتوي على 'phone' أو 'number'
+        if (!phone) {
+            const phoneKeys = Object.keys(data).filter(k => 
+                k.toLowerCase().includes('phone') || 
+                k.toLowerCase().includes('number') ||
+                k.toLowerCase().includes('sender')
+            );
+            if (phoneKeys.length > 0) {
+                phone = data[phoneKeys[0]];
             }
         }
         
-        // في بعض حالات SemySMS، الرسالة قد تكون في كائن داخل البيانات أو مع اسم حقل مختلف
-        for (const key in data) {
-            const value = data[key];
-            if (typeof value === 'object' && value !== null) {
-                // استخراج البيانات من الكائنات الداخلية
-                if (!id && (value.id || value.message_id || value.messageId)) {
-                    id = value.id || value.message_id || value.messageId;
-                }
-                if (!phone && (value.phone || value.from || value.sender || value.number)) {
-                    phone = value.phone || value.from || value.sender || value.number;
-                }
-                if (!msg && (value.msg || value.message || value.text || value.content)) {
-                    msg = value.msg || value.message || value.text || value.content;
-                }
+        // البحث عن أي مفتاح يحتوي على 'msg' أو 'message' أو 'text'
+        if (!msg) {
+            const msgKeys = Object.keys(data).filter(k => 
+                k.toLowerCase().includes('msg') || 
+                k.toLowerCase().includes('message') || 
+                k.toLowerCase().includes('text') ||
+                k.toLowerCase().includes('content')
+            );
+            if (msgKeys.length > 0) {
+                msg = data[msgKeys[0]];
             }
         }
-        
-        // تجميع البيانات التشخيصية
-        const diagnosticInfo = {
-            ip: ipAddress,
-            userAgent: userAgent,
-            contentType: contentType,
-            headers: req.headers,
-            query: req.query,
-            body: data,
-            rawData: rawData,
-            extractedData: {
-                id, date, phone, msg, type, deviceId, dir
-            },
-            queryString: req.url
-        };
-        
-        // لأغراض التشخيص، إذا لم يكن هناك معرف رسالة، نقوم بإنشاء واحد
-        if (!id && (phone || msg)) {
-            id = 'temp_' + Date.now();
+    }
+    
+    // في بعض حالات SemySMS، الرسالة قد تكون في كائن داخل البيانات أو مع اسم حقل مختلف
+    for (const key in data) {
+        const value = data[key];
+        if (typeof value === 'object' && value !== null) {
+            // استخراج البيانات من الكائنات الداخلية
+            if (!id && (value.id || value.message_id || value.messageId)) {
+                id = value.id || value.message_id || value.messageId;
+            }
+            if (!phone && (value.phone || value.from || value.sender || value.number)) {
+                phone = value.phone || value.from || value.sender || value.number;
+            }
+            if (!msg && (value.msg || value.message || value.text || value.content)) {
+                msg = value.msg || value.message || value.text || value.content;
+            }
         }
+    }
+    
+    // تجميع البيانات التشخيصية
+    const diagnosticInfo = {
+        ip: ipAddress,
+        userAgent: userAgent,
+        contentType: contentType,
+        headers: req.headers,
+        query: req.query,
+        body: data,
+        rawData: rawData,
+        extractedData: {
+            id, date, phone, msg, type, deviceId, dir
+        },
+        queryString: req.url
+    };
+    
+    // لأغراض التشخيص، إذا لم يكن هناك معرف رسالة، نقوم بإنشاء واحد
+    if (!id && (phone || msg)) {
+        id = 'temp_' + Date.now();
+    }
+    
+    // التنظيف والتحقق من الصحة
+    if (phone) {
+        phone = phone.replace(/[^\d+]/g, '');
+        logger.debug('whatsappWebhookController', 'تنظيف رقم الهاتف', { cleanedPhone: phone });
+    }
+    
+    // التحقق من وجود المعلومات الأساسية للرسالة
+    if (!id || !phone || !msg) {
+        logger.warn('whatsappWebhookController', 'معلومات الرسالة غير مكتملة', {
+            missingId: !id,
+            missingPhone: !phone,
+            missingMsg: !msg
+        });
         
-        // التنظيف والتحقق من الصحة
-        if (phone) {
-            phone = phone.replace(/[^\d+]/g, '');
-        }
-        
-        // التحقق من وجود المعلومات الأساسية للرسالة
-        if (!id || !phone || !msg) {
-            // إرجاع استجابة تشخيصية مع كل المعلومات
-            return res.status(200).json({
-                success: false,
-                error: 'معلومات الرسالة غير مكتملة',
-                message: 'يجب توفير معرف الرسالة ورقم الهاتف ومحتوى الرسالة',
-                diagnosticInfo: diagnosticInfo,
-                missingFields: {
-                    id: !id,
-                    phone: !phone,
-                    msg: !msg
-                }
-            });
-        }
-        
-        // التحقق من وجود رسالة مستلمة بنفس المعرف لتجنب التكرار
+        // إرجاع استجابة تشخيصية مع كل المعلومات
+        return res.status(200).json({
+            success: false,
+            error: 'معلومات الرسالة غير مكتملة',
+            message: 'يجب توفير معرف الرسالة ورقم الهاتف ومحتوى الرسالة',
+            diagnosticInfo: diagnosticInfo,
+            missingFields: {
+                id: !id,
+                phone: !phone,
+                msg: !msg
+            }
+        });
+    }
+    
+    // التحقق من وجود رسالة مستلمة بنفس المعرف لتجنب التكرار
+    try {
         let existingMessage = await WhatsappIncomingMessage.findOne({ id: id });
         
         if (existingMessage) {
+            logger.info('whatsappWebhookController', 'تم استلام رسالة مكررة', { 
+                messageId: id, 
+                phone: phone 
+            });
+            
             return res.status(200).json({
                 success: true,
-                info: 'تم استلام هذه الرسالة من قبل',
-                messageId: id,
+                message: 'تم استلام هذه الرسالة مسبقًا',
+                duplicate: true,
                 diagnosticInfo: diagnosticInfo
             });
         }
         
-        // إنشاء سجل جديد
+        // البحث عن العميل المرتبط برقم الهاتف
+        let client = null;
+        try {
+            client = await SemClient.findOne({ phone: phone });
+            
+            if (client) {
+                logger.debug('whatsappWebhookController', 'تم العثور على عميل مرتبط برقم الهاتف', { 
+                    clientId: client._id,
+                    clientName: client.name
+                });
+            } else {
+                logger.debug('whatsappWebhookController', 'لم يتم العثور على عميل مرتبط برقم الهاتف', { phone });
+            }
+        } catch (clientError) {
+            logger.error('whatsappWebhookController', 'خطأ أثناء البحث عن العميل', clientError);
+        }
+        
+        // حفظ الرسالة الواردة في قاعدة البيانات
         const incomingMessage = new WhatsappIncomingMessage({
-            id: id,
-            phone: phone,
-            msg: msg,
-            date: date,
-            type: type,
+            id,
+            phone,
+            msg,
+            date,
+            type,
             id_device: deviceId,
-            dir: dir,
-            rawData: diagnosticInfo // تخزين كل المعلومات التشخيصية
+            dir,
+            clientId: client ? client._id : null,
+            rawData: reqData
         });
         
-        // حفظ السجل في قاعدة البيانات
         await incomingMessage.save();
+        logger.info('whatsappWebhookController', 'تم حفظ رسالة واتس أب واردة جديدة بنجاح', { 
+            messageId: id, 
+            phone: phone 
+        });
         
-        // إرسال استجابة نجاح مع معلومات تشخيصية
+        // إرجاع استجابة نجاح
         return res.status(200).json({
             success: true,
             message: 'تم استلام الرسالة بنجاح',
-            messageId: id,
-            savedData: {
-                id, phone, msg, date, type, deviceId
+            savedMessage: {
+                id: incomingMessage.id,
+                phone: incomingMessage.phone,
+                date: incomingMessage.date
             },
             diagnosticInfo: diagnosticInfo
         });
+        
     } catch (error) {
         logger.error('whatsappWebhookController', 'خطأ أثناء معالجة رسالة واتس أب واردة', error);
         
-        // إرسال استجابة خطأ
-        return res.status(500).json({
+        // إرجاع استجابة خطأ
+        return res.status(200).json({
             success: false,
-            error: 'حدث خطأ أثناء معالجة الرسالة',
+            error: 'خطأ في معالجة الرسالة الواردة',
             message: error.message,
-            stack: error.stack // إضافة تفاصيل الخطأ للتشخيص
+            diagnosticInfo: diagnosticInfo
         });
     }
 };
