@@ -196,4 +196,7 @@ router.get('/admin/whatsapp-monitor', [isAuthenticated, checkRole(['admin'])], w
 // مسار webhook لاستقبال تحديثات حالة رسائل الواتس أب من مزود الخدمة - لا يتطلب مصادقة
 router.post('/api/whatsapp/webhook/status-update', whatsappWebhookController.handleStatusUpdate);
 
+// مسار webhook لاستقبال الرسائل الواردة من الواتس أب - لا يتطلب مصادقة
+router.post('/api/whatsapp/webhook/incoming-message', whatsappWebhookController.handleIncomingMessage);
+
 module.exports = router;

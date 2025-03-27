@@ -3,6 +3,7 @@
  */
 const WhatsappMessage = require('../models/WhatsappMessage');
 const SemMessage = require('../models/SemMessage');
+const WhatsappIncomingMessage = require('../models/WhatsappIncomingMessage');
 const logger = require('../services/loggerService');
 const multer = require('multer');
 const upload = multer();
@@ -27,7 +28,6 @@ exports.handleStatusUpdate = async (req, res) => {
         
         if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
             // معالجة البيانات بتنسيق multipart/form-data
-            // دمج جميع البيانات المتاحة
             data = { ...req.query, ...req.body };
             
             // في بعض حالات multipart/form-data، قد تكون البيانات في req.files
@@ -409,6 +409,162 @@ exports.handleStatusUpdate = async (req, res) => {
         return res.status(200).json({ 
             success: false, 
             error: 'حدث خطأ أثناء معالجة الطلب'
+        });
+    }
+};
+
+/**
+ * معالجة الرسائل الواردة من SemySMS Webhook لرسائل الواتس أب
+ */
+exports.handleIncomingMessage = async (req, res) => {
+    try {
+        // سجل الحد الأدنى من المعلومات عن الطلب الوارد
+        logger.debug('whatsappWebhookController', 'استلام رسالة واردة من webhook', {
+            method: req.method,
+            contentType: req.headers['content-type'] || 'غير محدد'
+        });
+        
+        // التحقق من نوع المحتوى وتحليله بطريقة مناسبة
+        let data = {};
+        
+        if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+            // معالجة البيانات بتنسيق multipart/form-data
+            data = { ...req.query, ...req.body };
+            
+            // في بعض حالات multipart/form-data، قد تكون البيانات في req.files
+            if (req.files && req.files.length > 0) {
+                for (const file of req.files) {
+                    try {
+                        // محاولة تحليل البيانات كـ JSON إذا كانت نصية
+                        if (file.buffer) {
+                            const fieldValue = file.buffer.toString('utf8');
+                            try {
+                                const jsonData = JSON.parse(fieldValue);
+                                data = { ...data, ...jsonData };
+                            } catch (e) {
+                                // إذا لم تكن JSON، نخزن النص كما هو
+                                data[file.fieldname] = fieldValue;
+                            }
+                        }
+                    } catch (error) {
+                        logger.error('whatsappWebhookController', `خطأ في تحليل الملف ${file.fieldname}`, error);
+                    }
+                }
+            }
+        } else {
+            // استخراج المعلومات من الطلب العادي - قد تكون في body أو query
+            data = { ...req.query, ...req.body };
+        }
+        
+        // التحقق من وجود البيانات في شكل سلسلة نصية JSON
+        if (typeof data === 'string' || (req.body && typeof req.body === 'string')) {
+            try {
+                const jsonString = typeof data === 'string' ? data : req.body;
+                const jsonData = JSON.parse(jsonString);
+                data = jsonData;
+            } catch (error) {
+                logger.error('whatsappWebhookController', `خطأ في تحليل البيانات كـ JSON`, {
+                    dataType: typeof data,
+                    dataPreview: typeof data === 'string' ? data.substring(0, 100) : null,
+                    error: error.message
+                });
+            }
+        }
+        
+        // استخراج المعلومات الأساسية من البيانات الواردة
+        // وفقاً للتوثيق، نحتاج للمعلومات التالية:
+        // 'id' (معرف الرسالة)
+        // 'date' (تاريخ وصول الرسالة)
+        // 'phone' (رقم الهاتف المرسل)
+        // 'msg' (محتوى الرسالة)
+        // 'type' (نوع الرسالة: 0 للرسائل القصيرة، 1 للواتس أب)
+        // 'id_device' (معرف الجهاز)
+        // 'dir' (اتجاه الرسالة)
+        
+        // استخراج المعلومات باستخدام مختلف أسماء الحقول المحتملة
+        const id = data.id || data.message_id || data.messageId || null;
+        const date = data.date || data.timestamp || data.time || null;
+        let phone = data.phone || data.from || data.sender || data.number || null;
+        const msg = data.msg || data.message || data.text || data.content || null;
+        const type = data.type !== undefined ? data.type : 1; // افتراض نوع واتس أب (1) إذا لم يتم تحديد النوع
+        const deviceId = data.id_device || data.device_id || data.device || null;
+        const dir = data.dir || data.direction || null;
+        
+        // تنظيف رقم الهاتف إذا كان متوفراً
+        if (phone) {
+            // إزالة أي أحرف غير رقمية من رقم الهاتف ما عدا علامة +
+            phone = phone.replace(/[^\d+]/g, '');
+        }
+        
+        // التحقق من وجود المعلومات الأساسية للرسالة
+        if (!id || !phone || !msg) {
+            logger.warn('whatsappWebhookController', 'معلومات الرسالة الواردة غير مكتملة', {
+                id: id || 'غير محدد',
+                phone: phone || 'غير محدد',
+                msg: msg ? 'متوفر' : 'غير متوفر',
+                type: type
+            });
+            
+            // نرسل استجابة إيجابية لتجنب إعادة إرسال الرسالة مع تحذير
+            return res.status(200).json({
+                success: false,
+                error: 'معلومات الرسالة غير مكتملة',
+                message: 'يجب توفير معرف الرسالة ورقم الهاتف ومحتوى الرسالة'
+            });
+        }
+        
+        // التحقق من وجود رسالة مستلمة بنفس المعرف لتجنب التكرار
+        let existingMessage = await WhatsappIncomingMessage.findOne({ id: id });
+        
+        if (existingMessage) {
+            logger.info('whatsappWebhookController', 'تم استلام رسالة مكررة من webhook', {
+                id: id,
+                phone: phone
+            });
+            
+            // إذا كانت الرسالة موجودة بالفعل، نرسل استجابة إيجابية دون معالجة
+            return res.status(200).json({
+                success: true,
+                info: 'تم استلام هذه الرسالة من قبل',
+                messageId: id
+            });
+        }
+        
+        // إنشاء سجل للرسالة المستلمة في قاعدة البيانات
+        const incomingMessage = new WhatsappIncomingMessage({
+            id: id,
+            phone: phone,
+            msg: msg,
+            date: date,
+            type: type,
+            id_device: deviceId,
+            dir: dir,
+            rawData: data // تخزين البيانات الخام للاستخدام المستقبلي
+        });
+        
+        // حفظ السجل في قاعدة البيانات
+        await incomingMessage.save();
+        
+        logger.info('whatsappWebhookController', 'تم حفظ رسالة واتس أب واردة بنجاح', {
+            id: id,
+            phone: phone,
+            messageLength: msg ? msg.length : 0
+        });
+        
+        // إرسال استجابة نجاح
+        return res.status(200).json({
+            success: true,
+            message: 'تم استلام الرسالة بنجاح',
+            messageId: id
+        });
+    } catch (error) {
+        logger.error('whatsappWebhookController', 'خطأ أثناء معالجة رسالة واتس أب واردة', error);
+        
+        // إرسال استجابة خطأ
+        return res.status(500).json({
+            success: false,
+            error: 'حدث خطأ أثناء معالجة الرسالة',
+            message: error.message
         });
     }
 };
