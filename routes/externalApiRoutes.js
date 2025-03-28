@@ -10,6 +10,7 @@ const { verifySystemApiKey } = require('../middleware/apiAuthMiddleware');
 const User = require('../models/User');
 const SemClient = require('../models/SemClient');
 const logger = require('../services/loggerService');
+const BalanceTransaction = require('../models/BalanceTransaction');
 
 /**
  * نقطة API لإنشاء عميل جديد من نظام خارجي
@@ -120,6 +121,30 @@ router.post('/external-api/clients', verifySystemApiKey, async (req, res) => {
         }
         
         await newClient.save();
+        
+        // إضافة رصيد أولي بقيمة 100 نقطة للعميل الجديد
+        try {
+            // إنشاء عملية إضافة رصيد
+            const transaction = new BalanceTransaction({
+                clientId: newClient._id,
+                amount: 100, // إضافة 100 نقطة
+                type: 'deposit',
+                notes: 'رصيد ترحيبي للعميل الجديد',
+                performedBy: userId
+            });
+            
+            // حفظ عملية إضافة الرصيد
+            await transaction.save();
+            
+            // تحديث رصيد العميل
+            newClient.balance += 100;
+            await newClient.save();
+            
+            logger.info('externalApiRoutes', `تم إضافة رصيد ترحيبي بقيمة 100 نقطة للعميل الجديد: ${newClient.name}`);
+        } catch (balanceError) {
+            // تسجيل الخطأ ولكن الاستمرار في العملية حتى لا تتأثر عملية إنشاء العميل
+            logger.error('externalApiRoutes', 'خطأ في إضافة الرصيد الترحيبي للعميل الجديد', balanceError);
+        }
         
         // تسجيل العملية
         logger.info('externalApiRoutes', `تم إنشاء عميل جديد من نظام خارجي: ${name} (${email})`);
