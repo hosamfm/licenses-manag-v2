@@ -18,6 +18,7 @@ const ocrRoutes = require('./routes/ocrRoutes'); // إضافة استيراد م
 const semClientRoutes = require('./routes/semClientRoutes'); // استيراد مسارات إدارة عملاء SEM
 const messageRoutes = require('./routes/messageRoutes'); // استيراد مسارات إرسال الرسائل
 const balanceRoutes = require('./routes/balanceRoutes'); // إضافة مسارات الرصيد
+const externalApiRoutes = require('./routes/externalApiRoutes'); // استيراد مسارات API الخارجية
 
 if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
   console.error("Error: config environment variables not set. Please create/edit .env configuration file.");
@@ -138,6 +139,7 @@ app.use(ocrRoutes);
 app.use(semClientRoutes); // إضافة مسارات عملاء SEM
 app.use(messageRoutes); // إضافة مسارات إرسال الرسائل
 app.use('/', balanceRoutes); // إضافة مسارات الرصيد
+app.use(externalApiRoutes); // إضافة مسارات API الخارجية
 
 // مسار لعرض صفحة سجل رسائل العميل
 app.get('/client_messages', isAuthenticated, async (req, res) => {
@@ -215,6 +217,51 @@ app.use((err, req, res, next) => {
   res.status(500).send("There was an error serving your request.");
 });
 
+/**
+ * إنشاء مستخدم افتراضي للموقع
+ */
+async function createWebsiteUser() {
+  try {
+    // التحقق من وجود مستخدم موقع التسجيل
+    const websiteUser = await User.findOne({ username: 'website-registration' });
+    
+    if (!websiteUser) {
+      console.log('إنشاء حساب مستخدم موقع التسجيل (website-registration)...');
+      
+      // توليد كلمة مرور عشوائية آمنة
+      const crypto = require('crypto');
+      const randomPassword = crypto.randomBytes(16).toString('hex');
+      
+      // تشفير كلمة المرور
+      const bcrypt = require('bcrypt');
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+      
+      // إنشاء المستخدم الجديد
+      const newWebsiteUser = new User({
+        username: 'website-registration',
+        password: hashedPassword,
+        full_name: 'حساب تسجيل موقع الويب',
+        phone_number: '00218000000000',
+        company_name: 'خدمة تسجيل الموقع',
+        account_status: 'active',
+        user_role: 'admin',
+        subordinates: [],
+        supervisor: null
+      });
+      
+      await newWebsiteUser.save();
+      console.log('تم إنشاء حساب مستخدم موقع التسجيل بنجاح.');
+      console.log('اسم المستخدم: website-registration');
+      console.log('كلمة المرور العشوائية: ' + randomPassword);
+      console.log('يرجى حفظ هذه المعلومات في مكان آمن.');
+    } else {
+      console.log('مستخدم موقع التسجيل (website-registration) موجود بالفعل.');
+    }
+  } catch (error) {
+    console.error('خطأ في إنشاء حساب مستخدم الموقع:', error.message);
+  }
+}
+
 async function createDefaultAdmin() {
   try {
     const admins = [
@@ -255,6 +302,9 @@ async function createDefaultAdmin() {
 }
 
 createDefaultAdmin().then(() => {
+  // إنشاء مستخدم للموقع بعد إنشاء المدير الافتراضي
+  return createWebsiteUser();
+}).then(() => {
   app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
   }).on('error', (err) => {
