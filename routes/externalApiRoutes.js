@@ -48,6 +48,15 @@ router.post('/external-api/clients', verifySystemApiKey, async (req, res) => {
             });
         }
         
+        // التحقق من رقم الهاتف
+        const existingClientWithPhone = await SemClient.findOne({ phone });
+        if (existingClientWithPhone) {
+            return res.status(400).json({
+                success: false,
+                message: 'رقم الهاتف مستخدم بالفعل من قبل عميل آخر'
+            });
+        }
+        
         // البحث عن المستخدم المنشئ
         let userId;
         
