@@ -87,9 +87,12 @@ function formatPhoneNumber(phone, countryAlpha2 = null) {
             cleanPhone = '+' + cleanPhone.substring(3);
             logger.debug('PhoneFormatService', 'تم تصحيح رقم يبدأ بـ +00', { cleanPhone });
         } else if (cleanPhone.startsWith('+0')) {
-            // إزالة +0 واستبدالها بـ +
-            cleanPhone = '+' + cleanPhone.substring(2);
-            logger.debug('PhoneFormatService', 'تم تصحيح رقم يبدأ بـ +0', { cleanPhone });
+            // إزالة +0 واستبدالها بـ + ورمز الدولة
+            cleanPhone = '+' + defaultCountryCode + cleanPhone.substring(2);
+            logger.debug('PhoneFormatService', 'تم تصحيح رقم يبدأ بـ +0', { 
+                cleanPhone,
+                countryCode: defaultCountryCode
+            });
         }
         
         // الحالة 2: إذا كان الرقم يبدأ بـ 00 (صيغة دولية بدون +)
