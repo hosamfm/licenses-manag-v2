@@ -402,9 +402,38 @@ exports.sendMessage = async (req, res) => {
     }
     
     let processedPhone = phone.trim().replace('+ ', '+').replace(/\s+/g, '');
-    if (!processedPhone.startsWith('+') && /^\d/.test(processedPhone)) {
-      processedPhone = '+' + processedPhone;
+    
+    // المعالجة الأولية للرقم المدخل
+    if (!processedPhone.startsWith('+')) {
+      // إذا كان الرقم يبدأ بـ 00 (صيغة دولية بديلة)
+      if (processedPhone.startsWith('00')) {
+        processedPhone = '+' + processedPhone.substring(2);
+        logger.debug('sendMessage', 'تحويل رقم من صيغة 00 إلى +', { processedPhone });
+      } 
+      // للأرقام التي تبدأ بـ 0 (قد تكون أرقام محلية)
+      else if (processedPhone.startsWith('0')) {
+        // إذا كان الرقم طويل (أكثر من 10 أرقام) قد يكون دولي مع 0 بادئة (مثل 0046...)
+        if (processedPhone.length > 10 && processedPhone.startsWith('00')) {
+          processedPhone = '+' + processedPhone.substring(2);
+          logger.debug('sendMessage', 'تحويل رقم دولي طويل يبدأ بـ 00 إلى +', { processedPhone });
+        } else {
+          // أرقام محلية تبدأ بـ 0
+          processedPhone = '+' + processedPhone;
+          logger.debug('sendMessage', 'إضافة + لرقم يبدأ بـ 0', { processedPhone });
+        }
+      }
+      // للأرقام الطويلة التي لا تبدأ بـ 0 (غالبًا أرقام دولية بدون + أو 00)
+      else if (processedPhone.length > 9) {
+        processedPhone = '+' + processedPhone;
+        logger.debug('sendMessage', 'إضافة + لرقم دولي طويل', { processedPhone });
+      }
+      // الأرقام القصيرة التي لا تبدأ بـ 0 ولا + (غالبًا أرقام محلية)
+      else {
+        processedPhone = '+' + processedPhone;
+        logger.debug('sendMessage', 'إضافة + لرقم قصير', { processedPhone });
+      }
     }
+    
     logger.debug('sendMessage', 'رقم الهاتف بعد المعالجة الأولية', { processedPhone });
     const formattedPhoneResult = phoneFormatService.formatPhoneNumber(processedPhone);
     if (!formattedPhoneResult.isValid) {

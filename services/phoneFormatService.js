@@ -5,15 +5,15 @@
 const libphonenumber = require('libphonenumber-js');
 const logger = require('./loggerService');
 
-// رمز الدولة الافتراضي (يمكن أن يتم تحديثه من الإعدادات)
-let defaultCountryCode = '218';  // ليبيا كافتراضي
-let defaultCountryAlpha2 = 'LY'; // رمز ليبيا بحرفين
+// رمز الدولة الافتراضي (يمكن أن يتم تحديثه من إعدادات العميل)
+let defaultCountryCode = '218';
+let defaultCountryAlpha2 = 'LY';
 
 /**
  * تعيين إعدادات الدولة الافتراضية
  * @param {Object} settings إعدادات الدولة
- * @param {string} settings.countryCode رمز الدولة الرقمي (مثل 218 لليبيا)
- * @param {string} settings.countryAlpha2 رمز الدولة بحرفين (مثل LY لليبيا)
+ * @param {string} settings.countryCode رمز الدولة الرقمي (مثل 218 لليبيا، 46 للسويد)
+ * @param {string} settings.countryAlpha2 رمز الدولة بحرفين (مثل LY لليبيا، SE للسويد)
  */
 function setDefaultCountry(settings) {
     if (settings && settings.countryCode) {
@@ -73,12 +73,15 @@ function formatPhoneNumber(phone, countryAlpha2 = null) {
         // تنظيف الرقم من المسافات الداخلية
         let cleanPhone = phoneStr.replace(/\s+/g, '');
         
-        // تسجيل الرقم بعد إزالة المسافات للتشخيص
-        logger.debug('PhoneFormatService', 'الرقم بعد إزالة المسافات', {
+        // تنظيف الرقم من الرموز غير الضرورية (مثل - و () و /)
+        cleanPhone = cleanPhone.replace(/[-()\/\\]/g, '');
+        
+        // تسجيل الرقم بعد إزالة المسافات والرموز للتشخيص
+        logger.debug('PhoneFormatService', 'الرقم بعد إزالة المسافات والرموز', {
             cleanedPhone: cleanPhone
         });
         
-        // ثم تنظيف الرقم من الأحرف غير الرقمية باستثناء +
+        // تنظيف الرقم من الأحرف غير الرقمية باستثناء +
         cleanPhone = cleanPhone.replace(/[^\d+]/g, '');
         
         // الحالة 1: إذا كان الرقم يبدأ بـ +00 أو +0
@@ -107,37 +110,25 @@ function formatPhoneNumber(phone, countryAlpha2 = null) {
         if (cleanPhone.startsWith('+')) {
             logger.debug('PhoneFormatService', 'تم اكتشاف رقم بصيغة دولية، لا يحتاج تعديل', { cleanPhone });
         } 
-        // الأرقام المحلية ليبية
+        // الأرقام المحلية بدون رمز دولي
         else {
-            // الحالة 3: إذا كان الرقم يبدأ بـ 0 ويليه 9 (أرقام ليبية)
-            if (cleanPhone.startsWith('0') && cleanPhone.length > 1 && cleanPhone.charAt(1) === '9') {
-                // إزالة 0 وإضافة رمز ليبيا
-                cleanPhone = '+' + defaultCountryCode + cleanPhone.substring(1);
-                logger.debug('PhoneFormatService', 'تم تحويل رقم ليبي يبدأ بـ 09 إلى صيغة دولية', { cleanPhone });
-            } 
-            // الحالة 4: إذا كان الرقم يبدأ بـ 0 (أي رقم آخر)
-            else if (cleanPhone.startsWith('0')) {
+            // الحالة 3: إذا كان الرقم يبدأ بـ 0 (رقم محلي)
+            if (cleanPhone.startsWith('0')) {
                 // إزالة 0 وإضافة رمز الدولة الافتراضي
                 cleanPhone = '+' + defaultCountryCode + cleanPhone.substring(1);
-                logger.debug('PhoneFormatService', 'تم تحويل رقم يبدأ بـ 0 إلى صيغة دولية', { cleanPhone });
-            }
-            // الحالة 5: إذا كان الرقم لا يبدأ بـ 0 ولا + (رقم محلي بدون رمز دولي)
+                logger.debug('PhoneFormatService', 'تم تحويل رقم يبدأ بـ 0 إلى صيغة دولية', { 
+                    cleanPhone,
+                    countryCode: defaultCountryCode 
+                });
+            } 
+            // الحالة 4: إذا كان الرقم لا يبدأ بـ 0 ولا + (رقم محلي بدون رمز دولي)
             else {
-                // التحقق إذا كان الرقم يبدأ برقم 9 (محتمل أنه رقم ليبي)
-                if (cleanPhone.startsWith('9') && cleanPhone.length >= 9) {
-                    cleanPhone = '+' + defaultCountryCode + cleanPhone;
-                    logger.debug('PhoneFormatService', 'تم إضافة رمز الدولة الافتراضي لرقم يبدأ بـ 9', { 
-                        cleanPhone,
-                        countryCode: defaultCountryCode 
-                    });
-                } else {
-                    // إضافة رمز الدولة الافتراضي لجميع الأرقام الأخرى
-                    cleanPhone = '+' + defaultCountryCode + cleanPhone;
-                    logger.debug('PhoneFormatService', 'تم إضافة رمز الدولة الافتراضي لرقم بدون رمز دولي', { 
-                        cleanPhone,
-                        countryCode: defaultCountryCode 
-                    });
-                }
+                // إضافة رمز الدولة الافتراضي
+                cleanPhone = '+' + defaultCountryCode + cleanPhone;
+                logger.debug('PhoneFormatService', 'تم إضافة رمز الدولة الافتراضي لرقم بدون رمز دولي', { 
+                    cleanPhone,
+                    countryCode: defaultCountryCode 
+                });
             }
         }
         
@@ -157,18 +148,8 @@ function formatPhoneNumber(phone, countryAlpha2 = null) {
                 });
                 
                 // محاولة أخيرة للتصحيح إذا كان الرقم غير صالح
-                // في بعض الحالات، قد تكون المكتبة صارمة جدًا في التحقق
-                
                 // إذا كان الرقم يحتوي على أكثر من 7 أرقام، نعتبره صالحًا للاستخدام
                 if (cleanPhone.replace(/\D/g, '').length >= 7) {
-                    // التأكد من أن الرقم يبدأ برمز الدولة الليبي إذا كان يبدأ بـ 9
-                    if (cleanPhone.startsWith('+9') && !cleanPhone.startsWith('+' + defaultCountryCode)) {
-                        cleanPhone = '+' + defaultCountryCode + cleanPhone.substring(1);
-                        logger.info('PhoneFormatService', 'تم تصحيح رقم ليبي بدون رمز الدولة الصحيح في المحاولة الأخيرة', {
-                            phone: cleanPhone
-                        });
-                    }
-                    
                     logger.info('PhoneFormatService', 'تم قبول الرقم رغم فشل التحقق بالمكتبة (يحتوي على أكثر من 7 أرقام)', {
                         phone: cleanPhone
                     });
@@ -188,16 +169,6 @@ function formatPhoneNumber(phone, countryAlpha2 = null) {
             
             // الحصول على الرقم بالصيغة الدولية
             let formattedPhone = phoneNumberObject.number;
-            
-            // التأكد من أن الرقم الليبي يبدأ بـ +218
-            if (formattedPhone.startsWith('+9') && !formattedPhone.startsWith('+' + defaultCountryCode) && 
-                (phoneNumberObject.countryCallingCode === defaultCountryCode || useCountryAlpha2 === defaultCountryAlpha2)) {
-                formattedPhone = '+' + defaultCountryCode + formattedPhone.substring(1);
-                logger.debug('PhoneFormatService', 'تم تصحيح رقم ليبي بعد التنسيق', {
-                    original: phoneNumberObject.number,
-                    corrected: formattedPhone
-                });
-            }
             
             logger.debug('PhoneFormatService', 'تنسيق رقم هاتف عام', {
                 original: phone,
@@ -223,14 +194,6 @@ function formatPhoneNumber(phone, countryAlpha2 = null) {
                     error: 'رقم هاتف غير صالح، يجب أن يحتوي على 7 أرقام على الأقل',
                     phone: cleanPhone 
                 };
-            }
-            
-            // التأكد من أن الرقم يبدأ برمز الدولة الليبي إذا كان يبدأ بـ 9
-            if (cleanPhone.startsWith('+9') && !cleanPhone.startsWith('+' + defaultCountryCode)) {
-                cleanPhone = '+' + defaultCountryCode + cleanPhone.substring(1);
-                logger.debug('PhoneFormatService', 'تم تصحيح رقم ليبي في المنطق البسيط', {
-                    phone: cleanPhone
-                });
             }
             
             return { 
@@ -310,5 +273,5 @@ module.exports = {
     formatPhoneNumber,
     prepareForSms,
     prepareForWhatsapp,
-    setDefaultCountry  // تصدير الدالة الجديدة
+    setDefaultCountry
 };
