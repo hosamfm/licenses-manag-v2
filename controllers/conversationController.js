@@ -436,13 +436,17 @@ const replyToConversation = async (req, res) => {
             return res.redirect(`/crm/conversations/${conversationId}`);
         }
 
+        // استيراد خدمة واتساب الرسمية
+        const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
+
         // إنشاء رسالة جديدة كرد
         const message = new WhatsappMessage({
             conversationId,
-            direction: 'outbound',
+            direction: 'outbound', // توحيد المصطلحات: استخدام outbound بدلاً من outgoing
             content,
             timestamp: new Date(),
-            sender: req.user._id
+            sender: req.user._id,
+            status: 'pending' // حالة معلقة حتى يتم تأكيد الإرسال
         });
 
         await message.save();
@@ -460,13 +464,59 @@ const replyToConversation = async (req, res) => {
         
         await conversation.save();
 
-        // إرسال إشعار برسالة جديدة
+        // إرسال الرسالة فعلياً إلى واتساب باستخدام خدمة الواتساب الرسمية
+        try {
+            // التأكد من تهيئة خدمة الواتساب
+            if (!metaWhatsappService.initialized) {
+                await metaWhatsappService.initialize();
+            }
+
+            // استخراج رقم الهاتف من المحادثة
+            const recipientPhone = conversation.phoneNumber;
+            
+            // الحصول على معرف قناة الواتساب إذا كان متاحاً
+            const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
+            
+            // إرسال الرسالة النصية
+            const response = await metaWhatsappService.sendTextMessage(
+                recipientPhone,
+                content,
+                phoneNumberId
+            );
+
+            // تحديث حالة الرسالة إلى "مرسلة" بعد نجاح الإرسال
+            if (response && response.messages && response.messages.length > 0) {
+                message.status = 'sent';
+                message.externalMessageId = response.messages[0].id;
+                await message.save();
+                
+                logger.info('conversationController', 'تم إرسال الرسالة بنجاح إلى واتساب', {
+                    conversationId,
+                    messageId: message._id,
+                    externalId: response.messages[0].id
+                });
+            }
+        } catch (apiError) {
+            // تسجيل خطأ الإرسال ولكن الاستمرار في العملية
+            logger.error('conversationController', 'فشل في إرسال الرسالة إلى واتساب API', {
+                error: apiError.message,
+                conversationId,
+                messageId: message._id
+            });
+            
+            // تحديث حالة الرسالة إلى "فشل"
+            message.status = 'failed';
+            await message.save();
+        }
+
+        // إرسال إشعار برسالة جديدة عبر Socket.io
         socketService.notifyNewMessage(conversationId, {
-            messageId: message._id,
+            _id: message._id,
             conversationId,
             content,
-            direction: 'outbound',
+            direction: 'outbound', // توحيد المصطلحات: استخدام outbound بدلاً من outgoing
             timestamp: message.timestamp,
+            status: message.status,
             sender: {
                 _id: req.user._id,
                 username: req.user.username
