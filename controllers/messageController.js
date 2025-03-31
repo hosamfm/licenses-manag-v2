@@ -233,25 +233,24 @@ async function sendSmsAndUpdate(message, client, formattedPhone, msgContent, sms
 
 /**
  * إرسال رسالة واتساب وتحديث السجل المناسب.
- * @param {SemMessage|null} message - إذا كانت موجودة (استخدام قناة مشتركة) يتم تحديث سجل SemMessage؛ إذا كانت null (واتساب فقط) يتم إنشاء سجل في WhatsappMessage.
+ * @param {SemMessage|null} message - سجل الرسالة، وإذا كان null سيتم إنشاء سجل جديد في SemMessage
  */
 async function sendWhatsappAndUpdate(message, client, formattedPhone, msgContent, whatsappConfig, updateSemMessage = true) {
   try {
     const options = {
       clientId: client._id,
-      deviceId: whatsappConfig.device || null
+      deviceId: whatsappConfig.device || null,
+      skipMessageRecord: true // نخبر مدير الواتساب بعدم إنشاء سجل لمنع التكرار
     };
-    
-    // إذا كنا نستخدم قناة مشتركة أو كنا سننشئ سجل رسالة واتساب يدويًا، نخبر مدير الواتساب بعدم إنشاء سجل
-    // هذا يمنع التكرار
-    options.skipMessageRecord = true;
     
     const whatsappResult = await WhatsappManager.sendWhatsapp(formattedPhone, msgContent, options);
     let messageId = null;
     
     if (whatsappResult.success) {
-      if (updateSemMessage) {
+      if (message && updateSemMessage) {
+        // تحديث سجل SemMessage الموجود
         message.status = 'sent';
+        message.sentAt = new Date();
         message.externalMessageId = whatsappResult.externalMessageId;
         message.providerData = {
           provider: 'semysms_whatsapp',
@@ -263,15 +262,17 @@ async function sendWhatsappAndUpdate(message, client, formattedPhone, msgContent
         };
         await message.save();
         messageId = message._id.toString();
+        logger.debug('messageController', 'تم تحديث سجل الرسالة في SemMessage', { messageId });
       } else {
-        // إنشاء سجل جديد في مجموعة WhatsappMessage لعملاء واتساب فقط
+        // إنشاء سجل جديد في SemMessage
         const msgId = new mongoose.Types.ObjectId().toString();
-        const whatsappMsg = new WhatsappMessage({
+        const newMessage = new SemMessage({
           clientId: client._id,
-          phoneNumber: formattedPhone,
-          message: msgContent,
+          recipients: [formattedPhone],
+          content: msgContent,
           messageId: msgId,
           status: 'sent',
+          sentAt: new Date(),
           externalMessageId: whatsappResult.externalMessageId,
           providerData: {
             provider: 'semysms_whatsapp',
@@ -282,16 +283,17 @@ async function sendWhatsappAndUpdate(message, client, formattedPhone, msgContent
             rawResponse: whatsappResult.rawResponse
           }
         });
-        await whatsappMsg.save();
-        messageId = whatsappMsg._id.toString() || msgId;
+        await newMessage.save();
+        messageId = newMessage._id.toString() || msgId;
+        logger.debug('messageController', 'تم إنشاء سجل جديد في SemMessage', { messageId });
       }
       return { success: true, messageId: messageId, externalMessageId: whatsappResult.externalMessageId };
     } else {
-      logger.error(`WhatsApp sending failed for client ${client.name}`, { error: whatsappResult.error });
+      logger.error(`فشل إرسال واتساب للعميل ${client.name}`, { error: whatsappResult.error });
       return { success: false, error: whatsappResult.error };
     }
   } catch (e) {
-    logger.error(`Error sending WhatsApp for client ${client.name}`, e);
+    logger.error(`خطأ في إرسال واتساب للعميل ${client.name}`, e);
     return { success: false, error: e.message };
   }
 }
@@ -337,33 +339,7 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
     // تخزين معرف الرسالة الخارجي من Meta
     const externalMessageId = result.messages?.[0]?.id || null;
     
-    // تخزين الرسالة دائمًا في جدول MetaWhatsappMessage بغض النظر عن وجود SemMessage
-    if (externalMessageId) {
-      const metaWhatsappMessage = new MetaWhatsappMessage({
-        clientId: client._id,
-        phoneNumber: formattedPhone,
-        message: msgContent,
-        status: 'sent',
-        messageId: message ? message.messageId : new mongoose.Types.ObjectId().toString(),
-        externalMessageId: externalMessageId,
-        template: {
-          name: templateName,
-          language: templateLanguage
-        },
-        providerData: {
-          provider: 'metaWhatsapp',
-          lastUpdate: new Date(),
-          rawResponse: result
-        }
-      });
-      await metaWhatsappMessage.save();
-      logger.debug('messageController', 'تم حفظ الرسالة في جدول MetaWhatsappMessage', { 
-        messageId: metaWhatsappMessage.messageId,
-        externalMessageId: metaWhatsappMessage.externalMessageId
-      });
-    }
-    
-    // تحديث سجل SemMessage إذا كان موجوداً ومطلوباً تحديثه
+    // إذا كان هناك كائن رسالة موجود وتم طلب تحديثه
     if (message && updateSemMessage) {
       message.status = 'sent';
       message.sentAt = new Date();
@@ -371,12 +347,38 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
       message.providerData = {
         provider: 'metaWhatsapp',
         lastUpdate: new Date(),
+        templateName,
+        templateLanguage,
         rawResponse: result
       };
       await message.save();
       logger.debug('messageController', 'تم تحديث الرسالة في جدول SemMessage', { 
         messageId: message._id,
         externalMessageId: message.externalMessageId 
+      });
+    } 
+    // إذا لم يكن هناك كائن رسالة، إنشاء سجل جديد في SemMessages
+    else if (!message) {
+      const newMessage = new SemMessage({
+        clientId: client._id,
+        recipients: [formattedPhone],
+        content: msgContent,
+        status: 'sent',
+        sentAt: new Date(),
+        messageId: new mongoose.Types.ObjectId().toString(),
+        externalMessageId: externalMessageId,
+        providerData: {
+          provider: 'metaWhatsapp',
+          lastUpdate: new Date(),
+          templateName,
+          templateLanguage,
+          rawResponse: result
+        }
+      });
+      await newMessage.save();
+      logger.debug('messageController', 'تم حفظ رسالة جديدة في جدول SemMessage', { 
+        messageId: newMessage._id,
+        externalMessageId: newMessage.externalMessageId 
       });
     }
     

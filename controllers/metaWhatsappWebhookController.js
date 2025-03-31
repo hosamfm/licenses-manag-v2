@@ -4,7 +4,6 @@
 const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const MetaWhatsappWebhookLog = require('../models/MetaWhatsappWebhookLog');
 const SemMessage = require('../models/SemMessage');
-const MetaWhatsappMessage = require('../models/MetaWhatsappMessage');
 const logger = require('../services/loggerService');
 const crypto = require('crypto');
 
@@ -59,237 +58,160 @@ exports.verifyWebhook = async (req, res) => {
  * يستقبل الإشعارات من واتساب مثل الرسائل الواردة وتحديثات حالة الرسائل
  */
 exports.handleWebhook = async (req, res) => {
-    const requestId = Date.now().toString();
-    
-    // تسجيل كامل للبيانات الواردة
-    logger.debug('metaWhatsappWebhookController', 'استلام webhook جديد من ميتا', {
-        requestId: requestId,
-        body: JSON.stringify(req.body, null, 2),
-        headers: JSON.stringify(req.headers, null, 2),
-        method: req.method,
-        url: req.originalUrl,
-        timestamp: new Date().toISOString()
-    });
-    
     try {
-        // إرسال استجابة سريعة لتجنب إعادة الإرسال من ميتا
-        res.status(200).send('EVENT_RECEIVED');
+        const requestId = Date.now().toString();
+        const body = req.body;
         
-        // تخزين سجل الطلب
-        try {
-            // تحديد نوع الطلب
-            let requestType = 'unknown';
-            if (req.body && req.body.entry && req.body.entry[0] && req.body.entry[0].changes && req.body.entry[0].changes[0]) {
-                const change = req.body.entry[0].changes[0];
-                if (change.field === 'messages') {
-                    if (change.value.messages && change.value.messages.length > 0) {
-                        requestType = 'message';
-                    } else if (change.value.statuses && change.value.statuses.length > 0) {
-                        requestType = 'status';
-                    }
-                }
-            }
-            
-            // حفظ سجل الطلب في قاعدة البيانات
-            const webhookLog = new MetaWhatsappWebhookLog({
-                requestId: requestId,
-                timestamp: new Date(),
-                method: req.method,
-                url: req.originalUrl,
-                headers: req.headers,
-                body: req.body,
-                rawBody: JSON.stringify(req.body, null, 2),
-                type: requestType
-            });
-            
-            await webhookLog.save();
-            logger.info('metaWhatsappWebhookController', 'تم حفظ سجل webhook في قاعدة البيانات', { 
-                requestId: requestId,
-                type: requestType
-            });
-        } catch (logError) {
-            logger.error('metaWhatsappWebhookController', 'خطأ في حفظ سجل webhook', {
-                requestId: requestId,
-                error: logError.message
-            });
-        }
-        
-        // التحقق من أن البيانات بالتنسيق المتوقع
-        if (!req.body || !req.body.object || !req.body.entry || !Array.isArray(req.body.entry)) {
-            logger.warn('metaWhatsappWebhookController', 'بيانات webhook بتنسيق غير متوقع', {
-                requestId: requestId,
-                body: req.body
-            });
-            return;
-        }
-        
-        const data = req.body;
-        
-        // التأكد من أن الكائن هو حساب واتساب تجاري
-        if (data.object !== 'whatsapp_business_account') {
-            logger.warn('metaWhatsappWebhookController', 'كائن webhook غير معروف', {
-                requestId: requestId,
-                object: data.object
-            });
-            return;
-        }
-        
-        // معالجة كل إدخال في البيانات
-        for (const entry of data.entry) {
-            // التحقق من وجود التغييرات
-            if (!entry.changes || !Array.isArray(entry.changes)) {
-                continue;
-            }
-            
-            // معالجة كل تغيير
-            for (const change of entry.changes) {
-                const value = change.value;
-                
-                // تسجيل كل تغيير بالتفصيل
-                logger.info('metaWhatsappWebhookController', `تغيير في ${change.field}`, {
-                    requestId: requestId,
-                    field: change.field,
-                    value: JSON.stringify(value)
-                });
-                
-                // التحقق من نوع التغيير
-                if (change.field === 'messages') {
-                    // معالجة الرسائل الواردة
-                    if (value.messages && Array.isArray(value.messages)) {
-                        for (const message of value.messages) {
-                            logger.info('metaWhatsappWebhookController', 'رسالة واردة جديدة', {
-                                requestId: requestId,
-                                messageId: message.id,
-                                from: message.from,
-                                type: message.type,
-                                content: JSON.stringify(message)
-                            });
-                            
-                            // يمكنك التعامل مع الرسالة الواردة هنا
-                            // حاليًا نقوم فقط بتسجيلها دون تخزينها في قاعدة البيانات
-                        }
-                    }
-                    
-                    // معالجة تحديثات حالة الرسائل
-                    if (value.statuses && Array.isArray(value.statuses)) {
-                        for (const status of value.statuses) {
-                            logger.info('metaWhatsappWebhookController', 'تحديث حالة رسالة', {
-                                requestId: requestId,
-                                messageId: status.id,
-                                status: status.status,
-                                recipientId: status.recipient_id,
-                                statusDetails: JSON.stringify(status)
-                            });
-                            
-                            // تحديث حالة الرسالة في قاعدة البيانات
-                            await updateMessageStatus(status);
-                        }
-                    }
-                }
-            }
-        }
-    } catch (error) {
-        logger.error('metaWhatsappWebhookController', 'خطأ في معالجة webhook', {
+        logger.debug('metaWhatsappWebhookController', 'استلام webhook جديد من ميتا', {
             requestId: requestId,
+            body: JSON.stringify(body, null, 2),
+            headers: JSON.stringify(req.headers, null, 2),
+            method: req.method,
+            url: req.url,
+            timestamp: new Date()
+        });
+        
+        // تحديد نوع الطلب
+        let requestType = 'unknown';
+        
+        // حفظ سجل webhook
+        const webhookLog = new MetaWhatsappWebhookLog({
+            requestId: requestId,
+            requestBody: body,
+            requestHeaders: req.headers,
+            requestMethod: req.method,
+            requestUrl: req.url,
+            receivedAt: new Date()
+        });
+        
+        // معالجة البيانات
+        if (body.object === 'whatsapp_business_account') {
+            // التحقق من وجود تغييرات
+            if (body.entry && body.entry.length > 0) {
+                for (const entry of body.entry) {
+                    if (entry.changes && entry.changes.length > 0) {
+                        for (const change of entry.changes) {
+                            if (change.field === 'messages') {
+                                if (change.value.messages && change.value.messages.length > 0) {
+                                    requestType = 'message';
+                                } else if (change.value.statuses && change.value.statuses.length > 0) {
+                                    requestType = 'status';
+                                }
+                            }
+                            
+                            logger.info('metaWhatsappWebhookController', 'تغيير في ' + change.field, {
+                                requestId: requestId,
+                                field: change.field,
+                                value: JSON.stringify(change.value)
+                            });
+                            
+                            // معالجة تحديثات الحالة
+                            if (change.field === 'messages' && change.value.statuses && change.value.statuses.length > 0) {
+                                for (const status of change.value.statuses) {
+                                    logger.info('metaWhatsappWebhookController', 'تحديث حالة رسالة', {
+                                        requestId: requestId,
+                                        messageId: status.id,
+                                        status: status.status,
+                                        recipientId: status.recipient_id,
+                                        statusDetails: JSON.stringify(status)
+                                    });
+                                    
+                                    // تحديث حالة الرسالة في قاعدة البيانات
+                                    await updateMessageStatus(status.id, status.status, new Date(status.timestamp * 1000));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // تحديث نوع الطلب وحفظ السجل
+        webhookLog.requestType = requestType;
+        await webhookLog.save();
+        
+        logger.info('metaWhatsappWebhookController', 'تم حفظ سجل webhook في قاعدة البيانات', {
+            requestId: requestId,
+            type: requestType
+        });
+        
+        return res.status(200).send('EVENT_RECEIVED');
+    } catch (error) {
+        logger.error('metaWhatsappWebhookController', 'خطأ في معالجة webhook ميتا', {
             error: error.message,
             stack: error.stack
         });
+        return res.status(500).send('ERROR');
     }
 };
 
-async function updateMessageStatus(status) {
-    try {
-        const messageId = status.id;
-        const newStatus = status.status;
-        const timestamp = status.timestamp ? new Date(status.timestamp * 1000) : new Date();
-        
-        logger.debug('metaWhatsappWebhookController', 'محاولة تحديث حالة الرسالة', {
-            messageId: messageId,
-            newStatus: newStatus,
-            timestamp: timestamp
-        });
-        
-        // تحويل حالة Meta WhatsApp إلى الحالة المناسبة في نظامنا
-        let systemStatus = newStatus;
-        if (newStatus === 'sent') {
-            systemStatus = 'sent';
-        } else if (newStatus === 'delivered') {
-            systemStatus = 'delivered';
-        } else if (newStatus === 'read') {
-            systemStatus = 'read';
-        } else if (newStatus === 'failed') {
-            systemStatus = 'failed';
-        }
-        
-        // 1. تحديث الرسالة في جدول MetaWhatsappMessage
-        const updateData = { status: systemStatus };
-        
-        // إضافة الحقول الخاصة بالتوقيت حسب نوع التحديث
-        if (newStatus === 'delivered') {
-            updateData.deliveredAt = timestamp;
-        } else if (newStatus === 'read') {
-            updateData.readAt = timestamp;
-        }
-        
-        // تحديث بيانات الرسالة في جدول MetaWhatsappMessage
-        const metaMessage = await MetaWhatsappMessage.findOneAndUpdate(
-            { externalMessageId: messageId },
-            {
-                $set: updateData,
-                $push: {
-                    'providerData.statusUpdates': {
-                        status: newStatus,
-                        timestamp: timestamp,
-                        rawData: status
-                    }
-                }
-            },
-            { new: true }
-        );
-        
-        // 2. تحديث الرسالة في جدول SemMessage
-        const semMessage = await SemMessage.findOneAndUpdate(
-            { externalMessageId: messageId },
-            {
-                $set: {
-                    status: systemStatus,
-                    'providerData.lastUpdate': timestamp,
-                    'providerData.statusUpdates': {
-                        status: newStatus,
-                        timestamp: timestamp
-                    }
-                }
-            },
-            { new: true }
-        );
-        
-        if (metaMessage) {
-            logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في MetaWhatsappMessage', {
-                messageId: messageId,
-                status: systemStatus
-            });
-        }
-        
-        if (semMessage) {
-            logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage', {
-                messageId: messageId,
-                status: systemStatus
-            });
-        }
-        
-        if (!metaMessage && !semMessage) {
-            logger.warn('metaWhatsappWebhookController', 'لم يتم العثور على الرسالة في قاعدة البيانات', {
-                messageId: messageId
-            });
-        }
-        
-        return { metaMessage, semMessage };
-    } catch (error) {
-        logger.error('metaWhatsappWebhookController', 'خطأ في تحديث حالة الرسالة', {
-            messageId: status.id,
-            error: error.message,
-            stack: error.stack
-        });
-        return null;
+/**
+ * تحديث حالة الرسالة بناءً على إشعار الحالة
+ * @param {string} messageId - معرف الرسالة الخارجي 
+ * @param {string} newStatus - الحالة الجديدة للرسالة
+ * @param {Date} timestamp - توقيت تحديث الحالة
+ */
+async function updateMessageStatus(messageId, newStatus, timestamp) {
+  try {
+    logger.debug('metaWhatsappWebhookController', 'محاولة تحديث حالة الرسالة', {
+      messageId,
+      newStatus,
+      timestamp
+    });
+    
+    // البحث عن الرسالة في جدول SemMessage
+    const message = await SemMessage.findOne({ externalMessageId: messageId });
+    
+    // إذا وجدنا الرسالة في جدول SemMessage، نحدث حالتها
+    if (message) {
+      // تحديث الحالة حسب الإشعار
+      if (newStatus === 'sent') {
+        message.status = 'sent';
+      } else if (newStatus === 'delivered') {
+        message.status = 'delivered';
+        message.deliveredAt = timestamp;
+      } else if (newStatus === 'read') {
+        message.status = 'read';
+        message.readAt = timestamp;
+      } else if (newStatus === 'failed') {
+        message.status = 'failed';
+      }
+      
+      // تحديث بيانات مزود الخدمة
+      if (!message.providerData) {
+        message.providerData = { provider: 'metaWhatsapp' };
+      }
+      
+      message.providerData.lastUpdate = timestamp;
+      
+      // إضافة تحديث الحالة إلى سجل التحديثات
+      if (!message.providerData.statusUpdates) {
+        message.providerData.statusUpdates = {};
+      }
+      
+      message.providerData.statusUpdates.status = newStatus;
+      message.providerData.statusUpdates.timestamp = timestamp;
+      
+      // حفظ التغييرات
+      await message.save();
+      
+      logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage', {
+        messageId,
+        status: newStatus
+      });
+      
+      return { success: true, message };
+    } else {
+      logger.warn('metaWhatsappWebhookController', 'لم يتم العثور على الرسالة في قاعدة البيانات', { messageId });
+      return { success: false, error: 'رسالة غير موجودة' };
     }
+  } catch (error) {
+    logger.error('metaWhatsappWebhookController', 'خطأ في تحديث حالة الرسالة', {
+      error: error.message,
+      stack: error.stack,
+      messageId,
+      newStatus
+    });
+    return { success: false, error: error.message };
+  }
 }
