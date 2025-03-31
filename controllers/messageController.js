@@ -277,11 +277,17 @@ async function sendWhatsappAndUpdate(message, client, formattedPhone, msgContent
  * @param {string} formattedPhone - رقم الهاتف المنسق
  * @param {string} msgContent - محتوى الرسالة
  * @param {boolean} updateSemMessage - تحديث سجل SemMessage أم لا
+ * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
  * @returns {Promise<Object>} نتيجة الإرسال
  */
-async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, updateSemMessage = true) {
+async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, updateSemMessage = true, phoneNumberId = null) {
   try {
-    logger.debug('messageController', 'إرسال رسالة عبر Meta واتساب', { formattedPhone });
+    logger.debug('messageController', 'إرسال رسالة عبر Meta واتساب', { 
+      formattedPhone,
+      clientId: client._id,
+      clientName: client.name,
+      phoneNumberId: phoneNumberId || 'الافتراضي'
+    });
     
     // استخدام إعدادات النموذج المخصصة للعميل أو الإعدادات الافتراضية
     const templateName = client.metaWhatsappTemplates?.name || 'siraj';
@@ -301,11 +307,13 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
     ];
     
     // استخدام واجهة إرسال النماذج بدلاً من الرسائل النصية العادية
+    // إرسال الرسالة عبر الرقم المحدد إذا تم توفيره
     const result = await MetaWhatsappService.sendTemplateMessage(
       formattedPhone, 
       templateName, 
       templateLanguage, 
-      components
+      components,
+      phoneNumberId // معرف رقم الهاتف (اختياري)
     );
     
     // تخزين معرف الرسالة الخارجي من Meta
@@ -321,6 +329,7 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
         lastUpdate: new Date(),
         templateName,
         templateLanguage,
+        phoneNumberId: phoneNumberId || null, // تسجيل رقم الهاتف المستخدم
         rawResponse: result
       };
       await message.save();
@@ -344,6 +353,7 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
           lastUpdate: new Date(),
           templateName,
           templateLanguage,
+          phoneNumberId: phoneNumberId || null, // تسجيل رقم الهاتف المستخدم
           rawResponse: result
         }
       });

@@ -4,6 +4,10 @@ const mongoose = require('mongoose');
  * نموذج إعدادات خدمة الواتس أب الرسمية من ميتا (الإصدار 22)
  */
 const metaWhatsappSettingsSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        default: 'إعدادات واتساب الرسمي'
+    },
     isActive: {
         type: Boolean,
         default: false
@@ -54,49 +58,26 @@ const metaWhatsappSettingsSchema = new mongoose.Schema({
 // طريقة للحصول على الإعدادات النشطة
 metaWhatsappSettingsSchema.statics.getActiveSettings = async function() {
     try {
+        // للتوافق مع الكود القديم، نقوم بإرجاع الإعدادات النشطة الأولى
+        const activeSettings = await this.findOne({ isActive: true }).sort({ updatedAt: -1 });
+        
+        // إذا وجدنا إعدادات نشطة، نرجعها
+        if (activeSettings) {
+            return activeSettings;
+        }
+        
         // البحث عن جميع الإعدادات الموجودة
         const allSettings = await this.find({}).sort({ updatedAt: -1 });
         
-        // إذا كان هناك أكثر من سجل، نقوم بتنظيف قاعدة البيانات والاحتفاظ بالسجل الأحدث
-        if (allSettings.length > 1) {
-            console.log(`تم العثور على ${allSettings.length} سجل، سيتم الاحتفاظ بأحدث سجل والتنظيف`);
-            
-            // البحث عن السجلات التي تحتوي على بيانات (غير فارغة)
-            const settingsWithData = allSettings.filter(setting => 
-                setting.config && 
-                ((setting.config.appId && setting.config.appId.trim() !== '') || 
-                (setting.config.accessToken && setting.config.accessToken.trim() !== '') || 
-                (setting.config.phoneNumberId && setting.config.phoneNumberId.trim() !== ''))
-            );
-            
-            // اختيار السجل الذي سنحتفظ به
-            let settingToKeep;
-            if (settingsWithData.length > 0) {
-                // نحتفظ بأحدث سجل يحتوي على بيانات
-                settingToKeep = settingsWithData[0];  // الأول هو الأحدث (مرتبة تنازلياً)
-                console.log('سيتم الاحتفاظ بأحدث سجل يحتوي على بيانات');
-            } else {
-                // إذا لم تكن هناك سجلات تحتوي على بيانات، نحتفظ بأحدث سجل
-                settingToKeep = allSettings[0];  // الأول هو الأحدث (مرتبة تنازلياً)
-                console.log('لا توجد سجلات بها بيانات، سيتم الاحتفاظ بأحدث سجل');
-            }
-            
-            // حذف جميع السجلات الأخرى
-            await this.deleteMany({ _id: { $ne: settingToKeep._id } });
-            console.log('تم تنظيف السجلات الزائدة');
-            
-            return settingToKeep;
-        }
-        
-        // إذا كان هناك سجل واحد، نستخدمه
-        if (allSettings.length === 1) {
-            console.log('تم العثور على سجل واحد موجود');
+        // إذا كان هناك أي إعدادات، نرجع الأحدث
+        if (allSettings.length > 0) {
             return allSettings[0];
         }
         
         // إذا لم تكن هناك سجلات، ننشئ سجلاً جديداً
         console.log('لم يتم العثور على سجلات، سيتم إنشاء سجل جديد');
         const newSettings = await this.create({
+            name: 'إعدادات واتساب الرسمي الافتراضية',
             isActive: false,
             config: {
                 appId: '',
@@ -114,6 +95,7 @@ metaWhatsappSettingsSchema.statics.getActiveSettings = async function() {
         console.error('خطأ في الحصول على إعدادات واتساب:', error);
         // في حالة الخطأ، ننشئ كائناً جديداً دون حفظه في قاعدة البيانات
         return new this({
+            name: 'إعدادات واتساب الرسمي الافتراضية',
             isActive: false,
             config: {
                 appId: '',
@@ -125,6 +107,39 @@ metaWhatsappSettingsSchema.statics.getActiveSettings = async function() {
                 webhookUrl: ''
             }
         });
+    }
+};
+
+// طريقة جديدة للحصول على جميع الإعدادات النشطة
+metaWhatsappSettingsSchema.statics.getAllActiveSettings = async function() {
+    try {
+        // البحث عن جميع الإعدادات النشطة
+        const activeSettings = await this.find({ isActive: true }).sort({ updatedAt: -1 });
+        
+        if (activeSettings.length > 0) {
+            return activeSettings;
+        }
+        
+        // إذا لم تكن هناك إعدادات نشطة، نرجع الإعدادات الافتراضية
+        const defaultSettings = await this.getActiveSettings();
+        return [defaultSettings];
+    } catch (error) {
+        console.error('خطأ في الحصول على جميع إعدادات واتساب النشطة:', error);
+        return [];
+    }
+};
+
+// طريقة للبحث عن الإعدادات حسب معرف رقم الهاتف
+metaWhatsappSettingsSchema.statics.getSettingsByPhoneNumberId = async function(phoneNumberId) {
+    try {
+        const settings = await this.findOne({
+            'config.phoneNumberId': phoneNumberId
+        });
+        
+        return settings;
+    } catch (error) {
+        console.error('خطأ في البحث عن إعدادات واتساب حسب معرف رقم الهاتف:', error);
+        return null;
     }
 };
 

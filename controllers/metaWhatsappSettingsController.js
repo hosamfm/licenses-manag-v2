@@ -11,7 +11,10 @@ const crypto = require('crypto');
  */
 exports.showMetaWhatsappSettings = async (req, res) => {
     try {
-        // الحصول على إعدادات واتساب الرسمي
+        // الحصول على جميع إعدادات واتساب الرسمي
+        const allSettings = await MetaWhatsappSettings.find().sort({ isActive: -1, updatedAt: -1 });
+        
+        // الحصول على الإعدادات النشطة لعرض حالة الاتصال
         const settings = await MetaWhatsappSettings.getActiveSettings();
         
         // الحصول على حالة الاتصال والمعلومات
@@ -22,7 +25,7 @@ exports.showMetaWhatsappSettings = async (req, res) => {
         };
         
         // محاولة الاتصال بواتساب الرسمي للتحقق من الإعدادات
-        if (settings.isConfigured()) {
+        if (settings && settings.isConfigured()) {
             try {
                 // تهيئة خدمة واتساب الرسمي
                 await MetaWhatsappService.initialize();
@@ -48,6 +51,7 @@ exports.showMetaWhatsappSettings = async (req, res) => {
         // عرض قالب إعدادات واتساب الرسمي
         res.render('meta_whatsapp_settings', {
             settings,
+            allSettings, // تمرير جميع الإعدادات للعرض في الجدول
             connectionStatus,
             webhookUrl, // تمرير عنوان webhook الذي تم توليده
             templates: [], // يمكن إضافة قوالب الرسائل هنا في المستقبل
@@ -143,6 +147,213 @@ exports.saveMetaWhatsappSettings = async (req, res) => {
 };
 
 /**
+ * إضافة إعداد واتساب جديد
+ */
+exports.addMetaWhatsappSettings = async (req, res) => {
+    try {
+        const {
+            name,
+            app_id,
+            app_secret,
+            phone_number_id,
+            business_account_id,
+            access_token,
+            verify_token,
+            is_active
+        } = req.body;
+
+        // التحقق من عدم وجود إعداد بنفس رقم الهاتف
+        const existingSettings = await MetaWhatsappSettings.findOne({
+            'config.phoneNumberId': phone_number_id
+        });
+
+        if (existingSettings) {
+            req.flash('error', 'يوجد إعداد آخر يستخدم نفس معرف رقم الهاتف بالفعل');
+            return res.redirect('/admin/meta-whatsapp-settings');
+        }
+
+        // إنشاء إعداد جديد
+        const newSettings = new MetaWhatsappSettings({
+            name: name || `إعداد واتساب ${phone_number_id}`,
+            isActive: is_active === 'on',
+            config: {
+                appId: app_id,
+                appSecret: app_secret,
+                phoneNumberId: phone_number_id,
+                businessAccountId: business_account_id,
+                accessToken: access_token,
+                verifyToken: verify_token || crypto.randomBytes(16).toString('hex')
+            },
+            createdBy: req.session && req.session.userId ? req.session.userId : null,
+            updatedBy: req.session && req.session.userId ? req.session.userId : null
+        });
+
+        await newSettings.save();
+
+        logger.info('metaWhatsappSettingsController', 'تم إضافة إعداد واتساب جديد', {
+            userId: req.session && req.session.userId ? req.session.userId : null,
+            settingsId: newSettings._id,
+            phoneNumberId: phone_number_id,
+            isActive: newSettings.isActive
+        });
+
+        req.flash('success', 'تم إضافة إعداد واتساب جديد بنجاح');
+        res.redirect('/admin/meta-whatsapp-settings');
+    } catch (error) {
+        logger.error('metaWhatsappSettingsController', 'خطأ في إضافة إعداد واتساب جديد', error);
+        req.flash('error', 'حدث خطأ أثناء إضافة إعداد واتساب جديد');
+        res.redirect('/admin/meta-whatsapp-settings');
+    }
+};
+
+/**
+ * الحصول على إعداد واتساب محدد
+ */
+exports.getMetaWhatsappSettings = async (req, res) => {
+    try {
+        const settingsId = req.params.id;
+        const settings = await MetaWhatsappSettings.findById(settingsId);
+
+        if (!settings) {
+            return res.status(404).json({
+                success: false,
+                message: 'لم يتم العثور على الإعداد المطلوب'
+            });
+        }
+
+        res.json({
+            success: true,
+            setting: {
+                _id: settings._id,
+                name: settings.name,
+                isActive: settings.isActive,
+                config: {
+                    appId: settings.config.appId,
+                    phoneNumberId: settings.config.phoneNumberId,
+                    businessAccountId: settings.config.businessAccountId,
+                    verifyToken: settings.config.verifyToken
+                    // لا نقم بإرجاع بيانات حساسة مثل access_token و app_secret
+                }
+            }
+        });
+    } catch (error) {
+        logger.error('metaWhatsappSettingsController', 'خطأ في الحصول على إعداد واتساب', error);
+        res.status(500).json({
+            success: false,
+            message: 'حدث خطأ أثناء معالجة الطلب'
+        });
+    }
+};
+
+/**
+ * تحديث إعداد واتساب محدد
+ */
+exports.updateMetaWhatsappSettings = async (req, res) => {
+    try {
+        const {
+            id,
+            name,
+            app_id,
+            app_secret,
+            phone_number_id,
+            business_account_id,
+            access_token,
+            verify_token,
+            is_active
+        } = req.body;
+
+        // البحث عن الإعداد
+        const settings = await MetaWhatsappSettings.findById(id);
+
+        if (!settings) {
+            req.flash('error', 'لم يتم العثور على الإعداد المطلوب');
+            return res.redirect('/admin/meta-whatsapp-settings');
+        }
+
+        // التحقق من عدم وجود إعداد آخر بنفس رقم الهاتف
+        if (phone_number_id && phone_number_id !== settings.config.phoneNumberId) {
+            const existingSettings = await MetaWhatsappSettings.findOne({
+                _id: { $ne: id },
+                'config.phoneNumberId': phone_number_id
+            });
+
+            if (existingSettings) {
+                req.flash('error', 'يوجد إعداد آخر يستخدم نفس معرف رقم الهاتف بالفعل');
+                return res.redirect('/admin/meta-whatsapp-settings');
+            }
+        }
+
+        // تحديث الإعدادات
+        settings.name = name || settings.name;
+        settings.isActive = is_active === 'on';
+        
+        // تحديث الحقول فقط إذا تم توفيرها وليست فارغة
+        if (app_id) settings.config.appId = app_id;
+        if (app_secret && app_secret.trim() !== '') settings.config.appSecret = app_secret;
+        if (phone_number_id) settings.config.phoneNumberId = phone_number_id;
+        if (business_account_id) settings.config.businessAccountId = business_account_id;
+        if (access_token && access_token.trim() !== '') settings.config.accessToken = access_token;
+        
+        // تحديث توكن التحقق إذا تم توفيره
+        if (verify_token && verify_token.trim() !== '') {
+            settings.config.verifyToken = verify_token;
+        }
+
+        settings.updatedBy = req.session && req.session.userId ? req.session.userId : null;
+        await settings.save();
+
+        logger.info('metaWhatsappSettingsController', 'تم تحديث إعداد واتساب', {
+            userId: req.session && req.session.userId ? req.session.userId : null,
+            settingsId: settings._id,
+            phoneNumberId: settings.config.phoneNumberId,
+            isActive: settings.isActive
+        });
+
+        req.flash('success', 'تم تحديث إعداد واتساب بنجاح');
+        res.redirect('/admin/meta-whatsapp-settings');
+    } catch (error) {
+        logger.error('metaWhatsappSettingsController', 'خطأ في تحديث إعداد واتساب', error);
+        req.flash('error', 'حدث خطأ أثناء تحديث إعداد واتساب');
+        res.redirect('/admin/meta-whatsapp-settings');
+    }
+};
+
+/**
+ * حذف إعداد واتساب محدد
+ */
+exports.deleteMetaWhatsappSettings = async (req, res) => {
+    try {
+        const { id } = req.body;
+
+        // البحث عن الإعداد
+        const settings = await MetaWhatsappSettings.findById(id);
+
+        if (!settings) {
+            req.flash('error', 'لم يتم العثور على الإعداد المطلوب');
+            return res.redirect('/admin/meta-whatsapp-settings');
+        }
+
+        // التحقق من عدم وجود قنوات مرتبطة بهذا الإعداد
+        // يمكن إضافة هذا التحقق لاحقًا إذا لزم الأمر
+
+        // حذف الإعداد
+        await MetaWhatsappSettings.findByIdAndDelete(id);
+
+        logger.info('metaWhatsappSettingsController', 'تم حذف إعداد واتساب', {
+            userId: req.session && req.session.userId ? req.session.userId : null,
+            deletedSettingsId: id
+        });
+
+        req.flash('success', 'تم حذف إعداد واتساب بنجاح');
+        res.redirect('/admin/meta-whatsapp-settings');
+    } catch (error) {
+        logger.error('metaWhatsappSettingsController', 'خطأ في حذف إعداد واتساب', error);
+        req.flash('error', 'حدث خطأ أثناء حذف إعداد واتساب');
+        res.redirect('/admin/meta-whatsapp-settings');
+    }
+};
+
+/**
  * توليد توكن تحقق جديد
  */
 exports.generateNewVerifyToken = async (req, res) => {
@@ -167,5 +378,64 @@ exports.generateNewVerifyToken = async (req, res) => {
     } catch (error) {
         logger.error('metaWhatsappSettingsController', 'خطأ في توليد توكن تحقق جديد', error);
         res.status(500).json({ error: 'حدث خطأ أثناء توليد توكن تحقق جديد' });
+    }
+};
+
+/**
+ * فحص حالة اتصال إعداد واتساب معين
+ */
+exports.checkSettingConnection = async (req, res) => {
+    try {
+        const id = req.params.id;
+        
+        // التحقق من وجود الإعداد
+        const setting = await MetaWhatsappSettings.findById(id);
+        if (!setting) {
+            return res.status(404).json({
+                success: false,
+                message: 'لم يتم العثور على الإعداد'
+            });
+        }
+        
+        // محاولة الاتصال بواتساب الرسمي للتحقق من الإعدادات
+        let connectionStatus = {
+            success: false,
+            error: null,
+            phoneNumber: null,
+            settingName: setting.name
+        };
+        
+        if (setting.isConfigured()) {
+            try {
+                // استخدام نسخة الخدمة الموجودة بدلاً من إنشاء نسخة جديدة
+                const tempService = MetaWhatsappService;
+                tempService.settings = setting;
+                await tempService.initialize();
+                
+                const phoneInfo = await tempService.getPhoneNumberInfo();
+                connectionStatus.success = true;
+                connectionStatus.phoneNumber = phoneInfo.display_phone_number || phoneInfo.id;
+            } catch (error) {
+                connectionStatus.error = error.message;
+                // إذا كان الخطأ 401، نضيف رسالة أكثر وضوحًا
+                if (error.response && error.response.status === 401) {
+                    connectionStatus.error = 'توكن الوصول غير صالح أو منتهي الصلاحية. الرجاء التحقق من إعدادات واتساب الرسمي.';
+                }
+                logger.error('metaWhatsappSettingsController', `خطأ في الاتصال بواتساب الرسمي للإعداد ${setting.name}`, error);
+            }
+        } else {
+            connectionStatus.error = 'الإعداد غير مكتمل. يرجى استكمال جميع الحقول المطلوبة.';
+        }
+        
+        return res.json({
+            success: true,
+            connectionStatus
+        });
+    } catch (error) {
+        logger.error('metaWhatsappSettingsController', 'خطأ في فحص حالة اتصال إعداد واتساب', error);
+        return res.status(500).json({
+            success: false,
+            message: 'حدث خطأ أثناء فحص حالة الاتصال'
+        });
     }
 };
