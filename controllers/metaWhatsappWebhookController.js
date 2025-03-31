@@ -5,6 +5,7 @@ const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const MetaWhatsappWebhookLog = require('../models/MetaWhatsappWebhookLog');
 const logger = require('../services/loggerService');
 const crypto = require('crypto');
+const WebhookForwardService = require('../services/whatsapp/WebhookForwardService');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -34,6 +35,14 @@ exports.verifyWebhook = async (req, res) => {
         // التحقق من وضع الطلب وتوكن التحقق
         if (mode === 'subscribe' && token === settings.config.verifyToken) {
             logger.info('metaWhatsappWebhookController', 'تم التحقق من webhook بنجاح');
+            
+            // تمرير طلب التحقق إلى الخدمة المستهدفة
+            try {
+                await WebhookForwardService.forwardVerification(req.query);
+                logger.info('metaWhatsappWebhookController', 'تم تمرير طلب التحقق بنجاح');
+            } catch (forwardError) {
+                logger.error('metaWhatsappWebhookController', 'خطأ في تمرير طلب التحقق', forwardError);
+            }
             
             // الرد بالتحدي لتأكيد نجاح التحقق
             res.status(200).send(challenge);
@@ -72,6 +81,28 @@ exports.handleWebhook = async (req, res) => {
     try {
         // إرسال استجابة سريعة لتجنب إعادة الإرسال من ميتا
         res.status(200).send('EVENT_RECEIVED');
+        
+        // تمرير الويب هوك إلى الخدمة المستهدفة
+        try {
+            // تمرير الطلب كاملاً مع نفس المحتوى والترويسات تماماً
+            const forwardResult = await WebhookForwardService.forwardWebhook(
+                req.body,
+                req.headers,
+                req.method,
+                requestId
+            );
+            
+            logger.info('metaWhatsappWebhookController', 'نتيجة تمرير الويب هوك', {
+                requestId: requestId,
+                success: forwardResult.success,
+                status: forwardResult.status
+            });
+        } catch (forwardError) {
+            logger.error('metaWhatsappWebhookController', 'خطأ في تمرير الويب هوك', {
+                requestId: requestId,
+                error: forwardError.message
+            });
+        }
         
         // تخزين سجل الطلب
         try {
