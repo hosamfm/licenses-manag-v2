@@ -30,4 +30,7 @@ router.post('/:conversationId/status', ensureCanAccessConversations, conversatio
 // مسار إرسال رد في المحادثة
 router.post('/:conversationId/reply', ensureCanAccessConversations, conversationController.replyToConversation);
 
+// مسار إلغاء إسناد المحادثة
+router.get('/:conversationId/unassign', ensureCanAccessConversations, conversationController.unassignConversation);
+
 module.exports = router;

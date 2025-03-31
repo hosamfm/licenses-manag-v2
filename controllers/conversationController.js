@@ -259,8 +259,8 @@ exports.showConversation = async (req, res) => {
 const assignConversation = async (req, res) => {
     try {
         const { conversationId } = req.params;
-        const { userId } = req.body;
-
+        const userId = req.body.assignedTo; // تعديل لقراءة الحقل الصحيح من النموذج
+        
         // التحقق من وجود المحادثة
         const conversation = await Conversation.findById(conversationId);
         if (!conversation) {
@@ -280,13 +280,21 @@ const assignConversation = async (req, res) => {
         // تحديث المحادثة بالمستخدم المعين
         conversation.assignedTo = userId || null;
         conversation.updatedAt = new Date();
+        
+        // تحديث الحالة استناداً إلى وجود مستخدم مُسند
+        if (userId) {
+            conversation.status = 'assigned';
+        } else {
+            conversation.status = 'open';
+        }
+        
         await conversation.save();
 
         // إرسال إشعار بتحديث المحادثة
         socketService.notifyConversationUpdate(conversationId, {
             type: 'assigned',
             assignedTo: userId,
-            assignedBy: req.user._id
+            assignedBy: req.user ? req.user._id : null
         });
 
         req.flash('success', userId ? 'تم إسناد المحادثة بنجاح' : 'تم إلغاء إسناد المحادثة بنجاح');
@@ -481,6 +489,65 @@ const replyToConversation = async (req, res) => {
         logger.error('conversationController', 'خطأ في إرسال رد على المحادثة', error);
         req.flash('error', 'حدث خطأ أثناء إرسال الرد');
         res.redirect('/crm/conversations');
+    }
+};
+
+/**
+ * إلغاء إسناد محادثة
+ * يزيل المستخدم المسند من المحادثة ويعيدها إلى الحالة المفتوحة
+ */
+exports.unassignConversation = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        
+        // التحقق من وجود المحادثة
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) {
+            req.flash('error', 'المحادثة غير موجودة');
+            return res.redirect('/crm/conversations');
+        }
+        
+        // التحقق من أن المحادثة مسندة بالفعل
+        if (!conversation.assignedTo) {
+            req.flash('error', 'المحادثة غير مسندة حاليًا');
+            return res.redirect(`/crm/conversations/${conversationId}`);
+        }
+        
+        // حفظ معرف المستخدم السابق للإشعارات
+        const previousAssignedUser = conversation.assignedTo;
+        
+        // إلغاء الإسناد وتغيير الحالة إلى مفتوحة
+        conversation.assignedTo = null;
+        conversation.status = 'open';
+        await conversation.save();
+        
+        // تسجيل المعلومات
+        logger.info('conversationController', 'تم إلغاء إسناد المحادثة', {
+            conversationId,
+            previousAssignedUser,
+            by: req.user._id
+        });
+        
+        // إرسال إشعار للمستخدمين عبر Socket.io
+        socketService.emitToAll('conversation_updated', {
+            conversationId: conversation._id,
+            status: conversation.status,
+            assignedTo: null
+        });
+        
+        req.flash('success', 'تم إلغاء إسناد المحادثة بنجاح');
+        
+        // إعادة التوجيه حسب مصدر الطلب
+        const referer = req.get('Referer');
+        if (referer && referer.includes('/conversations/my')) {
+            return res.redirect('/crm/conversations/my');
+        }
+        return res.redirect('/crm/conversations');
+        
+    } catch (error) {
+        logger.error('conversationController', 'خطأ في إلغاء إسناد المحادثة', error);
+        req.flash('error', 'حدث خطأ أثناء إلغاء إسناد المحادثة');
+        return res.redirect('/crm/conversations');
     }
 };
 

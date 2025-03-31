@@ -12,16 +12,35 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/css/style.css">
   
-  <!-- Socket.io -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Socket.io - استخدام CDN -->
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <script>
-    // تهيئة اتصال Socket.io
-    const socket = io();
+    // إنشاء متغير socket عالمي
+    var socket;
     
-    // انضمام المستخدم إلى غرفته الخاصة إذا كان مسجل دخوله
-    <% if (user && user._id) { %>
-      socket.emit('join-user-room', '<%= user._id %>');
-    <% } %>
+    // تهيئة اتصال Socket.io
+    try {
+      // تهيئة الاتصال بالخادم على المنفذ 3001
+      socket = io('http://localhost:3001', {
+        withCredentials: false,
+        transports: ['websocket', 'polling']
+      });
+      
+      socket.on('connect', function() {
+        console.log('تم الاتصال بنجاح بـ Socket.io');
+        
+        // انضمام المستخدم إلى غرفته الخاصة إذا كان مسجل دخوله
+        <% if (typeof user !== 'undefined' && user && user._id) { %>
+          socket.emit('join-user-room', '<%= user._id %>');
+        <% } %>
+      });
+      
+      socket.on('connect_error', function(error) {
+        console.error('خطأ في الاتصال بـ Socket.io:', error);
+      });
+    } catch (e) {
+      console.error('حدث خطأ أثناء تهيئة Socket.io:', e);
+    }
   </script>
   
   <style>

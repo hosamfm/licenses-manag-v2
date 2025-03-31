@@ -523,163 +523,194 @@
   
   <%- include('../partials/_footer') %>
   
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- إضافة مكتبة Socket.io مباشرة في صفحة المحادثة -->
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // تنسيق التاريخ
-      function formatDate(date) {
-        const options = {
-          year: 'numeric',
-          month: 'numeric',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        };
-        return new Date(date).toLocaleString('ar-LY', options);
+      // تهيئة Socket.io محلياً في صفحة المحادثة
+      let conversationSocket;
+      
+      try {
+        conversationSocket = io('http://localhost:3001', {
+          withCredentials: false,
+          transports: ['websocket', 'polling']
+        });
+        
+        // عند نجاح الاتصال
+        conversationSocket.on('connect', function() {
+          console.log('تم الاتصال بنجاح بـ Socket.io في صفحة المحادثة');
+          
+          // الانضمام إلى غرفة المحادثة
+          conversationSocket.emit('join-conversation', '<%= conversation._id %>');
+          
+          // استقبال الرسائل الجديدة
+          conversationSocket.on('new-message', function(message) {
+            console.log('استلام رسالة جديدة:', message);
+            
+            // إضافة الرسالة الجديدة إذا كانت لهذه المحادثة
+            if (message.conversationId === '<%= conversation._id %>') {
+              addMessageToChat(message);
+              showAlert('تم استلام رسالة جديدة', 'info');
+            }
+          });
+          
+          // استقبال تحديثات المحادثة
+          conversationSocket.on('conversation-update', function(update) {
+            console.log('تحديث المحادثة:', update);
+            
+            // معالجة التحديثات المختلفة
+            switch (update.type) {
+              case 'assigned':
+                updateAssignmentStatus(update);
+                break;
+              case 'status_changed':
+                updateConversationStatus(update.status);
+                break;
+              case 'note_added':
+                showAlert('تم إضافة ملاحظة داخلية جديدة', 'success');
+                break;
+            }
+          });
+        });
+        
+        // معالجة خطأ الاتصال
+        conversationSocket.on('connect_error', function(error) {
+          console.error('خطأ في الاتصال بـ Socket.io:', error);
+        });
+        
+        // مغادرة غرفة المحادثة عند مغادرة الصفحة
+        window.addEventListener('beforeunload', function() {
+          if (conversationSocket && conversationSocket.connected) {
+            conversationSocket.emit('leave-conversation', '<%= conversation._id %>');
+          }
+        });
+      } catch (e) {
+        console.error('حدث خطأ أثناء تهيئة Socket.io في صفحة المحادثة:', e);
       }
       
-      // التمرير إلى آخر الرسائل
-      const messageContainer = document.querySelector('.message-container');
-      if (messageContainer) {
-        messageContainer.scrollTop = messageContainer.scrollHeight;
-      }
-      
-      // جلب قائمة الموظفين لنافذة الإسناد عبر AJAX
-      const assignSelect = document.getElementById('assignedTo');
-      if (assignSelect) {
+      // دالة لجلب قائمة الموظفين المتاحين للإسناد
+      function loadSupportUsers() {
+        const selectElement = document.getElementById('assignedTo');
+        if (!selectElement) return;
+        
+        // إضافة خيار "إلغاء الإسناد"
+        const unassignOption = document.createElement('option');
+        unassignOption.value = '';
+        unassignOption.textContent = '-- إلغاء الإسناد --';
+        selectElement.appendChild(unassignOption);
+        
+        // جلب قائمة الموظفين من واجهة برمجة التطبيقات
         fetch('/api/users/support')
-          .then(response => response.json())
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('فشل في جلب قائمة الموظفين');
+            }
+            return response.json();
+          })
           .then(data => {
-            if (data.users && data.users.length > 0) {
+            // إضافة الموظفين إلى القائمة المنسدلة
+            if (data.success && data.users && data.users.length > 0) {
               data.users.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user._id;
                 option.textContent = user.full_name || user.username;
-                // تحديد المستخدم الحالي إن كان مسنداً
-                if ('<%= conversation.assignedTo ? conversation.assignedTo._id : "" %>' === user._id) {
-                  option.selected = true;
-                }
-                assignSelect.appendChild(option);
+                selectElement.appendChild(option);
               });
+              
+              // تحديد المستخدم المسند حالياً إذا وجد
+              const currentAssignedUser = '<%= conversation.assignedTo ? conversation.assignedTo._id : "" %>';
+              if (currentAssignedUser) {
+                selectElement.value = currentAssignedUser;
+              }
+            } else {
+              const option = document.createElement('option');
+              option.disabled = true;
+              option.textContent = 'لا يوجد موظفين متاحين';
+              selectElement.appendChild(option);
             }
           })
-          .catch(error => console.error('خطأ في جلب قائمة المستخدمين:', error));
+          .catch(error => {
+            console.error('خطأ في جلب قائمة الموظفين:', error);
+            const option = document.createElement('option');
+            option.disabled = true;
+            option.textContent = 'حدث خطأ في تحميل الموظفين';
+            selectElement.appendChild(option);
+          });
       }
       
-      // الانضمام إلى غرفة المحادثة
-      if (typeof socket !== 'undefined') {
-        socket.emit('join-conversation', '<%= conversation._id %>');
-        
-        // استقبال الرسائل الجديدة
-        socket.on('new-message', function(message) {
-          console.log('استلام رسالة جديدة:', message);
-          
-          // التحقق مما إذا كانت هذه الرسالة لهذه المحادثة
-          if (message.conversationId === '<%= conversation._id %>') {
-            // إضافة الرسالة الجديدة إلى قائمة الرسائل
-            const messagesContainer = document.querySelector('.messages-container');
-            
-            // إنشاء عنصر الرسالة الجديدة
-            const messageElement = document.createElement('div');
-            const isOutbound = message.direction === 'outbound';
-            
-            messageElement.className = `message ${isOutbound ? 'outbound' : 'inbound'}`;
-            
-            // تهيئة محتوى الرسالة
-            messageElement.innerHTML = `
-              <div class="message-content">
-                <div class="message-text">${message.content}</div>
-                <div class="message-meta">
-                  <small>${formatDate(new Date(message.timestamp))}</small>
-                  ${isOutbound ? `<small class="sender">${message.sender.username}</small>` : ''}
-                </div>
-              </div>
-            `;
-            
-            // إضافة الرسالة إلى الحاوية
-            messagesContainer.appendChild(messageElement);
-            
-            // التمرير إلى أسفل لعرض الرسالة الجديدة
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          }
-        });
-        
-        // استقبال تحديثات المحادثة
-        socket.on('conversation-update', function(update) {
-          console.log('تحديث المحادثة:', update);
-          
-          // التعامل مع التحديثات المختلفة
-          switch (update.type) {
-            case 'assigned':
-              // تحديث واجهة المستخدم عند إسناد المحادثة
-              updateAssignmentStatus(update);
-              break;
-              
-            case 'status_changed':
-              // تحديث واجهة المستخدم عند تغيير حالة المحادثة
-              updateConversationStatus(update.status);
-              break;
-              
-            case 'note_added':
-              // تنبيه المستخدم بإضافة ملاحظة جديدة
-              showAlert('تم إضافة ملاحظة داخلية جديدة', 'success');
-              // يمكن تحديث قائمة الملاحظات هنا إذا كانت معروضة
-              break;
-          }
-        });
-      } else {
-        console.error('Socket.io غير متوفر');
-      }
-      
-      // تحميل قائمة الموظفين عند فتح نافذة الإسناد
+      // تحميل الموظفين عند فتح نافذة الإسناد
       const assignModal = document.getElementById('assignModal');
       if (assignModal) {
-        assignModal.addEventListener('show.bs.modal', function () {
-          const assignSelect = document.getElementById('assignedTo');
-          
-          // تفريغ القائمة أولاً
-          assignSelect.innerHTML = '<option value="" selected disabled>-- اختر الموظف --</option>';
-          
-          // جلب قائمة الموظفين من API
-          fetch('/api/users/support')
-            .then(response => response.json())
-            .then(data => {
-              if (data.success && data.users) {
-                // إضافة كل موظف إلى القائمة
-                data.users.forEach(user => {
-                  const option = document.createElement('option');
-                  option.value = user._id;
-                  option.text = user.full_name || user.username;
-                  
-                  // تحديد الموظف الحالي إذا كان مسنداً
-                  if ('<%= conversation.assignedTo?._id %>' === user._id) {
-                    option.selected = true;
-                  }
-                  
-                  assignSelect.appendChild(option);
-                });
-                
-                // إضافة خيار إلغاء الإسناد
-                const unassignOption = document.createElement('option');
-                unassignOption.value = '';
-                unassignOption.text = '-- إلغاء الإسناد --';
-                assignSelect.appendChild(unassignOption);
-              } else {
-                showAlert('فشل تحميل قائمة الموظفين', 'error');
-              }
-            })
-            .catch(error => {
-              console.error('خطأ في تحميل قائمة الموظفين:', error);
-              showAlert('حدث خطأ أثناء تحميل قائمة الموظفين', 'error');
-            });
-        });
+        assignModal.addEventListener('show.bs.modal', loadSupportUsers);
       }
       
-      // دالة لتحديث حالة إسناد المحادثة في واجهة المستخدم
+      // توابع المساعدة والوظائف الأخرى
+      
+      // تنسيق التاريخ
+      function formatDate(date) {
+        const options = {
+          year: 'numeric', month: 'numeric', day: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        };
+        return new Date(date).toLocaleString('ar-LY', options);
+      }
+      
+      // إضافة رسالة إلى المحادثة
+      function addMessageToChat(message) {
+        const messagesContainer = document.querySelector('.messages-container');
+        if (!messagesContainer) return;
+        
+        // إنشاء عنصر الرسالة الجديدة
+        const messageElement = document.createElement('div');
+        const isOutbound = message.direction === 'outbound';
+        
+        messageElement.className = `message ${isOutbound ? 'outbound' : 'inbound'}`;
+        
+        // تهيئة محتوى الرسالة
+        messageElement.innerHTML = `
+          <div class="message-content">
+            <div class="message-text">${message.content}</div>
+            <div class="message-meta">
+              <small>${formatDate(new Date(message.timestamp))}</small>
+              ${isOutbound ? `<small class="sender">${message.sender?.username || 'النظام'}</small>` : ''}
+            </div>
+          </div>
+        `;
+        
+        // إضافة الرسالة إلى الحاوية
+        messagesContainer.appendChild(messageElement);
+        
+        // التمرير إلى أسفل لعرض الرسالة الجديدة
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+      
+      // دالة تحديث حالة المحادثة
+      function updateConversationStatus(status) {
+        const statusBadge = document.getElementById('conversation-status');
+        if (!statusBadge) return;
+        
+        if (status === 'open') {
+          statusBadge.textContent = 'مفتوحة';
+          statusBadge.className = 'badge bg-success';
+          
+          document.getElementById('close-conversation-btn')?.classList.remove('d-none');
+          document.getElementById('reopen-conversation-btn')?.classList.add('d-none');
+        } else if (status === 'closed') {
+          statusBadge.textContent = 'مغلقة';
+          statusBadge.className = 'badge bg-danger';
+          
+          document.getElementById('close-conversation-btn')?.classList.add('d-none');
+          document.getElementById('reopen-conversation-btn')?.classList.remove('d-none');
+        }
+      }
+      
+      // دالة تحديث حالة الإسناد
       function updateAssignmentStatus(data) {
         const assignmentStatus = document.getElementById('assignment-status');
         if (!assignmentStatus) return;
         
-        // طلب اسم المستخدم من الخادم
         if (data.assignedTo) {
           fetch(`/api/users/${data.assignedTo}/info`)
             .then(response => response.json())
@@ -698,35 +729,11 @@
         }
       }
       
-      // دالة لتحديث حالة المحادثة في واجهة المستخدم
-      function updateConversationStatus(status) {
-        const statusBadge = document.getElementById('conversation-status');
-        if (!statusBadge) return;
-        
-        // تحديث النص والألوان
-        if (status === 'open') {
-          statusBadge.textContent = 'مفتوحة';
-          statusBadge.className = 'badge bg-success';
-          
-          // تغيير الأزرار المرئية
-          document.getElementById('close-conversation-btn').classList.remove('d-none');
-          document.getElementById('reopen-conversation-btn').classList.add('d-none');
-        } else if (status === 'closed') {
-          statusBadge.textContent = 'مغلقة';
-          statusBadge.className = 'badge bg-danger';
-          
-          // تغيير الأزرار المرئية
-          document.getElementById('close-conversation-btn').classList.add('d-none');
-          document.getElementById('reopen-conversation-btn').classList.remove('d-none');
-        }
-      }
-      
-      // دالة لعرض تنبيه
+      // دالة عرض تنبيه
       function showAlert(message, type = 'info') {
         const alertsContainer = document.getElementById('alerts-container');
         if (!alertsContainer) return;
         
-        // إنشاء عنصر التنبيه
         const alert = document.createElement('div');
         alert.className = `alert alert-${type} alert-dismissible fade show`;
         alert.innerHTML = `
@@ -734,296 +741,35 @@
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
         `;
         
-        // إضافة التنبيه إلى الحاوية
         alertsContainer.appendChild(alert);
         
-        // إزالة التنبيه بعد 5 ثوانٍ
         setTimeout(() => {
           alert.classList.remove('show');
           setTimeout(() => alert.remove(), 150);
         }, 5000);
       }
-    });
-  </script>
-  
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script>
-    // الانضمام إلى غرفة المحادثة
-    if (typeof socket !== 'undefined') {
-      socket.emit('join-conversation', '<%= conversation._id %>');
-
-      // استقبال الرسائل الجديدة
-      socket.on('new-message', function(message) {
-        console.log('استلام رسالة جديدة:', message);
-        
-        // التحقق مما إذا كانت هذه الرسالة لهذه المحادثة
-        if (message.conversationId === '<%= conversation._id %>') {
-          // إضافة الرسالة الجديدة إلى قائمة الرسائل
-          const messagesContainer = document.querySelector('.messages-container');
-          
-          // إنشاء عنصر الرسالة الجديدة
-          const messageElement = document.createElement('div');
-          const isOutbound = message.direction === 'outbound';
-          
-          messageElement.className = `message ${isOutbound ? 'outbound' : 'inbound'}`;
-          
-          // تهيئة محتوى الرسالة
-          messageElement.innerHTML = `
-            <div class="message-content">
-              <div class="message-text">${message.content}</div>
-              <div class="message-meta">
-                <small>${formatDate(new Date(message.timestamp))}</small>
-                ${isOutbound ? `<small class="sender">${message.sender.username}</small>` : ''}
-              </div>
-            </div>
-          `;
-          
-          // إضافة الرسالة إلى الحاوية
-          messagesContainer.appendChild(messageElement);
-          
-          // التمرير إلى أسفل لعرض الرسالة الجديدة
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      
+      // مسح شارة الإشعارات لهذه المحادثة عند تحميل الصفحة
+      fetch(`/api/conversations/<%= conversation._id %>/mark-as-read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         }
-      });
-      
-      // استقبال تحديثات المحادثة
-      socket.on('conversation-update', function(update) {
-        console.log('تحديث المحادثة:', update);
-        
-        // التعامل مع التحديثات المختلفة
-        switch (update.type) {
-          case 'assigned':
-            // تحديث واجهة المستخدم عند إسناد المحادثة
-            updateAssignmentStatus(update);
-            break;
-            
-          case 'status_changed':
-            // تحديث واجهة المستخدم عند تغيير حالة المحادثة
-            updateConversationStatus(update.status);
-            break;
-            
-          case 'note_added':
-            // تنبيه المستخدم بإضافة ملاحظة جديدة
-            showAlert('تم إضافة ملاحظة داخلية جديدة', 'success');
-            // يمكن تحديث قائمة الملاحظات هنا إذا كانت معروضة
-            break;
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          console.log('تم تحديث حالة القراءة للمحادثة');
         }
-      });
-    } else {
-      console.error('Socket.io غير متوفر');
-    }
-    
-    // دالة لتحديث حالة إسناد المحادثة في واجهة المستخدم
-    function updateAssignmentStatus(data) {
-      const assignmentStatus = document.getElementById('assignment-status');
-      if (!assignmentStatus) return;
+      })
+      .catch(error => console.error('خطأ في تحديث حالة القراءة:', error));
       
-      // طلب اسم المستخدم من الخادم
-      if (data.assignedTo) {
-        fetch(`/api/users/${data.assignedTo}/info`)
-          .then(response => response.json())
-          .then(userData => {
-            if (userData.success) {
-              assignmentStatus.textContent = `مسندة إلى: ${userData.user.full_name || userData.user.username}`;
-              assignmentStatus.classList.remove('text-warning');
-              assignmentStatus.classList.add('text-success');
-            }
-          })
-          .catch(error => console.error('خطأ في جلب معلومات المستخدم:', error));
-      } else {
-        assignmentStatus.textContent = 'غير مسندة';
-        assignmentStatus.classList.remove('text-success');
-        assignmentStatus.classList.add('text-warning');
-      }
-    }
-    
-    // دالة لتحديث حالة المحادثة في واجهة المستخدم
-    function updateConversationStatus(status) {
-      const statusBadge = document.getElementById('conversation-status');
-      if (!statusBadge) return;
-      
-      // تحديث النص والألوان
-      if (status === 'open') {
-        statusBadge.textContent = 'مفتوحة';
-        statusBadge.className = 'badge bg-success';
-        
-        // تغيير الأزرار المرئية
-        document.getElementById('close-conversation-btn').classList.remove('d-none');
-        document.getElementById('reopen-conversation-btn').classList.add('d-none');
-      } else if (status === 'closed') {
-        statusBadge.textContent = 'مغلقة';
-        statusBadge.className = 'badge bg-danger';
-        
-        // تغيير الأزرار المرئية
-        document.getElementById('close-conversation-btn').classList.add('d-none');
-        document.getElementById('reopen-conversation-btn').classList.remove('d-none');
-      }
-    }
-    
-    // دالة لعرض تنبيه
-    function showAlert(message, type = 'info') {
-      const alertsContainer = document.getElementById('alerts-container');
-      if (!alertsContainer) return;
-      
-      // إنشاء عنصر التنبيه
-      const alert = document.createElement('div');
-      alert.className = `alert alert-${type} alert-dismissible fade show`;
-      alert.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
-      `;
-      
-      // إضافة التنبيه إلى الحاوية
-      alertsContainer.appendChild(alert);
-      
-      // إزالة التنبيه بعد 5 ثوانٍ
-      setTimeout(() => {
-        alert.classList.remove('show');
-        setTimeout(() => alert.remove(), 150);
-      }, 5000);
-    }
-    
-    // دالة لتنسيق التاريخ
-    function formatDate(date) {
-      const options = {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      };
-      return new Date(date).toLocaleString('ar-LY', options);
-    }
-    
-    // مغادرة غرفة المحادثة عند مغادرة الصفحة
-    window.addEventListener('beforeunload', function() {
-      if (typeof socket !== 'undefined') {
-        socket.emit('leave-conversation', '<%= conversation._id %>');
+      // التمرير إلى آخر الرسائل
+      const messageContainer = document.querySelector('.message-container');
+      if (messageContainer) {
+        messageContainer.scrollTop = messageContainer.scrollHeight;
       }
     });
-
-    // مسح شارة الإشعارات لهذه المحادثة عند تحميل الصفحة
-    document.addEventListener('DOMContentLoaded', function() {
-      // إذا كانت هناك دالة لتحديث شارة الإشعارات في ملف التخطيط
-      if (typeof updateMessagesBadge === 'function') {
-        // إرسال طلب إلى الخادم لتحديث حالة قراءة الرسائل لهذه المحادثة
-        fetch(`/api/conversations/<%= conversation._id %>/mark-as-read`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success && data.unreadCount > 0) {
-            // تقليل عدد الرسائل غير المقروءة
-            updateMessagesBadge(-data.unreadCount);
-          }
-        })
-        .catch(error => console.error('خطأ في تحديث حالة القراءة:', error));
-      }
-    });
-  </script>
-  
-  <script>
-    // الانضمام إلى غرفة المحادثة
-    if (typeof socket !== 'undefined') {
-      socket.emit('join-conversation', '<%= conversation._id %>');
-
-      // استقبال الرسائل الجديدة
-      socket.on('new-message', function(message) {
-        // إضافة الرسالة الجديدة إلى قائمة الرسائل
-        addMessageToChat(message);
-        
-        // إظهار تنبيه بوصول رسالة جديدة
-        showAlert('تم استلام رسالة جديدة', 'info');
-      });
-      
-      // استقبال تحديثات المحادثة
-      socket.on('conversation-update', function(update) {
-        console.log('تحديث المحادثة:', update);
-        
-        // تحديث واجهة المستخدم بناءً على نوع التحديث
-        if (update.type === 'status') {
-          updateConversationStatus(update.status);
-        } else if (update.type === 'assigned') {
-          updateAssignedUser(update.assignedTo);
-        } else if (update.type === 'note') {
-          addInternalNote(update.note);
-        }
-      });
-    } else {
-      console.error('Socket.io غير متوفر');
-    }
-    
-    // تحميل قائمة الموظفين عند فتح نافذة الإسناد
-    const assignModal = document.getElementById('assignModal');
-    if (assignModal) {
-      assignModal.addEventListener('show.bs.modal', function () {
-        const assignSelect = document.getElementById('assignedTo');
-        
-        // تفريغ القائمة أولاً
-        assignSelect.innerHTML = '<option value="" selected disabled>-- اختر الموظف --</option>';
-        
-        // جلب قائمة الموظفين من API
-        fetch('/api/users/support')
-          .then(response => response.json())
-          .then(data => {
-            if (data.success && data.users) {
-              // إضافة كل موظف إلى القائمة
-              data.users.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user._id;
-                option.text = user.full_name || user.username;
-                
-                // تحديد الموظف الحالي إذا كان مسنداً
-                if ('<%= conversation.assignedTo?._id %>' === user._id) {
-                  option.selected = true;
-                }
-                
-                assignSelect.appendChild(option);
-              });
-              
-              // إضافة خيار إلغاء الإسناد
-              const unassignOption = document.createElement('option');
-              unassignOption.value = '';
-              unassignOption.text = '-- إلغاء الإسناد --';
-              assignSelect.appendChild(unassignOption);
-            } else {
-              showAlert('فشل تحميل قائمة الموظفين', 'error');
-            }
-          })
-          .catch(error => {
-            console.error('خطأ في تحميل قائمة الموظفين:', error);
-            showAlert('حدث خطأ أثناء تحميل قائمة الموظفين', 'error');
-          });
-      });
-    }
-    
-    // إضافة رسالة جديدة إلى المحادثة
-    function addMessageToChat(message) {
-      // إنشاء عنصر الرسالة الجديدة
-      const messageElement = document.createElement('div');
-      const isOutbound = message.direction === 'outbound';
-      
-      messageElement.className = `message ${isOutbound ? 'outbound' : 'inbound'}`;
-      
-      // تهيئة محتوى الرسالة
-      messageElement.innerHTML = `
-        <div class="message-content">
-          <div class="message-text">${message.content}</div>
-          <div class="message-meta">
-            <small>${formatDate(new Date(message.timestamp))}</small>
-            ${isOutbound ? `<small class="sender">${message.sender.username}</small>` : ''}
-          </div>
-        </div>
-      `;
-      
-      // إضافة الرسالة إلى الحاوية
-      const messagesContainer = document.querySelector('.messages-container');
-      messagesContainer.appendChild(messageElement);
-      
-      // التمرير إلى أسفل لعرض الرسالة الجديدة
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
   </script>
 </body>
 </html>

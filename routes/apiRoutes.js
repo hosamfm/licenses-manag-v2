@@ -17,11 +17,11 @@ const ensureCanAccessAPI = [isAuthenticated, checkCanAccessConversations];
  */
 router.get('/users/support', ensureCanAccessAPI, async (req, res) => {
   try {
-    // جلب المستخدمين الذين لديهم دور مشرف أو داعم فني
+    // جلب المستخدمين الذين لديهم صلاحية الوصول إلى المحادثات
     const users = await User.find({
-      role: { $in: ['admin', 'support', 'supervisor'] }
+      can_access_conversations: true
     })
-    .select('_id username full_name role')
+    .select('_id username full_name user_role')
     .sort('full_name')
     .lean();
     
@@ -61,6 +61,12 @@ router.get('/users/:userId/info', ensureCanAccessAPI, async (req, res) => {
 router.post('/conversations/:conversationId/mark-as-read', ensureCanAccessAPI, async (req, res) => {
   try {
     const { conversationId } = req.params;
+    
+    // التحقق من وجود المستخدم
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, error: 'غير مصرح، يرجى تسجيل الدخول' });
+    }
+    
     const userId = req.user._id;
     
     // التحقق من وجود المحادثة
