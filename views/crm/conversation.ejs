@@ -555,15 +555,21 @@
             console.log('استلام رسالة جديدة:', message);
             
             // إضافة الرسالة الجديدة إذا كانت لهذه المحادثة
-            if (message && message.conversationId === '<%= conversation._id %>') {
+            if (message) {
               // معالجة هيكل البيانات القادمة من Socket.io لتتوافق مع هيكل دالة إضافة الرسائل
               const formattedMessage = {
+                _id: message._id,
                 content: message.content || '',
-                direction: message.direction || 'inbound',
+                // تحويل 'incoming' إلى 'inbound' و 'outgoing' إلى 'outbound'
+                direction: message.direction === 'incoming' ? 'inbound' : 
+                           message.direction === 'outgoing' ? 'outbound' : message.direction,
                 timestamp: message.createdAt || message.timestamp || new Date(),
                 mediaUrl: message.mediaUrl || '',
-                mediaType: message.mediaType || null
+                mediaType: message.mediaType || null,
+                conversationId: '<%= conversation._id %>'
               };
+              
+              console.log('الرسالة المنسقة للعرض:', formattedMessage);
               
               // إضافة الرسالة إلى واجهة المحادثة
               addMessageToChat(formattedMessage);
@@ -678,9 +684,12 @@
         
         // إنشاء عنصر الرسالة الجديدة
         const messageElement = document.createElement('div');
+        // التحقق من اتجاه الرسالة (inbound للواردة، outbound للصادرة)
         const isOutbound = message.direction === 'outbound';
         
+        // إضافة الفئات المناسبة للعنصر
         messageElement.className = `message ${isOutbound ? 'message-outbound' : 'message-inbound'}`;
+        messageElement.setAttribute('data-message-id', message._id || '');
         
         // التحقق من وجود محتوى الرسالة
         const messageContent = message.content || 'محتوى غير متوفر';
@@ -701,6 +710,13 @@
         // إضافة فاصل واضح بعد كل رسالة
         const clearDiv = document.createElement('div');
         clearDiv.className = 'clear-both';
+        
+        // التحقق من وجود رسالة بنفس المعرف لتجنب التكرار
+        const existingMessage = document.querySelector(`.message[data-message-id="${message._id}"]`);
+        if (existingMessage && message._id) {
+          console.log('الرسالة موجودة بالفعل، لن تتم إضافتها مرة أخرى:', message._id);
+          return;
+        }
         
         // إضافة الرسالة إلى الحاوية
         messagesContainer.appendChild(messageElement);
