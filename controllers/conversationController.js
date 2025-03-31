@@ -445,7 +445,7 @@ const replyToConversation = async (req, res) => {
             direction: 'outbound', // توحيد المصطلحات: استخدام outbound بدلاً من outgoing
             content,
             timestamp: new Date(),
-            sender: req.user._id,
+            sender: req.user ? req.user._id : null, // التحقق من وجود المستخدم قبل الوصول إلى _id
             status: 'pending' // حالة معلقة حتى يتم تأكيد الإرسال
         });
 
@@ -517,14 +517,14 @@ const replyToConversation = async (req, res) => {
             direction: 'outbound', // توحيد المصطلحات: استخدام outbound بدلاً من outgoing
             timestamp: message.timestamp,
             status: message.status,
-            sender: {
+            sender: req.user ? {
                 _id: req.user._id,
                 username: req.user.username
-            }
+            } : { _id: null, username: 'النظام' }
         });
 
         // أيضًا قم بإرسال إشعار إلى المستخدم المسند إليه المحادثة إذا كان موجودًا ومختلفًا عن المستخدم الحالي
-        if (conversation.assignedTo && conversation.assignedTo.toString() !== req.user._id.toString()) {
+        if (req.user && conversation.assignedTo && conversation.assignedTo.toString() !== req.user._id.toString()) {
             socketService.notifyUser(conversation.assignedTo, 'new_message', {
                 conversationId,
                 messageCount: 1,
@@ -534,11 +534,18 @@ const replyToConversation = async (req, res) => {
         }
 
         req.flash('success', 'تم إرسال الرد بنجاح');
-        res.redirect(`/crm/conversations/${conversationId}`);
+        return res.redirect(`/crm/conversations/${conversationId}`);
     } catch (error) {
         logger.error('conversationController', 'خطأ في إرسال رد على المحادثة', error);
         req.flash('error', 'حدث خطأ أثناء إرسال الرد');
-        res.redirect(`/crm/conversations/${conversationId}`);
+        
+        // في حالة حدوث خطأ، نتأكد من وجود conversationId قبل استخدامه
+        const conversationId = req.params?.conversationId;
+        if (conversationId) {
+            return res.redirect(`/crm/conversations/${conversationId}`);
+        } else {
+            return res.redirect('/crm/conversations');
+        }
     }
 };
 
