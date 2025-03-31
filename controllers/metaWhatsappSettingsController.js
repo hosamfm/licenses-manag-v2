@@ -14,9 +14,6 @@ exports.showMetaWhatsappSettings = async (req, res) => {
         // الحصول على إعدادات واتساب الرسمي
         const settings = await MetaWhatsappSettings.getActiveSettings();
         
-        // تهيئة خدمة واتساب الرسمي
-        await MetaWhatsappService.initialize();
-        
         // الحصول على حالة الاتصال والمعلومات
         let connectionStatus = {
             success: false,
@@ -27,11 +24,17 @@ exports.showMetaWhatsappSettings = async (req, res) => {
         // محاولة الاتصال بواتساب الرسمي للتحقق من الإعدادات
         if (settings.isConfigured()) {
             try {
+                // تهيئة خدمة واتساب الرسمي
+                await MetaWhatsappService.initialize();
                 const phoneInfo = await MetaWhatsappService.getPhoneNumberInfo();
                 connectionStatus.success = true;
                 connectionStatus.phoneNumber = phoneInfo.display_phone_number || phoneInfo.id;
             } catch (error) {
                 connectionStatus.error = error.message;
+                // إذا كان الخطأ 401، نضيف رسالة أكثر وضوحًا
+                if (error.response && error.response.status === 401) {
+                    connectionStatus.error = 'توكن الوصول غير صالح أو منتهي الصلاحية. الرجاء التحقق من إعدادات واتساب الرسمي.';
+                }
                 logger.error('metaWhatsappSettingsController', 'خطأ في الاتصال بواتساب الرسمي', error);
             }
         }
