@@ -544,45 +544,90 @@
           conversationSocket.on('new-message', function(data) {
             console.log('استلام رسالة جديدة:', data);
             
-            // إذا كانت تخص هذه المحادثة
-            if (data.conversationId === '<%= conversation._id %>') {
+            // توحيد direction (مثال لو أتى inbound/outbound)
+            let dir = data.direction;
+            if (dir === 'inbound') dir = 'incoming';
+            else if (dir === 'outbound') dir = 'outgoing';
+            
+            // توحيد status في حال وصلنا 'received' أو 'pending'
+            let st = data.status || 'sent';
+            if (st === 'received') st = 'delivered';
+            if (st === 'pending')  st = 'sending';
+            
+            // تأكد من عدم إضافة الرسالة مرتين
+            const existing = document.querySelector(`.message[data-message-id="${data._id}"]`);
+            
+            // إنشاء العنصر
+            const msgEl = document.createElement('div');
+            msgEl.className = `message ${dir}`;
+            msgEl.setAttribute('data-message-id', data._id || '');
+            if (data.externalMessageId) {
+              msgEl.setAttribute('data-external-id', data.externalMessageId);
+            }
+            msgEl.setAttribute('data-status', st);
+            
+            // فقاعة
+            const bubble = document.createElement('div');
+            bubble.className = `message-bubble ${dir === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
+            bubble.textContent = data.content;
+            
+            // عنصر الوقت
+            const timeEl = document.createElement('div');
+            timeEl.className = 'message-time';
+            
+            // إن كانت رسالة صادرة, نعرض أيقونة الحالة
+            if (dir === 'outgoing') {
+              const statusSpan = document.createElement('span');
+              statusSpan.className = 'message-status';
               
-              // توحيد direction (مثال لو أتى inbound/outbound)
-              let dir = data.direction;
-              if (dir === 'inbound') dir = 'incoming';
-              else if (dir === 'outbound') dir = 'outgoing';
+              // حدد الأيقونة
+              let statusIcon = '';
+              let statusClass = '';
+              let statusTitle = '';
               
-              // توحيد status في حال وصلنا 'received' أو 'pending'
-              let st = data.status || 'sent';
-              if (st === 'received') st = 'delivered';
-              if (st === 'pending')  st = 'sending';
+              if (st === 'sending') {
+                statusIcon = 'clock'; statusClass = 'text-secondary'; statusTitle = 'جاري الإرسال...';
+              } else if (st === 'sent') {
+                statusIcon = 'check'; statusClass = 'text-info'; statusTitle = 'تم الإرسال';
+              } else if (st === 'delivered') {
+                statusIcon = 'check-double'; statusClass = 'text-primary'; statusTitle = 'تم التسليم';
+              } else if (st === 'read') {
+                statusIcon = 'check-double'; statusClass = 'text-success'; statusTitle = 'تم القراءة';
+              } else if (st === 'failed') {
+                statusIcon = 'exclamation-triangle'; statusClass = 'text-danger'; statusTitle = 'فشل الإرسال';
+              }
               
-              // تأكد من عدم إضافة الرسالة مرتين
-              const existing = document.querySelector(`.message[data-message-id="${data._id}"]`);
-              if (!existing) {
-                const formattedMessage = {
-                  _id: data._id,
-                  content: data.content,
-                  direction: dir,
-                  timestamp: data.timestamp,
-                  mediaUrl: data.mediaUrl || '',
-                  mediaType: data.mediaType || null,
-                  status: st,
-                  externalMessageId: data.externalMessageId || null
-                };
-                
-                console.log('الرسالة المنسقة للعرض:', formattedMessage);
-                addMessageToChat(formattedMessage);
-                
-                // إذا كانت رسالة واردة (incoming)، نشغل صوت تنبيه
-                if (dir === 'incoming') {
-                  const audioElement = document.getElementById('messageSound');
-                  if (audioElement) {
-                    audioElement.play().catch(err => {
-                      console.log('لم يتمكن من تشغيل الصوت:', err);
-                    });
-                  }
-                }
+              if (statusIcon) {
+                const iconEl = document.createElement('i');
+                iconEl.className = `fas fa-${statusIcon} ${statusClass}`;
+                iconEl.title = statusTitle;
+                statusSpan.appendChild(iconEl);
+                timeEl.appendChild(statusSpan);
+              }
+            }
+            
+            // نص الوقت
+            const timeText = document.createElement('span');
+            timeText.textContent = new Date(data.timestamp).toLocaleString('ar-LY');
+            timeEl.appendChild(timeText);
+            
+            bubble.appendChild(timeEl);
+            msgEl.appendChild(bubble);
+            
+            const container = document.querySelector('.message-container');
+            if (container) {
+              container.appendChild(msgEl);
+              container.appendChild(document.createElement('div')).className = 'clear-both';
+              container.scrollTop = container.scrollHeight;
+            }
+            
+            // إذا كانت رسالة واردة, نشغل صوت تنبيه
+            if (dir === 'incoming') {
+              const audioElement = document.getElementById('messageSound');
+              if (audioElement) {
+                audioElement.play().catch(err => {
+                  console.log('لم يتمكن من تشغيل الصوت:', err);
+                });
               }
             }
           });
@@ -590,9 +635,6 @@
           // تحديثات المحادثة (مثل lastMessageAt, status...)
           conversationSocket.on('conversation-update', function(data) {
             console.log('تحديث المحادثة:', data);
-            if (data._id === '<%= conversation._id %>') {
-              // يمكنك تحديث حالة المحادثة/الوقت وغيره إن أردت
-            }
           });
           
           // تحديث حالة الرسالة
@@ -616,7 +658,7 @@
               if (st === 'pending')  st = 'sending';
               
               found.forEach(msgEl => {
-                // لو لم يكن الرسالة outgoing, نتجاهل
+                // لو ليست outgoing, لا نعرض الحالة
                 if (!msgEl.classList.contains('outgoing')) return;
                 
                 // حدث حالة الرسالة
@@ -641,7 +683,7 @@
         // عند مغادرة الصفحة
         window.addEventListener('beforeunload', function() {
           if (conversationSocket && conversationSocket.connected) {
-            conversationSocket.emit('leave-conversation', '<%= conversation._id %>');
+            conversationSocket.disconnect();
           }
         });
       } catch (e) {
