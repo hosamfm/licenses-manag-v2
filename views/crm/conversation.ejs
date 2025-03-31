@@ -718,5 +718,104 @@
       }
     });
   </script>
+  
+  <script>
+    // الانضمام إلى غرفة المحادثة
+    socket.emit('join-conversation', '<%= conversation._id %>');
+
+    // استقبال الرسائل الجديدة
+    socket.on('new-message', function(message) {
+      // إضافة الرسالة الجديدة إلى قائمة الرسائل
+      addMessageToChat(message);
+      
+      // إظهار تنبيه بوصول رسالة جديدة
+      showAlert('تم استلام رسالة جديدة', 'info');
+    });
+    
+    // استقبال تحديثات المحادثة
+    socket.on('conversation-update', function(update) {
+      console.log('تحديث المحادثة:', update);
+      
+      // تحديث واجهة المستخدم بناءً على نوع التحديث
+      if (update.type === 'status') {
+        updateConversationStatus(update.status);
+      } else if (update.type === 'assigned') {
+        updateAssignedUser(update.assignedTo);
+      } else if (update.type === 'note') {
+        addInternalNote(update.note);
+      }
+    });
+    
+    // تحميل قائمة الموظفين عند فتح نافذة الإسناد
+    const assignModal = document.getElementById('assignModal');
+    if (assignModal) {
+      assignModal.addEventListener('show.bs.modal', function () {
+        const assignSelect = document.getElementById('assignedTo');
+        
+        // تفريغ القائمة أولاً
+        assignSelect.innerHTML = '<option value="" selected disabled>-- اختر الموظف --</option>';
+        
+        // جلب قائمة الموظفين من API
+        fetch('/api/users/support')
+          .then(response => response.json())
+          .then(data => {
+            if (data.success && data.users) {
+              // إضافة كل موظف إلى القائمة
+              data.users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user._id;
+                option.text = user.full_name || user.username;
+                
+                // تحديد الموظف الحالي إذا كان مسندًا
+                if ('<%= conversation.assignedTo?._id %>' === user._id) {
+                  option.selected = true;
+                }
+                
+                assignSelect.appendChild(option);
+              });
+              
+              // إضافة خيار إلغاء الإسناد
+              const unassignOption = document.createElement('option');
+              unassignOption.value = '';
+              unassignOption.text = '-- إلغاء الإسناد --';
+              assignSelect.appendChild(unassignOption);
+            } else {
+              showAlert('فشل تحميل قائمة الموظفين', 'error');
+            }
+          })
+          .catch(error => {
+            console.error('خطأ في تحميل قائمة الموظفين:', error);
+            showAlert('حدث خطأ أثناء تحميل قائمة الموظفين', 'error');
+          });
+      });
+    }
+    
+    // إضافة رسالة جديدة إلى المحادثة
+    function addMessageToChat(message) {
+      // إنشاء عنصر الرسالة الجديدة
+      const messageElement = document.createElement('div');
+      const isOutbound = message.direction === 'outbound';
+      
+      messageElement.className = `message ${isOutbound ? 'outbound' : 'inbound'}`;
+      
+      // تهيئة محتوى الرسالة
+      messageElement.innerHTML = `
+        <div class="message-content">
+          <div class="message-text">${message.content}</div>
+          <div class="message-meta">
+            <small>${formatDate(new Date(message.timestamp))}</small>
+            ${isOutbound ? `<small class="sender">${message.sender.username}</small>` : ''}
+          </div>
+        </div>
+      `;
+      
+      // إضافة الرسالة إلى الحاوية
+      const messagesContainer = document.querySelector('.messages-container');
+      messagesContainer.appendChild(messageElement);
+      
+      // التمرير إلى أسفل لعرض الرسالة الجديدة
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  </script>
 </body>
 </html>

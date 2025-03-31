@@ -12,6 +12,18 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/css/style.css">
   
+  <!-- Socket.io -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // تهيئة اتصال Socket.io
+    const socket = io();
+    
+    // انضمام المستخدم إلى غرفته الخاصة إذا كان مسجل دخوله
+    <% if (user && user._id) { %>
+      socket.emit('join-user-room', '<%= user._id %>');
+    <% } %>
+  </script>
+  
   <style>
     /* أنماط خاصة بقالب CRM */
     .crm-container {
@@ -268,12 +280,8 @@
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
   
   <script>
-    // إعداد اتصال Socket.io
-    const socket = io();
-    
     // أي شيفرة جافا سكريبت عامة لواجهة CRM
     document.addEventListener('DOMContentLoaded', function() {
       // يمكن إضافة أي وظائف عامة هنا
