@@ -80,12 +80,13 @@
       position: relative;
     }
     
-    /* تنسيقات الرسائل الواردة والصادرة */
+    /* الرسائل الواردة */
     .incoming {
       float: right;
       margin-left: auto;
     }
     
+    /* الرسائل الصادرة */
     .outgoing {
       float: left;
       margin-right: auto;
@@ -137,16 +138,14 @@
       height: 1px;
     }
     
-    /* أنماط الحالة المضافة */
+    /* حالة الرسالة إذا كانت قيد الإرسال أو فشلت */
     .message[data-status="sending"] .message-bubble {
       opacity: 0.8;
     }
-    
     .message[data-status="failed"] .message-bubble {
       border: 1px solid #ff4d4f;
     }
     
-    /* الأنماط الإضافية */
     .reply-form {
       padding: 15px;
       border-top: 1px solid #eee;
@@ -196,7 +195,6 @@
             <span>الإحصائيات</span>
           </a>
         </li>
-        <!-- يمكن إضافة روابط أخرى هنا في المستقبل -->
         <li class="mt-4">
           <a href="/" class="text-muted">
             <i class="fas fa-arrow-right"></i>
@@ -337,21 +335,27 @@
               <!-- مساحة الرسائل -->
               <div class="message-container p-3">
                 <% if (messages && messages.length > 0) { %>
-                  <% messages.forEach(function(message, index) { %>
-                    <!-- نتأكد من أن الرسائل الواردة تظهر على اليسار والصادرة على اليمين بغض النظر عن توقيت إنشائها -->
-                    <div class="message <%= message.direction === 'inbound' ? 'incoming' : 'outgoing' %>">
-                      <div class="message-bubble">
-                        <%= message.content %>
+                  <% messages.forEach(function(msg, index) { %>
+                    <!-- نتوقع في الـ DB أن تكون msg.direction === 'incoming' أو 'outgoing' -->
+                    <div class="message <%= msg.direction %>" data-message-id="<%= msg._id %>" data-status="<%= msg.status %>" <% if (msg.externalMessageId) { %> data-external-id="<%= msg.externalMessageId %>" <% } %>>
+                      <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %>">
+                        <%= msg.content %>
+                        
                         <div class="message-time">
-                          <%= new Date(message.timestamp).toLocaleString('ar-LY') %>
-                          <% if (message.status) { %>
+                          <%= new Date(msg.timestamp).toLocaleString('ar-LY') %>
+                          
+                          <% if (msg.direction === 'outgoing') { %>
                             <span class="message-status">
-                              <% if (message.status === 'pending') { %>
-                                <i class="fas fa-clock text-warning" title="في انتظار الإرسال"></i>
-                              <% } else if (message.status === 'sent') { %>
-                                <i class="fas fa-check text-success" title="تم الإرسال"></i>
-                              <% } else if (message.status === 'failed') { %>
-                                <i class="fas fa-exclamation-circle text-danger" title="فشل الإرسال"></i>
+                              <% if (msg.status === 'sending') { %>
+                                <i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>
+                              <% } else if (msg.status === 'sent') { %>
+                                <i class="fas fa-check text-info" title="تم الإرسال"></i>
+                              <% } else if (msg.status === 'delivered') { %>
+                                <i class="fas fa-check-double text-primary" title="تم التسليم"></i>
+                              <% } else if (msg.status === 'read') { %>
+                                <i class="fas fa-check-double text-success" title="تم القراءة"></i>
+                              <% } else if (msg.status === 'failed') { %>
+                                <i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>
                               <% } %>
                             </span>
                           <% } %>
@@ -361,10 +365,10 @@
                     <div class="clear-both"></div>
                     
                     <% if (index < messages.length - 1 && 
-                           new Date(messages[index+1].timestamp) - new Date(message.timestamp) > 3600000) { %>
+                           new Date(messages[index+1].timestamp) - new Date(msg.timestamp) > 3600000) { %>
                       <div class="message-internal-note">
                         <i class="fas fa-clock me-1"></i>
-                        مرت <%= Math.round((new Date(messages[index+1].timestamp) - new Date(message.timestamp)) / 3600000) %> ساعة
+                        مرت <%= Math.round((new Date(messages[index+1].timestamp) - new Date(msg.timestamp)) / 3600000) %> ساعة
                       </div>
                     <% } %>
                   <% }); %>
@@ -522,55 +526,56 @@
   
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // تهيئة Socket.io محلياً في صفحة المحادثة
       let conversationSocket;
       
       try {
-        // الحصول على عنوان الخادم الحالي بدلاً من localhost
         const serverUrl = window.location.origin;
         console.log('محاولة الاتصال بخادم Socket.io على:', serverUrl);
         
-        // تهيئة اتصال Socket.io
         conversationSocket = io(serverUrl);
         
-        // عند نجاح الاتصال
         conversationSocket.on('connect', function() {
           console.log('تم الاتصال بنجاح بـ Socket.io في صفحة المحادثة');
           
-          // الانضمام إلى غرفة المحادثة
+          // الانضمام لغرفة المحادثة
           conversationSocket.emit('join-conversation', '<%= conversation._id %>');
           
           // استقبال الرسائل الجديدة
           conversationSocket.on('new-message', function(data) {
             console.log('استلام رسالة جديدة:', data);
             
+            // إذا كانت تخص هذه المحادثة
             if (data.conversationId === '<%= conversation._id %>') {
-              // التحقق من وجود الرسالة أولاً لتجنب التكرار
-              const existingMessage = document.querySelector(`.message[data-message-id="${data._id}"]`);
-              if (!existingMessage) {
-                // توحيد قيم direction لتكون دائمًا 'incoming' أو 'outgoing'
-                const messageDirection = data.direction === 'inbound' ? 'incoming' : 
-                                        data.direction === 'outbound' ? 'outgoing' : data.direction;
-                
-                // تنسيق الرسالة للعرض
+              
+              // توحيد direction (مثال لو أتى inbound/outbound)
+              let dir = data.direction;
+              if (dir === 'inbound') dir = 'incoming';
+              else if (dir === 'outbound') dir = 'outgoing';
+              
+              // توحيد status في حال وصلنا 'received' أو 'pending'
+              let st = data.status || 'sent';
+              if (st === 'received') st = 'delivered';
+              if (st === 'pending')  st = 'sending';
+              
+              // تأكد من عدم إضافة الرسالة مرتين
+              const existing = document.querySelector(`.message[data-message-id="${data._id}"]`);
+              if (!existing) {
                 const formattedMessage = {
                   _id: data._id,
                   content: data.content,
-                  direction: messageDirection,
+                  direction: dir,
                   timestamp: data.timestamp,
                   mediaUrl: data.mediaUrl || '',
                   mediaType: data.mediaType || null,
-                  status: data.status || 'sent',
+                  status: st,
                   externalMessageId: data.externalMessageId || null
                 };
                 
                 console.log('الرسالة المنسقة للعرض:', formattedMessage);
-                
-                // إضافة الرسالة إلى المحادثة
                 addMessageToChat(formattedMessage);
                 
-                // تشغيل صوت تنبيه إذا كانت الرسالة واردة
-                if (messageDirection === 'incoming') {
+                // إذا كانت رسالة واردة (incoming)، نشغل صوت تنبيه
+                if (dir === 'incoming') {
                   const audioElement = document.getElementById('messageSound');
                   if (audioElement) {
                     audioElement.play().catch(err => {
@@ -579,94 +584,61 @@
                   }
                 }
               }
-              
-              // تحديث تفاصيل المحادثة
-              const lastMessagePreview = document.getElementById('lastMessagePreview');
-              const lastMessageTime = document.getElementById('lastMessageTime');
-              
-              if (lastMessagePreview && lastMessageTime) {
-                lastMessagePreview.textContent = data.content.substring(0, 50) + (data.content.length > 50 ? '...' : '');
-                lastMessageTime.textContent = formatDate(new Date(data.timestamp));
-              }
             }
           });
           
-          // استقبال تحديثات المحادثة
+          // تحديثات المحادثة (مثل lastMessageAt, status...)
           conversationSocket.on('conversation-update', function(data) {
             console.log('تحديث المحادثة:', data);
-            
             if (data._id === '<%= conversation._id %>') {
-              // تحديث حالة المحادثة إذا تغيرت
-              if (data.status) {
-                const statusElement = document.getElementById('conversationStatus');
-                if (statusElement) {
-                  let statusText = 'غير معروف';
-                  let statusClass = '';
-                  
-                  if (data.status === 'open') {
-                    statusText = 'مفتوحة';
-                    statusClass = 'badge-primary';
-                  } else if (data.status === 'assigned') {
-                    statusText = 'مُسندة';
-                    statusClass = 'badge-warning';
-                  } else if (data.status === 'closed') {
-                    statusText = 'مغلقة';
-                    statusClass = 'badge-secondary';
-                  }
-                  
-                  statusElement.textContent = statusText;
-                  statusElement.className = `badge ${statusClass}`;
-                }
-              }
-              
-              // تحديث وقت آخر رسالة إذا تغير
-              if (data.lastMessageAt) {
-                const lastMessageTimeElement = document.getElementById('lastMessageTime');
-                if (lastMessageTimeElement) {
-                  lastMessageTimeElement.textContent = formatDate(new Date(data.lastMessageAt));
-                }
-              }
+              // يمكنك تحديث حالة المحادثة/الوقت وغيره إن أردت
             }
           });
           
-          // الاستماع لتحديثات حالة الرسائل
+          // تحديث حالة الرسالة
           conversationSocket.on('message_status_update', function(data) {
             console.log('تحديث حالة الرسالة:', data);
             
-            // البحث عن الرسالة بمعرف الرسالة الخارجي
-            const messageElements = document.querySelectorAll('.message[data-external-id="' + data.externalMessageId + '"]');
+            // احتمال يكون externalMessageId أو messageId
+            let sel = `.message[data-external-id="${data.externalMessageId}"]`;
+            let found = document.querySelectorAll(sel);
             
-            if (messageElements.length > 0) {
-              // تحديث كل الرسائل التي تحمل نفس المعرف الخارجي
-              messageElements.forEach(messageElement => {
-                // تحديث حالة الرسالة
-                updateMessageStatus(messageElement, data.status);
+            // لو لم نجدها بالمعرف الخارجي, نجرب بالـ messageId
+            if (found.length === 0 && data.messageId) {
+              sel = `.message[data-message-id="${data.messageId}"]`;
+              found = document.querySelectorAll(sel);
+            }
+            
+            if (found.length > 0) {
+              // توحيد status
+              let st = data.status || 'sent';
+              if (st === 'received') st = 'delivered';
+              if (st === 'pending')  st = 'sending';
+              
+              found.forEach(msgEl => {
+                // لو لم يكن الرسالة outgoing, نتجاهل
+                if (!msgEl.classList.contains('outgoing')) return;
+                
+                // حدث حالة الرسالة
+                updateMessageStatus(msgEl, st);
+                
+                // ضع externalMessageId لو لم يكن موجود
+                if (data.externalMessageId && !msgEl.getAttribute('data-external-id')) {
+                  msgEl.setAttribute('data-external-id', data.externalMessageId);
+                }
               });
             } else {
               console.log('لم يتم العثور على الرسالة المراد تحديثها');
-              
-              // بحث بديل باستخدام ID الرسالة إذا كان متوفرًا
-              if (data.messageId) {
-                const messageByIdElements = document.querySelectorAll('.message[data-message-id="' + data.messageId + '"]');
-                if (messageByIdElements.length > 0) {
-                  messageByIdElements.forEach(messageElement => {
-                    // إضافة معرف الرسالة الخارجي للعنصر
-                    messageElement.setAttribute('data-external-id', data.externalMessageId);
-                    // تحديث حالة الرسالة
-                    updateMessageStatus(messageElement, data.status);
-                  });
-                }
-              }
             }
           });
         });
         
-        // معالجة خطأ الاتصال
+        // خطأ في الاتصال
         conversationSocket.on('connect_error', function(error) {
           console.error('خطأ في الاتصال بـ Socket.io:', error);
         });
         
-        // مغادرة غرفة المحادثة عند مغادرة الصفحة
+        // عند مغادرة الصفحة
         window.addEventListener('beforeunload', function() {
           if (conversationSocket && conversationSocket.connected) {
             conversationSocket.emit('leave-conversation', '<%= conversation._id %>');
@@ -676,36 +648,39 @@
         console.error('حدث خطأ أثناء تهيئة Socket.io في صفحة المحادثة:', e);
       }
       
-      // دالة لجلب قائمة الموظفين المتاحين للإسناد
+      // تحميل الموظفين عند فتح نافذة الإسناد
+      const assignModal = document.getElementById('assignModal');
+      if (assignModal) {
+        assignModal.addEventListener('show.bs.modal', loadSupportUsers);
+      }
+      
+      // دالة لجلب الموظفين
       function loadSupportUsers() {
         const selectElement = document.getElementById('assignedTo');
         if (!selectElement) return;
         
-        // إضافة خيار "إلغاء الإسناد"
+        selectElement.innerHTML = ''; // إعادة التهيئة
+        
+        // خيار "إلغاء الإسناد"
         const unassignOption = document.createElement('option');
         unassignOption.value = '';
         unassignOption.textContent = '-- إلغاء الإسناد --';
         selectElement.appendChild(unassignOption);
         
-        // جلب قائمة الموظفين من واجهة برمجة التطبيقات
         fetch('/api/users/support')
           .then(response => {
-            if (!response.ok) {
-              throw new Error('فشل في جلب قائمة الموظفين');
-            }
+            if (!response.ok) throw new Error('فشل في جلب الموظفين');
             return response.json();
           })
           .then(data => {
-            // إضافة الموظفين إلى القائمة المنسدلة
-            if (data.success && data.users && data.users.length > 0) {
+            if (data.success && Array.isArray(data.users)) {
               data.users.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user._id;
                 option.textContent = user.full_name || user.username;
                 selectElement.appendChild(option);
               });
-              
-              // تحديد المستخدم المسند حالياً إذا وجد
+              // لو المحادثة مسندة أساسًا
               const currentAssignedUser = '<%= conversation.assignedTo ? conversation.assignedTo._id : "" %>';
               if (currentAssignedUser) {
                 selectElement.value = currentAssignedUser;
@@ -717,16 +692,8 @@
               selectElement.appendChild(option);
             }
           })
-          .catch(error => console.error('خطأ في جلب قائمة الموظفين:', error));
+          .catch(err => console.error('خطأ في جلب الموظفين:', err));
       }
-      
-      // تحميل الموظفين عند فتح نافذة الإسناد
-      const assignModal = document.getElementById('assignModal');
-      if (assignModal) {
-        assignModal.addEventListener('show.bs.modal', loadSupportUsers);
-      }
-      
-      // توابع المساعدة والوظائف الأخرى
       
       // تنسيق التاريخ
       function formatDate(date) {
@@ -737,278 +704,159 @@
         return new Date(date).toLocaleString('ar-LY', options);
       }
       
-      // إضافة رسالة إلى المحادثة
-      function addMessageToChat(message) {
-        const messagesContainer = document.querySelector('.message-container');
-        if (!messagesContainer) {
-          console.error('لم يتم العثور على حاوية الرسائل في الصفحة!');
+      // إضافة رسالة
+      function addMessageToChat(msg) {
+        const container = document.querySelector('.message-container');
+        if (!container) {
+          console.error('لا توجد حاوية للرسائل!');
           return;
         }
         
-        console.log('إضافة رسالة جديدة للمحادثة:', message);
+        console.log('إضافة رسالة جديدة:', msg);
         
-        // التحقق من وجود رسالة بنفس المعرف لتجنب التكرار
-        if (message._id && message._id !== '' && !message._id.startsWith('temp-')) {
-          const existingMessage = document.querySelector(`.message[data-message-id="${message._id}"]`);
-          if (existingMessage) {
-            console.log('الرسالة موجودة بالفعل، لن تتم إضافتها مرة أخرى:', message._id);
+        // تفادي الإضافة المكررة
+        if (msg._id && !msg._id.startsWith('temp-')) {
+          const existEl = document.querySelector(`.message[data-message-id="${msg._id}"]`);
+          if (existEl) {
+            console.log('الرسالة موجودة، لن نضيفها ثانية:', msg._id);
             return;
           }
         }
         
-        // توحيد قيم direction
-        const messageDirection = message.direction === 'inbound' ? 'incoming' : 
-                               message.direction === 'outbound' ? 'outgoing' : message.direction;
-        
-        // إنشاء عنصر الرسالة
-        const messageElement = document.createElement('div');
-        messageElement.className = `message ${messageDirection}`;
-        
-        if (message._id) {
-          messageElement.setAttribute('data-message-id', message._id);
+        // إنشاء العنصر
+        const msgEl = document.createElement('div');
+        msgEl.className = `message ${msg.direction}`;
+        msgEl.setAttribute('data-message-id', msg._id || '');
+        if (msg.externalMessageId) {
+          msgEl.setAttribute('data-external-id', msg.externalMessageId);
         }
+        msgEl.setAttribute('data-status', msg.status || 'sent');
         
-        // إضافة معرف الرسالة الخارجي إذا كان موجودًا
-        if (message.externalMessageId) {
-          messageElement.setAttribute('data-external-id', message.externalMessageId);
-        }
+        // فقاعة
+        const bubble = document.createElement('div');
+        bubble.className = `message-bubble ${msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
+        bubble.textContent = msg.content;
         
-        // إضافة حالة الرسالة إذا كانت موجودة
-        if (message.status) {
-          messageElement.setAttribute('data-status', message.status);
-        }
+        // عنصر الوقت
+        const timeEl = document.createElement('div');
+        timeEl.className = 'message-time';
         
-        // إنشاء فقاعة الرسالة
-        const bubbleElement = document.createElement('div');
-        bubbleElement.className = `message-bubble ${messageDirection}-bubble`;
-        bubbleElement.textContent = message.content;
-        
-        // إضافة عنصر الوقت
-        const timeElement = document.createElement('div');
-        timeElement.className = 'message-time';
-        
-        // إنشاء عنصر الحالة إذا كانت الرسالة صادرة
-        if (messageDirection === 'outgoing') {
-          const statusElement = document.createElement('span');
-          statusElement.className = 'message-status';
+        // إن كانت رسالة صادرة, نعرض أيقونة الحالة
+        if (msg.direction === 'outgoing') {
+          const statusSpan = document.createElement('span');
+          statusSpan.className = 'message-status';
           
-          // إضافة أيقونة الحالة المناسبة
+          // حدد الأيقونة
           let statusIcon = '';
           let statusClass = '';
           let statusTitle = '';
           
-          if (message.status === 'sending') {
-            statusIcon = 'clock';
-            statusClass = 'text-secondary';
-            statusTitle = 'جاري الإرسال...';
-          } else if (message.status === 'sent') {
-            statusIcon = 'check';
-            statusClass = 'text-info';
-            statusTitle = 'تم الإرسال';
-          } else if (message.status === 'delivered') {
-            statusIcon = 'check-double';
-            statusClass = 'text-primary';
-            statusTitle = 'تم التسليم';
-          } else if (message.status === 'read') {
-            statusIcon = 'check-double';
-            statusClass = 'text-success';
-            statusTitle = 'تم القراءة';
-          } else if (message.status === 'failed') {
-            statusIcon = 'exclamation-triangle';
-            statusClass = 'text-danger';
-            statusTitle = 'فشل الإرسال';
+          let st = msg.status;
+          if (st === 'sending') {
+            statusIcon = 'clock'; statusClass = 'text-secondary'; statusTitle = 'جاري الإرسال...';
+          } else if (st === 'sent') {
+            statusIcon = 'check'; statusClass = 'text-info'; statusTitle = 'تم الإرسال';
+          } else if (st === 'delivered') {
+            statusIcon = 'check-double'; statusClass = 'text-primary'; statusTitle = 'تم التسليم';
+          } else if (st === 'read') {
+            statusIcon = 'check-double'; statusClass = 'text-success'; statusTitle = 'تم القراءة';
+          } else if (st === 'failed') {
+            statusIcon = 'exclamation-triangle'; statusClass = 'text-danger'; statusTitle = 'فشل الإرسال';
           }
           
-          // إضافة أيقونة الحالة فقط إذا كانت الرسالة صادرة
           if (statusIcon) {
-            const iconElement = document.createElement('i');
-            iconElement.className = `fas fa-${statusIcon} ${statusClass}`;
-            iconElement.title = statusTitle;
-            statusElement.appendChild(iconElement);
-            timeElement.appendChild(statusElement);
+            const iconEl = document.createElement('i');
+            iconEl.className = `fas fa-${statusIcon} ${statusClass}`;
+            iconEl.title = statusTitle;
+            statusSpan.appendChild(iconEl);
+            timeEl.appendChild(statusSpan);
           }
         }
         
-        // إضافة الوقت
+        // نص الوقت
         const timeText = document.createElement('span');
-        timeText.textContent = formatDate(new Date(message.timestamp));
-        timeElement.appendChild(timeText);
+        timeText.textContent = formatDate(msg.timestamp);
+        timeEl.appendChild(timeText);
         
-        // تجميع كل العناصر
-        messageElement.appendChild(bubbleElement);
-        messageElement.appendChild(timeElement);
+        bubble.appendChild(timeEl);
+        msgEl.appendChild(bubble);
         
-        // إضافة الرسالة إلى حاوية الرسائل
-        messagesContainer.appendChild(messageElement);
+        container.appendChild(msgEl);
         
-        // إضافة عنصر التنظيف لتجنب مشاكل التدفق
-        const clearElement = document.createElement('div');
-        clearElement.className = 'clear-both';
-        messagesContainer.appendChild(clearElement);
+        // إضافة clear-both
+        const clearEl = document.createElement('div');
+        clearEl.className = 'clear-both';
+        container.appendChild(clearEl);
         
-        // التمرير إلى أسفل لرؤية الرسالة الجديدة
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        // تمكين التمرير للأسفل
+        container.scrollTop = container.scrollHeight;
       }
       
-      // دالة تحديث حالة الرسالة في واجهة المستخدم
-      function updateMessageStatus(messageElement, status) {
-        // التأكد من أن عنصر الرسالة هو للرسائل الصادرة فقط
-        if (!messageElement.classList.contains('outgoing')) {
-          return;
-        }
+      // تحديث حالة الرسالة في الواجهة
+      function updateMessageStatus(msgEl, st) {
+        // لو ليست outgoing, لا نعرض الحالة
+        if (!msgEl.classList.contains('outgoing')) return;
         
-        // البحث عن عنصر الحالة داخل عنصر الرسالة
-        const statusElement = messageElement.querySelector('.message-status');
-        if (!statusElement) {
-          return;
-        }
+        // ابحث عن العنصر
+        const statusEl = msgEl.querySelector('.message-status');
+        if (!statusEl) return;
         
-        // إزالة جميع أيقونات الحالة السابقة
-        statusElement.innerHTML = '';
+        // افرغ الايقونات
+        statusEl.innerHTML = '';
         
-        // إضافة أيقونة الحالة المناسبة
+        // حدد الحالة
         let statusIcon = '';
         let statusClass = '';
         let statusTitle = '';
         
-        if (status === 'sending') {
-          statusIcon = 'clock';
-          statusClass = 'text-secondary';
-          statusTitle = 'جاري الإرسال...';
-        } else if (status === 'sent') {
-          statusIcon = 'check';
-          statusClass = 'text-info';
-          statusTitle = 'تم الإرسال';
-        } else if (status === 'delivered') {
-          statusIcon = 'check-double';
-          statusClass = 'text-primary';
-          statusTitle = 'تم التسليم';
-        } else if (status === 'read') {
-          statusIcon = 'check-double';
-          statusClass = 'text-success';
-          statusTitle = 'تم القراءة';
-        } else if (status === 'failed') {
-          statusIcon = 'exclamation-triangle';
-          statusClass = 'text-danger';
-          statusTitle = 'فشل الإرسال';
+        if (st === 'sending') {
+          statusIcon = 'clock'; statusClass = 'text-secondary'; statusTitle = 'جاري الإرسال...';
+        } else if (st === 'sent') {
+          statusIcon = 'check'; statusClass = 'text-info'; statusTitle = 'تم الإرسال';
+        } else if (st === 'delivered') {
+          statusIcon = 'check-double'; statusClass = 'text-primary'; statusTitle = 'تم التسليم';
+        } else if (st === 'read') {
+          statusIcon = 'check-double'; statusClass = 'text-success'; statusTitle = 'تم القراءة';
+        } else if (st === 'failed') {
+          statusIcon = 'exclamation-triangle'; statusClass = 'text-danger'; statusTitle = 'فشل الإرسال';
         }
         
-        // إضافة أيقونة الحالة الجديدة
-        const iconElement = document.createElement('i');
-        iconElement.className = `fas fa-${statusIcon} ${statusClass}`;
-        iconElement.title = statusTitle;
-        statusElement.appendChild(iconElement);
-        
-        // تحديث بيانات سمة الحالة في عنصر الرسالة
-        messageElement.setAttribute('data-status', status);
-      }
-      
-      // دالة تحديث حالة المحادثة
-      function updateConversationStatus(status) {
-        const statusBadge = document.getElementById('conversation-status');
-        if (!statusBadge) return;
-        
-        if (status === 'open') {
-          statusBadge.textContent = 'مفتوحة';
-          statusBadge.className = 'badge bg-success';
-          
-          document.getElementById('close-conversation-btn')?.classList.remove('d-none');
-          document.getElementById('reopen-conversation-btn')?.classList.add('d-none');
-        } else if (status === 'closed') {
-          statusBadge.textContent = 'مغلقة';
-          statusBadge.className = 'badge bg-danger';
-          
-          document.getElementById('close-conversation-btn')?.classList.add('d-none');
-          document.getElementById('reopen-conversation-btn')?.classList.remove('d-none');
-        }
-      }
-      
-      // دالة تحديث حالة الإسناد
-      function updateAssignmentStatus(data) {
-        const assignmentStatus = document.getElementById('assignment-status');
-        if (!assignmentStatus) return;
-        
-        if (data.assignedTo) {
-          fetch(`/api/users/${data.assignedTo}/info`)
-            .then(response => response.json())
-            .then(userData => {
-              if (userData.success) {
-                assignmentStatus.textContent = `مسندة إلى: ${userData.user.full_name || userData.user.username}`;
-                assignmentStatus.classList.remove('text-warning');
-                assignmentStatus.classList.add('text-success');
-              }
-            })
-            .catch(error => console.error('خطأ في جلب معلومات المستخدم:', error));
-        } else {
-          assignmentStatus.textContent = 'غير مسندة';
-          assignmentStatus.classList.remove('text-success');
-          assignmentStatus.classList.add('text-warning');
-        }
-      }
-      
-      // دالة عرض تنبيه
-      function showAlert(message, type = 'info') {
-        const alertsContainer = document.getElementById('alerts-container') || document.createElement('div');
-        if (!document.getElementById('alerts-container')) {
-          alertsContainer.id = 'alerts-container';
-          alertsContainer.className = 'position-fixed top-0 start-50 translate-middle-x mt-3 z-index-1050';
-          document.body.appendChild(alertsContainer);
+        if (statusIcon) {
+          const iconEl = document.createElement('i');
+          iconEl.className = `fas fa-${statusIcon} ${statusClass}`;
+          iconEl.title = statusTitle;
+          statusEl.appendChild(iconEl);
         }
         
-        const alertId = 'alert-' + new Date().getTime();
-        const alert = document.createElement('div');
-        alert.className = `alert alert-${type} alert-dismissible fade show`;
-        alert.id = alertId;
-        alert.innerHTML = `
-          ${message}
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        `;
-        
-        alertsContainer.appendChild(alert);
-        setTimeout(() => {
-          const alertElement = document.getElementById(alertId);
-          if (alertElement) {
-            alertElement.classList.remove('show');
-            setTimeout(() => alertElement.remove(), 150);
-          }
-        }, 5000);
+        msgEl.setAttribute('data-status', st);
       }
       
-      // إرسال نموذج الرد باستخدام AJAX
+      // إرسال الرد Ajax
       const replyForm = document.getElementById('replyForm');
-        
       if (replyForm) {
-        replyForm.addEventListener('submit', function(event) {
-          event.preventDefault();
-            
-          // الحصول على قيمة الرسالة
-          const messageInput = document.getElementById('replyMessage');
-          const content = messageInput.value.trim();
-            
-          if (!content) {
-            showAlert('يرجى إدخال نص الرسالة', 'warning');
-            return;
-          }
-            
-          // تعطيل زر الإرسال أثناء العملية
-          const submitButton = replyForm.querySelector('button[type="submit"]');
-          const originalButtonText = submitButton.innerHTML;
-          submitButton.disabled = true;
-          submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
-            
-          // إنشاء عنصر الرسالة مؤقتًا في واجهة المستخدم
-          const tempMessage = {
-            _id: 'temp-' + new Date().getTime(),
-            content: content,
+        replyForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          
+          const msgInput = document.getElementById('replyMessage');
+          const content = msgInput.value.trim();
+          if (!content) return alert('يرجى إدخال نص الرسالة');
+          
+          const submitBtn = replyForm.querySelector('button[type="submit"]');
+          const oldHtml = submitBtn.innerHTML;
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+          
+          // رسالة مؤقتة
+          const tempId = 'temp-' + Date.now();
+          const tempMsg = {
+            _id: tempId,
+            content,
             direction: 'outgoing',
             timestamp: new Date(),
             status: 'sending'
           };
-            
-          // إضافة الرسالة المؤقتة إلى المحادثة
-          addMessageToChat(tempMessage);
-            
-          // إرسال الرسالة إلى الخادم باستخدام fetch API
+          addMessageToChat(tempMsg);
+          
           fetch(replyForm.action, {
             method: 'POST',
             headers: {
@@ -1017,92 +865,111 @@
             },
             body: JSON.stringify({ content })
           })
-          .then(response => {
-            if (!response.ok) {
-              throw new Error('حدث خطأ أثناء إرسال الرسالة');
-            }
-            return response.json();
+          .then(res => {
+            if (!res.ok) throw new Error('فشل في الإرسال');
+            return res.json();
           })
           .then(data => {
-            console.log('استجابة الخادم:', data);
-              
-            // إزالة الرسالة المؤقتة
-            const tempMessageElement = document.querySelector(`.message[data-message-id="${tempMessage._id}"]`);
-            if (tempMessageElement) {
-              tempMessageElement.remove();
-              // إزالة العنصر التالي أيضًا (وهو عنصر div.clear-both)
-              const nextElement = tempMessageElement.nextElementSibling;
-              if (nextElement && nextElement.classList.contains('clear-both')) {
-                nextElement.remove();
-              }
+            // إزالة المؤقت
+            const tempEl = document.querySelector(`.message[data-message-id="${tempId}"]`);
+            if (tempEl) {
+              const nxt = tempEl.nextElementSibling;
+              tempEl.remove();
+              if (nxt && nxt.classList.contains('clear-both')) nxt.remove();
             }
+            
+            if (data.success && data.message) {
+              // توحيد direction لو أتانا inbound/outbound
+              let dir = data.message.direction;
+              if (dir === 'inbound') dir = 'incoming';
+              else if (dir === 'outbound') dir = 'outgoing';
               
-            if (data.success) {
-              // إضافة الرسالة الحقيقية بعد استلام الرد من الخادم
-              if (data.message) {
-                // تنسيق الرسالة بالشكل المطلوب
-                const formattedMessage = {
-                  _id: data.message._id,
-                  content: data.message.content,
-                  direction: data.message.direction,
-                  timestamp: data.message.timestamp,
-                  status: data.message.status || 'sent'
-                };
-                  
-                // إضافة الرسالة المستلمة من الخادم إلى المحادثة
-                addMessageToChat(formattedMessage);
-              }
-                
-              // عرض رسالة نجاح
-              showAlert('تم إرسال الرسالة بنجاح', 'success');
+              // توحيد status
+              let st = data.message.status || 'sent';
+              if (st === 'received') st = 'delivered';
+              if (st === 'pending')  st = 'sending';
+              
+              const finalMsg = {
+                _id: data.message._id,
+                content: data.message.content,
+                direction: dir,
+                timestamp: data.message.timestamp,
+                status: st,
+                externalMessageId: data.message.externalMessageId || ''
+              };
+              addMessageToChat(finalMsg);
             } else {
-              // عرض رسالة خطأ
-              showAlert(data.error || 'حدث خطأ أثناء إرسال الرسالة', 'danger');
+              console.error('خطأ:', data.error || 'مجهول');
+              alert('فشل في إرسال الرسالة');
             }
           })
-          .catch(error => {
-            console.error('خطأ في إرسال الرسالة:', error);
-            showAlert('فشل في إرسال الرسالة. يرجى المحاولة مرة أخرى.', 'danger');
+          .catch(err => {
+            console.error('خطأ أثناء إرسال الرسالة:', err);
+            alert('فشل في إرسال الرسالة');
           })
           .finally(() => {
-            // إعادة تفعيل زر الإرسال
-            submitButton.disabled = false;
-            submitButton.innerHTML = originalButtonText;
-              
-            // مسح محتوى حقل الرسالة
-            messageInput.value = '';
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = oldHtml;
+            msgInput.value = '';
           });
         });
       }
       
-      // مسح شارة الإشعارات لهذه المحادثة عند تحميل الصفحة
+      // وضع مؤشر المقروئية
       fetch(`/crm/conversations/<%= conversation._id %>/mark-as-read`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
       })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`خطأ في الاستجابة: ${response.status}`);
-        }
-        return response.json();
-      })
+      .then(res => res.json())
       .then(data => {
         if (data.success) {
-          console.log('تم تحديث حالة القراءة للمحادثة');
-        } else if (data.error) {
-          console.error('خطأ:', data.error);
+          console.log('تم تحديث حالة القراءة');
         }
       })
-      .catch(error => console.error('خطأ في تحديث حالة القراءة:', error));
+      .catch(err => console.error('خطأ في تحديث القراءة:', err));
       
-      // التمرير إلى آخر الرسائل
-      const messageContainer = document.querySelector('.message-container');
-      if (messageContainer) {
-        messageContainer.scrollTop = messageContainer.scrollHeight;
+      // تمرير لأسفل
+      const container = document.querySelector('.message-container');
+      if (container) {
+        container.scrollTop = container.scrollHeight;
       }
     });
+    
+    // جلب الموظفين
+    function loadSupportUsers() {
+      const sel = document.getElementById('assignedTo');
+      if (!sel) return;
+      sel.innerHTML = '';
+      
+      const unassign = document.createElement('option');
+      unassign.value = '';
+      unassign.textContent = '-- إلغاء الإسناد --';
+      sel.appendChild(unassign);
+      
+      fetch('/api/users/support')
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.users) {
+            d.users.forEach(u => {
+              const op = document.createElement('option');
+              op.value = u._id;
+              op.textContent = u.full_name || u.username;
+              sel.appendChild(op);
+            });
+            const assigned = '<%= conversation.assignedTo ? conversation.assignedTo._id : "" %>';
+            if (assigned) sel.value = assigned;
+          } else {
+            const o = document.createElement('option');
+            o.disabled = true;
+            o.textContent = 'لا يوجد موظفين';
+            sel.appendChild(o);
+          }
+        })
+        .catch(e => console.error(e));
+    }
   </script>
+  
+  <!-- صوت تنبيه للرسائل الواردة -->
+  <audio id="messageSound" src="/sounds/new-message.mp3" preload="auto"></audio>
 </body>
 </html>
