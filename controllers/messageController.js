@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const SemClient = require('../models/SemClient');
 const SemMessage = require('../models/SemMessage');
 const WhatsappMessage = require('../models/WhatsappMessage');
+const MetaWhatsappMessage = require('../models/MetaWhatsappMessage'); // Added MetaWhatsappMessage
 const logger = require('../services/loggerService');
 const BalanceTransaction = require('../models/BalanceTransaction');
 const SmsManager = require('../services/sms/SmsManager');
@@ -345,21 +346,25 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
       };
       await message.save();
     } else if (!message) {
-      // إنشاء سجل WhatsappMessage جديد في حالة عدم وجود SemMessage
-      const whatsappMessage = new WhatsappMessage({
+      // إنشاء سجل MetaWhatsappMessage جديد في حالة عدم وجود SemMessage
+      const metaWhatsappMessage = new MetaWhatsappMessage({
         clientId: client._id,
         phoneNumber: formattedPhone,
         message: msgContent,
         status: 'sent',
         messageId: new mongoose.Types.ObjectId().toString(),
         externalMessageId: result.messages?.[0]?.id || null,
+        template: {
+          name: templateName,
+          language: templateLanguage
+        },
         providerData: {
           provider: 'metaWhatsapp',
           lastUpdate: new Date(),
           rawResponse: result
         }
       });
-      await whatsappMessage.save();
+      await metaWhatsappMessage.save();
     }
     
     return {
@@ -456,7 +461,7 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
         }
       } else if (channel === 'metaWhatsapp') {
         // محاولة الإرسال عبر واتساب ميتا الرسمي
-        const metaWhatsappResult = await sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, true);
+        const metaWhatsappResult = await sendMetaWhatsappAndUpdate(null, client, formattedPhone, msgContent, false);
         if (metaWhatsappResult.success) {
           metaWhatsappSent = true;
           logger.info('processChannelFallback', 'تم إرسال رسالة واتساب ميتا الرسمي بنجاح');
@@ -656,7 +661,7 @@ exports.sendMessage = async (req, res) => {
               await updateClientBalance(client, false, true, msg);
             }
           } else if (canSendMetaWhatsapp && metaWhatsappInitialized) {
-            const metaResult = await sendMetaWhatsappAndUpdate(semMessage, client, formattedPhone, msg, true);
+            const metaResult = await sendMetaWhatsappAndUpdate(null, client, formattedPhone, msg, false);
             if (metaResult.success) {
               logger.info(`تم إرسال واتساب ميتا الرسمي بنجاح للعميل ${client.name}`);
               await updateClientBalance(client, false, true, msg);
@@ -664,7 +669,7 @@ exports.sendMessage = async (req, res) => {
           }
         }
       } catch (error) {
-        logger.error('sendMessage', 'خطأ في إرسال الرسالة', {
+        logger.error('خطأ أثناء إرسال الرسالة', {
           error: error.message,
           stack: error.stack
         });
