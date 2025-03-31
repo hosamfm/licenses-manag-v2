@@ -442,11 +442,11 @@ const replyToConversation = async (req, res) => {
         // إنشاء رسالة جديدة كرد
         const message = new WhatsappMessage({
             conversationId,
-            direction: 'outbound', // توحيد المصطلحات: استخدام outbound بدلاً من outgoing
+            direction: 'outgoing', // يجب استخدام 'outgoing' وليس 'outbound' حسب النموذج
             content,
             timestamp: new Date(),
             sender: req.user ? req.user._id : null, // التحقق من وجود المستخدم قبل الوصول إلى _id
-            status: 'pending' // حالة معلقة حتى يتم تأكيد الإرسال
+            status: 'sent' // استخدام 'sent' بدلاً من 'pending' لأن النموذج لا يدعم 'pending'
         });
 
         await message.save();
@@ -514,7 +514,7 @@ const replyToConversation = async (req, res) => {
             _id: message._id,
             conversationId,
             content,
-            direction: 'outbound', // توحيد المصطلحات: استخدام outbound بدلاً من outgoing
+            direction: 'outgoing', // يجب استخدام 'outgoing' في Socket.io أيضًا للتوافق مع النموذج
             timestamp: message.timestamp,
             status: message.status,
             sender: req.user ? {
