@@ -49,137 +49,113 @@
     }
     
     .crm-sidebar-nav a.active {
-      background-color: #e9ecef;
-      color: #212529;
-      border-right-color: #0d6efd;
+      color: #007bff;
+      background-color: #e9f2ff;
+      border-right-color: #007bff;
     }
     
-    .crm-sidebar-nav i {
-      width: 20px;
-      text-align: center;
-      margin-left: 8px;
+    .card-conversation {
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,.05);
+      transition: transform 0.2s;
+      margin-bottom: 15px;
     }
     
-    .page-title {
-      color: #495057;
-      margin-bottom: 25px;
-      border-bottom: 1px solid #dee2e6;
-      padding-bottom: 15px;
+    .card-conversation:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 4px 6px rgba(0,0,0,.1);
     }
     
     .message-container {
-      max-height: 600px;
+      max-height: 400px;
       overflow-y: auto;
-      padding-right: 10px;
-      margin-bottom: 20px;
-      background-color: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      padding: 15px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
     }
     
     .message {
       margin-bottom: 15px;
-      position: relative;
       max-width: 80%;
-      clear: both;
+      position: relative;
     }
     
-    .message-inbound {
-      float: left;
-    }
-    
-    .message-outbound {
+    /* تنسيقات الرسائل الواردة والصادرة */
+    .incoming {
       float: right;
+      margin-left: auto;
+    }
+    
+    .outgoing {
+      float: left;
+      margin-right: auto;
     }
     
     .message-bubble {
       padding: 10px 15px;
-      border-radius: 18px;
+      border-radius: 10px;
       position: relative;
       word-wrap: break-word;
     }
     
-    .message-inbound .message-bubble {
-      background-color: #f0f2f5;
-      border-bottom-right-radius: 0;
+    .incoming-bubble {
+      background-color: #e6f2ff;
+      border-top-left-radius: 0;
+      text-align: right;
     }
     
-    .message-outbound .message-bubble {
-      background-color: #e6f7ff;
-      border-bottom-left-radius: 0;
+    .outgoing-bubble {
+      background-color: #dcf8c6;
+      border-top-right-radius: 0;
+      text-align: left;
     }
     
     .message-time {
-      color: #aaa;
-      font-size: 0.7rem;
+      font-size: 0.75rem;
+      color: #888;
       margin-top: 5px;
-      display: block;
+      display: flex;
+      align-items: center;
+    }
+    
+    .incoming .message-time {
+      justify-content: flex-start;
+    }
+    
+    .outgoing .message-time {
+      justify-content: flex-end;
     }
     
     .message-status {
-      margin-left: 5px;
-      font-size: 0.8rem;
-    }
-    
-    .message-internal-note {
-      background-color: #fff3cd;
-      border-radius: 8px;
-      padding: 10px 15px;
-      margin: 15px 0;
-      position: relative;
-      clear: both;
-      border-left: 3px solid #ffc107;
-      text-align: center;
-    }
-    
-    .reply-form {
-      background-color: #fff;
-      border-radius: 8px;
-      padding: 15px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-    
-    .conversation-info-card {
-      background-color: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-      margin-bottom: 20px;
-    }
-    
-    .status-badge {
-      font-size: 0.8rem;
-      padding: 5px 10px;
-      border-radius: 50px;
-    }
-    
-    .status-open {
-      background-color: #d1e7dd;
-      color: #0f5132;
-    }
-    
-    .status-assigned {
-      background-color: #fff3cd;
-      color: #856404;
-    }
-    
-    .status-closed {
-      background-color: #f8d7da;
-      color: #721c24;
-    }
-    
-    .conversation-action-buttons {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 20px;
-    }
-    
-    .conversation-action-buttons .btn {
-      margin-left: 10px;
+      display: inline-block;
+      margin-right: 5px;
     }
     
     .clear-both {
       clear: both;
       width: 100%;
+      height: 1px;
+    }
+    
+    /* أنماط الحالة المضافة */
+    .message[data-status="sending"] .message-bubble {
+      opacity: 0.8;
+    }
+    
+    .message[data-status="failed"] .message-bubble {
+      border: 1px solid #ff4d4f;
+    }
+    
+    /* الأنماط الإضافية */
+    .reply-form {
+      padding: 15px;
+      border-top: 1px solid #eee;
+    }
+    
+    .conversation-info-card {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,.05);
     }
   </style>
 </head>
@@ -363,7 +339,7 @@
                 <% if (messages && messages.length > 0) { %>
                   <% messages.forEach(function(message, index) { %>
                     <!-- نتأكد من أن الرسائل الواردة تظهر على اليسار والصادرة على اليمين بغض النظر عن توقيت إنشائها -->
-                    <div class="message <%= message.direction === 'inbound' ? 'message-inbound' : 'message-outbound' %>">
+                    <div class="message <%= message.direction === 'inbound' ? 'incoming' : 'outgoing' %>">
                       <div class="message-bubble">
                         <%= message.content %>
                         <div class="message-time">
@@ -565,47 +541,88 @@
           conversationSocket.emit('join-conversation', '<%= conversation._id %>');
           
           // استقبال الرسائل الجديدة
-          conversationSocket.on('new-message', function(message) {
-            console.log('استلام رسالة جديدة:', message);
+          conversationSocket.on('new-message', function(data) {
+            console.log('استلام رسالة جديدة:', data);
             
-            // إضافة الرسالة الجديدة إذا كانت لهذه المحادثة
-            if (message) {
-              // معالجة هيكل البيانات القادمة من Socket.io لتتوافق مع هيكل دالة إضافة الرسائل
-              const formattedMessage = {
-                _id: message._id,
-                content: message.content || '',
-                // تحويل 'incoming' إلى 'inbound' و 'outgoing' إلى 'outbound'
-                direction: message.direction === 'incoming' ? 'inbound' : 
-                           message.direction === 'outgoing' ? 'outbound' : message.direction,
-                timestamp: message.createdAt || message.timestamp || new Date(),
-                mediaUrl: message.mediaUrl || '',
-                mediaType: message.mediaType || null,
-                conversationId: '<%= conversation._id %>'
-              };
+            if (data.conversationId === '<%= conversation._id %>') {
+              // التحقق من وجود الرسالة أولاً لتجنب التكرار
+              const existingMessage = document.querySelector(`.message[data-message-id="${data._id}"]`);
+              if (!existingMessage) {
+                // تنسيق الرسالة للعرض
+                const formattedMessage = {
+                  _id: data._id,
+                  content: data.content,
+                  direction: data.direction,
+                  timestamp: data.timestamp,
+                  mediaUrl: data.mediaUrl || '',
+                  mediaType: data.mediaType || null,
+                  status: data.status || 'sent',
+                  externalMessageId: data.externalMessageId || null
+                };
+                
+                console.log('الرسالة المنسقة للعرض:', formattedMessage);
+                
+                // إضافة الرسالة إلى المحادثة
+                addMessageToChat(formattedMessage);
+              }
               
-              console.log('الرسالة المنسقة للعرض:', formattedMessage);
+              // تحديث تفاصيل المحادثة
+              const lastMessagePreview = document.getElementById('lastMessagePreview');
+              const lastMessageTime = document.getElementById('lastMessageTime');
               
-              // إضافة الرسالة إلى واجهة المحادثة
-              addMessageToChat(formattedMessage);
-              showAlert('تم استلام رسالة جديدة', 'info');
+              if (lastMessagePreview && lastMessageTime) {
+                lastMessagePreview.textContent = data.content.substring(0, 50) + (data.content.length > 50 ? '...' : '');
+                lastMessageTime.textContent = formatDate(new Date(data.timestamp));
+              }
+              
+              // إظهار إشعار بشكل اختياري إذا كانت الرسالة واردة
+              if (data.direction === 'incoming' || data.direction === 'inbound') {
+                // تشغيل صوت تنبيه اختياري
+                const audioElement = document.getElementById('messageSound');
+                if (audioElement) {
+                  audioElement.play().catch(err => {
+                    console.log('لم يتمكن من تشغيل الصوت:', err);
+                  });
+                }
+              }
             }
           });
           
           // استقبال تحديثات المحادثة
-          conversationSocket.on('conversation-update', function(update) {
-            console.log('تحديث المحادثة:', update);
+          conversationSocket.on('conversation-update', function(data) {
+            console.log('تحديث المحادثة:', data);
             
-            // معالجة التحديثات المختلفة
-            switch (update.type) {
-              case 'assigned':
-                updateAssignmentStatus(update);
-                break;
-              case 'status_changed':
-                updateConversationStatus(update.status);
-                break;
-              case 'note_added':
-                showAlert('تم إضافة ملاحظة داخلية جديدة', 'success');
-                break;
+            if (data._id === '<%= conversation._id %>') {
+              // تحديث حالة المحادثة إذا تغيرت
+              if (data.status) {
+                const statusElement = document.getElementById('conversationStatus');
+                if (statusElement) {
+                  let statusText = 'غير معروف';
+                  let statusClass = '';
+                  
+                  if (data.status === 'open') {
+                    statusText = 'مفتوحة';
+                    statusClass = 'badge-primary';
+                  } else if (data.status === 'assigned') {
+                    statusText = 'مُسندة';
+                    statusClass = 'badge-warning';
+                  } else if (data.status === 'closed') {
+                    statusText = 'مغلقة';
+                    statusClass = 'badge-secondary';
+                  }
+                  
+                  statusElement.textContent = statusText;
+                  statusElement.className = `badge ${statusClass}`;
+                }
+              }
+              
+              // تحديث وقت آخر رسالة إذا تغير
+              if (data.lastMessageAt) {
+                const lastMessageTimeElement = document.getElementById('lastMessageTime');
+                if (lastMessageTimeElement) {
+                  lastMessageTimeElement.textContent = formatDate(new Date(data.lastMessageAt));
+                }
+              }
             }
           });
           
@@ -624,6 +641,19 @@
               });
             } else {
               console.log('لم يتم العثور على الرسالة المراد تحديثها');
+              
+              // بحث بديل باستخدام ID الرسالة إذا كان متوفرًا
+              if (data.messageId) {
+                const messageByIdElements = document.querySelectorAll('.message[data-message-id="' + data.messageId + '"]');
+                if (messageByIdElements.length > 0) {
+                  messageByIdElements.forEach(messageElement => {
+                    // إضافة معرف الرسالة الخارجي للعنصر
+                    messageElement.setAttribute('data-external-id', data.externalMessageId);
+                    // تحديث حالة الرسالة
+                    updateMessageStatus(messageElement, data.status);
+                  });
+                }
+              }
             }
           });
         });
@@ -714,17 +744,36 @@
         
         console.log('إضافة رسالة جديدة للمحادثة:', message);
         
+        // التحقق من وجود رسالة بنفس المعرف لتجنب التكرار
+        if (message._id && message._id !== '' && !message._id.startsWith('temp-')) {
+          const existingMessage = document.querySelector(`.message[data-message-id="${message._id}"]`);
+          if (existingMessage) {
+            console.log('الرسالة موجودة بالفعل، لن تتم إضافتها مرة أخرى:', message._id);
+            return;
+          }
+        }
+        
+        // توحيد اتجاه الرسالة (استخدام القيم المتوافقة مع النموذج)
+        // تحويل inbound إلى incoming و outbound إلى outgoing إذا لزم الأمر
+        let normalizedDirection = message.direction;
+        if (message.direction === 'inbound') normalizedDirection = 'incoming';
+        if (message.direction === 'outbound') normalizedDirection = 'outgoing';
+        
         // إنشاء عنصر الرسالة الجديدة
         const messageElement = document.createElement('div');
-        // التحقق من اتجاه الرسالة (inbound للواردة، outbound للصادرة)
-        const isOutbound = message.direction === 'outbound';
+        
+        // تحديد ما إذا كانت الرسالة صادرة أم واردة
+        const isOutgoing = normalizedDirection === 'outgoing';
         
         // إضافة الفئات المناسبة للعنصر
-        messageElement.className = `message ${isOutbound ? 'message-outbound' : 'message-inbound'}`;
+        messageElement.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`;
         messageElement.setAttribute('data-message-id', message._id || '');
+        
+        // تخزين معرف الرسالة الخارجي (مهم لتحديث الحالة)
         if (message.externalMessageId) {
           messageElement.setAttribute('data-external-id', message.externalMessageId);
         }
+        
         messageElement.setAttribute('data-status', message.status || 'sent');
         
         // التحقق من وجود محتوى الرسالة
@@ -735,11 +784,11 @@
         
         // تهيئة محتوى الرسالة
         messageElement.innerHTML = `
-          <div class="message-bubble">
+          <div class="message-bubble ${isOutgoing ? 'outgoing-bubble' : 'incoming-bubble'}">
             ${messageContent}
             <div class="message-time">
               ${messageTime}
-              ${message.direction === 'outgoing' ? '<span class="message-status"></span>' : ''}
+              ${isOutgoing ? '<span class="message-status"></span>' : ''}
             </div>
           </div>
         `;
@@ -747,13 +796,6 @@
         // إضافة فاصل واضح بعد كل رسالة
         const clearDiv = document.createElement('div');
         clearDiv.className = 'clear-both';
-        
-        // التحقق من وجود رسالة بنفس المعرف لتجنب التكرار
-        const existingMessage = document.querySelector(`.message[data-message-id="${message._id}"]`);
-        if (existingMessage && message._id) {
-          console.log('الرسالة موجودة بالفعل، لن تتم إضافتها مرة أخرى:', message._id);
-          return;
-        }
         
         // إضافة الرسالة إلى الحاوية
         messagesContainer.appendChild(messageElement);
@@ -763,7 +805,7 @@
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         
         // إذا كانت الرسالة صادرة، قم بتعيين حالتها
-        if (message.direction === 'outgoing') {
+        if (isOutgoing) {
           updateMessageStatus(messageElement, message.status || 'sent');
         }
       }

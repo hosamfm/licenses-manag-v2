@@ -215,6 +215,7 @@ async function updateMessageStatus(messageId, newStatus, timestamp) {
       if (conversationId) {
         socketService.emitToRoom(`conversation-${conversationId}`, 'message_status_update', {
           externalMessageId: messageId,
+          messageId: whatsappMessage._id, // إضافة معرف الرسالة الداخلي أيضًا
           status: systemStatus,
           timestamp: new Date()
         });

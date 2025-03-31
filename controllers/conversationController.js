@@ -496,8 +496,9 @@ const replyToConversation = async (req, res) => {
 
             // تحديث حالة الرسالة إلى "مرسلة" بعد نجاح الإرسال
             if (apiResponse && apiResponse.messages && apiResponse.messages.length > 0) {
-                message.status = 'sent';
+                // حفظ معرف الرسالة الخارجي (مهم لتحديث الحالة لاحقاً)
                 message.externalMessageId = apiResponse.messages[0].id;
+                message.status = 'sent';
                 await message.save();
                 
                 logger.info('conversationController', 'تم إرسال الرسالة بنجاح إلى واتساب', {
@@ -527,6 +528,7 @@ const replyToConversation = async (req, res) => {
             direction: 'outgoing', // يجب استخدام 'outgoing' في Socket.io أيضًا للتوافق مع النموذج
             timestamp: message.timestamp,
             status: message.status,
+            externalMessageId: message.externalMessageId, // إضافة معرف الرسالة الخارجي
             sender: req.user ? {
                 _id: req.user._id,
                 username: req.user.username
