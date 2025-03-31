@@ -74,16 +74,29 @@ exports.saveMetaWhatsappSettings = async (req, res) => {
             is_active
         } = req.body;
         
+        // تسجيل البيانات المستلمة للتشخيص
+        logger.debug('metaWhatsappSettingsController', 'البيانات المستلمة لحفظ الإعدادات', {
+            app_id: app_id || 'غير موجود',
+            app_secret: app_secret ? '(موجود)' : 'غير موجود',
+            access_token: access_token ? '(موجود)' : 'غير موجود',
+            phone_number_id: phone_number_id || 'غير موجود',
+            business_account_id: business_account_id || 'غير موجود',
+            verify_token: verify_token ? '(موجود)' : 'غير موجود',
+            is_active: is_active || 'غير موجود'
+        });
+        
         // الحصول على إعدادات واتساب الرسمي الحالية
         const settings = await MetaWhatsappSettings.getActiveSettings();
         
-        // تحديث الإعدادات
+        // تحديث الإعدادات (التحقق من وجود القيم قبل التحديث)
         settings.isActive = is_active === 'on';
-        settings.config.appId = app_id || '';
-        settings.config.appSecret = app_secret || '';
-        settings.config.accessToken = access_token || '';
-        settings.config.phoneNumberId = phone_number_id || '';
-        settings.config.businessAccountId = business_account_id || '';
+        
+        // تحديث الحقول فقط إذا تم توفيرها وليست فارغة
+        if (app_id !== undefined) settings.config.appId = app_id;
+        if (app_secret !== undefined) settings.config.appSecret = app_secret;
+        if (access_token !== undefined) settings.config.accessToken = access_token;
+        if (phone_number_id !== undefined) settings.config.phoneNumberId = phone_number_id;
+        if (business_account_id !== undefined) settings.config.businessAccountId = business_account_id;
         
         // إذا كان توكن التحقق غير موجود، إنشاء توكن جديد
         if (!verify_token || verify_token.trim() === '') {
@@ -92,14 +105,29 @@ exports.saveMetaWhatsappSettings = async (req, res) => {
             settings.config.verifyToken = verify_token;
         }
         
-        settings.config.webhookUrl = webhook_url || '';
+        if (webhook_url !== undefined) settings.config.webhookUrl = webhook_url;
+        
+        // تسجيل البيانات قبل الحفظ للتشخيص
+        logger.debug('metaWhatsappSettingsController', 'البيانات قبل الحفظ', {
+            appId: settings.config.appId || 'غير موجود',
+            appSecret: settings.config.appSecret ? '(موجود)' : 'غير موجود',
+            accessToken: settings.config.accessToken ? '(موجود)' : 'غير موجود',
+            phoneNumberId: settings.config.phoneNumberId || 'غير موجود',
+            businessAccountId: settings.config.businessAccountId || 'غير موجود',
+            verifyToken: settings.config.verifyToken ? '(موجود)' : 'غير موجود',
+            isActive: settings.isActive
+        });
         
         // حفظ الإعدادات المحدثة
-        settings.updatedBy = req.user ? req.user._id : null;
+        settings.updatedBy = req.session && req.session.userId ? req.session.userId : null;
         await settings.save();
         
         logger.info('metaWhatsappSettingsController', 'تم حفظ إعدادات واتساب الرسمي', {
-            userId: req.user ? req.user._id : null
+            userId: req.session && req.session.userId ? req.session.userId : null,
+            isActive: settings.isActive,
+            hasAppId: !!settings.config.appId,
+            hasAccessToken: !!settings.config.accessToken,
+            hasPhoneNumberId: !!settings.config.phoneNumberId
         });
         
         req.flash('success', 'تم حفظ إعدادات واتساب الرسمي بنجاح');
