@@ -20,8 +20,7 @@ const semMessageSchema = new mongoose.Schema({
     content: {
         type: String,
         required: true,
-        trim: true,
-        maxlength: 160
+        trim: true
     },
     status: {
         type: String,
