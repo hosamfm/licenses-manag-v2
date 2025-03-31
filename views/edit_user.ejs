@@ -68,6 +68,16 @@
                             <% } %>
                         </div>
                         
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canAccessConversations" name="canAccessConversations" <%= user.can_access_conversations ? 'checked' : '' %>>
+                                    <label class="form-check-label" for="canAccessConversations">السماح بالوصول إلى نظام محادثات واتساب</label>
+                                </div>
+                                <small class="text-muted">هذه الصلاحية ستسمح للمستخدم بالوصول إلى محادثات واتساب وإدارتها</small>
+                            </div>
+                        </div>
+                        
                         <div id="supervisorFieldContainer" class="mb-3" style="<%= (req.session.userRole === 'admin' && user.user_role !== 'representative') ? 'display: none;' : '' %>">
                             <label for="supervisorId" class="form-label">المشرف/المورد</label>
                             <select class="form-select" id="supervisorId" name="supervisorId">

@@ -431,6 +431,10 @@ router.post('/licenses/admin/user-management/update', [isAuthenticated, checkRol
       updateData.supervisor = supervisorId;
     }
     
+    // إضافة صلاحية الوصول إلى نظام المحادثات
+    const canAccessConversations = req.body.canAccessConversations === 'on';
+    updateData.can_access_conversations = canAccessConversations;
+    
     // تحديث بيانات المستخدم
     await User.findByIdAndUpdate(userId, updateData);
     

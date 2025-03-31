@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema({
     enum: ['no_permissions', 'representative', 'supervisor', 'admin', 'supplier'], // Added 'supplier'
     default: 'no_permissions' 
   },
+  // إضافة صلاحية الوصول إلى نظام المحادثات
+  can_access_conversations: {
+    type: Boolean,
+    default: false
+  },
   temp_code: { type: String },
   subordinates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   supervisor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false }

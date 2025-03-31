@@ -22,6 +22,7 @@ const externalApiRoutes = require('./routes/externalApiRoutes'); // استيرا
 const metaWhatsappWebhookRoutes = require('./routes/metaWhatsappWebhookRoutes'); // استيراد مسارات webhook واتساب الرسمي
 const metaWhatsappSettingsRoutes = require('./routes/metaWhatsappSettingsRoutes'); // استيراد مسارات إعدادات واتساب الرسمي
 const metaWhatsappMonitorRoutes = require('./routes/metaWhatsappMonitorRoutes'); // استيراد مسارات مراقبة webhook واتساب الرسمي
+const whatsappChannelRoutes = require('./routes/whatsappChannelRoutes'); // استيراد مسارات إدارة قنوات واتساب
 
 if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
   console.error("Error: config environment variables not set. Please create/edit .env configuration file.");
@@ -146,6 +147,7 @@ app.use(externalApiRoutes); // إضافة مسارات API الخارجية
 app.use(metaWhatsappWebhookRoutes); // إضافة مسارات webhook واتساب الرسمي
 app.use(metaWhatsappSettingsRoutes); // إضافة مسارات إعدادات واتساب الرسمي
 app.use(metaWhatsappMonitorRoutes); // إضافة مسارات مراقبة webhook ميتا
+app.use(whatsappChannelRoutes); // إضافة مسارات إدارة قنوات واتساب
 
 // مسار لعرض صفحة سجل رسائل العميل
 app.get('/client_messages', isAuthenticated, async (req, res) => {
