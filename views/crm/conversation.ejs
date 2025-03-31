@@ -551,14 +551,11 @@
       
       try {
         // الحصول على عنوان الخادم الحالي بدلاً من localhost
-        const socketServer = window.location.hostname === 'localhost' 
-          ? 'http://localhost:3001'  // استخدام localhost في بيئة التطوير
-          : window.location.origin;  // استخدام نفس النطاق الحالي في بيئة الإنتاج
+        const serverUrl = window.location.origin;
+        console.log('محاولة الاتصال بخادم Socket.io على:', serverUrl);
         
-        conversationSocket = io(socketServer, {
-          withCredentials: true,  // السماح بإرسال الكوكيز للمصادقة
-          transports: ['websocket', 'polling']
-        });
+        // تهيئة اتصال Socket.io
+        conversationSocket = io(serverUrl);
         
         // عند نجاح الاتصال
         conversationSocket.on('connect', function() {
@@ -896,107 +893,105 @@
       }
       
       // إرسال نموذج الرد باستخدام AJAX
-      document.addEventListener('DOMContentLoaded', function() {
-        const replyForm = document.getElementById('replyForm');
+      const replyForm = document.getElementById('replyForm');
         
-        if (replyForm) {
-          replyForm.addEventListener('submit', function(event) {
-            event.preventDefault();
+      if (replyForm) {
+        replyForm.addEventListener('submit', function(event) {
+          event.preventDefault();
             
-            // الحصول على قيمة الرسالة
-            const messageInput = document.getElementById('replyMessage');
-            const content = messageInput.value.trim();
+          // الحصول على قيمة الرسالة
+          const messageInput = document.getElementById('replyMessage');
+          const content = messageInput.value.trim();
             
-            if (!content) {
-              showAlert('يرجى إدخال نص الرسالة', 'warning');
-              return;
+          if (!content) {
+            showAlert('يرجى إدخال نص الرسالة', 'warning');
+            return;
+          }
+            
+          // تعطيل زر الإرسال أثناء العملية
+          const submitButton = replyForm.querySelector('button[type="submit"]');
+          const originalButtonText = submitButton.innerHTML;
+          submitButton.disabled = true;
+          submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+            
+          // إنشاء عنصر الرسالة مؤقتًا في واجهة المستخدم
+          const tempMessage = {
+            _id: 'temp-' + new Date().getTime(),
+            content: content,
+            direction: 'outgoing',
+            timestamp: new Date(),
+            status: 'sending'
+          };
+            
+          // إضافة الرسالة المؤقتة إلى المحادثة
+          addMessageToChat(tempMessage);
+            
+          // إرسال الرسالة إلى الخادم باستخدام fetch API
+          fetch(replyForm.action, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ content })
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('حدث خطأ أثناء إرسال الرسالة');
             }
-            
-            // تعطيل زر الإرسال أثناء العملية
-            const submitButton = replyForm.querySelector('button[type="submit"]');
-            const originalButtonText = submitButton.innerHTML;
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
-            
-            // إنشاء عنصر الرسالة مؤقتًا في واجهة المستخدم
-            const tempMessage = {
-              _id: 'temp-' + new Date().getTime(),
-              content: content,
-              direction: 'outgoing',
-              timestamp: new Date(),
-              status: 'sending'
-            };
-            
-            // إضافة الرسالة المؤقتة إلى المحادثة
-            addMessageToChat(tempMessage);
-            
-            // إرسال الرسالة إلى الخادم باستخدام fetch API
-            fetch(replyForm.action, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-              },
-              body: JSON.stringify({ content })
-            })
-            .then(response => {
-              if (!response.ok) {
-                throw new Error('حدث خطأ أثناء إرسال الرسالة');
-              }
-              return response.json();
-            })
-            .then(data => {
-              console.log('استجابة الخادم:', data);
+            return response.json();
+          })
+          .then(data => {
+            console.log('استجابة الخادم:', data);
               
-              // إزالة الرسالة المؤقتة
-              const tempMessageElement = document.querySelector(`.message[data-message-id="${tempMessage._id}"]`);
-              if (tempMessageElement) {
-                tempMessageElement.remove();
-                // إزالة العنصر التالي أيضًا (وهو عنصر div.clear-both)
-                const nextElement = tempMessageElement.nextElementSibling;
-                if (nextElement && nextElement.classList.contains('clear-both')) {
-                  nextElement.remove();
-                }
+            // إزالة الرسالة المؤقتة
+            const tempMessageElement = document.querySelector(`.message[data-message-id="${tempMessage._id}"]`);
+            if (tempMessageElement) {
+              tempMessageElement.remove();
+              // إزالة العنصر التالي أيضًا (وهو عنصر div.clear-both)
+              const nextElement = tempMessageElement.nextElementSibling;
+              if (nextElement && nextElement.classList.contains('clear-both')) {
+                nextElement.remove();
               }
+            }
               
-              if (data.success) {
-                // إضافة الرسالة الحقيقية بعد استلام الرد من الخادم
-                if (data.message) {
-                  // تنسيق الرسالة بالشكل المطلوب
-                  const formattedMessage = {
-                    _id: data.message._id,
-                    content: data.message.content,
-                    direction: data.message.direction,
-                    timestamp: data.message.timestamp,
-                    status: data.message.status || 'sent'
-                  };
+            if (data.success) {
+              // إضافة الرسالة الحقيقية بعد استلام الرد من الخادم
+              if (data.message) {
+                // تنسيق الرسالة بالشكل المطلوب
+                const formattedMessage = {
+                  _id: data.message._id,
+                  content: data.message.content,
+                  direction: data.message.direction,
+                  timestamp: data.message.timestamp,
+                  status: data.message.status || 'sent'
+                };
                   
-                  // إضافة الرسالة المستلمة من الخادم إلى المحادثة
-                  addMessageToChat(formattedMessage);
-                }
-                
-                // عرض رسالة نجاح
-                showAlert('تم إرسال الرسالة بنجاح', 'success');
-              } else {
-                // عرض رسالة خطأ
-                showAlert(data.error || 'حدث خطأ أثناء إرسال الرسالة', 'danger');
+                // إضافة الرسالة المستلمة من الخادم إلى المحادثة
+                addMessageToChat(formattedMessage);
               }
-            })
-            .catch(error => {
-              console.error('خطأ في إرسال الرسالة:', error);
-              showAlert('فشل في إرسال الرسالة. يرجى المحاولة مرة أخرى.', 'danger');
-            })
-            .finally(() => {
-              // إعادة تفعيل زر الإرسال
-              submitButton.disabled = false;
-              submitButton.innerHTML = originalButtonText;
+                
+              // عرض رسالة نجاح
+              showAlert('تم إرسال الرسالة بنجاح', 'success');
+            } else {
+              // عرض رسالة خطأ
+              showAlert(data.error || 'حدث خطأ أثناء إرسال الرسالة', 'danger');
+            }
+          })
+          .catch(error => {
+            console.error('خطأ في إرسال الرسالة:', error);
+            showAlert('فشل في إرسال الرسالة. يرجى المحاولة مرة أخرى.', 'danger');
+          })
+          .finally(() => {
+            // إعادة تفعيل زر الإرسال
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
               
-              // مسح محتوى حقل الرسالة
-              messageInput.value = '';
-            });
+            // مسح محتوى حقل الرسالة
+            messageInput.value = '';
           });
-        }
-      });
+        });
+      }
       
       // مسح شارة الإشعارات لهذه المحادثة عند تحميل الصفحة
       fetch(`/crm/conversations/<%= conversation._id %>/mark-as-read`, {

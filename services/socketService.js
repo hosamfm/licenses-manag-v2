@@ -116,9 +116,27 @@ function broadcastNotification(type, data) {
     return;
   }
 
-  // إرسال الإشعار للجميع
-  io.emit('notification', { type, data });
+  io.emit(type, data);
   logger.info('socketService', 'تم إرسال إشعار عام', { type });
+}
+
+/**
+ * إرسال إشعار إلى غرفة محددة
+ * @param {String} roomName - اسم الغرفة
+ * @param {String} eventName - اسم الحدث
+ * @param {Object} data - بيانات الإشعار
+ */
+function emitToRoom(roomName, eventName, data) {
+  if (!io) {
+    logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+    return;
+  }
+
+  io.to(roomName).emit(eventName, data);
+  logger.info('socketService', 'تم إرسال إشعار إلى غرفة محددة', { 
+    roomName,
+    eventName
+  });
 }
 
 module.exports = {
@@ -126,5 +144,6 @@ module.exports = {
   notifyNewMessage,
   notifyConversationUpdate,
   notifyUser,
-  broadcastNotification
+  broadcastNotification,
+  emitToRoom
 };
