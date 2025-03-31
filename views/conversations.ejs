@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('partials/_head') %>
+  <title>إدارة المحادثات</title>
+  <style>
+    .conversations-list {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .conversation-item {
+      border-bottom: 1px solid #eee;
+      padding: 15px;
+      transition: all 0.2s;
+    }
+    .conversation-item:hover {
+      background-color: #f8f9fa;
+    }
+    .conversation-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .phone-number {
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+    .conversation-time {
+      color: #6c757d;
+      font-size: 0.85rem;
+    }
+    .conversation-preview {
+      color: #666;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 80%;
+    }
+    .status-badge {
+      font-size: 0.8rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 20px;
+    }
+    .status-open {
+      background-color: #e6f7ff;
+      border: 1px solid #91d5ff;
+      color: #1890ff;
+    }
+    .status-assigned {
+      background-color: #fff7e6;
+      border: 1px solid #ffd591;
+      color: #fa8c16;
+    }
+    .status-closed {
+      background-color: #f6ffed;
+      border: 1px solid #b7eb8f;
+      color: #52c41a;
+    }
+    .filter-card {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .counter-box {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.05);
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .counter-number {
+      font-size: 2rem;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .counter-label {
+      color: #6c757d;
+      font-size: 0.9rem;
+    }
+    .counter-open .counter-number {
+      color: #1890ff;
+    }
+    .counter-assigned .counter-number {
+      color: #fa8c16;
+    }
+    .counter-closed .counter-number {
+      color: #52c41a;
+    }
+    .counter-total .counter-number {
+      color: #722ed1;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 50px 0;
+      color: #6c757d;
+    }
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 20px;
+      color: #d9d9d9;
+    }
+    .pagination-container {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/_header') %>
+  
+  <div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3">
+        <% if (typeof isMyConversations !== 'undefined' && isMyConversations) { %>
+          محادثاتي
+        <% } else { %>
+          إدارة المحادثات
+        <% } %>
+      </h1>
+      
+      <div>
+        <% if (typeof isMyConversations === 'undefined' || !isMyConversations) { %>
+          <a href="/conversations/my" class="btn btn-outline-primary me-2">
+            <i class="fas fa-user me-1"></i> محادثاتي
+          </a>
+        <% } else { %>
+          <a href="/conversations" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-list me-1"></i> جميع المحادثات
+          </a>
+        <% } %>
+        
+        <a href="/settings" class="btn btn-secondary">
+          <i class="fas fa-cog me-1"></i> الإعدادات
+        </a>
+      </div>
+    </div>
+    
+    <% if (flashMessages.error) { %>
+      <div class="alert alert-danger"><%= flashMessages.error %></div>
+    <% } %>
+    <% if (flashMessages.success) { %>
+      <div class="alert alert-success"><%= flashMessages.success %></div>
+    <% } %>
+    
+    <!-- إحصائيات سريعة -->
+    <div class="row mb-4">
+      <div class="col-md-3">
+        <div class="counter-box counter-open">
+          <div class="counter-number"><%= counts.open %></div>
+          <div class="counter-label">محادثات مفتوحة</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="counter-box counter-assigned">
+          <div class="counter-number"><%= counts.assigned %></div>
+          <div class="counter-label">محادثات مسندة</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="counter-box counter-closed">
+          <div class="counter-number"><%= counts.closed %></div>
+          <div class="counter-label">محادثات مغلقة</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="counter-box counter-total">
+          <div class="counter-number"><%= counts.total %></div>
+          <div class="counter-label">إجمالي المحادثات</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- فلاتر البحث -->
+    <div class="filter-card mb-4">
+      <form action="<%= typeof isMyConversations !== 'undefined' && isMyConversations ? '/conversations/my' : '/conversations' %>" method="GET" class="row g-3">
+        <div class="col-md-4">
+          <label for="status" class="form-label">حالة المحادثة</label>
+          <select name="status" id="status" class="form-select">
+            <% filters.availableStatuses.forEach(function(s) { %>
+              <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>>
+                <% if (s === 'all') { %>جميع الحالات<% } %>
+                <% if (s === 'open') { %>مفتوحة<% } %>
+                <% if (s === 'assigned') { %>مسندة<% } %>
+                <% if (s === 'closed') { %>مغلقة<% } %>
+              </option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label for="limit" class="form-label">عدد العناصر</label>
+          <select name="limit" id="limit" class="form-select">
+            <option value="10" <%= pagination.limit === 10 ? 'selected' : '' %>>10</option>
+            <option value="20" <%= pagination.limit === 20 ? 'selected' : '' %>>20</option>
+            <option value="50" <%= pagination.limit === 50 ? 'selected' : '' %>>50</option>
+          </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fas fa-filter me-1"></i> تطبيق الفلتر
+          </button>
+        </div>
+      </form>
+    </div>
+    
+    <!-- قائمة المحادثات -->
+    <div class="conversations-list">
+      <% if (conversations && conversations.length > 0) { %>
+        <% conversations.forEach(function(conversation) { %>
+          <div class="conversation-item">
+            <div class="conversation-header">
+              <div class="phone-number">
+                <i class="fas fa-phone me-1"></i>
+                <%= conversation.phoneNumber %>
+                <% if (conversation.customerName) { %>
+                  <span class="ms-2 text-muted">(<%= conversation.customerName %>)</span>
+                <% } %>
+              </div>
+              
+              <div>
+                <span class="status-badge status-<%= conversation.status %>">
+                  <% if (conversation.status === 'open') { %>مفتوحة<% } %>
+                  <% if (conversation.status === 'assigned') { %>مسندة<% } %>
+                  <% if (conversation.status === 'closed') { %>مغلقة<% } %>
+                </span>
+                
+                <span class="conversation-time ms-2">
+                  <i class="far fa-clock me-1"></i>
+                  <%= new Date(conversation.lastMessageAt).toLocaleString('ar-EG') %>
+                </span>
+              </div>
+            </div>
+            
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="conversation-preview">
+                <% if (conversation.lastMessage) { %>
+                  <% if (conversation.lastMessage.direction === 'incoming') { %>
+                    <i class="fas fa-arrow-left text-success me-1"></i>
+                  <% } else { %>
+                    <i class="fas fa-arrow-right text-primary me-1"></i>
+                  <% } %>
+                  <%= conversation.lastMessage.content || 'محتوى وسائط' %>
+                <% } else { %>
+                  <i class="fas fa-comment-dots me-1"></i> لا توجد رسائل
+                <% } %>
+              </div>
+              
+              <div>
+                <% if (conversation.assignedTo) { %>
+                  <span class="badge bg-info me-2">
+                    <i class="fas fa-user me-1"></i>
+                    <%= conversation.assignedTo.full_name || conversation.assignedTo.username %>
+                  </span>
+                <% } %>
+                
+                <a href="/conversations/<%= conversation._id %>" class="btn btn-sm btn-outline-primary">
+                  <i class="far fa-eye me-1"></i> عرض
+                </a>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      <% } else { %>
+        <div class="empty-state">
+          <div class="empty-icon">
+            <i class="far fa-comments"></i>
+          </div>
+          <h4>لا توجد محادثات</h4>
+          <p>لم يتم العثور على محادثات تطابق الفلتر الحالي</p>
+        </div>
+      <% } %>
+    </div>
+    
+    <!-- ترقيم الصفحات -->
+    <% if (pagination.total > 1) { %>
+      <div class="pagination-container">
+        <nav aria-label="ترقيم الصفحات">
+          <ul class="pagination">
+            <% if (pagination.prev) { %>
+              <li class="page-item">
+                <a class="page-link" href="?page=<%= pagination.prev %>&status=<%= filters.status %>&limit=<%= pagination.limit %>">
+                  السابق
+                </a>
+              </li>
+            <% } else { %>
+              <li class="page-item disabled">
+                <span class="page-link">السابق</span>
+              </li>
+            <% } %>
+            
+            <% for (let i = 1; i <= pagination.total; i++) { %>
+              <li class="page-item <%= i === pagination.current ? 'active' : '' %>">
+                <a class="page-link" href="?page=<%= i %>&status=<%= filters.status %>&limit=<%= pagination.limit %>">
+                  <%= i %>
+                </a>
+              </li>
+            <% } %>
+            
+            <% if (pagination.next) { %>
+              <li class="page-item">
+                <a class="page-link" href="?page=<%= pagination.next %>&status=<%= filters.status %>&limit=<%= pagination.limit %>">
+                  التالي
+                </a>
+              </li>
+            <% } else { %>
+              <li class="page-item disabled">
+                <span class="page-link">التالي</span>
+              </li>
+            <% } %>
+          </ul>
+        </nav>
+      </div>
+    <% } %>
+  </div>
+  
+  <%- include('partials/_footer') %>
+  
+  <script>
+    // إضافة تحديث تلقائي للنموذج عند تغيير القيم
+    document.addEventListener('DOMContentLoaded', function() {
+      const statusSelect = document.getElementById('status');
+      const limitSelect = document.getElementById('limit');
+      
+      if (statusSelect) {
+        statusSelect.addEventListener('change', function() {
+          this.form.submit();
+        });
+      }
+      
+      if (limitSelect) {
+        limitSelect.addEventListener('change', function() {
+          this.form.submit();
+        });
+      }
+    });
+  </script>
+</body>
+</html>

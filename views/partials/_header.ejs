@@ -43,6 +43,14 @@
                             <span>إدارة التراخيص</span>
                         </a>
                     </li>
+                    <% if (session.userRole === 'admin' || session.userPermissions?.can_access_conversations) { %>
+                    <li class="nav-item">
+                        <a class="nav-link <%= (typeof originalUrl !== 'undefined' && originalUrl.includes('/conversations')) ? 'active' : '' %>" href="/conversations">
+                            <i class="fas fa-comments"></i>
+                            <span>المحادثات</span>
+                        </a>
+                    </li>
+                    <% } %>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-cog"></i>
