@@ -157,7 +157,7 @@ exports.getSemClientDetails = async (req, res) => {
 exports.updateSemClient = async (req, res) => {
     try {
         const { clientId } = req.params;
-        const { name, email, phone, company, status, dailyLimit, monthlyLimit, messagingChannels, preferredChannel, defaultCountry } = req.body;
+        const { name, email, phone, company, status, dailyLimit, monthlyLimit, messagingChannels, preferredChannel, defaultCountry, metaWhatsappTemplates } = req.body;
         const { userId, userRole } = req.session;
         
         const client = await SemClient.findById(clientId);
@@ -191,7 +191,16 @@ exports.updateSemClient = async (req, res) => {
         if (messagingChannels) {
             client.messagingChannels = {
                 sms: messagingChannels.sms !== undefined ? messagingChannels.sms : client.messagingChannels.sms,
-                whatsapp: messagingChannels.whatsapp !== undefined ? messagingChannels.whatsapp : client.messagingChannels.whatsapp
+                whatsapp: messagingChannels.whatsapp !== undefined ? messagingChannels.whatsapp : client.messagingChannels.whatsapp,
+                metaWhatsapp: messagingChannels.metaWhatsapp !== undefined ? messagingChannels.metaWhatsapp : client.messagingChannels.metaWhatsapp
+            };
+        }
+        
+        // تحديث إعدادات نماذج واتساب ميتا
+        if (metaWhatsappTemplates) {
+            client.metaWhatsappTemplates = {
+                name: metaWhatsappTemplates.name || client.metaWhatsappTemplates?.name || 'siraj',
+                language: metaWhatsappTemplates.language || client.metaWhatsappTemplates?.language || 'ar'
             };
         }
         

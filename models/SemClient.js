@@ -31,12 +31,22 @@ const semClientSchema = new mongoose.Schema({
         whatsapp: {
             type: Boolean,
             default: false
+        },
+        metaWhatsapp: {
+            type: Boolean,
+            default: false
         }
     },
+    // القناة المفضلة للإرسال
     preferredChannel: {
         type: String,
-        enum: ['none', 'sms', 'whatsapp'],
+        enum: ['none', 'sms', 'whatsapp', 'metaWhatsapp'],
         default: 'none'
+    },
+    // إعدادات نماذج رسائل Meta WhatsApp
+    metaWhatsappTemplates: {
+        name: { type: String, default: 'siraj' },
+        language: { type: String, default: 'ar' }
     },
     apiKey: {
         type: String,

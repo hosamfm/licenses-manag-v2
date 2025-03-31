@@ -9,6 +9,8 @@ const SmsSettings = require('../models/SmsSettings');
 const SmsStatusService = require('../services/sms/SmsStatusService');
 const WhatsappManager = require('../services/whatsapp/WhatsappManager');
 const WhatsappSettings = require('../models/WhatsappSettings');
+const MetaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
+const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const phoneFormatService = require('../services/phoneFormatService');
 
 /*----------------------------------------------------------
@@ -52,6 +54,27 @@ async function _initializeWhatsappManager() {
     return true;
   } catch (error) {
     logger.error('messageController', 'خطأ في تهيئة مدير خدمة الواتساب', error);
+    return false;
+  }
+}
+
+async function _initializeMetaWhatsappManager() {
+  try {
+    if (MetaWhatsappService.initialized) return true;
+    const settings = await MetaWhatsappSettings.getActiveSettings();
+    if (!settings) {
+      logger.error('messageController', 'لا يمكن العثور على إعدادات Meta الواتساب النشطة');
+      return false;
+    }
+    const config = settings.getProviderConfig();
+    const initialized = await MetaWhatsappService.initialize(config);
+    if (!initialized) {
+      logger.error('messageController', 'فشل في تهيئة مدير خدمة Meta الواتساب');
+      return false;
+    }
+    return true;
+  } catch (error) {
+    logger.error('messageController', 'خطأ في تهيئة مدير خدمة Meta الواتساب', error);
     return false;
   }
 }
@@ -272,87 +295,180 @@ async function sendWhatsappAndUpdate(message, client, formattedPhone, msgContent
 }
 
 /**
- * عملية إرسال الرسالة بالقنوات المتعددة (Fallback)
- * إذا كان العميل يمتلك قناتين (SMS وواتساب) يتم المحاولة بالقناة المفضلة أولاً، ثم استخدام البديلة في حال فشل الإرسال.
+ * إرسال رسالة واتساب ميتا الرسمي وتحديث السجل المناسب
+ * @param {SemMessage|null} message - سجل الرسالة الحالي (إن وجد)
+ * @param {Object} client - معلومات العميل
+ * @param {string} formattedPhone - رقم الهاتف المنسق
+ * @param {string} msgContent - محتوى الرسالة
+ * @param {boolean} updateSemMessage - تحديث سجل SemMessage أم لا
+ * @returns {Promise<Object>} نتيجة الإرسال
  */
-async function processChannelFallback(message, client, formattedPhone, msgContent, useWhatsappFirst) {
-  let smsSent = false, whatsappSent = false;
+async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, updateSemMessage = true) {
   try {
-    // تحديث إعدادات الخدمات قبل البدء
-    const whatsappSettings = await WhatsappSettings.getActiveSettings();
-    const whatsappConfig = whatsappSettings.getProviderConfig();
-    await WhatsappManager.initialize(whatsappConfig);
-    const smsSettings = await SmsSettings.getActiveSettings();
-    const smsConfig = smsSettings.getProviderConfig();
-    await SmsManager.initialize(smsConfig);
+    logger.debug('messageController', 'إرسال رسالة عبر Meta واتساب', { formattedPhone });
     
-    if (useWhatsappFirst) {
-      logger.info(`محاولة إرسال رسالة واتساب للعميل ${client.name} (القناة الأولى)`);
-      
-      // استخدام دالة إرسال الواتساب بدون ربطها بـ SemMessage (updateSemMessage = false)
-      const whatsappSuccess = await sendWhatsappAndUpdate(null, client, formattedPhone, msgContent, whatsappConfig, false);
-      
-      if (whatsappSuccess.success) {
-        // تم إرسال الواتساب بنجاح - تم تخزينها في WhatsappMessage
-        logger.info(`تم إرسال واتساب بنجاح للعميل ${client.name} وتخزينها في WhatsappMessage`);
-        await updateClientBalance(client, false, true, msgContent);
-      } else {
-        // فشل إرسال الواتساب - محاولة إرسال SMS كقناة بديلة
-        logger.info(`فشل إرسال واتساب للعميل ${client.name}، جاري المحاولة عبر SMS`);
-        
-        // إنشاء سجل SemMessage الآن (لأننا سنستخدم SMS)
-        const semMessage = new SemMessage({
-          clientId: client._id,
-          recipients: [formattedPhone],
-          originalRecipients: [phone],
-          content: msgContent,
-          status: 'pending',
-          messageId: new mongoose.Types.ObjectId().toString()
-        });
-        await semMessage.save();
-        
-        const smsSuccess = await sendSmsAndUpdate(semMessage, client, formattedPhone, msgContent, smsConfig);
-        if (smsSuccess) {
-          // تم إرسال SMS بنجاح
-          logger.info(`تم إرسال SMS كقناة بديلة بنجاح للعميل ${client.name}`);
-          await updateClientBalance(client, true, false, msgContent);
-        }
+    // استخدام إعدادات النموذج المخصصة للعميل أو الإعدادات الافتراضية
+    const templateName = client.metaWhatsappTemplates?.name || 'siraj';
+    const templateLanguage = client.metaWhatsappTemplates?.language || 'ar';
+    
+    // إعداد مكونات النموذج - نفترض أن النموذج يحتوي على متغير واحد لنص الرسالة
+    const components = [
+      {
+        type: 'body',
+        parameters: [
+          {
+            type: 'text',
+            text: msgContent
+          }
+        ]
       }
-    } else {
-      // محاولة الإرسال عبر SMS أولاً
-      logger.info(`محاولة إرسال SMS كقناة أولى للعميل ${client.name}`);
-      
-      // إنشاء سجل SemMessage لأننا سنجرب SMS أولاً
-      const semMessage = new SemMessage({
+    ];
+    
+    // استخدام واجهة إرسال النماذج بدلاً من الرسائل النصية العادية
+    const result = await MetaWhatsappService.sendTemplateMessage(
+      formattedPhone, 
+      templateName, 
+      templateLanguage, 
+      components
+    );
+    
+    if (message && updateSemMessage) {
+      // تحديث سجل SemMessage إذا كان موجوداً ومطلوباً تحديثه
+      message.status = 'sent';
+      message.sentAt = new Date();
+      message.externalMessageId = result.messages?.[0]?.id || null;
+      message.providerData = {
+        provider: 'metaWhatsapp',
+        lastUpdate: new Date(),
+        rawResponse: result
+      };
+      await message.save();
+    } else if (!message) {
+      // إنشاء سجل WhatsappMessage جديد في حالة عدم وجود SemMessage
+      const whatsappMessage = new WhatsappMessage({
         clientId: client._id,
-        recipients: [formattedPhone],
-        originalRecipients: [phone],
-        content: msgContent,
-        status: 'pending',
-        messageId: new mongoose.Types.ObjectId().toString()
+        phoneNumber: formattedPhone,
+        message: msgContent,
+        status: 'sent',
+        messageId: new mongoose.Types.ObjectId().toString(),
+        externalMessageId: result.messages?.[0]?.id || null,
+        providerData: {
+          provider: 'metaWhatsapp',
+          lastUpdate: new Date(),
+          rawResponse: result
+        }
       });
-      await semMessage.save();
+      await whatsappMessage.save();
+    }
+    
+    return {
+      success: true,
+      messageId: message ? message._id : null,
+      externalMessageId: result.messages?.[0]?.id || null
+    };
+  } catch (error) {
+    logger.error('messageController', 'خطأ في إرسال رسالة Meta واتساب', {
+      error: error.message,
+      stack: error.stack
+    });
+    
+    if (message && updateSemMessage) {
+      message.status = 'failed';
+      message.errorMessage = error.message;
+      await message.save();
+    }
+    
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * عملية إرسال الرسالة بالقنوات المتعددة (Fallback)
+ * إذا كان العميل يمتلك قناتين (SMS وواتساب وميتا واتساب) يتم المحاولة بالقناة المفضلة أولاً، ثم استخدام البديلة في حال فشل الإرسال.
+ */
+async function processChannelFallback(message, client, formattedPhone, msgContent, preferredChannel) {
+  let smsSent = false;
+  let whatsappSent = false;
+  let metaWhatsappSent = false;
+  
+  try {
+    // الحصول على إعدادات المزودين
+    const smsConfig = (await SmsSettings.getActiveSettings()).getProviderConfig();
+    const whatsappConfig = (await WhatsappSettings.getActiveSettings()).getProviderConfig();
+    
+    // تحديد ترتيب القنوات بناءً على تفضيل العميل
+    let channels = [];
+    const canSendSms = client.messagingChannels?.sms !== false;
+    const canSendWhatsapp = client.messagingChannels?.whatsapp === true;
+    const canSendMetaWhatsapp = client.messagingChannels?.metaWhatsapp === true;
+    
+    // إضافة القنوات المتاحة حسب الترتيب المفضل
+    if (preferredChannel === 'sms' && canSendSms) {
+      channels.push('sms');
+    } else if (preferredChannel === 'whatsapp' && canSendWhatsapp) {
+      channels.push('whatsapp');
+    } else if (preferredChannel === 'metaWhatsapp' && canSendMetaWhatsapp) {
+      channels.push('metaWhatsapp');
+    }
+    
+    // إضافة القنوات المتبقية بترتيب: ميتا واتساب، واتساب غير رسمي، SMS
+    if (canSendMetaWhatsapp && !channels.includes('metaWhatsapp')) {
+      channels.push('metaWhatsapp');
+    }
+    if (canSendWhatsapp && !channels.includes('whatsapp')) {
+      channels.push('whatsapp');
+    }
+    if (canSendSms && !channels.includes('sms')) {
+      channels.push('sms');
+    }
+    
+    // إذا لم يتم تحديد أي قناة، استخدام SMS كقناة افتراضية
+    if (channels.length === 0) {
+      logger.warn('processChannelFallback', 'لم يتم تحديد أي قناة، استخدام SMS كقناة افتراضية');
+      if (canSendSms) {
+        channels.push('sms');
+      }
+    }
+    
+    // محاولة الإرسال عبر القنوات المتاحة بالترتيب
+    for (const channel of channels) {
+      logger.info('processChannelFallback', `محاولة الإرسال عبر قناة ${channel}`);
       
-      const smsSuccess = await sendSmsAndUpdate(semMessage, client, formattedPhone, msgContent, smsConfig);
-      
-      if (smsSuccess) {
-        // تم إرسال SMS بنجاح - تم تخزينها في SemMessage
-        logger.info(`تم إرسال SMS بنجاح للعميل ${client.name}`);
-        await updateClientBalance(client, true, false, msgContent);
-      } else {
-        // فشل إرسال SMS - محاولة إرسال واتساب كقناة بديلة
-        logger.info(`فشل إرسال SMS للعميل ${client.name}، جاري المحاولة عبر واتساب`);
-        
-        // عند استخدام الواتساب كقناة بديلة، نقوم بتحديث سجل SemMessage نفسه (updateSemMessage = true)
-        const whatsappSuccess = await sendWhatsappAndUpdate(semMessage, client, formattedPhone, msgContent, whatsappConfig, true);
-        if (whatsappSuccess.success) {
-          // تم إرسال واتساب بنجاح وتحديث سجل SemMessage
-          logger.info(`تم إرسال واتساب كقناة بديلة بنجاح للعميل ${client.name}`);
-          await updateClientBalance(client, false, true, msgContent);
+      if (channel === 'sms') {
+        // محاولة الإرسال عبر SMS
+        const smsResult = await sendSmsAndUpdate(message, client, formattedPhone, msgContent, smsConfig);
+        if (smsResult) {
+          smsSent = true;
+          logger.info('processChannelFallback', 'تم إرسال رسالة SMS بنجاح');
+          break;
+        }
+      } else if (channel === 'whatsapp') {
+        // محاولة الإرسال عبر واتساب غير رسمي
+        const whatsappResult = await sendWhatsappAndUpdate(message, client, formattedPhone, msgContent, whatsappConfig, true);
+        if (whatsappResult.success) {
+          whatsappSent = true;
+          logger.info('processChannelFallback', 'تم إرسال رسالة واتساب بنجاح');
+          break;
+        }
+      } else if (channel === 'metaWhatsapp') {
+        // محاولة الإرسال عبر واتساب ميتا الرسمي
+        const metaWhatsappResult = await sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, true);
+        if (metaWhatsappResult.success) {
+          metaWhatsappSent = true;
+          logger.info('processChannelFallback', 'تم إرسال رسالة واتساب ميتا الرسمي بنجاح');
+          break;
         }
       }
     }
-    return { smsSent, whatsappSent };
+    
+    // تحديث رصيد العميل حسب نتيجة الإرسال
+    if (smsSent || whatsappSent || metaWhatsappSent) {
+      await updateClientBalance(client, smsSent, whatsappSent || metaWhatsappSent, msgContent);
+    }
+    return { smsSent, whatsappSent, metaWhatsappSent };
   } catch (error) {
     logger.error('خطأ أثناء عملية تحويل القنوات (Fallback)', { error: error.message, stack: error.stack });
     try {
@@ -362,7 +478,7 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
     } catch (e) {
       logger.error('خطأ أثناء حفظ سجل الرسالة الفاشلة', e);
     }
-    return { smsSent, whatsappSent, error };
+    return { smsSent, whatsappSent, metaWhatsappSent, error };
   }
 }
 
@@ -422,7 +538,7 @@ exports.sendMessage = async (req, res) => {
           logger.debug('sendMessage', 'إضافة + لرقم يبدأ بـ 0', { processedPhone });
         }
       }
-      // للأرقام الطويلة التي لا تبدأ بـ 0 (غالبًا أرقام دولية بدون + أو 00)
+      // للأرقام الطويلة التي لا تبدأ بـ 0 ولا + (غالبًا أرقام دولية بدون + أو 00)
       else if (processedPhone.length > 9) {
         processedPhone = '+' + processedPhone;
         logger.debug('sendMessage', 'إضافة + لرقم دولي طويل', { processedPhone });
@@ -470,7 +586,8 @@ exports.sendMessage = async (req, res) => {
     /* تحديد القنوات المفعلة */
     const canSendSms = client.messagingChannels?.sms !== false;
     const canSendWhatsapp = client.messagingChannels?.whatsapp === true;
-    if (!canSendSms && !canSendWhatsapp) {
+    const canSendMetaWhatsapp = client.messagingChannels?.metaWhatsapp === true;
+    if (!canSendSms && !canSendWhatsapp && !canSendMetaWhatsapp) {
       const errorMessage = new SemMessage({
         clientId: client._id,
         recipients: [formattedPhone],
@@ -487,183 +604,71 @@ exports.sendMessage = async (req, res) => {
     /* تهيئة الخدمات حسب القنوات */
     const smsInitialized = canSendSms ? await _initializeSmsManager() : false;
     const whatsappInitialized = canSendWhatsapp ? await _initializeWhatsappManager() : false;
-    if (!smsInitialized && !whatsappInitialized) {
+    const metaWhatsappInitialized = canSendMetaWhatsapp ? await _initializeMetaWhatsappManager() : false;
+    
+    if (!smsInitialized && !whatsappInitialized && !metaWhatsappInitialized) {
       logger.error('sendMessage', 'فشل في تهيئة أي من خدمات الرسائل');
       return res.status(500).send("6");
     }
     
     /* استراتيجية الإرسال */
-    if (canSendSms && canSendWhatsapp && smsInitialized && whatsappInitialized) {
-      // الحالة: قناتان (SMS وواتساب)
-      res.status(200).send("1"); // الرد الفوري للعميل
-      
-      setImmediate(async () => {
-        try {
-          const preferred = client.preferredChannel || 'none';
-          const whatsappConfig = (await WhatsappSettings.getActiveSettings()).getProviderConfig();
-          const smsConfig = (await SmsSettings.getActiveSettings()).getProviderConfig();
-          
-          // تحديد القناة الأولى للمحاولة بناءً على التفضيل
-          const tryWhatsappFirst = preferred === 'whatsapp' || (preferred === 'none' && Math.random() < 0.5);
-          
-          if (tryWhatsappFirst) {
-            // محاولة الإرسال عبر الواتساب أولاً
-            logger.info(`محاولة إرسال واتساب كقناة أولى للعميل ${client.name}`);
-            
-            // استخدام دالة إرسال الواتساب مع إنشاء سجل WhatsappMessage
-            const whatsappResult = await sendWhatsappAndUpdate(null, client, formattedPhone, msg, whatsappConfig, false);
-            
-            if (whatsappResult.success) {
-              logger.info(`تم إرسال واتساب بنجاح للعميل ${client.name} وتخزينها في WhatsappMessage، معرف الرسالة: ${whatsappResult.messageId}`);
-              
-              // انتظار 30 ثانية للتأكد من التسليم
-              const deliveryStatus = await waitForMessageStatus(whatsappResult.messageId, 'whatsapp', 30000);
-              
-              if (deliveryStatus.success) {
-                // تم تسليم رسالة الواتساب بنجاح
-                logger.info(`تأكيد تسليم رسالة الواتساب (${whatsappResult.messageId}) للعميل ${client.name}`);
-                await updateClientBalance(client, false, true, msg);
-              } else if (deliveryStatus.timedOut) {
-                // لم يتم تأكيد تسليم رسالة الواتساب - محاولة إرسال SMS كقناة بديلة
-                logger.info(`انتهت مهلة تأكيد تسليم رسالة الواتساب (${whatsappResult.messageId}) للعميل ${client.name}، جاري المحاولة عبر SMS`);
-                
-                // إنشاء سجل SemMessage لإرسال SMS
-                const semMessage = new SemMessage({
-                  clientId: client._id,
-                  recipients: [formattedPhone],
-                  originalRecipients: [phone],
-                  content: msg,
-                  status: 'pending',
-                  messageId: new mongoose.Types.ObjectId().toString()
-                });
-                await semMessage.save();
-                
-                const smsSuccess = await sendSmsAndUpdate(semMessage, client, formattedPhone, msg, smsConfig);
-                if (smsSuccess) {
-                  // تم إرسال SMS بنجاح
-                  logger.info(`تم إرسال SMS كقناة بديلة بنجاح للعميل ${client.name}`);
-                  await updateClientBalance(client, true, false, msg);
-                }
-              } else {
-                // فشل تسليم رسالة الواتساب (معروف أنه فشل، ليس مجرد انتهاء مهلة)
-                logger.warn(`فشل تسليم رسالة الواتساب (${whatsappResult.messageId}) للعميل ${client.name}، حالة: ${deliveryStatus.status}`);
-                
-                // إنشاء سجل SemMessage لإرسال SMS
-                const semMessage = new SemMessage({
-                  clientId: client._id,
-                  recipients: [formattedPhone],
-                  originalRecipients: [phone],
-                  content: msg,
-                  status: 'pending',
-                  messageId: new mongoose.Types.ObjectId().toString()
-                });
-                await semMessage.save();
-                
-                const smsSuccess = await sendSmsAndUpdate(semMessage, client, formattedPhone, msg, smsConfig);
-                if (smsSuccess) {
-                  // تم إرسال SMS بنجاح
-                  logger.info(`تم إرسال SMS كقناة بديلة بنجاح للعميل ${client.name}`);
-                  await updateClientBalance(client, true, false, msg);
-                }
-              }
-            } else {
-              // فشل إرسال الواتساب من البداية - محاولة إرسال SMS كقناة بديلة
-              logger.info(`فشل إرسال واتساب للعميل ${client.name}، جاري المحاولة عبر SMS`);
-              
-              // إنشاء سجل SemMessage للإرسال عبر SMS
-              const semMessage = new SemMessage({
-                clientId: client._id,
-                recipients: [formattedPhone],
-                originalRecipients: [phone],
-                content: msg,
-                status: 'pending',
-                messageId: new mongoose.Types.ObjectId().toString()
-              });
-              await semMessage.save();
-              
-              const smsSuccess = await sendSmsAndUpdate(semMessage, client, formattedPhone, msg, smsConfig);
-              if (smsSuccess) {
-                // تم إرسال SMS بنجاح
-                logger.info(`تم إرسال SMS كقناة بديلة بنجاح للعميل ${client.name}`);
-                await updateClientBalance(client, true, false, msg);
-              }
-            }
-          } else {
-            // محاولة الإرسال عبر SMS أولاً
-            logger.info(`محاولة إرسال SMS كقناة أولى للعميل ${client.name}`);
-            
-            // إنشاء سجل SemMessage لأننا سنجرب SMS أولاً
-            const semMessage = new SemMessage({
-              clientId: client._id,
-              recipients: [formattedPhone],
-              originalRecipients: [phone],
-              content: msg,
-              status: 'pending',
-              messageId: new mongoose.Types.ObjectId().toString()
-            });
-            await semMessage.save();
-            
+    // أولاً: تحديد ما إذا كان لدينا قنوات متعددة تتطلب استراتيجية fallback
+    const hasMultipleChannels = [canSendSms, canSendWhatsapp, canSendMetaWhatsapp].filter(Boolean).length > 1;
+    
+    // إرسال استجابة سريعة للعميل قبل المعالجة
+    res.status(200).send("1");
+    
+    setImmediate(async () => {
+      try {
+        const preferredChannel = client.preferredChannel || 'none';
+        
+        // إنشاء سجل رسالة جديد
+        const semMessage = new SemMessage({
+          clientId: client._id,
+          recipients: [formattedPhone],
+          originalRecipients: [phone],
+          content: msg,
+          status: 'pending',
+          messageId: new mongoose.Types.ObjectId().toString()
+        });
+        await semMessage.save();
+        
+        // إذا كان لدينا قنوات متعددة، استخدم استراتيجية تحويل القنوات (fallback)
+        if (hasMultipleChannels) {
+          logger.info(`استخدام استراتيجية تحويل القنوات للعميل ${client.name} مع القناة المفضلة: ${preferredChannel}`);
+          await processChannelFallback(semMessage, client, formattedPhone, msg, preferredChannel);
+        } 
+        // إذا كان لدينا قناة واحدة فقط
+        else {
+          if (canSendSms && smsInitialized) {
+            const smsConfig = (await SmsSettings.getActiveSettings()).getProviderConfig();
             const smsSuccess = await sendSmsAndUpdate(semMessage, client, formattedPhone, msg, smsConfig);
-            
             if (smsSuccess) {
-              // تم إرسال SMS بنجاح - تم تخزينها في SemMessage
               logger.info(`تم إرسال SMS بنجاح للعميل ${client.name}`);
               await updateClientBalance(client, true, false, msg);
-            } else {
-              // فشل إرسال SMS - محاولة إرسال واتساب كقناة بديلة
-              logger.info(`فشل إرسال SMS للعميل ${client.name}، جاري المحاولة عبر واتساب`);
-              
-              // عند استخدام الواتساب كقناة بديلة، نقوم بتحديث سجل SemMessage نفسه (updateSemMessage = true)
-              const whatsappSuccess = await sendWhatsappAndUpdate(semMessage, client, formattedPhone, msg, whatsappConfig, true);
-              if (whatsappSuccess.success) {
-                // تم إرسال واتساب بنجاح وتحديث سجل SemMessage
-                logger.info(`تم إرسال واتساب كقناة بديلة بنجاح للعميل ${client.name}`);
-                await updateClientBalance(client, false, true, msg);
-              }
+            }
+          } else if (canSendWhatsapp && whatsappInitialized) {
+            const whatsappConfig = (await WhatsappSettings.getActiveSettings()).getProviderConfig();
+            const whatsappResult = await sendWhatsappAndUpdate(semMessage, client, formattedPhone, msg, whatsappConfig, true);
+            if (whatsappResult.success) {
+              logger.info(`تم إرسال واتساب بنجاح للعميل ${client.name}`);
+              await updateClientBalance(client, false, true, msg);
+            }
+          } else if (canSendMetaWhatsapp && metaWhatsappInitialized) {
+            const metaResult = await sendMetaWhatsappAndUpdate(semMessage, client, formattedPhone, msg, true);
+            if (metaResult.success) {
+              logger.info(`تم إرسال واتساب ميتا الرسمي بنجاح للعميل ${client.name}`);
+              await updateClientBalance(client, false, true, msg);
             }
           }
-        } catch (e) {
-          logger.error('Error in dual-channel background processing', e);
         }
-      });
-    } else if (canSendWhatsapp && whatsappInitialized && !canSendSms) {
-      // الحالة: واتساب فقط
-      res.status(200).send("1");
-      setImmediate(async () => {
-        try {
-          const whatsappConfig = (await WhatsappSettings.getActiveSettings()).getProviderConfig();
-          const sent = await sendWhatsappAndUpdate(null, client, formattedPhone, msg, whatsappConfig, false);
-          if (sent.success) {
-            await updateClientBalance(client, false, true, msg);
-          }
-        } catch (e) {
-          logger.error('Error in WhatsApp-only background processing', e);
-        }
-      });
-    } else if (canSendSms && smsInitialized && !canSendWhatsapp) {
-      // الحالة: SMS فقط
-      const semMessage = new SemMessage({
-        clientId: client._id,
-        recipients: [formattedPhone],
-        originalRecipients: [phone],
-        content: msg,
-        status: 'pending',
-        messageId: new mongoose.Types.ObjectId().toString()
-      });
-      await semMessage.save();
-      res.status(200).send("1");
-      setImmediate(async () => {
-        try {
-          const smsConfig = (await SmsSettings.getActiveSettings()).getProviderConfig();
-          const sent = await sendSmsAndUpdate(semMessage, client, formattedPhone, msg, smsConfig);
-          if (sent) {
-            await updateClientBalance(client, true, false, msg);
-          }
-        } catch (e) {
-          logger.error('Error in SMS-only background processing', e);
-        }
-      });
-    }
+      } catch (error) {
+        logger.error('sendMessage', 'خطأ في إرسال الرسالة', {
+          error: error.message,
+          stack: error.stack
+        });
+      }
+    });
   } catch (error) {
     logger.error('sendMessage', 'خطأ في إرسال الرسالة', {
       error: error.message || 'خطأ غير معروف',

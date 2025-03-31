@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // التعامل مع تغيير خيارات قنوات الإرسال وإظهار قائمة القناة المفضلة
     document.getElementById('smsChannel').addEventListener('change', updatePreferredChannelOptions);
     document.getElementById('whatsappChannel').addEventListener('change', updatePreferredChannelOptions);
+    document.getElementById('metaWhatsappChannel').addEventListener('change', function() {
+        updatePreferredChannelOptions();
+        toggleMetaWhatsappTemplateSettings();
+    });
     
     // معالجة تغيير اختيار الدولة
     document.getElementById('country-select').addEventListener('change', updateCountryFields);
@@ -54,16 +58,21 @@ document.addEventListener('DOMContentLoaded', function() {
     function updatePreferredChannelOptions() {
         const smsChecked = document.getElementById('smsChannel').checked;
         const whatsappChecked = document.getElementById('whatsappChannel').checked;
+        const metaWhatsappChecked = document.getElementById('metaWhatsappChannel').checked;
         const preferredChannelContainer = document.querySelector('.preferred-channel-container');
         const smsOption = document.querySelector('.sms-option');
         const whatsappOption = document.querySelector('.whatsapp-option');
+        const metaWhatsappOption = document.querySelector('.metaWhatsapp-option');
         const preferredChannelSelect = document.getElementById('preferredChannel');
         
         // إظهار قائمة القناة المفضلة فقط عند اختيار أكثر من قناة
-        if (smsChecked && whatsappChecked) {
+        const enabledChannelsCount = [smsChecked, whatsappChecked, metaWhatsappChecked].filter(Boolean).length;
+        
+        if (enabledChannelsCount > 1) {
             preferredChannelContainer.style.display = 'block';
-            smsOption.style.display = 'block';
-            whatsappOption.style.display = 'block';
+            smsOption.style.display = smsChecked ? 'block' : 'none';
+            whatsappOption.style.display = whatsappChecked ? 'block' : 'none';
+            metaWhatsappOption.style.display = metaWhatsappChecked ? 'block' : 'none';
         } else {
             // إخفاء القائمة وإعادة تعيين القيمة إلى 'none'
             preferredChannelContainer.style.display = 'none';
@@ -72,7 +81,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // إخفاء الخيارات غير المتاحة
             smsOption.style.display = smsChecked ? 'block' : 'none';
             whatsappOption.style.display = whatsappChecked ? 'block' : 'none';
+            metaWhatsappOption.style.display = metaWhatsappChecked ? 'block' : 'none';
         }
+    }
+    
+    /**
+     * إظهار أو إخفاء إعدادات نماذج واتساب ميتا
+     */
+    function toggleMetaWhatsappTemplateSettings() {
+        const metaWhatsappChecked = document.getElementById('metaWhatsappChannel').checked;
+        const templateSettings = document.getElementById('metaWhatsappTemplateSettings');
+        
+        templateSettings.style.display = metaWhatsappChecked ? 'block' : 'none';
     }
     
     /**
@@ -87,7 +107,8 @@ document.addEventListener('DOMContentLoaded', function() {
             company: document.getElementById('company').value,
             messagingChannels: {
                 sms: document.getElementById('smsChannel').checked,
-                whatsapp: document.getElementById('whatsappChannel').checked
+                whatsapp: document.getElementById('whatsappChannel').checked,
+                metaWhatsapp: document.getElementById('metaWhatsappChannel').checked
             },
             preferredChannel: document.getElementById('preferredChannel').value,
             defaultCountry: {
@@ -96,6 +117,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: document.getElementById('countryName').value
             }
         };
+        
+        // إعدادات نماذج واتساب ميتا إذا كانت مفعلة
+        if (document.getElementById('metaWhatsappChannel').checked) {
+            formData.metaWhatsappTemplates = {
+                name: document.getElementById('metaWhatsappTemplateName').value,
+                language: document.getElementById('metaWhatsappTemplateLanguage').value
+            };
+        }
         
         // الحدود - قد تكون غير متاحة للمستخدمين العاديين
         const dailyLimitElement = document.getElementById('dailyLimit');
@@ -133,6 +162,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const channels = [];
                 if (data.client.messagingChannels.sms) channels.push('SMS');
                 if (data.client.messagingChannels.whatsapp) channels.push('واتساب');
+                if (data.client.messagingChannels.metaWhatsapp) channels.push('واتساب ميتا الرسمي');
                 messagingChannelsText = channels.length > 0 ? 
                     `<div class="mt-2 mb-2">قنوات الإرسال المتاحة: ${channels.join(' و ')}</div>` : 
                     '';

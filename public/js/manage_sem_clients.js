@@ -69,6 +69,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // التعامل مع تغيير خيارات قنوات الإرسال وإظهار قائمة القناة المفضلة في نافذة التعديل
     document.getElementById('edit-sms-channel').addEventListener('change', updateEditPreferredChannelOptions);
     document.getElementById('edit-whatsapp-channel').addEventListener('change', updateEditPreferredChannelOptions);
+    document.getElementById('edit-metawhatsapp-channel').addEventListener('change', function() {
+        updateEditPreferredChannelOptions();
+        toggleEditMetaWhatsappTemplateSettings();
+    });
 
     // معالجة تغيير اختيار الدولة في نموذج التعديل
     document.getElementById('edit-country-select').addEventListener('change', updateEditCountryFields);
@@ -405,12 +409,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.client.messagingChannels) {
                     const smsChannel = document.getElementById('modal-client-sms-channel');
                     const whatsappChannel = document.getElementById('modal-client-whatsapp-channel');
+                    const metawhatsappChannel = document.getElementById('modal-client-metawhatsapp-channel');
                     const noChannels = document.getElementById('modal-client-no-channels');
                     
                     smsChannel.style.display = data.client.messagingChannels.sms ? 'inline-block' : 'none';
                     whatsappChannel.style.display = data.client.messagingChannels.whatsapp ? 'inline-block' : 'none';
+                    metawhatsappChannel.style.display = data.client.messagingChannels.metaWhatsapp ? 'inline-block' : 'none';
                     
-                    if (!data.client.messagingChannels.sms && !data.client.messagingChannels.whatsapp) {
+                    if (!data.client.messagingChannels.sms && !data.client.messagingChannels.whatsapp && !data.client.messagingChannels.metaWhatsapp) {
                         noChannels.style.display = 'inline-block';
                     } else {
                         noChannels.style.display = 'none';
@@ -418,6 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     document.getElementById('modal-client-sms-channel').style.display = 'none';
                     document.getElementById('modal-client-whatsapp-channel').style.display = 'none';
+                    document.getElementById('modal-client-metawhatsapp-channel').style.display = 'none';
                     document.getElementById('modal-client-no-channels').style.display = 'inline-block';
                 }
                 
@@ -428,6 +435,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         preferredChannelElement.textContent = 'رسائل SMS';
                     } else if (data.client.preferredChannel === 'whatsapp') {
                         preferredChannelElement.textContent = 'رسائل واتساب';
+                    } else if (data.client.preferredChannel === 'metawhatsapp') {
+                        preferredChannelElement.textContent = 'واتساب ميتا الرسمي';
                     }
                 } else {
                     preferredChannelElement.textContent = 'بلا (افتراضي)';
@@ -537,16 +546,21 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateEditPreferredChannelOptions() {
         const smsChecked = document.getElementById('edit-sms-channel').checked;
         const whatsappChecked = document.getElementById('edit-whatsapp-channel').checked;
+        const metaWhatsappChecked = document.getElementById('edit-metawhatsapp-channel').checked;
         const preferredChannelContainer = document.querySelector('.edit-preferred-channel-container');
         const smsOption = document.querySelector('.edit-sms-option');
         const whatsappOption = document.querySelector('.edit-whatsapp-option');
+        const metawhatsappOption = document.querySelector('.edit-metawhatsapp-option');
         const preferredChannelSelect = document.getElementById('edit-preferred-channel');
         
         // إظهار قائمة القناة المفضلة فقط عند اختيار أكثر من قناة
-        if (smsChecked && whatsappChecked) {
+        const enabledChannelsCount = [smsChecked, whatsappChecked, metaWhatsappChecked].filter(Boolean).length;
+        
+        if (enabledChannelsCount > 1) {
             preferredChannelContainer.style.display = 'block';
-            smsOption.style.display = 'block';
-            whatsappOption.style.display = 'block';
+            smsOption.style.display = smsChecked ? 'block' : 'none';
+            whatsappOption.style.display = whatsappChecked ? 'block' : 'none';
+            metawhatsappOption.style.display = metaWhatsappChecked ? 'block' : 'none';
         } else {
             // إخفاء القائمة وإعادة تعيين القيمة إلى 'none'
             preferredChannelContainer.style.display = 'none';
@@ -555,7 +569,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // إخفاء الخيارات غير المتاحة
             smsOption.style.display = smsChecked ? 'block' : 'none';
             whatsappOption.style.display = whatsappChecked ? 'block' : 'none';
+            metawhatsappOption.style.display = metaWhatsappChecked ? 'block' : 'none';
         }
+    }
+
+    /**
+     * إظهار أو إخفاء إعدادات نماذج واتساب ميتا في نافذة التعديل
+     */
+    function toggleEditMetaWhatsappTemplateSettings() {
+        const metaWhatsappChecked = document.getElementById('edit-metawhatsapp-channel').checked;
+        const templateSettings = document.getElementById('edit-metawhatsapp-template-settings');
+        
+        templateSettings.style.display = metaWhatsappChecked ? 'block' : 'none';
     }
 
     /**
@@ -598,14 +623,30 @@ document.addEventListener('DOMContentLoaded', function() {
         // تعبئة خيارات قنوات الإرسال
         const smsChannelCheckbox = document.getElementById('edit-sms-channel');
         const whatsappChannelCheckbox = document.getElementById('edit-whatsapp-channel');
+        const metawhatsappChannelCheckbox = document.getElementById('edit-metawhatsapp-channel');
         
         if (client.messagingChannels) {
             smsChannelCheckbox.checked = client.messagingChannels.sms || false;
             whatsappChannelCheckbox.checked = client.messagingChannels.whatsapp || false;
+            metawhatsappChannelCheckbox.checked = client.messagingChannels.metaWhatsapp || false;
+            
+            // إعدادات نماذج واتساب ميتا
+            if (client.metaWhatsappTemplates) {
+                document.getElementById('edit-metawhatsapp-template-name').value = client.metaWhatsappTemplates.name || 'siraj';
+                document.getElementById('edit-metawhatsapp-template-language').value = client.metaWhatsappTemplates.language || 'ar';
+            } else {
+                // تعيين القيم الافتراضية إذا لم تكن موجودة
+                document.getElementById('edit-metawhatsapp-template-name').value = 'siraj';
+                document.getElementById('edit-metawhatsapp-template-language').value = 'ar';
+            }
+            
+            // إظهار أو إخفاء إعدادات النماذج
+            toggleEditMetaWhatsappTemplateSettings();
         } else {
             // إعدادات افتراضية إذا لم تكن متوفرة
             smsChannelCheckbox.checked = true;
             whatsappChannelCheckbox.checked = false;
+            metawhatsappChannelCheckbox.checked = false;
         }
         
         // تعبئة إعدادات الدولة الافتراضية
@@ -680,7 +721,8 @@ document.addEventListener('DOMContentLoaded', function() {
             company: document.getElementById('edit-client-company').value,
             messagingChannels: {
                 sms: document.getElementById('edit-sms-channel').checked,
-                whatsapp: document.getElementById('edit-whatsapp-channel').checked
+                whatsapp: document.getElementById('edit-whatsapp-channel').checked,
+                metaWhatsapp: document.getElementById('edit-metawhatsapp-channel').checked
             },
             preferredChannel: document.getElementById('edit-preferred-channel').value,
             defaultCountry: {
@@ -689,6 +731,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: document.getElementById('edit-country-name').value
             }
         };
+        
+        // إعدادات نماذج واتساب ميتا إذا كانت مفعلة
+        if (document.getElementById('edit-metawhatsapp-channel').checked) {
+            data.metaWhatsappTemplates = {
+                name: document.getElementById('edit-metawhatsapp-template-name').value,
+                language: document.getElementById('edit-metawhatsapp-template-language').value
+            };
+        }
         
         // الحقول الخاصة بالمدير أو المشرف
         const statusSelect = document.getElementById('edit-client-status');
