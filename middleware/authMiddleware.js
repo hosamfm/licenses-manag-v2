@@ -16,7 +16,17 @@ const checkRole = (roles) => (req, res, next) => {
   }
 };
 
+// دالة وسيطة للتحقق من صلاحية المدير
+const isAdmin = (req, res, next) => {
+  if (req.session && req.session.userId && req.session.userRole === 'admin') {
+    return next(); // المستخدم مسجل الدخول وله صلاحيات المدير
+  } else {
+    return res.status(403).send('غير مصرح لك بالوصول إلى هذه الصفحة'); // المستخدم ليس مديراً
+  }
+};
+
 module.exports = {
   isAuthenticated,
   checkRole,
+  isAdmin, // تصدير دالة isAdmin
 };
