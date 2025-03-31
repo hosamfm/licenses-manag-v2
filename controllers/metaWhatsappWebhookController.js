@@ -77,11 +77,11 @@ exports.handleWebhook = async (req, res) => {
         // حفظ سجل webhook
         const webhookLog = new MetaWhatsappWebhookLog({
             requestId: requestId,
-            requestBody: body,
-            requestHeaders: req.headers,
-            requestMethod: req.method,
-            requestUrl: req.url,
-            receivedAt: new Date()
+            body: body,
+            headers: req.headers,
+            method: req.method,
+            url: req.url,
+            timestamp: new Date()
         });
         
         // معالجة البيانات

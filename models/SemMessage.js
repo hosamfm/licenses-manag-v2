@@ -25,7 +25,7 @@ const semMessageSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'sent', 'delivered', 'failed'],
+        enum: ['pending', 'sent', 'delivered', 'read', 'failed'],
         default: 'pending'
     },
     sentAt: {
