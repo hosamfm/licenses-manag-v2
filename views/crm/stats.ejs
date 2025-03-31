@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('../partials/_head') %>
+  <title>الإحصائيات - إدارة العملاء</title>
+  <!-- أنماط خاصة بصفحات CRM -->
+  <style>
+    .crm-container {
+      display: flex;
+      min-height: calc(100vh - 60px);
+    }
+    
+    .crm-sidebar {
+      width: 250px;
+      background-color: #f8f9fa;
+      border-left: 1px solid #dee2e6;
+      padding: 20px 0;
+    }
+    
+    .crm-content {
+      flex: 1;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    .crm-sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .crm-sidebar-nav li {
+      margin-bottom: 5px;
+    }
+    
+    .crm-sidebar-nav a {
+      display: block;
+      padding: 10px 20px;
+      color: #6c757d;
+      text-decoration: none;
+      border-right: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    
+    .crm-sidebar-nav a:hover {
+      background-color: #f0f0f0;
+      color: #495057;
+      border-right-color: #6c757d;
+    }
+    
+    .crm-sidebar-nav a.active {
+      background-color: #e9ecef;
+      color: #212529;
+      border-right-color: #0d6efd;
+    }
+    
+    .crm-sidebar-nav i {
+      width: 20px;
+      text-align: center;
+      margin-left: 8px;
+    }
+    
+    .page-title {
+      color: #495057;
+      margin-bottom: 25px;
+      border-bottom: 1px solid #dee2e6;
+      padding-bottom: 15px;
+    }
+    
+    .stats-card {
+      border-radius: 8px;
+      border: none;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: all 0.3s;
+    }
+    
+    .stats-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .stats-card .icon {
+      font-size: 2.5rem;
+      color: rgba(0,0,0,0.1);
+    }
+    
+    .stats-number {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <%- include('../partials/_header') %>
+  
+  <div class="crm-container">
+    <!-- القائمة الجانبية -->
+    <div class="crm-sidebar">
+      <ul class="crm-sidebar-nav">
+        <li>
+          <a href="/crm">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>لوحة التحكم</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/contacts">
+            <i class="fas fa-address-book"></i>
+            <span>جهات الاتصال</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/conversations">
+            <i class="fas fa-comments"></i>
+            <span>المحادثات</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/conversations/my">
+            <i class="fas fa-user-circle"></i>
+            <span>محادثاتي</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/stats" class="active">
+            <i class="fas fa-chart-bar"></i>
+            <span>الإحصائيات</span>
+          </a>
+        </li>
+        <!-- يمكن إضافة روابط أخرى هنا في المستقبل -->
+        <li class="mt-4">
+          <a href="/" class="text-muted">
+            <i class="fas fa-arrow-right"></i>
+            <span>العودة للرئيسية</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="crm-content">
+      <% if (flashMessages && flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <% if (flashMessages && flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <!-- صفحة الإحصائيات -->
+      <h1 class="page-title">
+        <i class="fas fa-chart-bar me-2"></i>
+        الإحصائيات
+      </h1>
+      
+      <!-- الإحصائيات الأساسية -->
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="card stats-card bg-primary text-white mb-3">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="card-title mb-0">إجمالي جهات الاتصال</h6>
+                  <div class="stats-number"><%= typeof stats !== 'undefined' ? stats.contacts : 0 %></div>
+                </div>
+                <div class="icon">
+                  <i class="fas fa-users"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="card stats-card bg-success text-white mb-3">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="card-title mb-0">إجمالي المحادثات</h6>
+                  <div class="stats-number"><%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.total : 0 %></div>
+                </div>
+                <div class="icon">
+                  <i class="fas fa-comments"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="card stats-card bg-info text-white mb-3">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="card-title mb-0">محادثات مفتوحة</h6>
+                  <div class="stats-number"><%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.open : 0 %></div>
+                </div>
+                <div class="icon">
+                  <i class="fas fa-door-open"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="card stats-card bg-secondary text-white mb-3">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="card-title mb-0">محادثات مغلقة</h6>
+                  <div class="stats-number"><%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.closed : 0 %></div>
+                </div>
+                <div class="icon">
+                  <i class="fas fa-check-circle"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- إحصائيات تفصيلية -->
+      <div class="row">
+        <div class="col-md-6">
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="fas fa-chart-pie me-2"></i>
+              حالة المحادثات
+            </div>
+            <div class="card-body">
+              <div class="chart-container">
+                <canvas id="conversationStatusChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-6">
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="fas fa-chart-line me-2"></i>
+              نشاط المحادثات (آخر 7 أيام)
+            </div>
+            <div class="card-body">
+              <div class="chart-container">
+                <canvas id="conversationActivityChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- أفضل الموظفين -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="fas fa-medal me-2"></i>
+          أفضل الموظفين
+        </div>
+        <div class="card-body">
+          <% if (topAgents && topAgents.length > 0) { %>
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>الموظف</th>
+                    <th>المحادثات المسندة</th>
+                    <th>المحادثات المغلقة</th>
+                    <th>متوسط وقت الاستجابة</th>
+                    <th>معدل الرضا</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% topAgents.forEach(function(agent) { %>
+                    <tr>
+                      <td><%= agent.name %></td>
+                      <td><%= agent.assignedCount %></td>
+                      <td><%= agent.closedCount %></td>
+                      <td><%= agent.avgResponseTime %> دقائق</td>
+                      <td>
+                        <div class="progress" style="height: 10px;">
+                          <div class="progress-bar bg-success" role="progressbar" 
+                              style="width: <%= typeof agent !== 'undefined' && agent.satisfactionRate ? agent.satisfactionRate : 0 %>%;" 
+                              aria-valuenow="<%= typeof agent !== 'undefined' && agent.satisfactionRate ? agent.satisfactionRate : 0 %>" 
+                              aria-valuemin="0" 
+                              aria-valuemax="100">
+                            <%= typeof agent !== 'undefined' && agent.satisfactionRate ? agent.satisfactionRate : 0 %>%
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% } else { %>
+            <div class="text-center text-muted py-5">
+              <i class="fas fa-users mb-3" style="font-size: 3rem; opacity: 0.2;"></i>
+              <p>لا توجد بيانات كافية لعرض أفضل الموظفين</p>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <%- include('../partials/_footer') %>
+  
+  <!-- إضافة مكتبة Chart.js للرسوم البيانية -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // رسم بياني دائري لحالة المحادثات
+      const statusCtx = document.getElementById('conversationStatusChart').getContext('2d');
+      const statusChart = new Chart(statusCtx, {
+        type: 'pie',
+        data: {
+          labels: ['مفتوحة', 'مسندة', 'مغلقة'],
+          datasets: [{
+            data: [
+              <%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.open : 0 %>, 
+              <%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.assigned : 0 %>, 
+              <%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.closed : 0 %>
+            ],
+            backgroundColor: [
+              'rgba(23, 162, 184, 0.8)',
+              'rgba(255, 193, 7, 0.8)',
+              'rgba(108, 117, 125, 0.8)'
+            ],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+      
+      // بيانات وهمية للرسم البياني الخطي (للعرض فقط)
+      // في التنفيذ الفعلي، ستأتي هذه البيانات من الخادم
+      const activityLabels = [];
+      const today = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        activityLabels.push(date.toLocaleDateString('ar-LY', { month: 'short', day: 'numeric' }));
+      }
+      
+      const activityCtx = document.getElementById('conversationActivityChart').getContext('2d');
+      const activityChart = new Chart(activityCtx, {
+        type: 'line',
+        data: {
+          labels: activityLabels,
+          datasets: [
+            {
+              label: 'محادثات جديدة',
+              data: [5, 8, 12, 8, 10, 6, 9],
+              borderColor: 'rgba(23, 162, 184, 1)',
+              backgroundColor: 'rgba(23, 162, 184, 0.1)',
+              fill: true,
+              tension: 0.4
+            },
+            {
+              label: 'محادثات مغلقة',
+              data: [3, 5, 8, 4, 7, 5, 6],
+              borderColor: 'rgba(108, 117, 125, 1)',
+              backgroundColor: 'rgba(108, 117, 125, 0.1)',
+              fill: true,
+              tension: 0.4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('../partials/_head') %>
+  <title>جهات الاتصال - إدارة العملاء</title>
+  <!-- أنماط خاصة بصفحات CRM -->
+  <style>
+    .crm-container {
+      display: flex;
+      min-height: calc(100vh - 60px);
+    }
+    
+    .crm-sidebar {
+      width: 250px;
+      background-color: #f8f9fa;
+      border-left: 1px solid #dee2e6;
+      padding: 20px 0;
+    }
+    
+    .crm-content {
+      flex: 1;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    .crm-sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .crm-sidebar-nav li {
+      margin-bottom: 5px;
+    }
+    
+    .crm-sidebar-nav a {
+      display: block;
+      padding: 10px 20px;
+      color: #6c757d;
+      text-decoration: none;
+      border-right: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    
+    .crm-sidebar-nav a:hover {
+      background-color: #f0f0f0;
+      color: #495057;
+      border-right-color: #6c757d;
+    }
+    
+    .crm-sidebar-nav a.active {
+      background-color: #e9ecef;
+      color: #212529;
+      border-right-color: #0d6efd;
+    }
+    
+    .crm-sidebar-nav i {
+      width: 20px;
+      text-align: center;
+      margin-left: 8px;
+    }
+    
+    .page-title {
+      color: #495057;
+      margin-bottom: 25px;
+      border-bottom: 1px solid #dee2e6;
+      padding-bottom: 15px;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 50rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <%- include('../partials/_header') %>
+  
+  <div class="crm-container">
+    <!-- القائمة الجانبية -->
+    <div class="crm-sidebar">
+      <ul class="crm-sidebar-nav">
+        <li>
+          <a href="/crm">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>لوحة التحكم</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/contacts" class="active">
+            <i class="fas fa-address-book"></i>
+            <span>جهات الاتصال</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/conversations">
+            <i class="fas fa-comments"></i>
+            <span>المحادثات</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/conversations/my">
+            <i class="fas fa-user-circle"></i>
+            <span>محادثاتي</span>
+          </a>
+        </li>
+        <!-- يمكن إضافة روابط أخرى هنا في المستقبل -->
+        <li class="mt-4">
+          <a href="/" class="text-muted">
+            <i class="fas fa-arrow-right"></i>
+            <span>العودة للرئيسية</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="crm-content">
+      <% if (flashMessages && flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <% if (flashMessages && flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <!-- صفحة قائمة جهات الاتصال -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="page-title mb-0">
+          <i class="fas fa-address-book me-2"></i>
+          جهات الاتصال
+        </h1>
+        
+        <a href="/crm/contacts/new" class="btn btn-primary">
+          <i class="fas fa-plus me-1"></i>
+          إضافة جهة اتصال جديدة
+        </a>
+      </div>
+
+      <!-- مربع البحث -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <form action="/crm/contacts" method="GET" class="row g-3">
+            <div class="col-md-8">
+              <div class="input-group">
+                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                <input type="text" name="search" class="form-control" placeholder="البحث بالاسم، رقم الهاتف، البريد..." value="<%= query %>">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <button type="submit" class="btn btn-primary w-100">
+                <i class="fas fa-search me-1"></i> بحث
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- إجمالي جهات الاتصال -->
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <span class="text-muted">إجمالي جهات الاتصال:</span>
+          <strong class="ms-2"><%= totalContacts %></strong>
+        </div>
+        
+        <% if (query) { %>
+          <a href="/crm/contacts" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-times me-1"></i>
+            مسح البحث
+          </a>
+        <% } %>
+      </div>
+
+      <!-- جدول جهات الاتصال -->
+      <div class="card">
+        <div class="card-body p-0">
+          <% if (contacts && contacts.length > 0) { %>
+            <div class="table-responsive">
+              <table class="table table-hover table-striped mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th width="30%">الاسم</th>
+                    <th width="20%">رقم الهاتف</th>
+                    <th width="20%">البريد الإلكتروني</th>
+                    <th width="15%">الشركة</th>
+                    <th width="15%">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% contacts.forEach(function(contact) { %>
+                    <tr>
+                      <td>
+                        <a href="/crm/contacts/<%= contact._id %>" class="fw-bold text-decoration-none text-dark">
+                          <%= contact.name %>
+                        </a>
+                      </td>
+                      <td dir="ltr" class="text-end"><%= contact.phoneNumber %></td>
+                      <td><%= contact.email || '-' %></td>
+                      <td><%= contact.company || '-' %></td>
+                      <td>
+                        <div class="btn-group btn-group-sm">
+                          <a href="/crm/contacts/<%= contact._id %>" class="btn btn-outline-secondary">
+                            <i class="fas fa-eye"></i>
+                          </a>
+                          <a href="/crm/contacts/<%= contact._id %>/edit" class="btn btn-outline-primary">
+                            <i class="fas fa-edit"></i>
+                          </a>
+                          <button type="button" class="btn btn-outline-success" 
+                                  onclick="location.href='/crm/conversations/start?contactId=<%= contact._id %>'">
+                            <i class="fas fa-comment"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% } else { %>
+            <div class="text-center py-5">
+              <i class="fas fa-address-book mb-3" style="font-size: 3rem; color: #e9ecef;"></i>
+              <h5>لا توجد جهات اتصال</h5>
+              <% if (query) { %>
+                <p>لم يتم العثور على جهات اتصال تطابق "<%= query %>"</p>
+                <a href="/crm/contacts" class="btn btn-outline-secondary mt-2">عرض جميع جهات الاتصال</a>
+              <% } else { %>
+                <p>قم بإضافة جهة اتصال جديدة للبدء</p>
+                <a href="/crm/contacts/new" class="btn btn-primary mt-2">
+                  <i class="fas fa-plus me-1"></i>
+                  إضافة جهة اتصال جديدة
+                </a>
+              <% } %>
+            </div>
+          <% } %>
+        </div>
+      </div>
+
+      <!-- ترقيم الصفحات -->
+      <% if (pagination.total > 1) { %>
+        <nav aria-label="ترقيم الصفحات" class="mt-4">
+          <ul class="pagination justify-content-center">
+            <% if (pagination.prev) { %>
+              <li class="page-item">
+                <a class="page-link" href="/crm/contacts?page=<%= pagination.prev %>&search=<%= query %>">
+                  السابق
+                </a>
+              </li>
+            <% } else { %>
+              <li class="page-item disabled">
+                <span class="page-link">السابق</span>
+              </li>
+            <% } %>
+            
+            <% for (let i = 1; i <= pagination.total; i++) { %>
+              <li class="page-item <%= i === pagination.current ? 'active' : '' %>">
+                <a class="page-link" href="/crm/contacts?page=<%= i %>&search=<%= query %>">
+                  <%= i %>
+                </a>
+              </li>
+            <% } %>
+            
+            <% if (pagination.next) { %>
+              <li class="page-item">
+                <a class="page-link" href="/crm/contacts?page=<%= pagination.next %>&search=<%= query %>">
+                  التالي
+                </a>
+              </li>
+            <% } else { %>
+              <li class="page-item disabled">
+                <span class="page-link">التالي</span>
+              </li>
+            <% } %>
+          </ul>
+        </nav>
+      <% } %>
+    </div>
+  </div>
+  
+  <%- include('../partials/_footer') %>
+</body>
+</html>

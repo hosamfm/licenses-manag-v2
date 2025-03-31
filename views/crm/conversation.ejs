@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('../partials/_head') %>
+  <title><%= title %></title>
+  <!-- أنماط خاصة بصفحات CRM -->
+  <style>
+    .crm-container {
+      display: flex;
+      min-height: calc(100vh - 60px);
+    }
+    
+    .crm-sidebar {
+      width: 250px;
+      background-color: #f8f9fa;
+      border-left: 1px solid #dee2e6;
+      padding: 20px 0;
+    }
+    
+    .crm-content {
+      flex: 1;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    .crm-sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .crm-sidebar-nav li {
+      margin-bottom: 5px;
+    }
+    
+    .crm-sidebar-nav a {
+      display: block;
+      padding: 10px 20px;
+      color: #6c757d;
+      text-decoration: none;
+      border-right: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    
+    .crm-sidebar-nav a:hover {
+      background-color: #f0f0f0;
+      color: #495057;
+      border-right-color: #6c757d;
+    }
+    
+    .crm-sidebar-nav a.active {
+      background-color: #e9ecef;
+      color: #212529;
+      border-right-color: #0d6efd;
+    }
+    
+    .crm-sidebar-nav i {
+      width: 20px;
+      text-align: center;
+      margin-left: 8px;
+    }
+    
+    .page-title {
+      color: #495057;
+      margin-bottom: 25px;
+      border-bottom: 1px solid #dee2e6;
+      padding-bottom: 15px;
+    }
+    
+    .message-container {
+      max-height: 600px;
+      overflow-y: auto;
+      padding-right: 10px;
+      margin-bottom: 20px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .message {
+      margin-bottom: 15px;
+      position: relative;
+      max-width: 80%;
+      clear: both;
+    }
+    
+    .message-inbound {
+      float: right;
+    }
+    
+    .message-outbound {
+      float: left;
+    }
+    
+    .message-bubble {
+      padding: 10px 15px;
+      border-radius: 18px;
+      position: relative;
+      word-wrap: break-word;
+    }
+    
+    .message-inbound .message-bubble {
+      background-color: #e6f7ff;
+      border-bottom-left-radius: 0;
+    }
+    
+    .message-outbound .message-bubble {
+      background-color: #f0f2f5;
+      border-bottom-right-radius: 0;
+    }
+    
+    .message-time {
+      color: #aaa;
+      font-size: 0.7rem;
+      margin-top: 5px;
+      display: block;
+    }
+    
+    .message-internal-note {
+      background-color: #fff3cd;
+      border-radius: 8px;
+      padding: 10px 15px;
+      margin: 15px 0;
+      position: relative;
+      clear: both;
+      border-left: 3px solid #ffc107;
+      text-align: center;
+    }
+    
+    .reply-form {
+      background-color: #fff;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .conversation-info-card {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+    }
+    
+    .status-badge {
+      font-size: 0.8rem;
+      padding: 5px 10px;
+      border-radius: 50px;
+    }
+    
+    .status-open {
+      background-color: #d1e7dd;
+      color: #0f5132;
+    }
+    
+    .status-assigned {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+    
+    .status-closed {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    
+    .conversation-action-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    
+    .conversation-action-buttons .btn {
+      margin-left: 10px;
+    }
+    
+    .clear-both {
+      clear: both;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <%- include('../partials/_header') %>
+  
+  <div class="crm-container">
+    <!-- القائمة الجانبية -->
+    <div class="crm-sidebar">
+      <ul class="crm-sidebar-nav">
+        <li>
+          <a href="/crm">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>لوحة التحكم</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/contacts">
+            <i class="fas fa-address-book"></i>
+            <span>جهات الاتصال</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/conversations" class="active">
+            <i class="fas fa-comments"></i>
+            <span>المحادثات</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/conversations/my">
+            <i class="fas fa-user-circle"></i>
+            <span>محادثاتي</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/stats">
+            <i class="fas fa-chart-bar"></i>
+            <span>الإحصائيات</span>
+          </a>
+        </li>
+        <!-- يمكن إضافة روابط أخرى هنا في المستقبل -->
+        <li class="mt-4">
+          <a href="/" class="text-muted">
+            <i class="fas fa-arrow-right"></i>
+            <span>العودة للرئيسية</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="crm-content">
+      <% if (flashMessages && flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <% if (flashMessages && flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <!-- شريط التنقل السريع -->
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="/crm">لوحة التحكم</a></li>
+          <li class="breadcrumb-item"><a href="/crm/conversations">المحادثات</a></li>
+          <li class="breadcrumb-item active" aria-current="page">
+            <%= conversation.customerName || conversation.phoneNumber %>
+          </li>
+        </ol>
+      </nav>
+      
+      <div class="row">
+        <!-- تفاصيل المحادثة والإجراءات -->
+        <div class="col-lg-4">
+          <div class="conversation-info-card p-3 mb-4">
+            <h5 class="card-title pb-2 border-bottom mb-3">تفاصيل المحادثة</h5>
+            
+            <div class="mb-3">
+              <strong>رقم الهاتف:</strong>
+              <span dir="ltr"><%= conversation.phoneNumber %></span>
+            </div>
+            
+            <% if (contact) { %>
+              <div class="mb-3">
+                <strong>جهة الاتصال:</strong>
+                <a href="/crm/contacts/<%= contact._id %>"><%= contact.name %></a>
+              </div>
+            <% } %>
+            
+            <div class="mb-3">
+              <strong>القناة:</strong>
+              <%= conversation.channelId ? conversation.channelId.name : 'غير معروفة' %>
+            </div>
+            
+            <div class="mb-3">
+              <strong>الحالة:</strong>
+              <span class="status-badge status-<%= conversation.status %>">
+                <% if (conversation.status === 'open') { %>مفتوحة<% } %>
+                <% if (conversation.status === 'assigned') { %>مسندة<% } %>
+                <% if (conversation.status === 'closed') { %>مغلقة<% } %>
+              </span>
+            </div>
+            
+            <div class="mb-3">
+              <strong>تاريخ البدء:</strong>
+              <%= new Date(conversation.createdAt).toLocaleString('ar-LY') %>
+            </div>
+            
+            <div class="mb-3">
+              <strong>آخر تحديث:</strong>
+              <%= new Date(conversation.lastMessageAt || conversation.updatedAt).toLocaleString('ar-LY') %>
+            </div>
+            
+            <% if (conversation.assignedTo) { %>
+              <div class="mb-3">
+                <strong>مسندة إلى:</strong>
+                <%= conversation.assignedTo.full_name || conversation.assignedTo.username %>
+              </div>
+            <% } %>
+            
+            <% if (conversation.notes) { %>
+              <div class="mb-3">
+                <strong>ملاحظات داخلية:</strong>
+                <p class="p-2 bg-light rounded mt-1"><%= conversation.notes %></p>
+              </div>
+            <% } %>
+          </div>
+          
+          <!-- أزرار الإجراءات -->
+          <div class="conversation-action-buttons">
+            <% if (conversation.status !== 'closed') { %>
+              <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#assignModal">
+                <i class="fas fa-user-check me-1"></i> إسناد المحادثة
+              </button>
+              
+              <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#closeModal">
+                <i class="fas fa-times-circle me-1"></i> إغلاق المحادثة
+              </button>
+            <% } else { %>
+              <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#reopenModal">
+                <i class="fas fa-door-open me-1"></i> إعادة فتح المحادثة
+              </button>
+            <% } %>
+          </div>
+          
+          <button type="button" class="btn btn-info w-100 mt-3" data-bs-toggle="modal" data-bs-target="#addNoteModal">
+            <i class="fas fa-sticky-note me-1"></i> إضافة ملاحظة داخلية
+          </button>
+          
+          <% if (contact) { %>
+            <a href="/crm/contacts/<%= contact._id %>" class="btn btn-outline-primary w-100 mt-3">
+              <i class="fas fa-user me-1"></i> عرض بيانات جهة الاتصال
+            </a>
+          <% } else if (conversation.phoneNumber) { %>
+            <a href="/crm/contacts/new?phone=<%= conversation.phoneNumber %>" class="btn btn-outline-success w-100 mt-3">
+              <i class="fas fa-user-plus me-1"></i> إضافة جهة اتصال جديدة
+            </a>
+          <% } %>
+        </div>
+        
+        <!-- الرسائل والرد -->
+        <div class="col-lg-8">
+          <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="mb-0">
+                <i class="fas fa-comments me-1"></i>
+                المحادثة مع <%= conversation.customerName || conversation.phoneNumber %>
+              </h5>
+              <span class="badge bg-primary"><%= messages.length %> رسالة</span>
+            </div>
+            
+            <div class="card-body p-0">
+              <!-- مساحة الرسائل -->
+              <div class="message-container p-3">
+                <% if (messages && messages.length > 0) { %>
+                  <% messages.forEach(function(message, index) { %>
+                    <div class="message <%= message.direction === 'inbound' ? 'message-inbound' : 'message-outbound' %>">
+                      <div class="message-bubble">
+                        <%= message.content %>
+                        <div class="message-time">
+                          <%= new Date(message.timestamp).toLocaleString('ar-LY') %>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="clear-both"></div>
+                    
+                    <% if (index < messages.length - 1 && 
+                           new Date(messages[index+1].timestamp) - new Date(message.timestamp) > 3600000) { %>
+                      <div class="message-internal-note">
+                        <i class="fas fa-clock me-1"></i>
+                        مرت <%= Math.round((new Date(messages[index+1].timestamp) - new Date(message.timestamp)) / 3600000) %> ساعة
+                      </div>
+                    <% } %>
+                  <% }); %>
+                <% } else { %>
+                  <div class="text-center text-muted py-5">
+                    <i class="fas fa-comment-dots mb-3" style="font-size: 3rem; opacity: 0.2;"></i>
+                    <p>لا توجد رسائل في هذه المحادثة</p>
+                  </div>
+                <% } %>
+              </div>
+            </div>
+          </div>
+          
+          <!-- نموذج الرد -->
+          <% if (conversation.status !== 'closed') { %>
+            <div class="reply-form">
+              <form action="/crm/conversations/<%= conversation._id %>/reply" method="POST">
+                <div class="mb-3">
+                  <label for="replyMessage" class="form-label">إرسال رد</label>
+                  <textarea class="form-control" id="replyMessage" name="content" rows="3" required placeholder="اكتب رسالتك هنا..."></textarea>
+                </div>
+                <div class="d-flex justify-content-between">
+                  <button type="reset" class="btn btn-outline-secondary">مسح</button>
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-paper-plane me-1"></i> إرسال
+                  </button>
+                </div>
+              </form>
+            </div>
+          <% } else { %>
+            <div class="alert alert-secondary">
+              <i class="fas fa-lock me-1"></i>
+              هذه المحادثة مغلقة. يرجى إعادة فتحها للرد.
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- نافذة إسناد المحادثة -->
+  <div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">إسناد المحادثة</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form action="/crm/conversations/<%= conversation._id %>/assign" method="POST">
+            <div class="mb-3">
+              <label for="assignedTo" class="form-label">اختر الموظف المسؤول</label>
+              <select class="form-select" id="assignedTo" name="assignedTo" required>
+                <option value="" selected disabled>-- اختر الموظف --</option>
+                <!-- سيتم تعبئة هذه القائمة من خلال AJAX -->
+              </select>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+              <button type="submit" class="btn btn-primary">إسناد</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- نافذة إغلاق المحادثة -->
+  <div class="modal fade" id="closeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">إغلاق المحادثة</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form action="/crm/conversations/<%= conversation._id %>/close" method="POST">
+            <div class="mb-3">
+              <label for="closeReason" class="form-label">سبب الإغلاق</label>
+              <select class="form-select" id="closeReason" name="closeReason">
+                <option value="completed">تم حل المشكلة</option>
+                <option value="inactive">عدم تفاعل العميل</option>
+                <option value="spam">رسائل غير مرغوب فيها</option>
+                <option value="other">سبب آخر</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="closeNote" class="form-label">ملاحظة (اختياري)</label>
+              <textarea class="form-control" id="closeNote" name="closeNote" rows="3"></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+              <button type="submit" class="btn btn-danger">إغلاق المحادثة</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- نافذة إعادة فتح المحادثة -->
+  <div class="modal fade" id="reopenModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">إعادة فتح المحادثة</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>هل أنت متأكد أنك تريد إعادة فتح هذه المحادثة؟</p>
+          <form action="/crm/conversations/<%= conversation._id %>/reopen" method="POST">
+            <div class="mb-3">
+              <label for="reopenNote" class="form-label">ملاحظة (اختياري)</label>
+              <textarea class="form-control" id="reopenNote" name="reopenNote" rows="3"></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+              <button type="submit" class="btn btn-success">إعادة فتح المحادثة</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- نافذة إضافة ملاحظة داخلية -->
+  <div class="modal fade" id="addNoteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">إضافة ملاحظة داخلية</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form action="/crm/conversations/<%= conversation._id %>/note" method="POST">
+            <div class="mb-3">
+              <label for="noteContent" class="form-label">الملاحظة</label>
+              <textarea class="form-control" id="noteContent" name="noteContent" rows="5" required placeholder="أضف ملاحظة داخلية لا يراها العميل..."></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+              <button type="submit" class="btn btn-primary">إضافة ملاحظة</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <%- include('../partials/_footer') %>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // التمرير إلى آخر الرسائل
+      const messageContainer = document.querySelector('.message-container');
+      if (messageContainer) {
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+      }
+      
+      // جلب قائمة الموظفين لنافذة الإسناد عبر AJAX
+      const assignSelect = document.getElementById('assignedTo');
+      if (assignSelect) {
+        fetch('/api/users/support')
+          .then(response => response.json())
+          .then(data => {
+            if (data.users && data.users.length > 0) {
+              data.users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user._id;
+                option.textContent = user.full_name || user.username;
+                // تحديد المستخدم الحالي إن كان مسنداً
+                if ('<%= conversation.assignedTo ? conversation.assignedTo._id : "" %>' === user._id) {
+                  option.selected = true;
+                }
+                assignSelect.appendChild(option);
+              });
+            }
+          })
+          .catch(error => console.error('خطأ في جلب قائمة المستخدمين:', error));
+      }
+    });
+  </script>
+</body>
+</html>

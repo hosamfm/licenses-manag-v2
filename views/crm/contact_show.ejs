@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('../partials/_head') %>
+  <title><%= contact.name %> - إدارة العملاء</title>
+  <!-- أنماط خاصة بصفحات CRM -->
+  <style>
+    .crm-container {
+      display: flex;
+      min-height: calc(100vh - 60px);
+    }
+    
+    .crm-sidebar {
+      width: 250px;
+      background-color: #f8f9fa;
+      border-left: 1px solid #dee2e6;
+      padding: 20px 0;
+    }
+    
+    .crm-content {
+      flex: 1;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    .crm-sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .crm-sidebar-nav li {
+      margin-bottom: 5px;
+    }
+    
+    .crm-sidebar-nav a {
+      display: block;
+      padding: 10px 20px;
+      color: #6c757d;
+      text-decoration: none;
+      border-right: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    
+    .crm-sidebar-nav a:hover {
+      background-color: #f0f0f0;
+      color: #495057;
+      border-right-color: #6c757d;
+    }
+    
+    .crm-sidebar-nav a.active {
+      background-color: #e9ecef;
+      color: #212529;
+      border-right-color: #0d6efd;
+    }
+    
+    .crm-sidebar-nav i {
+      width: 20px;
+      text-align: center;
+      margin-left: 8px;
+    }
+    
+    .page-title {
+      color: #495057;
+      margin-bottom: 25px;
+      border-bottom: 1px solid #dee2e6;
+      padding-bottom: 15px;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 50rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    
+    .status-open {
+      background-color: #d1e7dd;
+      color: #0f5132;
+    }
+    
+    .status-assigned {
+      background-color: #cff4fc;
+      color: #055160;
+    }
+    
+    .status-closed {
+      background-color: #e2e3e5;
+      color: #41464b;
+    }
+  </style>
+</head>
+<body>
+  <%- include('../partials/_header') %>
+  
+  <div class="crm-container">
+    <!-- القائمة الجانبية -->
+    <div class="crm-sidebar">
+      <ul class="crm-sidebar-nav">
+        <li>
+          <a href="/crm">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>لوحة التحكم</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/contacts" class="active">
+            <i class="fas fa-address-book"></i>
+            <span>جهات الاتصال</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/conversations">
+            <i class="fas fa-comments"></i>
+            <span>المحادثات</span>
+          </a>
+        </li>
+        <li>
+          <a href="/crm/conversations/my">
+            <i class="fas fa-user-circle"></i>
+            <span>محادثاتي</span>
+          </a>
+        </li>
+        <!-- يمكن إضافة روابط أخرى هنا في المستقبل -->
+        <li class="mt-4">
+          <a href="/" class="text-muted">
+            <i class="fas fa-arrow-right"></i>
+            <span>العودة للرئيسية</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="crm-content">
+      <% if (flashMessages && flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <% if (flashMessages && flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <!-- صفحة عرض تفاصيل جهة اتصال -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="page-title mb-0">
+          <i class="fas fa-user me-2"></i>
+          <%= contact.name %>
+        </h1>
+        
+        <div>
+          <form action="/crm/conversations/start" method="POST" class="d-inline">
+            <input type="hidden" name="contactId" value="<%= contact._id %>">
+            <button type="submit" class="btn btn-success me-2">
+              <i class="fas fa-comment me-1"></i>
+              بدء محادثة
+            </button>
+          </form>
+          
+          <a href="/crm/contacts/<%= contact._id %>/edit" class="btn btn-primary me-2">
+            <i class="fas fa-edit me-1"></i>
+            تعديل
+          </a>
+          
+          <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteContactModal">
+            <i class="fas fa-trash me-1"></i>
+            حذف
+          </button>
+        </div>
+      </div>
+
+      <!-- بطاقة تفاصيل جهة الاتصال -->
+      <div class="row">
+        <div class="col-md-6">
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="fas fa-info-circle me-2"></i>
+              معلومات جهة الاتصال
+            </div>
+            <div class="card-body">
+              <div class="mb-3 row">
+                <label class="col-sm-4 text-muted">رقم الهاتف:</label>
+                <div class="col-sm-8 fw-bold" dir="ltr"><%= contact.phoneNumber %></div>
+              </div>
+              
+              <div class="mb-3 row">
+                <label class="col-sm-4 text-muted">البريد الإلكتروني:</label>
+                <div class="col-sm-8"><%= contact.email || 'غير محدد' %></div>
+              </div>
+              
+              <div class="mb-3 row">
+                <label class="col-sm-4 text-muted">الشركة:</label>
+                <div class="col-sm-8"><%= contact.company || 'غير محدد' %></div>
+              </div>
+              
+              <div class="mb-3 row">
+                <label class="col-sm-4 text-muted">تاريخ الإضافة:</label>
+                <div class="col-sm-8">
+                  <%= new Date(contact.createdAt).toLocaleString('en-LY', { 
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) %>
+                </div>
+              </div>
+              
+              <div class="mb-3 row">
+                <label class="col-sm-4 text-muted">آخر تحديث:</label>
+                <div class="col-sm-8">
+                  <%= new Date(contact.updatedAt).toLocaleString('en-LY', { 
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) %>
+                </div>
+              </div>
+              
+              <% if (contact.createdBy) { %>
+                <div class="mb-3 row">
+                  <label class="col-sm-4 text-muted">تمت الإضافة بواسطة:</label>
+                  <div class="col-sm-8">
+                    <%= contact.createdBy.full_name || contact.createdBy.username %>
+                  </div>
+                </div>
+              <% } %>
+            </div>
+          </div>
+          
+          <!-- ملاحظات -->
+          <% if (contact.notes) { %>
+            <div class="card mb-4">
+              <div class="card-header">
+                <i class="fas fa-sticky-note me-2"></i>
+                ملاحظات
+              </div>
+              <div class="card-body">
+                <%= contact.notes %>
+              </div>
+            </div>
+          <% } %>
+        </div>
+        
+        <div class="col-md-6">
+          <!-- المحادثات المرتبطة -->
+          <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span><i class="fas fa-comments me-2"></i> المحادثات</span>
+              <% if (conversations.length > 5) { %>
+                <a href="/crm/conversations?search=<%= contact.phoneNumber %>" class="btn btn-sm btn-outline-primary">
+                  عرض الكل
+                </a>
+              <% } %>
+            </div>
+            <div class="card-body p-0">
+              <% if (conversations && conversations.length > 0) { %>
+                <div class="list-group list-group-flush">
+                  <% conversations.forEach(function(conversation) { %>
+                    <a href="/crm/conversations/<%= conversation._id %>" class="list-group-item list-group-item-action">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-1">
+                          <span class="status-badge status-<%= conversation.status %> me-2">
+                            <% if (conversation.status === 'open') { %>مفتوحة<% } %>
+                            <% if (conversation.status === 'assigned') { %>مسندة<% } %>
+                            <% if (conversation.status === 'closed') { %>مغلقة<% } %>
+                          </span>
+                          محادثة #<%= conversation._id.toString().substr(-6) %>
+                        </h6>
+                        <small class="text-muted">
+                          <%= new Date(conversation.lastMessageAt).toLocaleString('en-LY', { 
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) %>
+                        </small>
+                      </div>
+                      <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                          <% if (conversation.assignedTo) { %>
+                            <i class="fas fa-user me-1"></i> 
+                            <%= conversation.assignedTo.full_name || conversation.assignedTo.username %>
+                          <% } else { %>
+                            <i class="fas fa-inbox me-1"></i> غير مسندة
+                          <% } %>
+                        </small>
+                      </div>
+                    </a>
+                  <% }); %>
+                </div>
+              <% } else { %>
+                <div class="p-4 text-center text-muted">
+                  <i class="fas fa-comments mb-3" style="font-size: 2rem;"></i>
+                  <p>لا توجد محادثات مع هذه الجهة بعد</p>
+                  <form action="/crm/conversations/start" method="POST">
+                    <input type="hidden" name="contactId" value="<%= contact._id %>">
+                    <button type="submit" class="btn btn-primary">
+                      <i class="fas fa-comment me-1"></i>
+                      بدء محادثة جديدة
+                    </button>
+                  </form>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <a href="/crm/contacts" class="btn btn-outline-secondary">
+          <i class="fas fa-arrow-right me-1"></i>
+          العودة لقائمة جهات الاتصال
+        </a>
+      </div>
+
+      <!-- مودال تأكيد الحذف -->
+      <div class="modal fade" id="deleteContactModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">تأكيد الحذف</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <p>هل أنت متأكد من رغبتك في حذف جهة الاتصال "<strong><%= contact.name %></strong>"؟</p>
+              <p class="text-danger">لا يمكن التراجع عن هذا الإجراء.</p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
+              <form action="/crm/contacts/<%= contact._id %>/delete" method="POST">
+                <button type="submit" class="btn btn-danger">تأكيد الحذف</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <%- include('../partials/_footer') %>
+</body>
+</html>
