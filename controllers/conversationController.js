@@ -3,10 +3,12 @@
  * هذا الملف مسؤول عن إدارة عرض وتحديث المحادثات
  */
 const Conversation = require('../models/Conversation');
+const Contact = require('../models/Contact');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
-const WhatsAppChannel = require('../models/WhatsAppChannel');
+const WhatsappChannel = require('../models/WhatsAppChannel');
 const User = require('../models/User');
 const logger = require('../services/loggerService');
+const socketService = require('../services/socketService');
 
 /**
  * عرض قائمة المحادثات
@@ -246,248 +248,239 @@ exports.showConversation = async (req, res) => {
 };
 
 /**
- * إسناد محادثة إلى موظف
+ * إسناد محادثة إلى مستخدم
  */
-exports.assignConversation = async (req, res) => {
+const assignConversation = async (req, res) => {
     try {
         const { conversationId } = req.params;
-        const { assignedTo } = req.body;
-        
-        if (!assignedTo) {
-            req.flash('error', 'يرجى اختيار موظف للإسناد');
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        }
-        
+        const { userId } = req.body;
+
         // التحقق من وجود المحادثة
         const conversation = await Conversation.findById(conversationId);
         if (!conversation) {
             req.flash('error', 'المحادثة غير موجودة');
             return res.redirect('/crm/conversations');
         }
-        
-        // التحقق من وجود المستخدم
-        const user = await User.findById(assignedTo);
-        if (!user) {
-            req.flash('error', 'المستخدم غير موجود');
-            return res.redirect(`/crm/conversations/${conversationId}`);
+
+        // التحقق من وجود المستخدم المحدد
+        if (userId) {
+            const user = await User.findById(userId);
+            if (!user) {
+                req.flash('error', 'المستخدم غير موجود');
+                return res.redirect(`/crm/conversations/${conversationId}`);
+            }
         }
-        
-        // تحديث المحادثة
-        conversation.assignedTo = assignedTo;
-        conversation.status = 'assigned';
-        
-        // إذا كانت الملاحظات موجودة، أضف ملاحظة حول الإسناد
-        let note = '';
-        if (conversation.notes) {
-            note = conversation.notes + '\n\n';
-        }
-        note += `تم إسناد المحادثة إلى ${user.full_name || user.username} في ${new Date().toLocaleString('ar-LY')} بواسطة ${req.user.full_name || req.user.username}`;
-        conversation.notes = note;
-        
+
+        // تحديث المحادثة بالمستخدم المعين
+        conversation.assignedTo = userId || null;
+        conversation.updatedAt = new Date();
         await conversation.save();
-        
-        req.flash('success', `تم إسناد المحادثة إلى ${user.full_name || user.username} بنجاح`);
+
+        // إرسال إشعار بتحديث المحادثة
+        socketService.notifyConversationUpdate(conversationId, {
+            type: 'assigned',
+            assignedTo: userId,
+            assignedBy: req.user._id
+        });
+
+        req.flash('success', userId ? 'تم إسناد المحادثة بنجاح' : 'تم إلغاء إسناد المحادثة بنجاح');
         res.redirect(`/crm/conversations/${conversationId}`);
     } catch (error) {
         logger.error('conversationController', 'خطأ في إسناد المحادثة', error);
         req.flash('error', 'حدث خطأ أثناء إسناد المحادثة');
-        res.redirect(`/crm/conversations/${req.params.conversationId}`);
+        res.redirect('/crm/conversations');
     }
 };
 
 /**
  * إضافة ملاحظة داخلية للمحادثة
  */
-exports.addNoteToConversation = async (req, res) => {
+const addInternalNote = async (req, res) => {
     try {
         const { conversationId } = req.params;
-        const { noteContent } = req.body;
-        
-        if (!noteContent || noteContent.trim() === '') {
-            req.flash('error', 'يرجى إدخال نص الملاحظة');
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        }
-        
+        const { note } = req.body;
+
         // التحقق من وجود المحادثة
         const conversation = await Conversation.findById(conversationId);
         if (!conversation) {
             req.flash('error', 'المحادثة غير موجودة');
             return res.redirect('/crm/conversations');
         }
-        
-        // إضافة الملاحظة
-        let note = '';
-        if (conversation.notes) {
-            note = conversation.notes + '\n\n';
+
+        // التحقق من وجود المحتوى للملاحظة
+        if (!note || note.trim() === '') {
+            req.flash('error', 'يجب إدخال نص الملاحظة');
+            return res.redirect(`/crm/conversations/${conversationId}`);
         }
-        note += `[${new Date().toLocaleString('ar-LY')} - ${req.user.full_name || req.user.username}]: ${noteContent}`;
-        conversation.notes = note;
-        
+
+        // إنشاء رسالة داخلية جديدة (ملاحظة) من نوع خاص
+        const internalMessage = new WhatsappMessage({
+            conversationId,
+            direction: 'internal',
+            content: note,
+            timestamp: new Date(),
+            sender: req.user._id,
+            isInternalNote: true
+        });
+
+        await internalMessage.save();
+
+        // تحديث وقت آخر تحديث للمحادثة
+        conversation.lastInternalNoteAt = new Date();
         await conversation.save();
-        
+
+        // إرسال إشعار بإضافة ملاحظة داخلية
+        socketService.notifyConversationUpdate(conversationId, {
+            type: 'note_added',
+            noteId: internalMessage._id,
+            addedBy: req.user._id
+        });
+
         req.flash('success', 'تمت إضافة الملاحظة بنجاح');
         res.redirect(`/crm/conversations/${conversationId}`);
     } catch (error) {
-        logger.error('conversationController', 'خطأ في إضافة ملاحظة', error);
+        logger.error('conversationController', 'خطأ في إضافة ملاحظة داخلية', error);
         req.flash('error', 'حدث خطأ أثناء إضافة الملاحظة');
-        res.redirect(`/crm/conversations/${req.params.conversationId}`);
+        res.redirect('/crm/conversations');
     }
 };
 
 /**
- * إغلاق محادثة
+ * تغيير حالة المحادثة (فتح/إغلاق)
  */
-exports.closeConversation = async (req, res) => {
+const toggleConversationStatus = async (req, res) => {
     try {
         const { conversationId } = req.params;
-        const { closeReason, closeNote } = req.body;
-        
-        // التحقق من وجود المحادثة
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation) {
-            req.flash('error', 'المحادثة غير موجودة');
-            return res.redirect('/crm/conversations');
-        }
-        
-        // تغيير حالة المحادثة إلى مغلقة
-        conversation.status = 'closed';
-        conversation.closedAt = new Date();
-        conversation.closedBy = req.user._id;
-        conversation.closeReason = closeReason || 'other';
-        
-        // إضافة ملاحظة عن الإغلاق إذا وجدت
-        let note = '';
-        if (conversation.notes) {
-            note = conversation.notes + '\n\n';
-        }
-        note += `تم إغلاق المحادثة في ${new Date().toLocaleString('ar-LY')} بواسطة ${req.user.full_name || req.user.username}`;
-        if (closeNote && closeNote.trim() !== '') {
-            note += `\nسبب الإغلاق: ${closeNote}`;
-        }
-        conversation.notes = note;
-        
-        await conversation.save();
-        
-        req.flash('success', 'تم إغلاق المحادثة بنجاح');
-        res.redirect(`/crm/conversations/${conversationId}`);
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في إغلاق المحادثة', error);
-        req.flash('error', 'حدث خطأ أثناء إغلاق المحادثة');
-        res.redirect(`/crm/conversations/${req.params.conversationId}`);
-    }
-};
+        const { status } = req.body;
 
-/**
- * إعادة فتح محادثة مغلقة
- */
-exports.reopenConversation = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        const { reopenNote } = req.body;
-        
-        // التحقق من وجود المحادثة
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation) {
-            req.flash('error', 'المحادثة غير موجودة');
-            return res.redirect('/crm/conversations');
-        }
-        
-        // التحقق من أن المحادثة مغلقة
-        if (conversation.status !== 'closed') {
-            req.flash('error', 'المحادثة ليست مغلقة');
+        // التحقق من صحة الحالة
+        if (status !== 'open' && status !== 'closed') {
+            req.flash('error', 'حالة غير صالحة');
             return res.redirect(`/crm/conversations/${conversationId}`);
         }
-        
-        // تغيير حالة المحادثة إلى مفتوحة
-        conversation.status = 'open';
-        
-        // إضافة ملاحظة عن إعادة الفتح إذا وجدت
-        let note = '';
-        if (conversation.notes) {
-            note = conversation.notes + '\n\n';
+
+        // التحقق من وجود المحادثة
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) {
+            req.flash('error', 'المحادثة غير موجودة');
+            return res.redirect('/crm/conversations');
         }
-        note += `تم إعادة فتح المحادثة في ${new Date().toLocaleString('ar-LY')} بواسطة ${req.user.full_name || req.user.username}`;
-        if (reopenNote && reopenNote.trim() !== '') {
-            note += `\nملاحظة: ${reopenNote}`;
-        }
-        conversation.notes = note;
+
+        // تحديث حالة المحادثة
+        conversation.status = status;
+        conversation.updatedAt = new Date();
         
+        // إذا تم إغلاق المحادثة، قم بتسجيل وقت الإغلاق
+        if (status === 'closed') {
+            conversation.closedAt = new Date();
+            conversation.closedBy = req.user._id;
+        } else {
+            // إذا تم إعادة فتح المحادثة، قم بإزالة معلومات الإغلاق
+            conversation.closedAt = null;
+            conversation.closedBy = null;
+        }
+
         await conversation.save();
-        
-        req.flash('success', 'تم إعادة فتح المحادثة بنجاح');
+
+        // إرسال إشعار بتغيير حالة المحادثة
+        socketService.notifyConversationUpdate(conversationId, {
+            type: 'status_changed',
+            status: status,
+            changedBy: req.user._id
+        });
+
+        const statusMessage = status === 'open' ? 'تم فتح المحادثة بنجاح' : 'تم إغلاق المحادثة بنجاح';
+        req.flash('success', statusMessage);
         res.redirect(`/crm/conversations/${conversationId}`);
     } catch (error) {
-        logger.error('conversationController', 'خطأ في إعادة فتح المحادثة', error);
-        req.flash('error', 'حدث خطأ أثناء إعادة فتح المحادثة');
-        res.redirect(`/crm/conversations/${req.params.conversationId}`);
+        logger.error('conversationController', 'خطأ في تغيير حالة المحادثة', error);
+        req.flash('error', 'حدث خطأ أثناء تغيير حالة المحادثة');
+        res.redirect('/crm/conversations');
     }
 };
 
 /**
- * إرسال رد في المحادثة
+ * إرسال رد على المحادثة
  */
-exports.replyToConversation = async (req, res) => {
+const replyToConversation = async (req, res) => {
     try {
         const { conversationId } = req.params;
         const { content } = req.body;
-        
-        if (!content || content.trim() === '') {
-            req.flash('error', 'يرجى إدخال نص الرسالة');
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        }
-        
+
         // التحقق من وجود المحادثة
-        const conversation = await Conversation.findById(conversationId);
+        const conversation = await Conversation.findById(conversationId)
+            .populate('channelId');
+        
         if (!conversation) {
             req.flash('error', 'المحادثة غير موجودة');
             return res.redirect('/crm/conversations');
         }
-        
-        // التحقق من أن المحادثة ليست مغلقة
-        if (conversation.status === 'closed') {
-            req.flash('error', 'لا يمكن الرد على محادثة مغلقة');
+
+        // التحقق من وجود محتوى للرد
+        if (!content || content.trim() === '') {
+            req.flash('error', 'يجب إدخال نص الرسالة');
             return res.redirect(`/crm/conversations/${conversationId}`);
         }
-        
-        // إنشاء رسالة جديدة
-        const newMessage = new WhatsappMessage({
+
+        // إنشاء رسالة جديدة كرد
+        const message = new WhatsappMessage({
             conversationId,
             direction: 'outbound',
             content,
-            sender: req.user._id,
-            timestamp: new Date()
+            timestamp: new Date(),
+            sender: req.user._id
         });
-        
-        await newMessage.save();
-        
-        // تحديث تاريخ آخر رسالة في المحادثة
+
+        await message.save();
+
+        // تحديث المحادثة
         conversation.lastMessageAt = new Date();
+        conversation.lastMessage = content;
         
-        // إذا كانت المحادثة مفتوحة ولم تكن مسندة بعد، قم بإسنادها للمستخدم الحالي
-        if (conversation.status === 'open' && !conversation.assignedTo) {
-            conversation.assignedTo = req.user._id;
-            conversation.status = 'assigned';
-            
-            // إضافة ملاحظة حول الإسناد التلقائي
-            let note = '';
-            if (conversation.notes) {
-                note = conversation.notes + '\n\n';
-            }
-            note += `تم إسناد المحادثة تلقائياً إلى ${req.user.full_name || req.user.username} في ${new Date().toLocaleString('ar-LY')} بعد الرد عليها`;
-            conversation.notes = note;
+        // إذا كانت المحادثة مغلقة، قم بإعادة فتحها عند الرد
+        if (conversation.status === 'closed') {
+            conversation.status = 'open';
+            conversation.closedAt = null;
+            conversation.closedBy = null;
         }
         
         await conversation.save();
-        
-        // [هنا ستضيف رمز لإرسال الرسالة الفعلية عبر WhatsApp API إذا كان متوفراً]
-        
+
+        // إرسال إشعار برسالة جديدة
+        socketService.notifyNewMessage(conversationId, {
+            messageId: message._id,
+            conversationId,
+            content,
+            direction: 'outbound',
+            timestamp: message.timestamp,
+            sender: {
+                _id: req.user._id,
+                username: req.user.username
+            }
+        });
+
+        // أيضًا قم بإرسال إشعار إلى المستخدم المسند إليه المحادثة إذا كان موجودًا ومختلفًا عن المستخدم الحالي
+        if (conversation.assignedTo && conversation.assignedTo.toString() !== req.user._id.toString()) {
+            socketService.notifyUser(conversation.assignedTo, 'new_message', {
+                conversationId,
+                messageCount: 1,
+                contactName: conversation.contactName || 'عميل',
+                preview: content.substring(0, 50) + (content.length > 50 ? '...' : '')
+            });
+        }
+
         req.flash('success', 'تم إرسال الرد بنجاح');
         res.redirect(`/crm/conversations/${conversationId}`);
     } catch (error) {
-        logger.error('conversationController', 'خطأ في إرسال رد', error);
+        logger.error('conversationController', 'خطأ في إرسال رد على المحادثة', error);
         req.flash('error', 'حدث خطأ أثناء إرسال الرد');
-        res.redirect(`/crm/conversations/${req.params.conversationId}`);
+        res.redirect('/crm/conversations');
     }
 };
+
+exports.assignConversation = assignConversation;
+exports.addInternalNote = addInternalNote;
+exports.toggleConversationStatus = toggleConversationStatus;
+exports.replyToConversation = replyToConversation;
 
 module.exports = exports;

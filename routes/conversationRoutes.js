@@ -22,13 +22,10 @@ router.get('/:conversationId', ensureCanAccessConversations, conversationControl
 router.post('/:conversationId/assign', ensureCanAccessConversations, conversationController.assignConversation);
 
 // مسار إضافة ملاحظة داخلية للمحادثة
-router.post('/:conversationId/note', ensureCanAccessConversations, conversationController.addNoteToConversation);
+router.post('/:conversationId/note', ensureCanAccessConversations, conversationController.addInternalNote);
 
-// مسار إغلاق محادثة
-router.post('/:conversationId/close', ensureCanAccessConversations, conversationController.closeConversation);
-
-// مسار إعادة فتح محادثة
-router.post('/:conversationId/reopen', ensureCanAccessConversations, conversationController.reopenConversation);
+// مسار تغيير حالة المحادثة (إغلاق / فتح)
+router.post('/:conversationId/status', ensureCanAccessConversations, conversationController.toggleConversationStatus);
 
 // مسار إرسال رد في المحادثة
 router.post('/:conversationId/reply', ensureCanAccessConversations, conversationController.replyToConversation);

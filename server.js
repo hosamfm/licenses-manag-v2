@@ -3,16 +3,15 @@ const mongoose = require("mongoose");
 const express = require("express");
 const session = require("express-session");
 const MongoStore = require('connect-mongo');
+const path = require('path');
 const flash = require('connect-flash');
 const authRoutes = require("./routes/authRoutes");
 const licenseRoutes = require('./routes/licenseRoutes');
-const licensesApiRoutes = require('./routes/licenses'); // إضافة الاستيراد الجديد
+const licensesApiRoutes = require('./routes/licenses'); // استيراد مسارات API الرخص
 const { isAuthenticated } = require('./middleware/authMiddleware');
 const User = require('./models/User');
 const chatIdRoutes = require('./routes/chatIdRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
-const { startTelegramBot } = require('./services/telegramService'); // استيراد دالة startTelegramBot
-const telegramMessagesRoutes = require('./routes/telegramMessages');
 const priceReaderLicenseRoutes = require('./routes/priceReaderLicense');
 const ocrRoutes = require('./routes/ocrRoutes'); // إضافة استيراد مسارات OCR
 const semClientRoutes = require('./routes/semClientRoutes'); // استيراد مسارات إدارة عملاء SEM
@@ -24,6 +23,9 @@ const metaWhatsappSettingsRoutes = require('./routes/metaWhatsappSettingsRoutes'
 const metaWhatsappMonitorRoutes = require('./routes/metaWhatsappMonitorRoutes'); // استيراد مسارات مراقبة webhook ميتا
 const whatsappChannelRoutes = require('./routes/whatsappChannelRoutes'); // استيراد مسارات إدارة قنوات واتساب
 const crmRoutes = require('./routes/crmRoutes'); // استيراد مسارات نظام إدارة العملاء (CRM)
+const apiRoutes = require('./routes/apiRoutes'); // استيراد مسارات API
+const { startTelegramBot } = require('./services/telegramService'); // استيراد دالة startTelegramBot
+const telegramMessagesRoutes = require('./routes/telegramMessages'); // استيراد مسارات الرسائل التلغرامية
 
 if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
   console.error("Error: config environment variables not set. Please create/edit .env configuration file.");
@@ -31,7 +33,7 @@ if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
 }
 
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -133,23 +135,24 @@ app.use((req, res, next) => {
 });
 
 app.use(authRoutes);
-app.use(licensesApiRoutes); // نقل هذا قبل licenseRoutes
+app.use(licensesApiRoutes);
 app.use('/licenses', licenseRoutes);
 app.use('/admin', chatIdRoutes);
 app.use('/program-details', require('./routes/programDetails'));
 app.use(settingsRoutes);
-app.use('/telegram', telegramMessagesRoutes);
 app.use(priceReaderLicenseRoutes);
 app.use(ocrRoutes);
-app.use(semClientRoutes); // إضافة مسارات عملاء SEM
-app.use(messageRoutes); // إضافة مسارات إرسال الرسائل
-app.use('/', balanceRoutes); // إضافة مسارات الرصيد
-app.use(externalApiRoutes); // إضافة مسارات API الخارجية
-app.use(metaWhatsappWebhookRoutes); // إضافة مسارات webhook واتساب الرسمي
-app.use(metaWhatsappSettingsRoutes); // إضافة مسارات إعدادات واتساب الرسمي
-app.use(metaWhatsappMonitorRoutes); // إضافة مسارات مراقبة webhook ميتا
-app.use(whatsappChannelRoutes); // إضافة مسارات إدارة قنوات واتساب
-app.use('/crm', crmRoutes); // إضافة مسارات نظام إدارة العملاء (CRM)
+app.use(balanceRoutes);
+app.use(semClientRoutes);
+app.use(messageRoutes);
+app.use(externalApiRoutes);
+app.use(metaWhatsappWebhookRoutes);
+app.use(metaWhatsappSettingsRoutes);
+app.use(metaWhatsappMonitorRoutes);
+app.use(whatsappChannelRoutes);
+app.use('/telegram', telegramMessagesRoutes);
+app.use('/crm', crmRoutes);
+app.use('/api', apiRoutes);
 
 // توجيه المسار القديم للمحادثات إلى نظام CRM
 app.get('/conversations', (req, res) => {
@@ -320,12 +323,18 @@ async function createDefaultAdmin() {
   }
 }
 
+const http = require('http').createServer(app);
+
+// تهيئة خدمة Socket.io
+const socketService = require('./services/socketService');
+const io = socketService.initialize(http);
+
 createDefaultAdmin().then(() => {
   // إنشاء مستخدم للموقع بعد إنشاء المدير الافتراضي
   return createWebsiteUser();
 }).then(() => {
-  app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+  http.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
   }).on('error', (err) => {
     console.error('Failed to start server:', err.message);
   });
