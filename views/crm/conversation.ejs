@@ -3,36 +3,32 @@
 <head>
   <%- include('../partials/_head') %>
   <title><%= title %></title>
-  <!-- أنماط خاصة بصفحات CRM -->
+  
   <style>
+    /* تنسيقات عامة للـ CRM */
     .crm-container {
       display: flex;
       min-height: calc(100vh - 60px);
     }
-    
     .crm-sidebar {
       width: 250px;
       background-color: #f8f9fa;
       border-left: 1px solid #dee2e6;
       padding: 20px 0;
     }
-    
     .crm-content {
       flex: 1;
       padding: 20px;
       background-color: #f5f5f5;
     }
-    
     .crm-sidebar-nav {
       list-style: none;
       padding: 0;
       margin: 0;
     }
-    
     .crm-sidebar-nav li {
       margin-bottom: 5px;
     }
-    
     .crm-sidebar-nav a {
       display: block;
       padding: 10px 20px;
@@ -41,76 +37,54 @@
       border-right: 3px solid transparent;
       transition: all 0.2s;
     }
-    
     .crm-sidebar-nav a:hover {
       background-color: #f0f0f0;
       color: #495057;
       border-right-color: #6c757d;
     }
-    
     .crm-sidebar-nav a.active {
       color: #007bff;
       background-color: #e9f2ff;
       border-right-color: #007bff;
     }
-    
-    .card-conversation {
-      border-radius: 10px;
-      box-shadow: 0 2px 4px rgba(0,0,0,.05);
-      transition: transform 0.2s;
-      margin-bottom: 15px;
-    }
-    
-    .card-conversation:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 4px 6px rgba(0,0,0,.1);
-    }
-    
+
+    /* تنسيقات واجهة المحادثة */
     .message-container {
-      max-height: 400px;
+      max-height: 450px;
       overflow-y: auto;
       padding: 15px;
       background-color: #f9f9f9;
       border-radius: 5px;
     }
-    
     .message {
       margin-bottom: 15px;
       max-width: 80%;
       position: relative;
     }
-    
-    /* الرسائل الواردة */
     .incoming {
       float: right;
       margin-left: auto;
     }
-    
-    /* الرسائل الصادرة */
     .outgoing {
       float: left;
       margin-right: auto;
     }
-    
     .message-bubble {
       padding: 10px 15px;
       border-radius: 10px;
       position: relative;
       word-wrap: break-word;
     }
-    
     .incoming-bubble {
       background-color: #e6f2ff;
       border-top-left-radius: 0;
       text-align: right;
     }
-    
     .outgoing-bubble {
       background-color: #dcf8c6;
       border-top-right-radius: 0;
       text-align: left;
     }
-    
     .message-time {
       font-size: 0.75rem;
       color: #888;
@@ -118,92 +92,69 @@
       display: flex;
       align-items: center;
     }
-    
     .incoming .message-time {
       justify-content: flex-start;
     }
-    
     .outgoing .message-time {
       justify-content: flex-end;
     }
-    
     .message-status {
       display: inline-block;
       margin-right: 5px;
     }
-    
     .clear-both {
       clear: both;
       width: 100%;
       height: 1px;
     }
-    
-    /* حالة الرسالة إذا كانت قيد الإرسال أو فشلت */
     .message[data-status="sending"] .message-bubble {
-      opacity: 0.8;
+      opacity: 0.85;
     }
     .message[data-status="failed"] .message-bubble {
       border: 1px solid #ff4d4f;
     }
-    
     .reply-form {
       padding: 15px;
       border-top: 1px solid #eee;
     }
-    
-    .conversation-info-card {
-      background-color: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 4px rgba(0,0,0,.05);
+
+    /* تنسيقات النوافذ المنبثقة */
+    .modal-content {
+      border-radius: 8px;
+    }
+    .modal-header {
+      border-bottom: 1px solid #dee2e6;
+    }
+    .modal-footer {
+      border-top: 1px solid #dee2e6;
+    }
+
+    /* زر إرسال بالإنتر */
+    textarea#replyMessage {
+      resize: none; /* منع تغيير حجم الحقل */
     }
   </style>
 </head>
 <body>
   <%- include('../partials/_header') %>
-  
+
   <div class="crm-container">
     <!-- القائمة الجانبية -->
     <div class="crm-sidebar">
       <ul class="crm-sidebar-nav">
-        <li>
-          <a href="/crm">
-            <i class="fas fa-tachometer-alt"></i>
-            <span>لوحة التحكم</span>
-          </a>
-        </li>
-        <li>
-          <a href="/crm/contacts">
-            <i class="fas fa-address-book"></i>
-            <span>جهات الاتصال</span>
-          </a>
-        </li>
-        <li>
-          <a href="/crm/conversations" class="active">
-            <i class="fas fa-comments"></i>
-            <span>المحادثات</span>
-          </a>
-        </li>
-        <li>
-          <a href="/crm/conversations/my">
-            <i class="fas fa-user-circle"></i>
-            <span>محادثاتي</span>
-          </a>
-        </li>
-        <li>
-          <a href="/crm/stats">
-            <i class="fas fa-chart-bar"></i>
-            <span>الإحصائيات</span>
-          </a>
-        </li>
+        <li><a href="/crm"><i class="fas fa-tachometer-alt"></i> لوحة التحكم</a></li>
+        <li><a href="/crm/contacts"><i class="fas fa-address-book"></i> جهات الاتصال</a></li>
+        <li><a href="/crm/conversations" class="active"><i class="fas fa-comments"></i> المحادثات</a></li>
+        <li><a href="/crm/conversations/my"><i class="fas fa-user-circle"></i> محادثاتي</a></li>
+        <li><a href="/crm/stats"><i class="fas fa-chart-bar"></i> الإحصائيات</a></li>
         <li class="mt-4">
           <a href="/" class="text-muted">
-            <i class="fas fa-arrow-right"></i>
-            <span>العودة للرئيسية</span>
+            <i class="fas fa-arrow-right"></i> العودة للرئيسية
           </a>
         </li>
       </ul>
     </div>
-    
+
     <!-- المحتوى الرئيسي -->
     <div class="crm-content">
       <% if (flashMessages && flashMessages.error) { %>
@@ -212,15 +163,15 @@
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
       <% } %>
-      
+
       <% if (flashMessages && flashMessages.success) { %>
         <div class="alert alert-success alert-dismissible fade show" role="alert">
           <%= flashMessages.success %>
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
       <% } %>
-      
-      <!-- شريط التنقل السريع -->
+
+      <!-- التنقل السريع -->
       <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
           <li class="breadcrumb-item"><a href="/crm">لوحة التحكم</a></li>
@@ -230,56 +181,55 @@
           </li>
         </ol>
       </nav>
-      
+
       <div class="row">
         <!-- تفاصيل المحادثة والإجراءات -->
         <div class="col-lg-4">
-          <div class="conversation-info-card p-3 mb-4">
+          <div class="card conversation-info-card p-3 mb-4">
             <h5 class="card-title pb-2 border-bottom mb-3">تفاصيل المحادثة</h5>
             
             <div class="mb-3">
               <strong>رقم الهاتف:</strong>
               <span dir="ltr"><%= conversation.phoneNumber %></span>
             </div>
-            
+
             <% if (contact) { %>
               <div class="mb-3">
                 <strong>جهة الاتصال:</strong>
                 <a href="/crm/contacts/<%= contact._id %>"><%= contact.name %></a>
               </div>
             <% } %>
-            
+
             <div class="mb-3">
               <strong>القناة:</strong>
               <%= conversation.channelId ? conversation.channelId.name : 'غير معروفة' %>
             </div>
-            
+
             <div class="mb-3">
               <strong>الحالة:</strong>
-              <span class="status-badge status-<%= conversation.status %>">
+              <span class="badge bg-secondary">
                 <% if (conversation.status === 'open') { %>مفتوحة<% } %>
                 <% if (conversation.status === 'assigned') { %>مسندة<% } %>
                 <% if (conversation.status === 'closed') { %>مغلقة<% } %>
               </span>
             </div>
-            
+
             <div class="mb-3">
               <strong>تاريخ البدء:</strong>
               <%= new Date(conversation.createdAt).toLocaleString('ar-LY') %>
             </div>
-            
             <div class="mb-3">
               <strong>آخر تحديث:</strong>
               <%= new Date(conversation.lastMessageAt || conversation.updatedAt).toLocaleString('ar-LY') %>
             </div>
-            
+
             <% if (conversation.assignedTo) { %>
               <div class="mb-3">
                 <strong>مسندة إلى:</strong>
                 <%= conversation.assignedTo.full_name || conversation.assignedTo.username %>
               </div>
             <% } %>
-            
+
             <% if (conversation.notes) { %>
               <div class="mb-3">
                 <strong>ملاحظات داخلية:</strong>
@@ -287,60 +237,58 @@
               </div>
             <% } %>
           </div>
-          
+
           <!-- أزرار الإجراءات -->
-          <div class="conversation-action-buttons">
+          <div class="conversation-action-buttons mb-3">
             <% if (conversation.status !== 'closed') { %>
-              <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#assignModal">
-                <i class="fas fa-user-check me-1"></i> إسناد المحادثة
+              <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#assignModal">
+                <i class="fas fa-user-check me-1"></i> إسناد
               </button>
-              
               <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#closeModal">
-                <i class="fas fa-times-circle me-1"></i> إغلاق المحادثة
+                <i class="fas fa-times-circle me-1"></i> إغلاق
               </button>
             <% } else { %>
               <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#reopenModal">
-                <i class="fas fa-door-open me-1"></i> إعادة فتح المحادثة
+                <i class="fas fa-door-open me-1"></i> فتح من جديد
               </button>
             <% } %>
           </div>
-          
-          <button type="button" class="btn btn-info w-100 mt-3" data-bs-toggle="modal" data-bs-target="#addNoteModal">
-            <i class="fas fa-sticky-note me-1"></i> إضافة ملاحظة داخلية
+
+          <button type="button" class="btn btn-info w-100 mb-3" data-bs-toggle="modal" data-bs-target="#addNoteModal">
+            <i class="fas fa-sticky-note me-1"></i> إضافة ملاحظة
           </button>
-          
+
           <% if (contact) { %>
-            <a href="/crm/contacts/<%= contact._id %>" class="btn btn-outline-primary w-100 mt-3">
-              <i class="fas fa-user me-1"></i> عرض بيانات جهة الاتصال
+            <a href="/crm/contacts/<%= contact._id %>" class="btn btn-outline-primary w-100 mb-3">
+              <i class="fas fa-user me-1"></i> عرض جهة الاتصال
             </a>
           <% } else if (conversation.phoneNumber) { %>
-            <a href="/crm/contacts/new?phone=<%= conversation.phoneNumber %>" class="btn btn-outline-success w-100 mt-3">
+            <a href="/crm/contacts/new?phone=<%= conversation.phoneNumber %>" class="btn btn-outline-success w-100">
               <i class="fas fa-user-plus me-1"></i> إضافة جهة اتصال جديدة
             </a>
           <% } %>
         </div>
-        
+
         <!-- الرسائل والرد -->
         <div class="col-lg-8">
           <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
               <h5 class="mb-0">
-                <i class="fas fa-comments me-1"></i>
-                المحادثة مع <%= conversation.customerName || conversation.phoneNumber %>
+                <i class="fas fa-comments me-1"></i> المحادثة مع <%= conversation.customerName || conversation.phoneNumber %>
               </h5>
               <span class="badge bg-primary"><%= messages.length %> رسالة</span>
             </div>
-            
             <div class="card-body p-0">
-              <!-- مساحة الرسائل -->
+              <!-- حاوية الرسائل -->
               <div class="message-container p-3">
                 <% if (messages && messages.length > 0) { %>
                   <% messages.forEach(function(msg, index) { %>
-                    <!-- نتوقع في الـ DB أن تكون msg.direction === 'incoming' أو 'outgoing' -->
-                    <div class="message <%= msg.direction %>" data-message-id="<%= msg._id %>" data-status="<%= msg.status %>" <% if (msg.externalMessageId) { %> data-external-id="<%= msg.externalMessageId %>" <% } %>>
+                    <div class="message <%= msg.direction %>"
+                         data-message-id="<%= msg._id %>"
+                         data-status="<%= msg.status %>"
+                         <% if (msg.externalMessageId) { %> data-external-id="<%= msg.externalMessageId %>" <% } %>>
                       <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %>">
                         <%= msg.content %>
-                        
                         <div class="message-time">
                           <%= new Date(msg.timestamp).toLocaleString('ar-LY') %>
                           
@@ -366,7 +314,7 @@
                     
                     <% if (index < messages.length - 1 && 
                            new Date(messages[index+1].timestamp) - new Date(msg.timestamp) > 3600000) { %>
-                      <div class="message-internal-note">
+                      <div class="message-internal-note text-muted my-2" style="font-size: 0.85rem;">
                         <i class="fas fa-clock me-1"></i>
                         مرت <%= Math.round((new Date(messages[index+1].timestamp) - new Date(msg.timestamp)) / 3600000) %> ساعة
                       </div>
@@ -375,20 +323,21 @@
                 <% } else { %>
                   <div class="text-center text-muted py-5">
                     <i class="fas fa-comment-dots mb-3" style="font-size: 3rem; opacity: 0.2;"></i>
-                    <p>لا توجد رسائل في هذه المحادثة</p>
+                    <p>لا توجد رسائل</p>
                   </div>
                 <% } %>
               </div>
             </div>
           </div>
-          
+
           <!-- نموذج الرد -->
           <% if (conversation.status !== 'closed') { %>
             <div class="reply-form">
               <form id="replyForm" action="/crm/conversations/<%= conversation._id %>/reply" method="POST">
                 <div class="mb-3">
                   <label for="replyMessage" class="form-label">إرسال رد</label>
-                  <textarea class="form-control" id="replyMessage" name="content" rows="3" required placeholder="اكتب رسالتك هنا..."></textarea>
+                  <textarea class="form-control" id="replyMessage" name="content"
+                            rows="3" required placeholder="اكتب رسالتك... (Enter للإرسال)"></textarea>
                 </div>
                 <div class="d-flex justify-content-between">
                   <button type="reset" class="btn btn-outline-secondary">مسح</button>
@@ -401,33 +350,32 @@
           <% } else { %>
             <div class="alert alert-secondary">
               <i class="fas fa-lock me-1"></i>
-              هذه المحادثة مغلقة. يرجى إعادة فتحها للرد.
+              هذه المحادثة مغلقة، لا يمكن الرد.
             </div>
           <% } %>
         </div>
       </div>
     </div>
   </div>
-  
+
   <!-- نافذة إسناد المحادثة -->
   <div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">إسناد المحادثة</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <form action="/crm/conversations/<%= conversation._id %>/assign" method="POST">
             <div class="mb-3">
-              <label for="assignedTo" class="form-label">اختر الموظف المسؤول</label>
+              <label for="assignedTo" class="form-label">الموظف</label>
               <select class="form-select" id="assignedTo" name="assignedTo" required>
-                <option value="" selected disabled>-- اختر الموظف --</option>
-                <!-- سيتم تعبئة هذه القائمة من خلال AJAX -->
+                <option value="" disabled selected>-- اختر الموظف --</option>
               </select>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
               <button type="submit" class="btn btn-primary">إسناد</button>
             </div>
           </form>
@@ -435,14 +383,14 @@
       </div>
     </div>
   </div>
-  
+
   <!-- نافذة إغلاق المحادثة -->
   <div class="modal fade" id="closeModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">إغلاق المحادثة</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <form action="/crm/conversations/<%= conversation._id %>/close" method="POST">
@@ -460,7 +408,7 @@
               <textarea class="form-control" id="closeNote" name="closeNote" rows="3"></textarea>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
               <button type="submit" class="btn btn-danger">إغلاق المحادثة</button>
             </div>
           </form>
@@ -468,550 +416,80 @@
       </div>
     </div>
   </div>
-  
+
   <!-- نافذة إعادة فتح المحادثة -->
   <div class="modal fade" id="reopenModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">إعادة فتح المحادثة</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <p>هل أنت متأكد أنك تريد إعادة فتح هذه المحادثة؟</p>
+          <p>هل أنت متأكد أنك تريد إعادة فتح المحادثة؟</p>
           <form action="/crm/conversations/<%= conversation._id %>/reopen" method="POST">
             <div class="mb-3">
               <label for="reopenNote" class="form-label">ملاحظة (اختياري)</label>
               <textarea class="form-control" id="reopenNote" name="reopenNote" rows="3"></textarea>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-              <button type="submit" class="btn btn-success">إعادة فتح المحادثة</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+              <button type="submit" class="btn btn-success">إعادة فتح</button>
             </div>
           </form>
         </div>
       </div>
     </div>
   </div>
-  
+
   <!-- نافذة إضافة ملاحظة داخلية -->
   <div class="modal fade" id="addNoteModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">إضافة ملاحظة داخلية</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <form action="/crm/conversations/<%= conversation._id %>/note" method="POST">
             <div class="mb-3">
               <label for="noteContent" class="form-label">الملاحظة</label>
-              <textarea class="form-control" id="noteContent" name="noteContent" rows="5" required placeholder="أضف ملاحظة داخلية لا يراها العميل..."></textarea>
+              <textarea class="form-control" id="noteContent" name="noteContent" rows="4" required></textarea>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-              <button type="submit" class="btn btn-primary">إضافة ملاحظة</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+              <button type="submit" class="btn btn-primary">إضافة</button>
             </div>
           </form>
         </div>
       </div>
     </div>
   </div>
-  
+
   <%- include('../partials/_footer') %>
-  
+
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <!-- إضافة مكتبة Socket.io مباشرة في صفحة المحادثة -->
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-  
+
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      let conversationSocket;
-      
-      try {
-        const serverUrl = window.location.origin;
-        console.log('محاولة الاتصال بخادم Socket.io على:', serverUrl);
-        
-        conversationSocket = io(serverUrl);
-        
-        conversationSocket.on('connect', function() {
-          console.log('تم الاتصال بنجاح بـ Socket.io في صفحة المحادثة');
-          
-          // الانضمام لغرفة المحادثة
-          conversationSocket.emit('join-conversation', '<%= conversation._id %>');
-          
-          // استقبال الرسائل الجديدة
-          conversationSocket.on('new-message', function(data) {
-            console.log('استلام رسالة جديدة:', data);
-            
-            // توحيد direction (مثال لو أتى inbound/outbound)
-            let dir = data.direction;
-            if (dir === 'inbound') dir = 'incoming';
-            else if (dir === 'outbound') dir = 'outgoing';
-            
-            // توحيد status في حال وصلنا 'received' أو 'pending'
-            let st = data.status || 'sent';
-            if (st === 'received') st = 'delivered';
-            if (st === 'pending')  st = 'sending';
-            
-            // تأكد من عدم إضافة الرسالة مرتين
-            const existing = document.querySelector(`.message[data-message-id="${data._id}"]`);
-            
-            // إنشاء العنصر
-            const msgEl = document.createElement('div');
-            msgEl.className = `message ${dir}`;
-            msgEl.setAttribute('data-message-id', data._id || '');
-            if (data.externalMessageId) {
-              msgEl.setAttribute('data-external-id', data.externalMessageId);
-            }
-            msgEl.setAttribute('data-status', st);
-            
-            // فقاعة
-            const bubble = document.createElement('div');
-            bubble.className = `message-bubble ${dir === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
-            bubble.textContent = data.content;
-            
-            // عنصر الوقت
-            const timeEl = document.createElement('div');
-            timeEl.className = 'message-time';
-            
-            // إن كانت رسالة صادرة, نعرض أيقونة الحالة
-            if (dir === 'outgoing') {
-              const statusSpan = document.createElement('span');
-              statusSpan.className = 'message-status';
-              
-              // حدد الأيقونة
-              let statusIcon = '';
-              let statusClass = '';
-              let statusTitle = '';
-              
-              if (st === 'sending') {
-                statusIcon = 'clock'; statusClass = 'text-secondary'; statusTitle = 'جاري الإرسال...';
-              } else if (st === 'sent') {
-                statusIcon = 'check'; statusClass = 'text-info'; statusTitle = 'تم الإرسال';
-              } else if (st === 'delivered') {
-                statusIcon = 'check-double'; statusClass = 'text-primary'; statusTitle = 'تم التسليم';
-              } else if (st === 'read') {
-                statusIcon = 'check-double'; statusClass = 'text-success'; statusTitle = 'تم القراءة';
-              } else if (st === 'failed') {
-                statusIcon = 'exclamation-triangle'; statusClass = 'text-danger'; statusTitle = 'فشل الإرسال';
-              }
-              
-              if (statusIcon) {
-                const iconEl = document.createElement('i');
-                iconEl.className = `fas fa-${statusIcon} ${statusClass}`;
-                iconEl.title = statusTitle;
-                statusSpan.appendChild(iconEl);
-                timeEl.appendChild(statusSpan);
-              }
-            }
-            
-            // نص الوقت
-            const timeText = document.createElement('span');
-            timeText.textContent = new Date(data.timestamp).toLocaleString('ar-LY');
-            timeEl.appendChild(timeText);
-            
-            bubble.appendChild(timeEl);
-            msgEl.appendChild(bubble);
-            
-            const container = document.querySelector('.message-container');
-            if (container) {
-              container.appendChild(msgEl);
-              container.appendChild(document.createElement('div')).className = 'clear-both';
-              container.scrollTop = container.scrollHeight;
-            }
-            
-            // إذا كانت رسالة واردة, نشغل صوت تنبيه
-            if (dir === 'incoming') {
-              const audioElement = document.getElementById('messageSound');
-              if (audioElement) {
-                audioElement.play().catch(err => {
-                  console.log('لم يتمكن من تشغيل الصوت:', err);
-                });
-              }
-            }
-          });
-          
-          // تحديثات المحادثة (مثل lastMessageAt, status...)
-          conversationSocket.on('conversation-update', function(data) {
-            console.log('تحديث المحادثة:', data);
-          });
-          
-          // تحديث حالة الرسالة
-          conversationSocket.on('message_status_update', function(data) {
-            console.log('تحديث حالة الرسالة:', data);
-            
-            // احتمال يكون externalMessageId أو messageId
-            let sel = `.message[data-external-id="${data.externalMessageId}"]`;
-            let found = document.querySelectorAll(sel);
-            
-            // لو لم نجدها بالمعرف الخارجي, نجرب بالـ messageId
-            if (found.length === 0 && data.messageId) {
-              sel = `.message[data-message-id="${data.messageId}"]`;
-              found = document.querySelectorAll(sel);
-            }
-            
-            if (found.length > 0) {
-              // توحيد status
-              let st = data.status || 'sent';
-              if (st === 'received') st = 'delivered';
-              if (st === 'pending')  st = 'sending';
-              
-              found.forEach(msgEl => {
-                // لو ليست outgoing, لا نعرض الحالة
-                if (!msgEl.classList.contains('outgoing')) return;
-                
-                // حدث حالة الرسالة
-                updateMessageStatus(msgEl, st);
-                
-                // ضع externalMessageId لو لم يكن موجود
-                if (data.externalMessageId && !msgEl.getAttribute('data-external-id')) {
-                  msgEl.setAttribute('data-external-id', data.externalMessageId);
-                }
-              });
-            } else {
-              console.log('لم يتم العثور على الرسالة المراد تحديثها');
-            }
-          });
-        });
-        
-        // خطأ في الاتصال
-        conversationSocket.on('connect_error', function(error) {
-          console.error('خطأ في الاتصال بـ Socket.io:', error);
-        });
-        
-        // عند مغادرة الصفحة
-        window.addEventListener('beforeunload', function() {
-          if (conversationSocket && conversationSocket.connected) {
-            conversationSocket.disconnect();
-          }
-        });
-      } catch (e) {
-        console.error('حدث خطأ أثناء تهيئة Socket.io في صفحة المحادثة:', e);
-      }
-      
-      // تحميل الموظفين عند فتح نافذة الإسناد
-      const assignModal = document.getElementById('assignModal');
-      if (assignModal) {
-        assignModal.addEventListener('show.bs.modal', loadSupportUsers);
-      }
-      
-      // دالة لجلب الموظفين
-      function loadSupportUsers() {
-        const selectElement = document.getElementById('assignedTo');
-        if (!selectElement) return;
-        
-        selectElement.innerHTML = ''; // إعادة التهيئة
-        
-        // خيار "إلغاء الإسناد"
-        const unassignOption = document.createElement('option');
-        unassignOption.value = '';
-        unassignOption.textContent = '-- إلغاء الإسناد --';
-        selectElement.appendChild(unassignOption);
-        
-        fetch('/api/users/support')
-          .then(response => {
-            if (!response.ok) throw new Error('فشل في جلب الموظفين');
-            return response.json();
-          })
-          .then(data => {
-            if (data.success && Array.isArray(data.users)) {
-              data.users.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user._id;
-                option.textContent = user.full_name || user.username;
-                selectElement.appendChild(option);
-              });
-              // لو المحادثة مسندة أساسًا
-              const currentAssignedUser = '<%= conversation.assignedTo ? conversation.assignedTo._id : "" %>';
-              if (currentAssignedUser) {
-                selectElement.value = currentAssignedUser;
-              }
-            } else {
-              const option = document.createElement('option');
-              option.disabled = true;
-              option.textContent = 'لا يوجد موظفين متاحين';
-              selectElement.appendChild(option);
-            }
-          })
-          .catch(err => console.error('خطأ في جلب الموظفين:', err));
-      }
-      
-      // تنسيق التاريخ
-      function formatDate(date) {
-        const options = {
-          year: 'numeric', month: 'numeric', day: 'numeric',
-          hour: '2-digit', minute: '2-digit'
-        };
-        return new Date(date).toLocaleString('ar-LY', options);
-      }
-      
-      // إضافة رسالة
-      function addMessageToChat(msg) {
-        const container = document.querySelector('.message-container');
-        if (!container) {
-          console.error('لا توجد حاوية للرسائل!');
-          return;
-        }
-        
-        console.log('إضافة رسالة جديدة:', msg);
-        
-        // تفادي الإضافة المكررة
-        if (msg._id && !msg._id.startsWith('temp-')) {
-          const existEl = document.querySelector(`.message[data-message-id="${msg._id}"]`);
-          if (existEl) {
-            console.log('الرسالة موجودة، لن نضيفها ثانية:', msg._id);
-            return;
-          }
-        }
-        
-        // إنشاء العنصر
-        const msgEl = document.createElement('div');
-        msgEl.className = `message ${msg.direction}`;
-        msgEl.setAttribute('data-message-id', msg._id || '');
-        if (msg.externalMessageId) {
-          msgEl.setAttribute('data-external-id', msg.externalMessageId);
-        }
-        msgEl.setAttribute('data-status', msg.status || 'sent');
-        
-        // فقاعة
-        const bubble = document.createElement('div');
-        bubble.className = `message-bubble ${msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
-        bubble.textContent = msg.content;
-        
-        // عنصر الوقت
-        const timeEl = document.createElement('div');
-        timeEl.className = 'message-time';
-        
-        // إن كانت رسالة صادرة, نعرض أيقونة الحالة
-        if (msg.direction === 'outgoing') {
-          const statusSpan = document.createElement('span');
-          statusSpan.className = 'message-status';
-          
-          // حدد الأيقونة
-          let statusIcon = '';
-          let statusClass = '';
-          let statusTitle = '';
-          
-          let st = msg.status;
-          if (st === 'sending') {
-            statusIcon = 'clock'; statusClass = 'text-secondary'; statusTitle = 'جاري الإرسال...';
-          } else if (st === 'sent') {
-            statusIcon = 'check'; statusClass = 'text-info'; statusTitle = 'تم الإرسال';
-          } else if (st === 'delivered') {
-            statusIcon = 'check-double'; statusClass = 'text-primary'; statusTitle = 'تم التسليم';
-          } else if (st === 'read') {
-            statusIcon = 'check-double'; statusClass = 'text-success'; statusTitle = 'تم القراءة';
-          } else if (st === 'failed') {
-            statusIcon = 'exclamation-triangle'; statusClass = 'text-danger'; statusTitle = 'فشل الإرسال';
-          }
-          
-          if (statusIcon) {
-            const iconEl = document.createElement('i');
-            iconEl.className = `fas fa-${statusIcon} ${statusClass}`;
-            iconEl.title = statusTitle;
-            statusSpan.appendChild(iconEl);
-            timeEl.appendChild(statusSpan);
-          }
-        }
-        
-        // نص الوقت
-        const timeText = document.createElement('span');
-        timeText.textContent = formatDate(msg.timestamp);
-        timeEl.appendChild(timeText);
-        
-        bubble.appendChild(timeEl);
-        msgEl.appendChild(bubble);
-        
-        container.appendChild(msgEl);
-        
-        // إضافة clear-both
-        const clearEl = document.createElement('div');
-        clearEl.className = 'clear-both';
-        container.appendChild(clearEl);
-        
-        // تمكين التمرير للأسفل
-        container.scrollTop = container.scrollHeight;
-      }
-      
-      // تحديث حالة الرسالة في الواجهة
-      function updateMessageStatus(msgEl, st) {
-        // لو ليست outgoing, لا نعرض الحالة
-        if (!msgEl.classList.contains('outgoing')) return;
-        
-        // ابحث عن العنصر
-        const statusEl = msgEl.querySelector('.message-status');
-        if (!statusEl) return;
-        
-        // افرغ الايقونات
-        statusEl.innerHTML = '';
-        
-        // حدد الحالة
-        let statusIcon = '';
-        let statusClass = '';
-        let statusTitle = '';
-        
-        if (st === 'sending') {
-          statusIcon = 'clock'; statusClass = 'text-secondary'; statusTitle = 'جاري الإرسال...';
-        } else if (st === 'sent') {
-          statusIcon = 'check'; statusClass = 'text-info'; statusTitle = 'تم الإرسال';
-        } else if (st === 'delivered') {
-          statusIcon = 'check-double'; statusClass = 'text-primary'; statusTitle = 'تم التسليم';
-        } else if (st === 'read') {
-          statusIcon = 'check-double'; statusClass = 'text-success'; statusTitle = 'تم القراءة';
-        } else if (st === 'failed') {
-          statusIcon = 'exclamation-triangle'; statusClass = 'text-danger'; statusTitle = 'فشل الإرسال';
-        }
-        
-        if (statusIcon) {
-          const iconEl = document.createElement('i');
-          iconEl.className = `fas fa-${statusIcon} ${statusClass}`;
-          iconEl.title = statusTitle;
-          statusEl.appendChild(iconEl);
-        }
-        
-        msgEl.setAttribute('data-status', st);
-      }
-      
-      // إرسال الرد Ajax
       const replyForm = document.getElementById('replyForm');
-      if (replyForm) {
-        replyForm.addEventListener('submit', function(e) {
-          e.preventDefault();
-          
-          const msgInput = document.getElementById('replyMessage');
-          const content = msgInput.value.trim();
-          if (!content) return alert('يرجى إدخال نص الرسالة');
-          
-          const submitBtn = replyForm.querySelector('button[type="submit"]');
-          const oldHtml = submitBtn.innerHTML;
-          submitBtn.disabled = true;
-          submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
-          
-          // رسالة مؤقتة
-          const tempId = 'temp-' + Date.now();
-          const tempMsg = {
-            _id: tempId,
-            content,
-            direction: 'outgoing',
-            timestamp: new Date(),
-            status: 'sending'
-          };
-          addMessageToChat(tempMsg);
-          
-          fetch(replyForm.action, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ content })
-          })
-          .then(res => {
-            if (!res.ok) throw new Error('فشل في الإرسال');
-            return res.json();
-          })
-          .then(data => {
-            // إزالة المؤقت
-            const tempEl = document.querySelector(`.message[data-message-id="${tempId}"]`);
-            if (tempEl) {
-              const nxt = tempEl.nextElementSibling;
-              tempEl.remove();
-              if (nxt && nxt.classList.contains('clear-both')) nxt.remove();
-            }
-            
-            if (data.success && data.message) {
-              // توحيد direction لو أتانا inbound/outbound
-              let dir = data.message.direction;
-              if (dir === 'inbound') dir = 'incoming';
-              else if (dir === 'outbound') dir = 'outgoing';
-              
-              // توحيد status
-              let st = data.message.status || 'sent';
-              if (st === 'received') st = 'delivered';
-              if (st === 'pending')  st = 'sending';
-              
-              const finalMsg = {
-                _id: data.message._id,
-                content: data.message.content,
-                direction: dir,
-                timestamp: data.message.timestamp,
-                status: st,
-                externalMessageId: data.message.externalMessageId || ''
-              };
-              addMessageToChat(finalMsg);
-            } else {
-              console.error('خطأ:', data.error || 'مجهول');
-              alert('فشل في إرسال الرسالة');
-            }
-          })
-          .catch(err => {
-            console.error('خطأ أثناء إرسال الرسالة:', err);
-            alert('فشل في إرسال الرسالة');
-          })
-          .finally(() => {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = oldHtml;
-            msgInput.value = '';
-          });
+      const replyMessage = document.getElementById('replyMessage');
+
+      // إرسال الرسالة بالضغط على Enter مع منع السطر الجديد
+      if (replyMessage && replyForm) {
+        replyMessage.addEventListener('keypress', function(e) {
+          // إذا ضغط على Enter مع عدم وجود Shift
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            replyForm.submit();
+          }
         });
-      }
-      
-      // وضع مؤشر المقروئية
-      fetch(`/crm/conversations/<%= conversation._id %>/mark-as-read`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          console.log('تم تحديث حالة القراءة');
-        }
-      })
-      .catch(err => console.error('خطأ في تحديث القراءة:', err));
-      
-      // تمرير لأسفل
-      const container = document.querySelector('.message-container');
-      if (container) {
-        container.scrollTop = container.scrollHeight;
       }
     });
-    
-    // جلب الموظفين
-    function loadSupportUsers() {
-      const sel = document.getElementById('assignedTo');
-      if (!sel) return;
-      sel.innerHTML = '';
-      
-      const unassign = document.createElement('option');
-      unassign.value = '';
-      unassign.textContent = '-- إلغاء الإسناد --';
-      sel.appendChild(unassign);
-      
-      fetch('/api/users/support')
-        .then(r => r.json())
-        .then(d => {
-          if (d.success && d.users) {
-            d.users.forEach(u => {
-              const op = document.createElement('option');
-              op.value = u._id;
-              op.textContent = u.full_name || u.username;
-              sel.appendChild(op);
-            });
-            const assigned = '<%= conversation.assignedTo ? conversation.assignedTo._id : "" %>';
-            if (assigned) sel.value = assigned;
-          } else {
-            const o = document.createElement('option');
-            o.disabled = true;
-            o.textContent = 'لا يوجد موظفين';
-            sel.appendChild(o);
-          }
-        })
-        .catch(e => console.error(e));
-    }
   </script>
-  
-  <!-- صوت تنبيه للرسائل الواردة -->
+
+  <!-- يمكن تشغيل الصوت عند وصول رسالة incoming -->
   <audio id="messageSound" src="/sounds/new-message.mp3" preload="auto"></audio>
 </body>
 </html>

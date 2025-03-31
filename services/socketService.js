@@ -18,11 +18,10 @@ function initialize(server) {
     }
   });
 
-  // تسجيل التوصيلات الجديدة
   io.on('connection', (socket) => {
     logger.info('socketService', 'اتصال جديد بواسطة Socket.io', { socketId: socket.id });
 
-    // الانضمام إلى غرفة المستخدم
+    // الانضمام لغرفة المستخدم
     socket.on('join-user-room', (userId) => {
       if (userId) {
         socket.join(`user-${userId}`);
@@ -30,7 +29,7 @@ function initialize(server) {
       }
     });
 
-    // الانضمام إلى غرفة المحادثة
+    // الانضمام لغرفة المحادثة
     socket.on('join-conversation', (conversationId) => {
       if (conversationId) {
         socket.join(`conversation-${conversationId}`);
@@ -46,7 +45,6 @@ function initialize(server) {
       }
     });
 
-    // تسجيل قطع الاتصال
     socket.on('disconnect', () => {
       logger.info('socketService', 'انقطع الاتصال', { socketId: socket.id });
     });
@@ -57,33 +55,27 @@ function initialize(server) {
 }
 
 /**
- * إرسال إشعار برسالة جديدة
+ * إرسال إشعار برسالة جديدة إلى غرفة المحادثة
  * @param {String} conversationId - معرف المحادثة
  * @param {Object} message - الرسالة الجديدة
  */
 function notifyNewMessage(conversationId, message) {
   if (!io) {
-    logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-
-  // إرسال الإشعار إلى غرفة المحادثة المحددة
   io.to(`conversation-${conversationId}`).emit('new-message', message);
   logger.info('socketService', 'تم إرسال إشعار برسالة جديدة', { conversationId });
 }
 
 /**
- * إرسال إشعار بتحديث المحادثة (تغير الحالة، الإسناد، الخ)
+ * إرسال إشعار بتحديث المحادثة (مثلاً تغير الحالة أو الإسناد)
  * @param {String} conversationId - معرف المحادثة
  * @param {Object} update - التحديث الجديد
  */
 function notifyConversationUpdate(conversationId, update) {
   if (!io) {
-    logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-
-  // إرسال الإشعار إلى غرفة المحادثة المحددة
   io.to(`conversation-${conversationId}`).emit('conversation-update', update);
   logger.info('socketService', 'تم إرسال إشعار بتحديث المحادثة', { conversationId });
 }
@@ -96,11 +88,8 @@ function notifyConversationUpdate(conversationId, update) {
  */
 function notifyUser(userId, type, data) {
   if (!io) {
-    logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-
-  // إرسال الإشعار إلى غرفة المستخدم المحددة
   io.to(`user-${userId}`).emit('user-notification', { type, data });
   logger.info('socketService', 'تم إرسال إشعار للمستخدم', { userId, type });
 }
@@ -112,10 +101,8 @@ function notifyUser(userId, type, data) {
  */
 function broadcastNotification(type, data) {
   if (!io) {
-    logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-
   io.emit(type, data);
   logger.info('socketService', 'تم إرسال إشعار عام', { type });
 }
@@ -128,15 +115,10 @@ function broadcastNotification(type, data) {
  */
 function emitToRoom(roomName, eventName, data) {
   if (!io) {
-    logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-
   io.to(roomName).emit(eventName, data);
-  logger.info('socketService', 'تم إرسال إشعار إلى غرفة محددة', { 
-    roomName,
-    eventName
-  });
+  logger.info('socketService', 'تم إرسال إشعار إلى غرفة محددة', { roomName, eventName });
 }
 
 module.exports = {

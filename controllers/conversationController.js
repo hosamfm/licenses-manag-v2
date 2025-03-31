@@ -1,660 +1,446 @@
 /**
  * متحكم المحادثات
- * هذا الملف مسؤول عن إدارة عرض وتحديث المحادثات
+ * مسؤول عن إدارة عرض وتحديث المحادثات
  */
 const Conversation = require('../models/Conversation');
 const Contact = require('../models/Contact');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const WhatsappChannel = require('../models/WhatsAppChannel');
+const SemMessage = require('../models/SemMessage'); // إن احتجته
 const User = require('../models/User');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 
 /**
- * عرض قائمة المحادثات
- * يعرض جميع المحادثات المتوفرة مع إمكانية الفلترة حسب الحالة
+ * عرض جميع المحادثات
  */
 exports.listConversations = async (req, res) => {
-    try {
-        // الحصول على معلمات الفلترة من الاستعلام
-        const status = req.query.status || 'all';
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
-        const skip = (page - 1) * limit;
-        
-        // بناء مرشح البحث
-        const filter = {};
-        if (status !== 'all') {
-            filter.status = status;
-        }
-        
-        // الحصول على إجمالي عدد المحادثات
-        const totalConversations = await Conversation.countDocuments(filter);
-        
-        // الحصول على المحادثات مع تاريخ آخر رسالة
-        const conversations = await Conversation.find(filter)
-            .sort({ lastMessageAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .populate('channelId', 'name')
-            .populate('assignedTo', 'username full_name')
-            .lean();
-        
-        // الحصول على آخر رسالة لكل محادثة
-        const conversationsWithLastMessage = await Promise.all(
-            conversations.map(async (conversation) => {
-                try {
-                    // الحصول على آخر رسالة في المحادثة
-                    const lastMessage = await WhatsappMessage.findOne({ 
-                        conversationId: conversation._id 
-                    })
-                    .sort({ timestamp: -1 })
-                    .limit(1)
-                    .lean();
-                    
-                    return {
-                        ...conversation,
-                        lastMessage: lastMessage || null
-                    };
-                } catch (error) {
-                    logger.error('conversationController', 'خطأ في الحصول على آخر رسالة', { 
-                        conversationId: conversation._id,
-                        error: error.message
-                    });
-                    return {
-                        ...conversation,
-                        lastMessage: null
-                    };
-                }
-            })
-        );
-        
-        // حساب معلومات الصفحات
-        const totalPages = Math.ceil(totalConversations / limit);
-        const pagination = {
-            current: page,
-            prev: page > 1 ? page - 1 : null,
-            next: page < totalPages ? page + 1 : null,
-            total: totalPages
-        };
-        
-        // عرض صفحة المحادثات
-        res.render('crm/conversations', {
-            title: 'المحادثات',
-            conversations: conversationsWithLastMessage,
-            pagination,
-            filters: {
-                status,
-                availableStatuses: ['all', 'open', 'assigned', 'closed']
-            },
-            counts: {
-                total: totalConversations,
-                open: await Conversation.countDocuments({ status: 'open' }),
-                assigned: await Conversation.countDocuments({ status: 'assigned' }),
-                closed: await Conversation.countDocuments({ status: 'closed' })
-            },
-            user: req.user,
-            isConversationsPage: true,
-            layout: 'crm/layout',
-            flashMessages: req.flash()
-        });
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في عرض المحادثات', error);
-        req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
-        res.redirect('/');
+  try {
+    const status = req.query.status || 'all';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const filter = {};
+    if (status !== 'all') {
+      filter.status = status;
     }
+
+    const total = await Conversation.countDocuments(filter);
+
+    const conversations = await Conversation.find(filter)
+      .sort({ lastMessageAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('channelId', 'name')
+      .populate('assignedTo', 'username full_name')
+      .lean();
+
+    // إحضار آخر رسالة لكل محادثة
+    const convWithLast = await Promise.all(conversations.map(async (c) => {
+      try {
+        const lastMsg = await WhatsappMessage.findOne({ conversationId: c._id })
+          .sort({ timestamp: -1 })
+          .lean();
+        return { ...c, lastMessage: lastMsg || null };
+      } catch (err) {
+        logger.error('conversationController', 'خطأ في آخر رسالة', { err, convId: c._id });
+        return { ...c, lastMessage: null };
+      }
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+    const pagination = {
+      current: page,
+      prev: page > 1 ? page - 1 : null,
+      next: page < totalPages ? page + 1 : null,
+      total: totalPages
+    };
+
+    res.render('crm/conversations', {
+      title: 'المحادثات',
+      conversations: convWithLast,
+      pagination,
+      filters: {
+        status,
+        availableStatuses: ['all', 'open', 'assigned', 'closed']
+      },
+      counts: {
+        total,
+        open: await Conversation.countDocuments({ status: 'open' }),
+        assigned: await Conversation.countDocuments({ status: 'assigned' }),
+        closed: await Conversation.countDocuments({ status: 'closed' })
+      },
+      user: req.user,
+      layout: 'crm/layout',
+      flashMessages: req.flash()
+    });
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في عرض المحادثات', error);
+    req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
+    res.redirect('/');
+  }
 };
 
 /**
  * عرض المحادثات المسندة للمستخدم الحالي
  */
 exports.listMyConversations = async (req, res) => {
-    try {
-        // التحقق من وجود المستخدم
-        if (!req.user || !req.user._id) {
-            req.flash('error', 'يرجى تسجيل الدخول للوصول إلى المحادثات المسندة إليك');
-            return res.redirect('/crm/conversations');
-        }
-        
-        // الحصول على معلمات الفلترة من الاستعلام
-        const status = req.query.status || 'all';
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
-        const skip = (page - 1) * limit;
-        
-        // بناء مرشح البحث
-        const filter = { assignedTo: req.user._id };
-        if (status !== 'all') {
-            filter.status = status;
-        }
-        
-        // الحصول على إجمالي عدد المحادثات
-        const totalConversations = await Conversation.countDocuments(filter);
-        
-        // الحصول على المحادثات مع تاريخ آخر رسالة
-        const conversations = await Conversation.find(filter)
-            .sort({ lastMessageAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .populate('channelId', 'name')
-            .populate('assignedTo', 'username full_name')
-            .lean();
-        
-        // الحصول على آخر رسالة لكل محادثة
-        const conversationsWithLastMessage = await Promise.all(
-            conversations.map(async (conversation) => {
-                try {
-                    // الحصول على آخر رسالة في المحادثة
-                    const lastMessage = await WhatsappMessage.findOne({ 
-                        conversationId: conversation._id 
-                    })
-                    .sort({ timestamp: -1 })
-                    .limit(1)
-                    .lean();
-                    
-                    return {
-                        ...conversation,
-                        lastMessage: lastMessage || null
-                    };
-                } catch (error) {
-                    logger.error('conversationController', 'خطأ في الحصول على آخر رسالة', { 
-                        conversationId: conversation._id,
-                        error: error.message
-                    });
-                    return {
-                        ...conversation,
-                        lastMessage: null
-                    };
-                }
-            })
-        );
-        
-        // حساب معلومات الصفحات
-        const totalPages = Math.ceil(totalConversations / limit);
-        const pagination = {
-            current: page,
-            prev: page > 1 ? page - 1 : null,
-            next: page < totalPages ? page + 1 : null,
-            total: totalPages
-        };
-        
-        // عرض صفحة المحادثات
-        res.render('crm/conversations', {
-            title: 'محادثاتي',
-            conversations: conversationsWithLastMessage,
-            pagination,
-            filters: {
-                status,
-                availableStatuses: ['all', 'open', 'assigned', 'closed']
-            },
-            counts: {
-                total: totalConversations,
-                open: await Conversation.countDocuments({ status: 'open', assignedTo: req.user._id }),
-                assigned: await Conversation.countDocuments({ status: 'assigned', assignedTo: req.user._id }),
-                closed: await Conversation.countDocuments({ status: 'closed', assignedTo: req.user._id })
-            },
-            isMyConversations: true,
-            user: req.user,
-            layout: 'crm/layout',
-            flashMessages: req.flash()
-        });
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في عرض محادثات المستخدم', error);
-        req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
-        res.redirect('/');
+  try {
+    if (!req.user || !req.user._id) {
+      req.flash('error', 'يرجى تسجيل الدخول أولاً');
+      return res.redirect('/crm/conversations');
     }
+    const status = req.query.status || 'all';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const filter = { assignedTo: req.user._id };
+    if (status !== 'all') filter.status = status;
+
+    const total = await Conversation.countDocuments(filter);
+
+    const conversations = await Conversation.find(filter)
+      .sort({ lastMessageAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('channelId', 'name')
+      .populate('assignedTo', 'username full_name')
+      .lean();
+
+    const convWithLast = await Promise.all(conversations.map(async (c) => {
+      try {
+        const lastMsg = await WhatsappMessage.findOne({ conversationId: c._id })
+          .sort({ timestamp: -1 })
+          .lean();
+        return { ...c, lastMessage: lastMsg || null };
+      } catch (err) {
+        logger.error('conversationController', 'خطأ في آخر رسالة', { err, convId: c._id });
+        return { ...c, lastMessage: null };
+      }
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+    const pagination = {
+      current: page,
+      prev: page > 1 ? page - 1 : null,
+      next: page < totalPages ? page + 1 : null,
+      total: totalPages
+    };
+
+    res.render('crm/conversations', {
+      title: 'محادثاتي',
+      conversations: convWithLast,
+      pagination,
+      filters: {
+        status,
+        availableStatuses: ['all', 'open', 'assigned', 'closed']
+      },
+      counts: {
+        total,
+        open: await Conversation.countDocuments({ status: 'open', assignedTo: req.user._id }),
+        assigned: await Conversation.countDocuments({ status: 'assigned', assignedTo: req.user._id }),
+        closed: await Conversation.countDocuments({ status: 'closed', assignedTo: req.user._id })
+      },
+      user: req.user,
+      layout: 'crm/layout',
+      isMyConversations: true,
+      flashMessages: req.flash()
+    });
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في عرض محادثات المستخدم', error);
+    req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
+    res.redirect('/crm/conversations');
+  }
 };
 
 /**
  * عرض محادثة محددة
  */
 exports.showConversation = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        
-        // جلب المحادثة مع آخر 50 رسالة
-        const conversation = await Conversation.findById(conversationId)
-            .populate('channelId')
-            .populate('assignedTo', 'username full_name')
-            .lean();
-        
-        if (!conversation) {
-            req.flash('error', 'المحادثة غير موجودة');
-            return res.redirect('/crm/conversations');
-        }
+  try {
+    const { conversationId } = req.params;
 
-        // البحث عما إذا كان هناك جهة اتصال مرتبطة برقم الهاتف
-        const Contact = require('../models/Contact');
-        const contact = await Contact.findOne({ phoneNumber: conversation.phoneNumber }).lean();
-        
-        // جلب الرسائل للمحادثة
-        const messages = await WhatsappMessage.find({ conversationId })
-            .sort({ timestamp: -1 })
-            .limit(50)
-            .lean();
-        
-        // عكس ترتيب الرسائل لعرضها من الأقدم للأحدث
-        const sortedMessages = messages.reverse();
-        
-        // عرض صفحة المحادثة
-        res.render('crm/conversation', {
-            title: `محادثة مع ${conversation.customerName || conversation.phoneNumber}`,
-            conversation,
-            messages: sortedMessages,
-            contact,
-            user: req.user,
-            layout: 'crm/layout',
-            flashMessages: req.flash()
-        });
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في عرض المحادثة', error);
-        req.flash('error', 'حدث خطأ أثناء تحميل المحادثة');
-        res.redirect('/crm/conversations');
+    const conversation = await Conversation.findById(conversationId)
+      .populate('channelId')
+      .populate('assignedTo', 'username full_name')
+      .lean();
+
+    if (!conversation) {
+      req.flash('error', 'المحادثة غير موجودة');
+      return res.redirect('/crm/conversations');
     }
+
+    // جلب جهة الاتصال إن وجدت
+    const contact = await Contact.findOne({ phoneNumber: conversation.phoneNumber }).lean();
+
+    // جلب آخر 50 رسالة
+    const msgs = await WhatsappMessage.find({ conversationId })
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .lean();
+
+    const sorted = msgs.reverse(); // الأقدم فالأحدث
+
+    res.render('crm/conversation', {
+      title: `محادثة مع ${conversation.customerName || conversation.phoneNumber}`,
+      conversation,
+      messages: sorted,
+      contact,
+      user: req.user,
+      layout: 'crm/layout',
+      flashMessages: req.flash()
+    });
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في عرض المحادثة', error);
+    req.flash('error', 'حدث خطأ أثناء تحميل المحادثة');
+    res.redirect('/crm/conversations');
+  }
 };
 
 /**
  * إسناد محادثة إلى مستخدم
  */
-const assignConversation = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        const userId = req.body.assignedTo; // تعديل لقراءة الحقل الصحيح من النموذج
-        
-        // التحقق من وجود المحادثة
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation) {
-            req.flash('error', 'المحادثة غير موجودة');
-            return res.redirect('/crm/conversations');
-        }
+exports.assignConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.body.assignedTo; // قراءة حقل إسناد الموظف
 
-        // التحقق من وجود المستخدم المحدد
-        if (userId) {
-            const user = await User.findById(userId);
-            if (!user) {
-                req.flash('error', 'المستخدم غير موجود');
-                return res.redirect(`/crm/conversations/${conversationId}`);
-            }
-        }
-
-        // تحديث المحادثة بالمستخدم المعين
-        conversation.assignedTo = userId || null;
-        conversation.updatedAt = new Date();
-        
-        // تحديث الحالة استناداً إلى وجود مستخدم مُسند
-        if (userId) {
-            conversation.status = 'assigned';
-        } else {
-            conversation.status = 'open';
-        }
-        
-        await conversation.save();
-
-        // إرسال إشعار بتحديث المحادثة
-        socketService.notifyConversationUpdate(conversationId, {
-            type: 'assigned',
-            assignedTo: userId,
-            assignedBy: req.user ? req.user._id : null
-        });
-
-        req.flash('success', userId ? 'تم إسناد المحادثة بنجاح' : 'تم إلغاء إسناد المحادثة بنجاح');
-        res.redirect(`/crm/conversations/${conversationId}`);
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في إسناد المحادثة', error);
-        req.flash('error', 'حدث خطأ أثناء إسناد المحادثة');
-        res.redirect('/crm/conversations');
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      req.flash('error', 'المحادثة غير موجودة');
+      return res.redirect('/crm/conversations');
     }
+
+    // إذا تم اختيار مستخدم معين
+    if (userId) {
+      const user = await User.findById(userId);
+      if (!user) {
+        req.flash('error', 'المستخدم غير موجود');
+        return res.redirect(`/crm/conversations/${conversationId}`);
+      }
+      conversation.assignedTo = userId;
+      conversation.status = 'assigned';
+    } else {
+      // إلغاء الإسناد
+      conversation.assignedTo = null;
+      conversation.status = 'open';
+    }
+
+    conversation.updatedAt = new Date();
+    await conversation.save();
+
+    socketService.notifyConversationUpdate(conversationId, {
+      type: 'assigned',
+      assignedTo: userId || null,
+      changedBy: req.user?._id || null
+    });
+
+    req.flash('success', userId ? 'تم إسناد المحادثة' : 'تم إلغاء إسناد المحادثة');
+    res.redirect(`/crm/conversations/${conversationId}`);
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في إسناد المحادثة', error);
+    req.flash('error', 'حدث خطأ أثناء إسناد المحادثة');
+    res.redirect('/crm/conversations');
+  }
 };
 
 /**
- * إضافة ملاحظة داخلية للمحادثة
+ * إضافة ملاحظة داخلية
  */
-const addInternalNote = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        const { note } = req.body;
+exports.addInternalNote = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const noteContent = req.body.noteContent || '';
 
-        // التحقق من وجود المحادثة
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation) {
-            req.flash('error', 'المحادثة غير موجودة');
-            return res.redirect('/crm/conversations');
-        }
-
-        // التحقق من وجود المحتوى للملاحظة
-        if (!note || note.trim() === '') {
-            req.flash('error', 'يجب إدخال نص الملاحظة');
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        }
-
-        // إنشاء رسالة داخلية جديدة (ملاحظة) من نوع خاص
-        const internalMessage = new WhatsappMessage({
-            conversationId,
-            direction: 'internal',
-            content: note,
-            timestamp: new Date(),
-            sender: req.user._id,
-            isInternalNote: true
-        });
-
-        await internalMessage.save();
-
-        // تحديث وقت آخر تحديث للمحادثة
-        conversation.lastInternalNoteAt = new Date();
-        await conversation.save();
-
-        // إرسال إشعار بإضافة ملاحظة داخلية
-        socketService.notifyConversationUpdate(conversationId, {
-            type: 'note_added',
-            noteId: internalMessage._id,
-            addedBy: req.user._id
-        });
-
-        req.flash('success', 'تمت إضافة الملاحظة بنجاح');
-        res.redirect(`/crm/conversations/${conversationId}`);
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في إضافة ملاحظة داخلية', error);
-        req.flash('error', 'حدث خطأ أثناء إضافة الملاحظة');
-        res.redirect('/crm/conversations');
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      req.flash('error', 'المحادثة غير موجودة');
+      return res.redirect('/crm/conversations');
     }
+
+    if (!noteContent.trim()) {
+      req.flash('error', 'لا يمكن إضافة ملاحظة فارغة');
+      return res.redirect(`/crm/conversations/${conversationId}`);
+    }
+
+    // تنشئ رسالة خاصة بالإدخال الداخلي (يمكنك إضافة حقل isInternalNote=true في النموذج)
+    const noteMsg = new WhatsappMessage({
+      conversationId,
+      direction: 'internal', 
+      content: noteContent,
+      timestamp: new Date(),
+      status: 'note'
+    });
+    await noteMsg.save();
+
+    // يمكنك أيضًا حفظ noteContent في conversation.notes إذا أردت دمجه
+    // أو استخدام آلية أخرى لتخزين الملاحظات
+
+    req.flash('success', 'تمت إضافة الملاحظة بنجاح');
+    res.redirect(`/crm/conversations/${conversationId}`);
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في إضافة ملاحظة', error);
+    req.flash('error', 'حدث خطأ أثناء إضافة الملاحظة');
+    res.redirect('/crm/conversations');
+  }
 };
 
 /**
- * تغيير حالة المحادثة (فتح/إغلاق)
+ * إغلاق/فتح المحادثة
  */
-const toggleConversationStatus = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        const { status } = req.body;
+exports.toggleConversationStatus = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const newStatus = req.url.endsWith('/close') ? 'closed' : 'open';
 
-        // التحقق من صحة الحالة
-        if (status !== 'open' && status !== 'closed') {
-            req.flash('error', 'حالة غير صالحة');
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        }
-
-        // التحقق من وجود المحادثة
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation) {
-            req.flash('error', 'المحادثة غير موجودة');
-            return res.redirect('/crm/conversations');
-        }
-
-        // تحديث حالة المحادثة
-        conversation.status = status;
-        conversation.updatedAt = new Date();
-        
-        // إذا تم إغلاق المحادثة، قم بتسجيل وقت الإغلاق
-        if (status === 'closed') {
-            conversation.closedAt = new Date();
-            conversation.closedBy = req.user._id;
-        } else {
-            // إذا تم إعادة فتح المحادثة، قم بإزالة معلومات الإغلاق
-            conversation.closedAt = null;
-            conversation.closedBy = null;
-        }
-
-        await conversation.save();
-
-        // إرسال إشعار بتغيير حالة المحادثة
-        socketService.notifyConversationUpdate(conversationId, {
-            type: 'status_changed',
-            status: status,
-            changedBy: req.user._id
-        });
-
-        const statusMessage = status === 'open' ? 'تم فتح المحادثة بنجاح' : 'تم إغلاق المحادثة بنجاح';
-        req.flash('success', statusMessage);
-        res.redirect(`/crm/conversations/${conversationId}`);
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في تغيير حالة المحادثة', error);
-        req.flash('error', 'حدث خطأ أثناء تغيير حالة المحادثة');
-        res.redirect('/crm/conversations');
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      req.flash('error', 'المحادثة غير موجودة');
+      return res.redirect('/crm/conversations');
     }
+
+    conversation.status = newStatus;
+    conversation.updatedAt = new Date();
+    if (newStatus === 'closed') {
+      conversation.closedAt = new Date();
+      conversation.closedBy = req.user?._id || null;
+    } else {
+      conversation.closedAt = null;
+      conversation.closedBy = null;
+    }
+    await conversation.save();
+
+    socketService.notifyConversationUpdate(conversationId, {
+      type: 'status_changed',
+      status: newStatus,
+      changedBy: req.user?._id || null
+    });
+
+    req.flash('success', newStatus === 'closed' ? 'تم إغلاق المحادثة' : 'تم فتح المحادثة');
+    res.redirect(`/crm/conversations/${conversationId}`);
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في تغيير حالة المحادثة', error);
+    req.flash('error', 'حدث خطأ أثناء تغيير حالة المحادثة');
+    res.redirect('/crm/conversations');
+  }
 };
 
 /**
- * إرسال رد على المحادثة
+ * إرسال رد على المحادثة (نص عادي)
  */
-const replyToConversation = async (req, res) => {
-    try {
-        // التحقق مما إذا كان الطلب من AJAX أو من نموذج عادي
-        const isAjaxRequest = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
-        
-        const { conversationId } = req.params;
-        const { content } = req.body;
+exports.replyToConversation = async (req, res) => {
+  const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
+  try {
+    const { conversationId } = req.params;
+    const { content } = req.body;
 
-        // التحقق من وجود المحادثة
-        const conversation = await Conversation.findById(conversationId)
-            .populate('channelId');
-        
-        if (!conversation) {
-            if (isAjaxRequest) {
-                return res.json({ success: false, error: 'المحادثة غير موجودة' });
-            }
-            req.flash('error', 'المحادثة غير موجودة');
-            return res.redirect('/crm/conversations');
-        }
-
-        // التحقق من وجود محتوى للرد
-        if (!content || content.trim() === '') {
-            if (isAjaxRequest) {
-                return res.json({ success: false, error: 'يجب إدخال نص الرسالة' });
-            }
-            req.flash('error', 'يجب إدخال نص الرسالة');
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        }
-
-        // استيراد خدمة واتساب الرسمية
-        const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
-
-        // إنشاء رسالة جديدة كرد
-        const message = new WhatsappMessage({
-            conversationId,
-            direction: 'outgoing', // يجب استخدام 'outgoing' وليس 'outbound' حسب النموذج
-            content,
-            timestamp: new Date(),
-            sender: req.user ? req.user._id : null, // التحقق من وجود المستخدم قبل الوصول إلى _id
-            status: 'sent' // استخدام 'sent' بدلاً من 'pending' لأن النموذج لا يدعم 'pending'
-        });
-
-        await message.save();
-
-        // تحديث المحادثة
-        conversation.lastMessageAt = new Date();
-        conversation.lastMessage = content;
-        
-        // إذا كانت المحادثة مغلقة، قم بإعادة فتحها عند الرد
-        if (conversation.status === 'closed') {
-            conversation.status = 'open';
-            conversation.closedAt = null;
-            conversation.closedBy = null;
-        }
-        
-        await conversation.save();
-
-        // إرسال الرسالة فعلياً إلى واتساب باستخدام خدمة الواتساب الرسمية
-        let apiResponse = null;
-        try {
-            // التأكد من تهيئة خدمة الواتساب
-            if (!metaWhatsappService.initialized) {
-                await metaWhatsappService.initialize();
-            }
-
-            // استخراج رقم الهاتف من المحادثة
-            const recipientPhone = conversation.phoneNumber;
-            
-            // الحصول على معرف قناة الواتساب إذا كان متاحاً
-            const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
-            
-            // إرسال الرسالة النصية
-            apiResponse = await metaWhatsappService.sendTextMessage(
-                recipientPhone,
-                content,
-                phoneNumberId
-            );
-
-            // تحديث حالة الرسالة إلى "مرسلة" بعد نجاح الإرسال
-            if (apiResponse && apiResponse.messages && apiResponse.messages.length > 0) {
-                // حفظ معرف الرسالة الخارجي (مهم لتحديث الحالة لاحقاً)
-                message.externalMessageId = apiResponse.messages[0].id;
-                message.status = 'sent';
-                await message.save();
-                
-                logger.info('conversationController', 'تم إرسال الرسالة بنجاح إلى واتساب', {
-                    conversationId,
-                    messageId: message._id,
-                    externalId: apiResponse.messages[0].id
-                });
-            }
-        } catch (apiError) {
-            // تسجيل خطأ الإرسال ولكن الاستمرار في العملية
-            logger.error('conversationController', 'فشل في إرسال الرسالة إلى واتساب API', {
-                error: apiError.message,
-                conversationId,
-                messageId: message._id
-            });
-            
-            // تحديث حالة الرسالة إلى "فشل"
-            message.status = 'failed';
-            await message.save();
-        }
-
-        // إرسال إشعار برسالة جديدة عبر Socket.io
-        socketService.notifyNewMessage(conversationId, {
-            _id: message._id,
-            conversationId,
-            content,
-            direction: 'outgoing', // يجب استخدام 'outgoing' في Socket.io أيضًا للتوافق مع النموذج
-            timestamp: message.timestamp,
-            status: message.status,
-            externalMessageId: message.externalMessageId, // إضافة معرف الرسالة الخارجي
-            sender: req.user ? {
-                _id: req.user._id,
-                username: req.user.username
-            } : { _id: null, username: 'النظام' }
-        });
-
-        // أيضًا قم بإرسال إشعار إلى المستخدم المسند إليه المحادثة إذا كان موجودًا ومختلفًا عن المستخدم الحالي
-        if (req.user && conversation.assignedTo && conversation.assignedTo.toString() !== req.user._id.toString()) {
-            socketService.notifyUser(conversation.assignedTo, 'new_message', {
-                conversationId,
-                messageCount: 1,
-                contactName: conversation.contactName || 'عميل',
-                preview: content.substring(0, 50) + (content.length > 50 ? '...' : '')
-            });
-        }
-
-        // إرجاع استجابة مناسبة بناءً على نوع الطلب (AJAX أو عادي)
-        if (isAjaxRequest) {
-            // إرجاع بيانات الرسالة المرسلة كـ JSON للطلبات من نوع AJAX
-            return res.json({
-                success: true,
-                message: {
-                    _id: message._id,
-                    conversationId,
-                    content,
-                    direction: 'outgoing',
-                    timestamp: message.timestamp,
-                    status: message.status,
-                    apiResponse: apiResponse ? {
-                        messageId: apiResponse.messages ? apiResponse.messages[0]?.id : null
-                    } : null
-                }
-            });
-        } else {
-            // الطريقة التقليدية - إعادة توجيه إلى صفحة المحادثة
-            req.flash('success', 'تم إرسال الرد بنجاح');
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        }
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في إرسال رد على المحادثة', error);
-        
-        // التحقق مما إذا كان الطلب من AJAX
-        const isAjaxRequest = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
-        if (isAjaxRequest) {
-            return res.status(500).json({
-                success: false,
-                error: 'حدث خطأ أثناء إرسال الرد',
-                details: process.env.NODE_ENV === 'development' ? error.message : undefined
-            });
-        }
-        
-        // الطريقة التقليدية - إعادة توجيه مع رسالة خطأ
-        req.flash('error', 'حدث خطأ أثناء إرسال الرد');
-        
-        // في حالة حدوث خطأ، نتأكد من وجود conversationId قبل استخدامه
-        const conversationId = req.params?.conversationId;
-        if (conversationId) {
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        } else {
-            return res.redirect('/crm/conversations');
-        }
+    const conversation = await Conversation.findById(conversationId).populate('channelId');
+    if (!conversation) {
+      if (isAjax) return res.json({ success: false, error: 'المحادثة غير موجودة' });
+      req.flash('error', 'المحادثة غير موجودة');
+      return res.redirect('/crm/conversations');
     }
-};
 
-/**
- * إلغاء إسناد محادثة
- * يزيل المستخدم المسند من المحادثة ويعيدها إلى الحالة المفتوحة
- */
-exports.unassignConversation = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        
-        // التحقق من وجود المحادثة
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation) {
-            req.flash('error', 'المحادثة غير موجودة');
-            return res.redirect('/crm/conversations');
-        }
-        
-        // التحقق من أن المحادثة مسندة بالفعل
-        if (!conversation.assignedTo) {
-            req.flash('error', 'المحادثة غير مسندة حاليًا');
-            return res.redirect(`/crm/conversations/${conversationId}`);
-        }
-        
-        // حفظ معرف المستخدم السابق للإشعارات
-        const previousAssignedUser = conversation.assignedTo;
-        
-        // إلغاء الإسناد وتغيير الحالة إلى مفتوحة
-        conversation.assignedTo = null;
-        conversation.status = 'open';
-        await conversation.save();
-        
-        // تسجيل المعلومات
-        logger.info('conversationController', 'تم إلغاء إسناد المحادثة', {
-            conversationId,
-            previousAssignedUser,
-            by: req.user._id
-        });
-        
-        // إرسال إشعار للمستخدمين عبر Socket.io
-        socketService.emitToAll('conversation_updated', {
-            conversationId: conversation._id,
-            status: conversation.status,
-            assignedTo: null
-        });
-        
-        req.flash('success', 'تم إلغاء إسناد المحادثة بنجاح');
-        
-        // إعادة التوجيه حسب مصدر الطلب
-        const referer = req.get('Referer');
-        if (referer && referer.includes('/conversations/my')) {
-            return res.redirect('/crm/conversations/my');
-        }
-        return res.redirect('/crm/conversations');
-        
-    } catch (error) {
-        logger.error('conversationController', 'خطأ في إلغاء إسناد المحادثة', error);
-        req.flash('error', 'حدث خطأ أثناء إلغاء إسناد المحادثة');
-        return res.redirect('/crm/conversations');
+    if (!content || !content.trim()) {
+      if (isAjax) return res.json({ success: false, error: 'لا يمكن إرسال رسالة فارغة' });
+      req.flash('error', 'لا يمكن إرسال رسالة فارغة');
+      return res.redirect(`/crm/conversations/${conversationId}`);
     }
+
+    // إنشاء رسالة في DB
+    const msg = new WhatsappMessage({
+      conversationId,
+      direction: 'outgoing',
+      content: content.trim(),
+      timestamp: new Date(),
+      sender: req.user?._id || null,
+      status: 'sending'
+    });
+    await msg.save();
+
+    // تحديث آخر رسالة
+    conversation.lastMessageAt = new Date();
+    conversation.lastMessage = content;
+    // إذا كانت المحادثة مغلقة، نفتحها تلقائياً
+    if (conversation.status === 'closed') {
+      conversation.status = 'open';
+      conversation.closedAt = null;
+      conversation.closedBy = null;
+    }
+    await conversation.save();
+
+    // إرسال فعلي للرسالة عبر واجهة WhatsApp (لو كانت متصلة)
+    let externalId = null;
+    let finalStatus = 'sent';
+    try {
+      const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
+      if (!metaWhatsappService.initialized) {
+        await metaWhatsappService.initialize();
+      }
+      const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
+      const apiResponse = await metaWhatsappService.sendTextMessage(
+        conversation.phoneNumber,
+        content,
+        phoneNumberId
+      );
+      if (apiResponse?.messages?.length > 0) {
+        externalId = apiResponse.messages[0].id;
+      }
+      // نعتبر الحالة sent حالياً
+    } catch (err) {
+      logger.error('conversationController', 'فشل إرسال عبر WhatsApp API', err);
+      finalStatus = 'failed';
+    }
+
+    msg.externalMessageId = externalId;
+    msg.status = finalStatus;
+    await msg.save();
+
+    // إشعار Socket.io
+    socketService.notifyNewMessage(conversationId, {
+      _id: msg._id,
+      conversationId,
+      content,
+      direction: 'outgoing',
+      timestamp: msg.timestamp,
+      status: msg.status,
+      externalMessageId: externalId || null
+    });
+
+    // إذا كان هناك مستخدم مسند غير المرسل
+    if (conversation.assignedTo && req.user && conversation.assignedTo.toString() !== req.user._id.toString()) {
+      socketService.notifyUser(conversation.assignedTo, 'new_message', {
+        conversationId,
+        messageCount: 1,
+        preview: content.substring(0, 80),
+      });
+    }
+
+    if (isAjax) {
+      return res.json({
+        success: true,
+        message: {
+          _id: msg._id,
+          conversationId,
+          content,
+          direction: 'outgoing',
+          timestamp: msg.timestamp,
+          status: msg.status,
+          externalMessageId: msg.externalMessageId || null
+        }
+      });
+    } else {
+      req.flash('success', 'تم إرسال الرسالة');
+      return res.redirect(`/crm/conversations/${conversationId}`);
+    }
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في إرسال رد', error);
+    if (isAjax) {
+      return res.json({ success: false, error: 'حدث خطأ أثناء الإرسال' });
+    }
+    req.flash('error', 'حدث خطأ أثناء الإرسال');
+    res.redirect(`/crm/conversations/${req.params.conversationId || ''}`);
+  }
 };
-
-exports.assignConversation = assignConversation;
-exports.addInternalNote = addInternalNote;
-exports.toggleConversationStatus = toggleConversationStatus;
-exports.replyToConversation = replyToConversation;
-
-module.exports = exports;
