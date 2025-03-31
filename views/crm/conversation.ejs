@@ -555,8 +555,18 @@
             console.log('استلام رسالة جديدة:', message);
             
             // إضافة الرسالة الجديدة إذا كانت لهذه المحادثة
-            if (message.conversationId === '<%= conversation._id %>') {
-              addMessageToChat(message);
+            if (message && message.conversationId === '<%= conversation._id %>') {
+              // معالجة هيكل البيانات القادمة من Socket.io لتتوافق مع هيكل دالة إضافة الرسائل
+              const formattedMessage = {
+                content: message.content || '',
+                direction: message.direction || 'inbound',
+                timestamp: message.createdAt || message.timestamp || new Date(),
+                mediaUrl: message.mediaUrl || '',
+                mediaType: message.mediaType || null
+              };
+              
+              // إضافة الرسالة إلى واجهة المحادثة
+              addMessageToChat(formattedMessage);
               showAlert('تم استلام رسالة جديدة', 'info');
             }
           });
@@ -659,7 +669,12 @@
       // إضافة رسالة إلى المحادثة
       function addMessageToChat(message) {
         const messagesContainer = document.querySelector('.message-container');
-        if (!messagesContainer) return;
+        if (!messagesContainer) {
+          console.error('لم يتم العثور على حاوية الرسائل في الصفحة!');
+          return;
+        }
+        
+        console.log('إضافة رسالة جديدة للمحادثة:', message);
         
         // إنشاء عنصر الرسالة الجديدة
         const messageElement = document.createElement('div');
@@ -667,12 +682,18 @@
         
         messageElement.className = `message ${isOutbound ? 'message-outbound' : 'message-inbound'}`;
         
+        // التحقق من وجود محتوى الرسالة
+        const messageContent = message.content || 'محتوى غير متوفر';
+        
+        // التحقق من وجود وقت الرسالة وتنسيقه
+        const messageTime = message.timestamp ? formatDate(new Date(message.timestamp)) : formatDate(new Date());
+        
         // تهيئة محتوى الرسالة
         messageElement.innerHTML = `
           <div class="message-bubble">
-            ${message.content}
+            ${messageContent}
             <div class="message-time">
-              ${formatDate(new Date(message.timestamp))}
+              ${messageTime}
             </div>
           </div>
         `;
