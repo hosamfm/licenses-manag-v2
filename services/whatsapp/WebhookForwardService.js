@@ -102,37 +102,45 @@ class WebhookForwardService {
                 headers: JSON.stringify(headers, null, 2)
             });
             
-            // تمرير جميع الترويسات المهمة
-            const forwardHeaders = {
-                'Content-Type': headers['content-type'] || 'application/json',
-                'User-Agent': headers['user-agent'] || 'WhatsApp-Proxy-Forwarder',
-            };
+            // إنشاء نسخة من الترويسات التي يرسلها ميتا بالضبط
+            // نحن نحتاج إلى تمرير الترويسات بالضبط كما يستلمها خادمنا من ميتا
+            const forwardHeaders = {};
             
-            // إضافة توقيعات الويب هوك
-            if (headers['x-hub-signature']) {
-                forwardHeaders['X-Hub-Signature'] = headers['x-hub-signature'];
+            // الترويسات الأساسية التي يجب تمريرها
+            const importantHeaders = [
+                'content-type',
+                'content-length',
+                'user-agent',
+                'accept',
+                'accept-encoding',
+                'x-hub-signature',
+                'x-hub-signature-256'
+            ];
+            
+            // نسخ الترويسات المهمة من الطلب الأصلي
+            for (const headerName of importantHeaders) {
+                if (headers[headerName]) {
+                    forwardHeaders[headerName] = headers[headerName];
+                }
             }
             
-            if (headers['x-hub-signature-256']) {
-                forwardHeaders['X-Hub-Signature-256'] = headers['x-hub-signature-256'];
-            }
-            
-            // إضافة ترويسات أخرى مهمة قد يتوقعها الخادم المستهدف
-            if (headers['accept']) forwardHeaders['Accept'] = headers['accept'];
-            if (headers['accept-encoding']) forwardHeaders['Accept-Encoding'] = headers['accept-encoding'];
-            if (headers['accept-language']) forwardHeaders['Accept-Language'] = headers['accept-language'];
-            if (headers['origin']) forwardHeaders['Origin'] = headers['origin'];
-            if (headers['referer']) forwardHeaders['Referer'] = headers['referer'];
-            
-            // إضافة ترويسات خاصة بواتساب
+            // إضافة جميع ترويسات X-FB و X-WhatsApp
             for (const key in headers) {
-                if (key.toLowerCase().startsWith('x-fb') || key.toLowerCase().startsWith('x-whatsapp')) {
+                if (key.toLowerCase().startsWith('x-fb') || 
+                    key.toLowerCase().startsWith('x-whatsapp') || 
+                    key.toLowerCase().includes('hub')) {
                     forwardHeaders[key] = headers[key];
                 }
             }
             
-            // إضافة معرف الطلب في الترويسات
+            // إضافة معرف الطلب للتتبع
             forwardHeaders['X-Request-ID'] = requestId;
+            
+            // تسجيل الترويسات النهائية للتشخيص
+            logger.debug('WebhookForwardService', 'الترويسات النهائية للتمرير', {
+                requestId,
+                headers: JSON.stringify(forwardHeaders, null, 2)
+            });
             
             // محاولة إرسال الطلب مع إعادة المحاولة عند الفشل
             let retryCount = 0;
@@ -140,11 +148,19 @@ class WebhookForwardService {
             
             while (retryCount <= this.maxRetries) {
                 try {
-                    // إرسال الطلب إلى الخدمة المستهدفة بنفس المحتوى تماماً
+                    // نحن بحاجة إلى إرسال البيانات كما هي تماماً - بدون أي تحويل
+                    // تحويل الجسم إلى سلسلة نصية إذا كان كائناً، ثم إرساله كما هو
+                    const rawBody = typeof body === 'object' ? JSON.stringify(body) : body;
+                    
+                    // إرسال الطلب إلى الخدمة المستهدفة بالضبط كما استلمناه
                     const response = await this.httpClient.post(
                         this.targetWebhookUrl,
-                        body,
-                        { headers: forwardHeaders }
+                        rawBody,
+                        { 
+                            headers: forwardHeaders,
+                            // منع Axios من معالجة البيانات - إرسال البيانات كما هي تماماً
+                            transformRequest: [(data) => data]
+                        }
                     );
                     
                     logger.info('WebhookForwardService', 'تم تمرير الويب هوك بنجاح', {
