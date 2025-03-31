@@ -14,7 +14,7 @@ const whatsappMessageSchema = new mongoose.Schema({
   },
   direction: { 
     type: String, 
-    enum: ['incoming', 'outgoing'], 
+    enum: ['incoming', 'outgoing', 'internal'], 
     required: true 
   },
   content: { 
@@ -34,7 +34,7 @@ const whatsappMessageSchema = new mongoose.Schema({
   },
   status: { 
     type: String, 
-    enum: ['sent', 'delivered', 'read', 'failed', 'received'], 
+    enum: ['sent', 'delivered', 'read', 'failed', 'received', 'note'], 
     default: 'sent' 
   },
   readAt: {
