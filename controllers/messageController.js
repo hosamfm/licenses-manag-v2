@@ -403,7 +403,7 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
       channels.push('sms');
     } else if (preferredChannel === 'whatsapp' && canSendWhatsapp) {
       channels.push('whatsapp');
-    } else if (preferredChannel === 'metaWhatsapp' && canSendMetaWhatsapp) {
+    } else if ((preferredChannel === 'metaWhatsapp' || preferredChannel === 'metawhatsapp') && canSendMetaWhatsapp) {
       channels.push('metaWhatsapp');
     }
     
@@ -426,8 +426,17 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
       }
     }
     
+    // التحقق إذا كان هناك قناة مفضلة وأكثر من قناة متاحة
+    const hasPreferredChannel = preferredChannel && preferredChannel !== 'none';
+    const hasMultipleChannels = channels.length > 1;
+    
     // محاولة الإرسال عبر القنوات المتاحة بالترتيب
-    for (const channel of channels) {
+    let currentIndex = 0;
+    let sentMessage = null;
+    let sentViaPreferredChannel = false;
+    
+    while (currentIndex < channels.length) {
+      const channel = channels[currentIndex];
       logger.info('processChannelFallback', `محاولة الإرسال عبر قناة ${channel}`);
       
       if (channel === 'sms') {
@@ -436,6 +445,11 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
         if (smsResult) {
           smsSent = true;
           logger.info('processChannelFallback', 'تم إرسال رسالة SMS بنجاح');
+          
+          // إذا كانت قناة SMS هي المفضلة، نعتبر أننا أرسلنا عبر القناة المفضلة
+          if (preferredChannel === 'sms') {
+            sentViaPreferredChannel = true;
+          }
           break;
         }
       } else if (channel === 'whatsapp') {
@@ -444,6 +458,17 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
         if (whatsappResult.success) {
           whatsappSent = true;
           logger.info('processChannelFallback', 'تم إرسال رسالة واتساب بنجاح');
+          sentMessage = whatsappResult.messageId;
+          
+          // إذا كانت قناة واتساب هي المفضلة، نعتبر أننا أرسلنا عبر القناة المفضلة
+          if (preferredChannel === 'whatsapp') {
+            sentViaPreferredChannel = true;
+          }
+          
+          // في حالة وجود قناة مفضلة والإرسال عبر القناة المفضلة، نقوم بجدولة التحقق من الحالة
+          if (hasPreferredChannel && hasMultipleChannels && sentViaPreferredChannel) {
+            waitForMessageStatusAndFallback(whatsappResult.messageId, client, formattedPhone, msgContent, channels, currentIndex + 1, smsConfig, whatsappConfig);
+          }
           break;
         }
       } else if (channel === 'metaWhatsapp') {
@@ -452,8 +477,26 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
         if (metaWhatsappResult.success) {
           metaWhatsappSent = true;
           logger.info('processChannelFallback', 'تم إرسال رسالة واتساب ميتا الرسمي بنجاح');
+          sentMessage = metaWhatsappResult.messageId;
+          
+          // إذا كانت قناة ميتا واتساب هي المفضلة، نعتبر أننا أرسلنا عبر القناة المفضلة
+          if (preferredChannel === 'metaWhatsapp' || preferredChannel === 'metawhatsapp') {
+            sentViaPreferredChannel = true;
+          }
+          
+          // في حالة وجود قناة مفضلة والإرسال عبر القناة المفضلة، نقوم بجدولة التحقق من الحالة
+          if (hasPreferredChannel && hasMultipleChannels && sentViaPreferredChannel) {
+            waitForMessageStatusAndFallback(metaWhatsappResult.messageId, client, formattedPhone, msgContent, channels, currentIndex + 1, smsConfig, whatsappConfig);
+          }
           break;
         }
+      }
+      
+      // إذا لم يكن هناك خيار تفضيل ولدى المستخدم أكثر من قناة، نحاول القنوات الأخرى
+      if (!hasPreferredChannel && hasMultipleChannels) {
+        currentIndex++;
+      } else {
+        break;
       }
     }
     
@@ -473,6 +516,89 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
     }
     return { smsSent, whatsappSent, metaWhatsappSent, error };
   }
+}
+
+/**
+ * التحقق من حالة الرسالة بعد مرور وقت وتنفيذ البدائل إذا فشلت
+ * @param {string} messageId معرف الرسالة
+ * @param {Object} client بيانات العميل
+ * @param {string} formattedPhone رقم الهاتف المنسق
+ * @param {string} msgContent محتوى الرسالة
+ * @param {Array} channels قائمة القنوات المتاحة
+ * @param {number} nextChannelIndex مؤشر القناة التالية
+ * @param {Object} smsConfig إعدادات SMS
+ * @param {Object} whatsappConfig إعدادات واتساب
+ */
+async function waitForMessageStatusAndFallback(messageId, client, formattedPhone, msgContent, channels, nextChannelIndex, smsConfig, whatsappConfig) {
+  logger.debug('waitForMessageStatusAndFallback', 'جدولة التحقق من حالة الرسالة بعد 45 ثانية', { messageId });
+  
+  // انتظار 45 ثانية قبل التحقق من حالة الرسالة
+  setTimeout(async () => {
+    try {
+      // استرجاع الرسالة من قاعدة البيانات
+      const message = await SemMessage.findById(messageId);
+      
+      if (!message) {
+        logger.warn('waitForMessageStatusAndFallback', 'لم يتم العثور على الرسالة', { messageId });
+        return;
+      }
+      
+      logger.debug('waitForMessageStatusAndFallback', 'تم استرجاع حالة الرسالة', { 
+        messageId, 
+        status: message.status,
+        nextChannelIndex
+      });
+      
+      // إذا كانت حالة الرسالة "failed"، نحاول القناة التالية
+      if (message.status === 'failed' && nextChannelIndex < channels.length) {
+        logger.info('waitForMessageStatusAndFallback', 'تم اكتشاف فشل الرسالة، محاولة القناة التالية', {
+          failedMessageId: messageId,
+          nextChannel: channels[nextChannelIndex]
+        });
+        
+        const nextChannel = channels[nextChannelIndex];
+        let result = false;
+        
+        // إرسال الرسالة عبر القناة التالية
+        if (nextChannel === 'sms') {
+          result = await sendSmsAndUpdate(null, client, formattedPhone, msgContent, smsConfig);
+          if (result) {
+            logger.info('waitForMessageStatusAndFallback', 'تم إرسال رسالة SMS بعد فشل القناة السابقة');
+          }
+        } else if (nextChannel === 'whatsapp') {
+          const whatsappResult = await sendWhatsappAndUpdate(null, client, formattedPhone, msgContent, whatsappConfig, true);
+          result = whatsappResult.success;
+          if (result) {
+            logger.info('waitForMessageStatusAndFallback', 'تم إرسال رسالة واتساب بعد فشل القناة السابقة');
+          }
+        } else if (nextChannel === 'metaWhatsapp') {
+          const metaWhatsappResult = await sendMetaWhatsappAndUpdate(null, client, formattedPhone, msgContent, true);
+          result = metaWhatsappResult.success;
+          if (result) {
+            logger.info('waitForMessageStatusAndFallback', 'تم إرسال رسالة واتساب ميتا بعد فشل القناة السابقة');
+          }
+        }
+        
+        // إذا نجحت الرسالة في القناة البديلة، نحدث رصيد العميل
+        if (result) {
+          const smsSent = nextChannel === 'sms';
+          const whatsappSent = nextChannel === 'whatsapp' || nextChannel === 'metaWhatsapp';
+          await updateClientBalance(client, smsSent, whatsappSent, msgContent);
+        } else {
+          // إذا فشلت القناة البديلة، نحاول القناة التالية
+          if (nextChannelIndex + 1 < channels.length) {
+            waitForMessageStatusAndFallback(messageId, client, formattedPhone, msgContent, channels, nextChannelIndex + 1, smsConfig, whatsappConfig);
+          }
+        }
+      }
+    } catch (error) {
+      logger.error('waitForMessageStatusAndFallback', 'خطأ أثناء التحقق من حالة الرسالة', {
+        error: error.message,
+        stack: error.stack,
+        messageId
+      });
+    }
+  }, 45000); // انتظار 45 ثانية
 }
 
 /*----------------------------------------------------------
