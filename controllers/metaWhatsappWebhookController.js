@@ -4,6 +4,9 @@
 const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const MetaWhatsappWebhookLog = require('../models/MetaWhatsappWebhookLog');
 const SemMessage = require('../models/SemMessage');
+const WhatsAppChannel = require('../models/WhatsAppChannel');
+const Conversation = require('../models/Conversation');
+const WhatsappMessage = require('../models/WhatsappMessage');
 const logger = require('../services/loggerService');
 const crypto = require('crypto');
 
@@ -120,6 +123,14 @@ exports.handleWebhook = async (req, res) => {
                                     await updateMessageStatus(status.id, status.status, new Date(status.timestamp * 1000));
                                 }
                             }
+                            
+                            // معالجة الرسائل الواردة
+                            if (change.field === 'messages' && change.value.messages && change.value.messages.length > 0) {
+                                await handleIncomingMessages(change.value.messages, {
+                                    phone_number_id: entry.messaging_product,
+                                    metadata: change.value.metadata
+                                });
+                            }
                         }
                     }
                 }
@@ -213,5 +224,94 @@ async function updateMessageStatus(messageId, newStatus, timestamp) {
       newStatus
     });
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * معالجة الرسائل الواردة من واتساب
+ * @param {Array} messages - مصفوفة الرسائل الواردة
+ * @param {Object} metadata - البيانات الوصفية للرسائل
+ */
+async function handleIncomingMessages(messages, metadata) {
+  try {
+    // استخراج رقم الهاتف للقناة
+    const phoneNumberId = metadata.phone_number_id;
+    
+    logger.debug('metaWhatsappWebhookController', 'معالجة الرسائل الواردة', {
+      phoneNumberId,
+      messagesCount: messages.length
+    });
+    
+    // الحصول على القناة المرتبطة برقم الهاتف
+    let channel;
+    try {
+      channel = await WhatsAppChannel.getChannelByPhoneNumberId(phoneNumberId);
+      
+      // إذا لم يتم العثور على القناة، إنشاء القناة الافتراضية
+      if (!channel) {
+        channel = await WhatsAppChannel.getDefaultChannel();
+        logger.info('metaWhatsappWebhookController', 'إنشاء قناة افتراضية لعدم وجود قناة مطابقة', {
+          phoneNumberId,
+          defaultChannelId: channel._id
+        });
+      }
+    } catch (error) {
+      logger.error('metaWhatsappWebhookController', 'خطأ في الحصول على القناة', {
+        error: error.message,
+        phoneNumberId
+      });
+      return;
+    }
+    
+    // معالجة كل رسالة واردة
+    for (const message of messages) {
+      try {
+        logger.info('metaWhatsappWebhookController', 'استلام رسالة جديدة', {
+          from: message.from,
+          type: message.type,
+          messageId: message.id,
+          timestamp: new Date(parseInt(message.timestamp) * 1000)
+        });
+        
+        // البحث عن محادثة موجودة أو إنشاء محادثة جديدة
+        let conversation = await Conversation.findOrCreate(message.from, channel._id);
+        
+        // تحديث وقت آخر رسالة وإعادة فتح المحادثة إذا كانت مغلقة
+        conversation.lastMessageAt = new Date();
+        if (conversation.status === 'closed') {
+          await conversation.reopen();
+          logger.info('metaWhatsappWebhookController', 'إعادة فتح محادثة مغلقة', {
+            conversationId: conversation._id,
+            phoneNumber: message.from
+          });
+        } else {
+          await conversation.save();
+        }
+        
+        // حفظ الرسالة
+        const savedMessage = await WhatsappMessage.createIncomingMessage(conversation._id, message);
+        
+        logger.info('metaWhatsappWebhookController', 'تم حفظ رسالة واردة', {
+          messageId: savedMessage._id,
+          externalId: message.id,
+          conversationId: conversation._id
+        });
+        
+        // يمكن إضافة إشعارات Socket.IO هنا لاحقاً
+        
+      } catch (error) {
+        logger.error('metaWhatsappWebhookController', 'خطأ في معالجة رسالة واردة', {
+          error: error.message,
+          stack: error.stack,
+          messageFrom: message.from,
+          messageId: message.id
+        });
+      }
+    }
+  } catch (error) {
+    logger.error('metaWhatsappWebhookController', 'خطأ في معالجة الرسائل الواردة', {
+      error: error.message,
+      stack: error.stack
+    });
   }
 }
