@@ -664,28 +664,32 @@
       
       // إضافة رسالة إلى المحادثة
       function addMessageToChat(message) {
-        const messagesContainer = document.querySelector('.messages-container');
+        const messagesContainer = document.querySelector('.message-container');
         if (!messagesContainer) return;
         
         // إنشاء عنصر الرسالة الجديدة
         const messageElement = document.createElement('div');
         const isOutbound = message.direction === 'outbound';
         
-        messageElement.className = `message ${isOutbound ? 'outbound' : 'inbound'}`;
+        messageElement.className = `message ${isOutbound ? 'message-outbound' : 'message-inbound'}`;
         
         // تهيئة محتوى الرسالة
         messageElement.innerHTML = `
-          <div class="message-content">
-            <div class="message-text">${message.content}</div>
-            <div class="message-meta">
-              <small>${formatDate(new Date(message.timestamp))}</small>
-              ${isOutbound ? `<small class="sender">${message.sender?.username || 'النظام'}</small>` : ''}
+          <div class="message-bubble">
+            ${message.content}
+            <div class="message-time">
+              ${formatDate(new Date(message.timestamp))}
             </div>
           </div>
         `;
         
+        // إضافة فاصل واضح بعد كل رسالة
+        const clearDiv = document.createElement('div');
+        clearDiv.className = 'clear-both';
+        
         // إضافة الرسالة إلى الحاوية
         messagesContainer.appendChild(messageElement);
+        messagesContainer.appendChild(clearDiv);
         
         // التمرير إلى آخر الرسائل
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -758,14 +762,28 @@
       fetch(`/api/conversations/<%= conversation._id %>/mark-as-read`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= csrfToken %>' // إضافة رمز CSRF إذا كان متاحًا
         },
-        credentials: 'include' // إضافة الكوكيز والجلسة مع الطلب
+        credentials: 'same-origin' // استخدام same-origin بدلاً من include للتأكد من إرسال الكوكيز
       })
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          if (response.status === 401) {
+            console.error('خطأ في المصادقة، يرجى تسجيل الدخول مرة أخرى');
+            // يمكن إضافة إعادة توجيه لصفحة تسجيل الدخول هنا
+            return { success: false, error: 'غير مصرح' };
+          } else {
+            throw new Error(`خطأ في الاستجابة: ${response.status}`);
+          }
+        }
+        return response.json();
+      })
       .then(data => {
         if (data.success) {
           console.log('تم تحديث حالة القراءة للمحادثة');
+        } else if (data.error) {
+          console.error('خطأ:', data.error);
         }
       })
       .catch(error => console.error('خطأ في تحديث حالة القراءة:', error));
