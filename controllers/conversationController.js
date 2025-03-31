@@ -538,7 +538,7 @@ const replyToConversation = async (req, res) => {
     } catch (error) {
         logger.error('conversationController', 'خطأ في إرسال رد على المحادثة', error);
         req.flash('error', 'حدث خطأ أثناء إرسال الرد');
-        res.redirect('/crm/conversations');
+        res.redirect(`/crm/conversations/${conversationId}`);
     }
 };
 

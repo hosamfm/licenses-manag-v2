@@ -116,6 +116,11 @@
       display: block;
     }
     
+    .message-status {
+      margin-left: 5px;
+      font-size: 0.8rem;
+    }
+    
     .message-internal-note {
       background-color: #fff3cd;
       border-radius: 8px;
@@ -357,11 +362,23 @@
               <div class="message-container p-3">
                 <% if (messages && messages.length > 0) { %>
                   <% messages.forEach(function(message, index) { %>
+                    <!-- نتأكد من أن الرسائل الواردة تظهر على اليسار والصادرة على اليمين بغض النظر عن توقيت إنشائها -->
                     <div class="message <%= message.direction === 'inbound' ? 'message-inbound' : 'message-outbound' %>">
                       <div class="message-bubble">
                         <%= message.content %>
                         <div class="message-time">
                           <%= new Date(message.timestamp).toLocaleString('ar-LY') %>
+                          <% if (message.status) { %>
+                            <span class="message-status">
+                              <% if (message.status === 'pending') { %>
+                                <i class="fas fa-clock text-warning" title="في انتظار الإرسال"></i>
+                              <% } else if (message.status === 'sent') { %>
+                                <i class="fas fa-check text-success" title="تم الإرسال"></i>
+                              <% } else if (message.status === 'failed') { %>
+                                <i class="fas fa-exclamation-circle text-danger" title="فشل الإرسال"></i>
+                              <% } %>
+                            </span>
+                          <% } %>
                         </div>
                       </div>
                     </div>
@@ -703,6 +720,13 @@
             ${messageContent}
             <div class="message-time">
               ${messageTime}
+              ${message.status ? `
+                <span class="message-status">
+                  ${message.status === 'pending' ? '<i class="fas fa-clock text-warning" title="في انتظار الإرسال"></i>' : ''}
+                  ${message.status === 'sent' ? '<i class="fas fa-check text-success" title="تم الإرسال"></i>' : ''}
+                  ${message.status === 'failed' ? '<i class="fas fa-exclamation-circle text-danger" title="فشل الإرسال"></i>' : ''}
+                </span>
+              ` : ''}
             </div>
           </div>
         `;
