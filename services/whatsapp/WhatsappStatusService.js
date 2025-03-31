@@ -1,9 +1,10 @@
 /**
  * خدمة تحديث حالة رسائل الواتس أب
  */
-const WhatsappMessage = require('../../models/WhatsappMessage');
+const SemMessage = require('../../models/SemMessage');
 const SmsManager = require('../sms/SmsManager');
 const logger = require('../loggerService');
+const WhatsappManager = require('./WhatsappManager');
 
 /**
  * تحديث حالة الرسائل المعلقة
@@ -11,7 +12,7 @@ const logger = require('../loggerService');
 exports.updatePendingMessagesStatus = async () => {
     try {
         // البحث عن الرسائل المعلقة
-        const pendingMessages = await WhatsappMessage.find({ status: 'pending' });
+        const pendingMessages = await SemMessage.find({ status: 'pending' });
         
         if (pendingMessages.length === 0) {
             return {

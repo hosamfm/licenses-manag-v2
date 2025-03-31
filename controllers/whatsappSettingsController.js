@@ -1,8 +1,9 @@
 const WhatsappSettings = require('../models/WhatsappSettings');
+const SemMessage = require('../models/SemMessage');
+const logger = require('../services/loggerService');
+const WhatsappManager = require('../services/whatsapp/WhatsappManager');
 const SmsManager = require('../services/sms/SmsManager');
 const WhatsappStatusService = require('../services/whatsapp/WhatsappStatusService');
-const logger = require('../services/loggerService');
-const WhatsappMessage = require('../models/WhatsappMessage');
 
 /**
  * عرض صفحة إعدادات الواتس أب
@@ -31,10 +32,10 @@ exports.showWhatsappSettings = async (req, res) => {
         }
         
         // تحميل إحصائيات الرسائل
-        const pendingMessagesCount = await WhatsappMessage.countDocuments({ status: 'pending' });
-        const sentMessagesCount = await WhatsappMessage.countDocuments({ status: 'sent' });
-        const deliveredMessagesCount = await WhatsappMessage.countDocuments({ status: 'delivered' });
-        const failedMessagesCount = await WhatsappMessage.countDocuments({ status: 'failed' });
+        const pendingMessagesCount = await SemMessage.countDocuments({ status: 'pending' });
+        const sentMessagesCount = await SemMessage.countDocuments({ status: 'sent' });
+        const deliveredMessagesCount = await SemMessage.countDocuments({ status: 'delivered' });
+        const failedMessagesCount = await SemMessage.countDocuments({ status: 'failed' });
         
         // إنشاء عنوان webhook
         const webhookUrl = `${req.protocol}://${req.get('host')}/api/whatsapp/webhook/status-update`;
@@ -158,14 +159,14 @@ exports.updatePendingMessages = async (req, res) => {
 exports.showWhatsappMonitor = async (req, res) => {
     try {
         // الحصول على إحصائيات الرسائل
-        const pendingCount = await WhatsappMessage.countDocuments({ status: 'pending' });
-        const sentCount = await WhatsappMessage.countDocuments({ status: 'sent' });
-        const deliveredCount = await WhatsappMessage.countDocuments({ status: 'delivered' });
-        const failedCount = await WhatsappMessage.countDocuments({ status: 'failed' });
+        const pendingCount = await SemMessage.countDocuments({ status: 'pending' });
+        const sentCount = await SemMessage.countDocuments({ status: 'sent' });
+        const deliveredCount = await SemMessage.countDocuments({ status: 'delivered' });
+        const failedCount = await SemMessage.countDocuments({ status: 'failed' });
         const totalCount = pendingCount + sentCount + deliveredCount + failedCount;
         
         // الحصول على آخر 10 رسائل
-        const recentMessages = await WhatsappMessage
+        const recentMessages = await SemMessage
             .find()
             .sort({ createdAt: -1 })
             .limit(10)

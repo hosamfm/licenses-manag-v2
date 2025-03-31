@@ -2,10 +2,12 @@
  * مدير خدمة رسائل الواتساب
  * يقوم بتحميل وإدارة مزودي خدمة الواتساب واختيار المزود المناسب بناءً على إعدادات النظام
  */
+const axios = require('axios');
+const qs = require('querystring');
 const logger = require('../loggerService');
+const SemMessage = require('../../models/SemMessage');
 const SemyWhatsappProvider = require('./SemyWhatsappProvider');
 const WhatsappSettings = require('../../models/WhatsappSettings');
-const WhatsappMessage = require('../../models/WhatsappMessage');
 
 class WhatsappManager {
     /**
@@ -92,7 +94,7 @@ class WhatsappManager {
             
             // إنشاء سجل للرسالة في قاعدة البيانات إلا إذا تم طلب تخطي ذلك
             if (!options.skipMessageRecord) {
-                messageRecord = new WhatsappMessage({
+                messageRecord = new SemMessage({
                     clientId: options.clientId || null,
                     phoneNumber,
                     message,
@@ -180,7 +182,7 @@ class WhatsappManager {
             });
 
             // البحث عن الرسالة في قاعدة البيانات - نبحث بأي من المعرفين
-            let messageRecord = await WhatsappMessage.findOne({ 
+            let messageRecord = await SemMessage.findOne({ 
                 $or: [
                     { messageId: messageId },
                     { externalMessageId: messageId }
@@ -281,7 +283,7 @@ class WhatsappManager {
 
         try {
             // البحث عن الرسائل المعلقة أو المرسلة (غير المستلمة أو الفاشلة)
-            const pendingMessages = await WhatsappMessage.find({
+            const pendingMessages = await SemMessage.find({
                 status: { $in: ['pending', 'sent', 'processing'] },
                 messageId: { $ne: null }
             });

@@ -1,8 +1,6 @@
 const mongoose = require('mongoose');
 const SemClient = require('../models/SemClient');
 const SemMessage = require('../models/SemMessage');
-const WhatsappMessage = require('../models/WhatsappMessage');
-const MetaWhatsappMessage = require('../models/MetaWhatsappMessage'); // Added MetaWhatsappMessage
 const logger = require('../services/loggerService');
 const BalanceTransaction = require('../models/BalanceTransaction');
 const SmsManager = require('../services/sms/SmsManager');
@@ -91,49 +89,23 @@ const waitForMessageStatus = async (messageId, messageType = 'any', timeout = 30
   return new Promise((resolve) => {
     const checkStatus = async () => {
       try {
-        // قائمة للبحث المتوازي في كلا الجدولين
-        const searchPromises = [];
-        
-        // البحث في جدول SemMessage إذا كان النوع 'any' أو 'sms'
-        if (messageType === 'any' || messageType === 'sms') {
-          searchPromises.push(
-            SemMessage.findOne({
-              $or: [
-                { _id: messageId },
-                { messageId: messageId },
-                { externalMessageId: messageId }
-              ]
-            }).exec()
-          );
-        }
-        
-        // البحث في جدول WhatsappMessage إذا كان النوع 'any' أو 'whatsapp'
-        if (messageType === 'any' || messageType === 'whatsapp') {
-          searchPromises.push(
-            WhatsappMessage.findOne({
-              $or: [
-                { _id: messageId },
-                { messageId: messageId },
-                { externalMessageId: messageId }
-              ]
-            }).exec()
-          );
-        }
-        
-        // انتظار نتائج البحث من جميع الجداول
-        const results = await Promise.all(searchPromises);
-        
-        // تصفية النتائج للحصول على سجل رسالة واحد موجود
-        const message = results.find(result => result !== null);
+        // البحث في جدول SemMessage فقط لجميع أنواع الرسائل
+        let message = await SemMessage.findOne({
+          $or: [
+            { _id: messageId },
+            { messageId: messageId },
+            { externalMessageId: messageId }
+          ]
+        }).exec();
         
         // إذا لم تكن الرسالة موجودة أو كانت حالتها "فشل"
         if (!message || message.status === 'failed') {
           logger.warn(`الرسالة (${messageId}) غير موجودة أو فشلت`);
-          return resolve({ success: false, status: message?.status || 'unknown', messageType: message ? (message.constructor.modelName === 'WhatsappMessage' ? 'whatsapp' : 'sms') : 'unknown' });
+          return resolve({ success: false, status: message?.status || 'unknown', messageType: 'unknown' });
         }
         
-        // تحديد نوع الرسالة التي تم العثور عليها
-        const foundMessageType = message.constructor.modelName === 'WhatsappMessage' ? 'whatsapp' : 'sms';
+        // تحديد نوع الرسالة من خلال بيانات المزود
+        const foundMessageType = message.providerData?.provider?.includes('whatsapp') ? 'whatsapp' : 'sms';
         
         // إذا تم تسليم الرسالة أو استلامها أو قراءتها
         if (['delivered', 'received', 'read'].includes(message.status)) {
