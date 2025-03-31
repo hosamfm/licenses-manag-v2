@@ -334,26 +334,18 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
       components
     );
     
-    if (message && updateSemMessage) {
-      // تحديث سجل SemMessage إذا كان موجوداً ومطلوباً تحديثه
-      message.status = 'sent';
-      message.sentAt = new Date();
-      message.externalMessageId = result.messages?.[0]?.id || null;
-      message.providerData = {
-        provider: 'metaWhatsapp',
-        lastUpdate: new Date(),
-        rawResponse: result
-      };
-      await message.save();
-    } else if (!message) {
-      // إنشاء سجل MetaWhatsappMessage جديد في حالة عدم وجود SemMessage
+    // تخزين معرف الرسالة الخارجي من Meta
+    const externalMessageId = result.messages?.[0]?.id || null;
+    
+    // تخزين الرسالة دائمًا في جدول MetaWhatsappMessage بغض النظر عن وجود SemMessage
+    if (externalMessageId) {
       const metaWhatsappMessage = new MetaWhatsappMessage({
         clientId: client._id,
         phoneNumber: formattedPhone,
         message: msgContent,
         status: 'sent',
-        messageId: new mongoose.Types.ObjectId().toString(),
-        externalMessageId: result.messages?.[0]?.id || null,
+        messageId: message ? message.messageId : new mongoose.Types.ObjectId().toString(),
+        externalMessageId: externalMessageId,
         template: {
           name: templateName,
           language: templateLanguage
@@ -365,12 +357,33 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
         }
       });
       await metaWhatsappMessage.save();
+      logger.debug('messageController', 'تم حفظ الرسالة في جدول MetaWhatsappMessage', { 
+        messageId: metaWhatsappMessage.messageId,
+        externalMessageId: metaWhatsappMessage.externalMessageId
+      });
+    }
+    
+    // تحديث سجل SemMessage إذا كان موجوداً ومطلوباً تحديثه
+    if (message && updateSemMessage) {
+      message.status = 'sent';
+      message.sentAt = new Date();
+      message.externalMessageId = externalMessageId;
+      message.providerData = {
+        provider: 'metaWhatsapp',
+        lastUpdate: new Date(),
+        rawResponse: result
+      };
+      await message.save();
+      logger.debug('messageController', 'تم تحديث الرسالة في جدول SemMessage', { 
+        messageId: message._id,
+        externalMessageId: message.externalMessageId 
+      });
     }
     
     return {
       success: true,
       messageId: message ? message._id : null,
-      externalMessageId: result.messages?.[0]?.id || null
+      externalMessageId: externalMessageId
     };
   } catch (error) {
     logger.error('messageController', 'خطأ في إرسال رسالة Meta واتساب', {
