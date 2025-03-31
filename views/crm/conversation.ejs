@@ -533,8 +533,13 @@
       let conversationSocket;
       
       try {
-        conversationSocket = io('http://localhost:3001', {
-          withCredentials: false,
+        // الحصول على عنوان الخادم الحالي بدلاً من localhost
+        const socketServer = window.location.hostname === 'localhost' 
+          ? 'http://localhost:3001'  // استخدام localhost في بيئة التطوير
+          : window.location.origin;  // استخدام نفس النطاق الحالي في بيئة الإنتاج
+        
+        conversationSocket = io(socketServer, {
+          withCredentials: true,  // السماح بإرسال الكوكيز للمصادقة
           transports: ['websocket', 'polling']
         });
         

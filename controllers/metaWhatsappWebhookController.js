@@ -8,6 +8,7 @@ const WhatsAppChannel = require('../models/WhatsAppChannel');
 const Conversation = require('../models/Conversation');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const logger = require('../services/loggerService');
+const socketService = require('../services/socketService');
 const crypto = require('crypto');
 
 /**
@@ -297,7 +298,23 @@ async function handleIncomingMessages(messages, metadata) {
           conversationId: conversation._id
         });
         
-        // يمكن إضافة إشعارات Socket.IO هنا لاحقاً
+        // إرسال إشعار بالرسالة الجديدة عبر Socket.io
+        socketService.notifyNewMessage(conversation._id.toString(), {
+          _id: savedMessage._id,
+          content: savedMessage.content,
+          mediaUrl: savedMessage.mediaUrl,
+          mediaType: savedMessage.mediaType,
+          direction: savedMessage.direction,
+          timestamp: savedMessage.timestamp,
+          status: savedMessage.status
+        });
+        
+        // إرسال إشعار بتحديث المحادثة (تاريخ آخر رسالة)
+        socketService.notifyConversationUpdate(conversation._id.toString(), {
+          _id: conversation._id,
+          lastMessageAt: conversation.lastMessageAt,
+          status: conversation.status
+        });
         
       } catch (error) {
         logger.error('metaWhatsappWebhookController', 'خطأ في معالجة رسالة واردة', {
