@@ -405,7 +405,7 @@
           <!-- نموذج الرد -->
           <% if (conversation.status !== 'closed') { %>
             <div class="reply-form">
-              <form action="/crm/conversations/<%= conversation._id %>/reply" method="POST">
+              <form id="replyForm" action="/crm/conversations/<%= conversation._id %>/reply" method="POST">
                 <div class="mb-3">
                   <label for="replyMessage" class="form-label">إرسال رد</label>
                   <textarea class="form-control" id="replyMessage" name="content" rows="3" required placeholder="اكتب رسالتك هنا..."></textarea>
@@ -611,6 +611,24 @@
                 break;
             }
           });
+          
+          // الاستماع لتحديثات حالة الرسائل
+          conversationSocket.on('message_status_update', function(data) {
+            console.log('تحديث حالة الرسالة:', data);
+            
+            // البحث عن الرسالة بمعرف الرسالة الخارجي
+            const messageElements = document.querySelectorAll('.message[data-external-id="' + data.externalMessageId + '"]');
+            
+            if (messageElements.length > 0) {
+              // تحديث كل الرسائل التي تحمل نفس المعرف الخارجي
+              messageElements.forEach(messageElement => {
+                // تحديث حالة الرسالة
+                updateMessageStatus(messageElement, data.status);
+              });
+            } else {
+              console.log('لم يتم العثور على الرسالة المراد تحديثها');
+            }
+          });
         });
         
         // معالجة خطأ الاتصال
@@ -707,6 +725,10 @@
         // إضافة الفئات المناسبة للعنصر
         messageElement.className = `message ${isOutbound ? 'message-outbound' : 'message-inbound'}`;
         messageElement.setAttribute('data-message-id', message._id || '');
+        if (message.externalMessageId) {
+          messageElement.setAttribute('data-external-id', message.externalMessageId);
+        }
+        messageElement.setAttribute('data-status', message.status || 'sent');
         
         // التحقق من وجود محتوى الرسالة
         const messageContent = message.content || 'محتوى غير متوفر';
@@ -720,13 +742,7 @@
             ${messageContent}
             <div class="message-time">
               ${messageTime}
-              ${message.status ? `
-                <span class="message-status">
-                  ${message.status === 'pending' ? '<i class="fas fa-clock text-warning" title="في انتظار الإرسال"></i>' : ''}
-                  ${message.status === 'sent' ? '<i class="fas fa-check text-success" title="تم الإرسال"></i>' : ''}
-                  ${message.status === 'failed' ? '<i class="fas fa-exclamation-circle text-danger" title="فشل الإرسال"></i>' : ''}
-                </span>
-              ` : ''}
+              ${message.direction === 'outgoing' ? '<span class="message-status"></span>' : ''}
             </div>
           </div>
         `;
@@ -748,6 +764,64 @@
         
         // التمرير إلى آخر الرسائل
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        // إذا كانت الرسالة صادرة، قم بتعيين حالتها
+        if (message.direction === 'outgoing') {
+          updateMessageStatus(messageElement, message.status || 'sent');
+        }
+      }
+      
+      // دالة تحديث حالة الرسالة في واجهة المستخدم
+      function updateMessageStatus(messageElement, status) {
+        // التأكد من أن عنصر الرسالة هو للرسائل الصادرة فقط
+        if (!messageElement.classList.contains('outgoing')) {
+          return;
+        }
+        
+        // البحث عن عنصر الحالة داخل عنصر الرسالة
+        const statusElement = messageElement.querySelector('.message-status');
+        if (!statusElement) {
+          return;
+        }
+        
+        // إزالة جميع أيقونات الحالة السابقة
+        statusElement.innerHTML = '';
+        
+        // إضافة أيقونة الحالة المناسبة
+        let statusIcon = '';
+        let statusClass = '';
+        let statusTitle = '';
+        
+        if (status === 'sending') {
+          statusIcon = 'clock';
+          statusClass = 'text-secondary';
+          statusTitle = 'جاري الإرسال...';
+        } else if (status === 'sent') {
+          statusIcon = 'check';
+          statusClass = 'text-info';
+          statusTitle = 'تم الإرسال';
+        } else if (status === 'delivered') {
+          statusIcon = 'check-double';
+          statusClass = 'text-primary';
+          statusTitle = 'تم التسليم';
+        } else if (status === 'read') {
+          statusIcon = 'check-double';
+          statusClass = 'text-success';
+          statusTitle = 'تم القراءة';
+        } else if (status === 'failed') {
+          statusIcon = 'exclamation-triangle';
+          statusClass = 'text-danger';
+          statusTitle = 'فشل الإرسال';
+        }
+        
+        // إضافة أيقونة الحالة الجديدة
+        const iconElement = document.createElement('i');
+        iconElement.className = `fas fa-${statusIcon} ${statusClass}`;
+        iconElement.title = statusTitle;
+        statusElement.appendChild(iconElement);
+        
+        // تحديث بيانات سمة الحالة في عنصر الرسالة
+        messageElement.setAttribute('data-status', status);
       }
       
       // دالة تحديث حالة المحادثة
@@ -795,23 +869,134 @@
       
       // دالة عرض تنبيه
       function showAlert(message, type = 'info') {
-        const alertsContainer = document.getElementById('alerts-container');
-        if (!alertsContainer) return;
+        const alertsContainer = document.getElementById('alerts-container') || document.createElement('div');
+        if (!document.getElementById('alerts-container')) {
+          alertsContainer.id = 'alerts-container';
+          alertsContainer.className = 'position-fixed top-0 start-50 translate-middle-x mt-3 z-index-1050';
+          document.body.appendChild(alertsContainer);
+        }
         
+        const alertId = 'alert-' + new Date().getTime();
         const alert = document.createElement('div');
         alert.className = `alert alert-${type} alert-dismissible fade show`;
+        alert.id = alertId;
         alert.innerHTML = `
           ${message}
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
         
         alertsContainer.appendChild(alert);
-        
         setTimeout(() => {
-          alert.classList.remove('show');
-          setTimeout(() => alert.remove(), 150);
+          const alertElement = document.getElementById(alertId);
+          if (alertElement) {
+            alertElement.classList.remove('show');
+            setTimeout(() => alertElement.remove(), 150);
+          }
         }, 5000);
       }
+      
+      // إرسال نموذج الرد باستخدام AJAX
+      document.addEventListener('DOMContentLoaded', function() {
+        const replyForm = document.getElementById('replyForm');
+        
+        if (replyForm) {
+          replyForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            // الحصول على قيمة الرسالة
+            const messageInput = document.getElementById('replyMessage');
+            const content = messageInput.value.trim();
+            
+            if (!content) {
+              showAlert('يرجى إدخال نص الرسالة', 'warning');
+              return;
+            }
+            
+            // تعطيل زر الإرسال أثناء العملية
+            const submitButton = replyForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+            
+            // إنشاء عنصر الرسالة مؤقتًا في واجهة المستخدم
+            const tempMessage = {
+              _id: 'temp-' + new Date().getTime(),
+              content: content,
+              direction: 'outgoing',
+              timestamp: new Date(),
+              status: 'sending'
+            };
+            
+            // إضافة الرسالة المؤقتة إلى المحادثة
+            addMessageToChat(tempMessage);
+            
+            // إرسال الرسالة إلى الخادم باستخدام fetch API
+            fetch(replyForm.action, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+              },
+              body: JSON.stringify({ content })
+            })
+            .then(response => {
+              if (!response.ok) {
+                throw new Error('حدث خطأ أثناء إرسال الرسالة');
+              }
+              return response.json();
+            })
+            .then(data => {
+              console.log('استجابة الخادم:', data);
+              
+              // إزالة الرسالة المؤقتة
+              const tempMessageElement = document.querySelector(`.message[data-message-id="${tempMessage._id}"]`);
+              if (tempMessageElement) {
+                tempMessageElement.remove();
+                // إزالة العنصر التالي أيضًا (وهو عنصر div.clear-both)
+                const nextElement = tempMessageElement.nextElementSibling;
+                if (nextElement && nextElement.classList.contains('clear-both')) {
+                  nextElement.remove();
+                }
+              }
+              
+              if (data.success) {
+                // إضافة الرسالة الحقيقية بعد استلام الرد من الخادم
+                if (data.message) {
+                  // تنسيق الرسالة بالشكل المطلوب
+                  const formattedMessage = {
+                    _id: data.message._id,
+                    content: data.message.content,
+                    direction: data.message.direction,
+                    timestamp: data.message.timestamp,
+                    status: data.message.status || 'sent'
+                  };
+                  
+                  // إضافة الرسالة المستلمة من الخادم إلى المحادثة
+                  addMessageToChat(formattedMessage);
+                }
+                
+                // عرض رسالة نجاح
+                showAlert('تم إرسال الرسالة بنجاح', 'success');
+              } else {
+                // عرض رسالة خطأ
+                showAlert(data.error || 'حدث خطأ أثناء إرسال الرسالة', 'danger');
+              }
+            })
+            .catch(error => {
+              console.error('خطأ في إرسال الرسالة:', error);
+              showAlert('فشل في إرسال الرسالة. يرجى المحاولة مرة أخرى.', 'danger');
+            })
+            .finally(() => {
+              // إعادة تفعيل زر الإرسال
+              submitButton.disabled = false;
+              submitButton.innerHTML = originalButtonText;
+              
+              // مسح محتوى حقل الرسالة
+              messageInput.value = '';
+            });
+          });
+        }
+      });
       
       // مسح شارة الإشعارات لهذه المحادثة عند تحميل الصفحة
       fetch(`/crm/conversations/<%= conversation._id %>/mark-as-read`, {

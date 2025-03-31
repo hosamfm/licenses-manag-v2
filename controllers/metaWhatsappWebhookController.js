@@ -171,48 +171,97 @@ async function updateMessageStatus(messageId, newStatus, timestamp) {
       timestamp
     });
     
+    // تحويل حالات واتساب إلى حالات النظام الداخلي
+    let systemStatus = newStatus;
+    if (newStatus === 'sent') {
+      systemStatus = 'sent';
+    } else if (newStatus === 'delivered') {
+      systemStatus = 'delivered';
+    } else if (newStatus === 'read') {
+      systemStatus = 'read';
+    } else if (newStatus === 'failed') {
+      systemStatus = 'failed';
+    }
+    
+    // البحث عن الرسالة في جدول WhatsappMessage
+    const whatsappMessage = await WhatsappMessage.findOne({ externalMessageId: messageId });
+    let conversationId = null;
+    
+    // تحديث رسالة WhatsappMessage إذا وجدت
+    if (whatsappMessage) {
+      // تخزين معرف المحادثة للاستخدام لاحقًا في إشعارات Socket.io
+      conversationId = whatsappMessage.conversationId;
+      
+      // تحديث الحالة حسب الإشعار
+      whatsappMessage.status = systemStatus;
+      
+      // تسجيل وقت التسليم والقراءة إذا كانت متوفرة
+      if (newStatus === 'delivered' && !whatsappMessage.deliveredAt) {
+        whatsappMessage.deliveredAt = timestamp;
+      } else if (newStatus === 'read' && !whatsappMessage.readAt) {
+        whatsappMessage.readAt = timestamp;
+      }
+      
+      // حفظ التغييرات
+      await whatsappMessage.save();
+      
+      logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في WhatsappMessage', {
+        messageId,
+        status: systemStatus,
+        conversationId
+      });
+      
+      // إرسال إشعار بتحديث حالة الرسالة عبر Socket.io
+      if (conversationId) {
+        socketService.emitToRoom(`conversation-${conversationId}`, 'message_status_update', {
+          externalMessageId: messageId,
+          status: systemStatus,
+          timestamp: new Date()
+        });
+      }
+    }
+    
     // البحث عن الرسالة في جدول SemMessage
-    const message = await SemMessage.findOne({ externalMessageId: messageId });
+    const semMessage = await SemMessage.findOne({ externalMessageId: messageId });
     
     // إذا وجدنا الرسالة في جدول SemMessage، نحدث حالتها
-    if (message) {
+    if (semMessage) {
       // تحديث الحالة حسب الإشعار
-      if (newStatus === 'sent') {
-        message.status = 'sent';
-      } else if (newStatus === 'delivered') {
-        message.status = 'delivered';
-        message.deliveredAt = timestamp;
+      semMessage.status = systemStatus;
+      
+      // تحديث أوقات التسليم والقراءة
+      if (newStatus === 'delivered') {
+        semMessage.deliveredAt = timestamp;
       } else if (newStatus === 'read') {
-        message.status = 'read';
-        message.readAt = timestamp;
-      } else if (newStatus === 'failed') {
-        message.status = 'failed';
+        semMessage.readAt = timestamp;
       }
       
       // تحديث بيانات مزود الخدمة
-      if (!message.providerData) {
-        message.providerData = { provider: 'metaWhatsapp' };
+      if (!semMessage.providerData) {
+        semMessage.providerData = { provider: 'metaWhatsapp' };
       }
       
-      message.providerData.lastUpdate = timestamp;
+      semMessage.providerData.lastUpdate = timestamp;
       
       // إضافة تحديث الحالة إلى سجل التحديثات
-      if (!message.providerData.statusUpdates) {
-        message.providerData.statusUpdates = {};
+      if (!semMessage.providerData.statusUpdates) {
+        semMessage.providerData.statusUpdates = {};
       }
       
-      message.providerData.statusUpdates.status = newStatus;
-      message.providerData.statusUpdates.timestamp = timestamp;
+      semMessage.providerData.statusUpdates.status = newStatus;
+      semMessage.providerData.statusUpdates.timestamp = timestamp;
       
       // حفظ التغييرات
-      await message.save();
+      await semMessage.save();
       
       logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage', {
         messageId,
-        status: newStatus
+        status: systemStatus
       });
-      
-      return { success: true, message };
+    }
+    
+    if (whatsappMessage || semMessage) {
+      return { success: true, whatsappMessage, semMessage, conversationId };
     } else {
       logger.warn('metaWhatsappWebhookController', 'لم يتم العثور على الرسالة في قاعدة البيانات', { messageId });
       return { success: false, error: 'رسالة غير موجودة' };

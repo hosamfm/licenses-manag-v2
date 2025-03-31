@@ -418,6 +418,9 @@ const toggleConversationStatus = async (req, res) => {
  */
 const replyToConversation = async (req, res) => {
     try {
+        // التحقق مما إذا كان الطلب من AJAX أو من نموذج عادي
+        const isAjaxRequest = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
+        
         const { conversationId } = req.params;
         const { content } = req.body;
 
@@ -426,12 +429,18 @@ const replyToConversation = async (req, res) => {
             .populate('channelId');
         
         if (!conversation) {
+            if (isAjaxRequest) {
+                return res.json({ success: false, error: 'المحادثة غير موجودة' });
+            }
             req.flash('error', 'المحادثة غير موجودة');
             return res.redirect('/crm/conversations');
         }
 
         // التحقق من وجود محتوى للرد
         if (!content || content.trim() === '') {
+            if (isAjaxRequest) {
+                return res.json({ success: false, error: 'يجب إدخال نص الرسالة' });
+            }
             req.flash('error', 'يجب إدخال نص الرسالة');
             return res.redirect(`/crm/conversations/${conversationId}`);
         }
@@ -465,6 +474,7 @@ const replyToConversation = async (req, res) => {
         await conversation.save();
 
         // إرسال الرسالة فعلياً إلى واتساب باستخدام خدمة الواتساب الرسمية
+        let apiResponse = null;
         try {
             // التأكد من تهيئة خدمة الواتساب
             if (!metaWhatsappService.initialized) {
@@ -478,22 +488,22 @@ const replyToConversation = async (req, res) => {
             const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
             
             // إرسال الرسالة النصية
-            const response = await metaWhatsappService.sendTextMessage(
+            apiResponse = await metaWhatsappService.sendTextMessage(
                 recipientPhone,
                 content,
                 phoneNumberId
             );
 
             // تحديث حالة الرسالة إلى "مرسلة" بعد نجاح الإرسال
-            if (response && response.messages && response.messages.length > 0) {
+            if (apiResponse && apiResponse.messages && apiResponse.messages.length > 0) {
                 message.status = 'sent';
-                message.externalMessageId = response.messages[0].id;
+                message.externalMessageId = apiResponse.messages[0].id;
                 await message.save();
                 
                 logger.info('conversationController', 'تم إرسال الرسالة بنجاح إلى واتساب', {
                     conversationId,
                     messageId: message._id,
-                    externalId: response.messages[0].id
+                    externalId: apiResponse.messages[0].id
                 });
             }
         } catch (apiError) {
@@ -533,10 +543,42 @@ const replyToConversation = async (req, res) => {
             });
         }
 
-        req.flash('success', 'تم إرسال الرد بنجاح');
-        return res.redirect(`/crm/conversations/${conversationId}`);
+        // إرجاع استجابة مناسبة بناءً على نوع الطلب (AJAX أو عادي)
+        if (isAjaxRequest) {
+            // إرجاع بيانات الرسالة المرسلة كـ JSON للطلبات من نوع AJAX
+            return res.json({
+                success: true,
+                message: {
+                    _id: message._id,
+                    conversationId,
+                    content,
+                    direction: 'outgoing',
+                    timestamp: message.timestamp,
+                    status: message.status,
+                    apiResponse: apiResponse ? {
+                        messageId: apiResponse.messages ? apiResponse.messages[0]?.id : null
+                    } : null
+                }
+            });
+        } else {
+            // الطريقة التقليدية - إعادة توجيه إلى صفحة المحادثة
+            req.flash('success', 'تم إرسال الرد بنجاح');
+            return res.redirect(`/crm/conversations/${conversationId}`);
+        }
     } catch (error) {
         logger.error('conversationController', 'خطأ في إرسال رد على المحادثة', error);
+        
+        // التحقق مما إذا كان الطلب من AJAX
+        const isAjaxRequest = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
+        if (isAjaxRequest) {
+            return res.status(500).json({
+                success: false,
+                error: 'حدث خطأ أثناء إرسال الرد',
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
+        }
+        
+        // الطريقة التقليدية - إعادة توجيه مع رسالة خطأ
         req.flash('error', 'حدث خطأ أثناء إرسال الرد');
         
         // في حالة حدوث خطأ، نتأكد من وجود conversationId قبل استخدامه
