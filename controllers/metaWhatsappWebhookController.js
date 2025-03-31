@@ -6,7 +6,7 @@ const MetaWhatsappWebhookLog = require('../models/MetaWhatsappWebhookLog');
 const SemMessage = require('../models/SemMessage');
 const WhatsAppChannel = require('../models/WhatsAppChannel');
 const Conversation = require('../models/Conversation');
-const WhatsappMessage = require('../models/WhatsappMessage');
+const WhatsappMessage = require('../models/WhatsappMessageModel');
 const logger = require('../services/loggerService');
 const crypto = require('crypto');
 
