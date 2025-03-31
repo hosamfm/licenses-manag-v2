@@ -31,6 +31,12 @@ router.post('/:conversationId/status', ensureCanAccessConversations, conversatio
 // مسار إرسال رد في المحادثة
 router.post('/:conversationId/reply', ensureCanAccessConversations, conversationController.replyToConversation);
 
+// مسار إغلاق المحادثة
+router.post('/:conversationId/close', ensureCanAccessConversations, conversationController.toggleConversationStatus);
+
+// مسار إعادة فتح المحادثة
+router.post('/:conversationId/reopen', ensureCanAccessConversations, conversationController.toggleConversationStatus);
+
 // مسار وضع علامة "مقروء" على محادثة (بدون التحقق من صلاحية الوصول)
 router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
   try {

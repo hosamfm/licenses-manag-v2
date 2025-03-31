@@ -501,6 +501,11 @@
       const sendingIndicator = document.getElementById('sendingIndicator');
       const messageContainer = document.getElementById('messageContainer');
       
+      // طابور الرسائل التي تنتظر الإرسال
+      let messageQueue = [];
+      // هل هناك عملية إرسال جارية
+      let isMessageSending = false;
+      
       // التمرير إلى أخر رسالة عند تحميل الصفحة
       scrollToBottom();
       
@@ -516,63 +521,96 @@
           // إذا ضغط على Enter مع عدم وجود Shift
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            if (!sendButton.disabled) {
-              submitForm();
-            }
+            submitForm();
           }
         });
       }
       
-      // وظيفة لتقديم النموذج وإظهار حالة الإرسال
+      // وظيفة لإضافة رسائل للطابور وبدء معالجتها
       function submitForm() {
         if (replyForm && replyMessage.value.trim() !== '') {
-          // تعطيل زر الإرسال وإظهار مؤشر الإرسال
-          sendButton.disabled = true;
+          // إضافة الرسالة إلى طابور الإرسال
+          const messageContent = replyMessage.value.trim();
+          addMessageToQueue(messageContent);
+          
+          // مسح صندوق الإدخال فوراً
+          replyMessage.value = '';
+          
+          // إظهار مؤشر الإرسال إذا لم يكن مرئياً
           sendingIndicator.style.display = 'flex';
           
-          // إنشاء عنصر رسالة مؤقت للإظهار الفوري
-          const tempMessageContent = replyMessage.value.trim();
-          addTempMessage(tempMessageContent);
-          
-          // إرسال الرسالة باستخدام AJAX بدلاً من إرسال النموذج التقليدي
-          fetch(replyForm.action, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ content: tempMessageContent })
-          })
-          .then(response => response.json())
-          .then(data => {
-            // إعادة تمكين زر الإرسال وإخفاء مؤشر الإرسال
-            sendButton.disabled = false;
-            sendingIndicator.style.display = 'none';
-            
-            // مسح النموذج
-            replyMessage.value = '';
-            
-            // إذا كان هناك خطأ، نعرضه
-            if (!data.success) {
-              alert(data.error || 'حدث خطأ أثناء إرسال الرسالة');
-            }
-            // لا نحتاج لإضافة الرسالة هنا لأن socket.io سيقوم بذلك
-          })
-          .catch(error => {
-            console.error('Error:', error);
-            sendButton.disabled = false;
-            sendingIndicator.style.display = 'none';
-            alert('حدث خطأ أثناء إرسال الرسالة');
-          });
+          // بدء معالجة الطابور إذا لم تكن هناك عملية إرسال جارية
+          if (!isMessageSending) {
+            processQueue();
+          }
         }
       }
       
+      // إضافة رسالة إلى طابور الإرسال وإظهارها مؤقتاً
+      function addMessageToQueue(content) {
+        // إنشاء معرف فريد للرسالة
+        const tempId = 'temp-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+        
+        // إضافة الرسالة إلى الطابور
+        messageQueue.push({
+          id: tempId,
+          content: content
+        });
+        
+        // إظهار الرسالة مؤقتاً في واجهة المستخدم
+        addTempMessage(content, tempId);
+      }
+      
+      // معالجة طابور الرسائل وإرسالها واحدة تلو الأخرى
+      function processQueue() {
+        if (messageQueue.length === 0) {
+          // الطابور فارغ، إيقاف المعالجة
+          isMessageSending = false;
+          sendingIndicator.style.display = 'none';
+          return;
+        }
+        
+        // تعيين علم الإرسال
+        isMessageSending = true;
+        
+        // أخذ الرسالة التالية من طابور الإرسال
+        const nextMessage = messageQueue.shift();
+        
+        // إرسال الرسالة باستخدام AJAX
+        fetch(replyForm.action, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ content: nextMessage.content })
+        })
+        .then(response => response.json())
+        .then(data => {
+          // إذا كان هناك خطأ، نعرضه
+          if (!data.success) {
+            alert(data.error || 'حدث خطأ أثناء إرسال الرسالة');
+          }
+          
+          // معالجة الرسالة التالية في الطابور
+          processQueue();
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('حدث خطأ أثناء إرسال الرسالة');
+          
+          // معالجة الرسالة التالية في الطابور حتى في حالة وجود خطأ
+          processQueue();
+        });
+      }
+      
       // إضافة رسالة مؤقتة إلى حاوية الرسائل
-      function addTempMessage(content) {
+      function addTempMessage(content, tempId) {
         // إنشاء عنصر الرسالة
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message outgoing temp-message';
         messageDiv.setAttribute('data-status', 'sending');
+        messageDiv.setAttribute('data-temp-id', tempId);
         
         // إنشاء فقاعة الرسالة
         const bubbleDiv = document.createElement('div');
