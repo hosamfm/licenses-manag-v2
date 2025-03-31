@@ -534,8 +534,36 @@
           const tempMessageContent = replyMessage.value.trim();
           addTempMessage(tempMessageContent);
           
-          // إرسال النموذج
-          replyForm.submit();
+          // إرسال الرسالة باستخدام AJAX بدلاً من إرسال النموذج التقليدي
+          fetch(replyForm.action, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ content: tempMessageContent })
+          })
+          .then(response => response.json())
+          .then(data => {
+            // إعادة تمكين زر الإرسال وإخفاء مؤشر الإرسال
+            sendButton.disabled = false;
+            sendingIndicator.style.display = 'none';
+            
+            // مسح النموذج
+            replyMessage.value = '';
+            
+            // إذا كان هناك خطأ، نعرضه
+            if (!data.success) {
+              alert(data.error || 'حدث خطأ أثناء إرسال الرسالة');
+            }
+            // لا نحتاج لإضافة الرسالة هنا لأن socket.io سيقوم بذلك
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            sendButton.disabled = false;
+            sendingIndicator.style.display = 'none';
+            alert('حدث خطأ أثناء إرسال الرسالة');
+          });
         }
       }
       

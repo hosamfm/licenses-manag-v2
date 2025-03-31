@@ -229,21 +229,21 @@ exports.assignConversation = async (req, res) => {
     const oldAssignee = conversation.assignedTo;
     conversation.assignedTo = assignedToId;
     conversation.assignedAt = assignedToId ? new Date() : null;
-    conversation.assignedBy = assignedToId ? req.user._id : null;
+    conversation.assignedBy = assignedToId ? (req.user ? req.user._id : null) : null;
     await conversation.save();
 
     // إرسال إشعار بالتحديث عبر Socket.io
     socketService.notifyConversationUpdate(conversationId, {
       type: 'assigned',
       assignedTo: assignedToId,
-      assignedBy: req.user._id
+      assignedBy: req.user ? req.user._id : null
     });
 
     // إذا كان هناك مستخدم مسند سابق مختلف عن المسند الجديد، نرسل له إشعار
     if (oldAssignee && oldAssignee.toString() !== (assignedToId || '')) {
       socketService.notifyUser(oldAssignee, 'conversation_unassigned', {
         conversationId,
-        unassignedBy: req.user.full_name || req.user.username
+        unassignedBy: req.user ? req.user.full_name || req.user.username : 'مستخدم النظام'
       });
     }
 
@@ -251,7 +251,7 @@ exports.assignConversation = async (req, res) => {
     if (assignedToId) {
       socketService.notifyUser(assignedToId, 'conversation_assigned', {
         conversationId,
-        assignedBy: req.user.full_name || req.user.username,
+        assignedBy: req.user ? req.user.full_name || req.user.username : 'مستخدم النظام',
         customerName: conversation.customerName,
         phoneNumber: conversation.phoneNumber
       });
