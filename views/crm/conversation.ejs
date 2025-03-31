@@ -753,22 +753,15 @@
       }
       
       // مسح شارة الإشعارات لهذه المحادثة عند تحميل الصفحة
-      fetch(`/api/conversations/<%= conversation._id %>/mark-as-read`, {
+      fetch(`/crm/conversations/<%= conversation._id %>/mark-as-read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        },
-        credentials: 'same-origin' // استخدام same-origin بدلاً من include للتأكد من إرسال الكوكيز
+        }
       })
       .then(response => {
         if (!response.ok) {
-          if (response.status === 401) {
-            console.error('خطأ في المصادقة، يرجى تسجيل الدخول مرة أخرى');
-            // يمكن إضافة إعادة توجيه لصفحة تسجيل الدخول هنا
-            return { success: false, error: 'غير مصرح' };
-          } else {
-            throw new Error(`خطأ في الاستجابة: ${response.status}`);
-          }
+          throw new Error(`خطأ في الاستجابة: ${response.status}`);
         }
         return response.json();
       })

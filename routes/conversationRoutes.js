@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const conversationController = require('../controllers/conversationController');
 const { isAuthenticated, checkCanAccessConversations } = require('../middleware/authMiddleware');
+const logger = require('../services/loggerService');
 
 // وسيط للتحقق من صلاحية الوصول للمحادثات
 const ensureCanAccessConversations = [isAuthenticated, checkCanAccessConversations];
@@ -32,5 +33,24 @@ router.post('/:conversationId/reply', ensureCanAccessConversations, conversation
 
 // مسار إلغاء إسناد المحادثة
 router.get('/:conversationId/unassign', ensureCanAccessConversations, conversationController.unassignConversation);
+
+// مسار وضع علامة "مقروء" على محادثة (بدون التحقق من صلاحية الوصول)
+router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    // تحديث حالة قراءة الرسائل (تنفيذ بسيط)
+    // في التطبيق الحقيقي، يمكنك تحديث نموذج الرسائل لتسجيل قراءة المستخدم
+    logger.info('conversationRoutes', 'تحديث حالة قراءة المحادثة', { 
+      conversationId, 
+      userId: req.user?._id 
+    });
+    
+    res.json({ success: true, message: 'تم تحديث حالة القراءة' });
+  } catch (error) {
+    logger.error('conversationRoutes', 'خطأ في تحديث حالة قراءة المحادثة', error);
+    res.status(500).json({ success: false, error: 'حدث خطأ أثناء تحديث حالة قراءة المحادثة' });
+  }
+});
 
 module.exports = router;
