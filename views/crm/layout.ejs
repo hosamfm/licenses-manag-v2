@@ -20,9 +20,13 @@
     
     // تهيئة اتصال Socket.io
     try {
-      // تهيئة الاتصال بالخادم على المنفذ 3001
-      socket = io('http://localhost:3001', {
-        withCredentials: false,
+      // استخدام الخادم الحالي بدلاً من عنوان ثابت
+      const socketUrl = window.location.protocol === 'https:' 
+                     ? 'https://' + window.location.hostname 
+                     : 'http://' + window.location.hostname + (window.location.port ? ':' + window.location.port : '');
+      
+      socket = io(socketUrl, {
+        withCredentials: true,
         transports: ['websocket', 'polling']
       });
       
@@ -30,9 +34,10 @@
         console.log('تم الاتصال بنجاح بـ Socket.io');
         
         // انضمام المستخدم إلى غرفته الخاصة إذا كان مسجل دخوله
-        <% if (typeof user !== 'undefined' && user && user._id) { %>
-          socket.emit('join-user-room', '<%= user._id %>');
-        <% } %>
+        const userId = '<%= typeof user !== "undefined" && user && user._id ? user._id : "" %>';
+        if (userId) {
+          socket.emit('join-user-room', userId);
+        }
       });
       
       socket.on('connect_error', function(error) {

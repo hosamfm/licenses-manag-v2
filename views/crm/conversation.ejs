@@ -682,7 +682,7 @@
         // إضافة الرسالة إلى الحاوية
         messagesContainer.appendChild(messageElement);
         
-        // التمرير إلى أسفل لعرض الرسالة الجديدة
+        // التمرير إلى آخر الرسائل
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
       }
       
@@ -754,7 +754,8 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include' // إضافة الكوكيز والجلسة مع الطلب
       })
       .then(response => response.json())
       .then(data => {
