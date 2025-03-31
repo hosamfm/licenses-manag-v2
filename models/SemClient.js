@@ -40,7 +40,7 @@ const semClientSchema = new mongoose.Schema({
     // القناة المفضلة للإرسال
     preferredChannel: {
         type: String,
-        enum: ['none', 'sms', 'whatsapp', 'metaWhatsapp'],
+        enum: ['none', 'sms', 'whatsapp', 'metaWhatsapp', 'metawhatsapp'],
         default: 'none'
     },
     // إعدادات نماذج رسائل Meta WhatsApp
