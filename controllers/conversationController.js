@@ -110,6 +110,12 @@ exports.listConversations = async (req, res) => {
  */
 exports.listMyConversations = async (req, res) => {
     try {
+        // التحقق من وجود المستخدم
+        if (!req.user || !req.user._id) {
+            req.flash('error', 'يرجى تسجيل الدخول للوصول إلى المحادثات المسندة إليك');
+            return res.redirect('/crm/conversations');
+        }
+        
         // الحصول على معلمات الفلترة من الاستعلام
         const status = req.query.status || 'all';
         const page = parseInt(req.query.page) || 1;
