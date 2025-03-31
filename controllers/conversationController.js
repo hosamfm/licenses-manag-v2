@@ -356,7 +356,7 @@ exports.replyToConversation = async (req, res) => {
       content: content.trim(),
       timestamp: new Date(),
       sender: req.user?._id || null,
-      status: 'sending'
+      status: 'sent'
     });
     await msg.save();
 

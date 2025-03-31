@@ -55,6 +55,7 @@
       padding: 15px;
       background-color: #f9f9f9;
       border-radius: 5px;
+      scroll-behavior: smooth;
     }
     .message {
       margin-bottom: 15px;
@@ -74,6 +75,7 @@
       border-radius: 10px;
       position: relative;
       word-wrap: break-word;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
     .incoming-bubble {
       background-color: #e6f2ff;
@@ -116,6 +118,23 @@
     .reply-form {
       padding: 15px;
       border-top: 1px solid #eee;
+      background-color: #fff;
+      border-radius: 0 0 8px 8px;
+    }
+    .sending-indicator {
+      display: none;
+      color: #007bff;
+      align-items: center;
+      margin-right: 10px;
+      font-size: 0.9rem;
+    }
+    .sending-indicator i {
+      margin-left: 5px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
 
     /* تنسيقات النوافذ المنبثقة */
@@ -280,7 +299,7 @@
             </div>
             <div class="card-body p-0">
               <!-- حاوية الرسائل -->
-              <div class="message-container p-3">
+              <div class="message-container p-3" id="messageContainer">
                 <% if (messages && messages.length > 0) { %>
                   <% messages.forEach(function(msg, index) { %>
                     <div class="message <%= msg.direction %>"
@@ -339,9 +358,12 @@
                   <textarea class="form-control" id="replyMessage" name="content"
                             rows="3" required placeholder="اكتب رسالتك... (Enter للإرسال)"></textarea>
                 </div>
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="sending-indicator" id="sendingIndicator">
+                    <i class="fas fa-circle-notch"></i> جاري الإرسال...
+                  </span>
                   <button type="reset" class="btn btn-outline-secondary">مسح</button>
-                  <button type="submit" class="btn btn-primary">
+                  <button type="submit" class="btn btn-primary" id="sendButton">
                     <i class="fas fa-paper-plane me-1"></i> إرسال
                   </button>
                 </div>
@@ -475,6 +497,18 @@
     document.addEventListener('DOMContentLoaded', function() {
       const replyForm = document.getElementById('replyForm');
       const replyMessage = document.getElementById('replyMessage');
+      const sendButton = document.getElementById('sendButton');
+      const sendingIndicator = document.getElementById('sendingIndicator');
+      const messageContainer = document.getElementById('messageContainer');
+      
+      // التمرير إلى أخر رسالة عند تحميل الصفحة
+      scrollToBottom();
+      
+      function scrollToBottom() {
+        if (messageContainer) {
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+      }
 
       // إرسال الرسالة بالضغط على Enter مع منع السطر الجديد
       if (replyMessage && replyForm) {
@@ -482,8 +516,181 @@
           // إذا ضغط على Enter مع عدم وجود Shift
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            replyForm.submit();
+            if (!sendButton.disabled) {
+              submitForm();
+            }
           }
+        });
+      }
+      
+      // وظيفة لتقديم النموذج وإظهار حالة الإرسال
+      function submitForm() {
+        if (replyForm && replyMessage.value.trim() !== '') {
+          // تعطيل زر الإرسال وإظهار مؤشر الإرسال
+          sendButton.disabled = true;
+          sendingIndicator.style.display = 'flex';
+          
+          // إنشاء عنصر رسالة مؤقت للإظهار الفوري
+          const tempMessageContent = replyMessage.value.trim();
+          addTempMessage(tempMessageContent);
+          
+          // إرسال النموذج
+          replyForm.submit();
+        }
+      }
+      
+      // إضافة رسالة مؤقتة إلى حاوية الرسائل
+      function addTempMessage(content) {
+        // إنشاء عنصر الرسالة
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message outgoing temp-message';
+        messageDiv.setAttribute('data-status', 'sending');
+        
+        // إنشاء فقاعة الرسالة
+        const bubbleDiv = document.createElement('div');
+        bubbleDiv.className = 'message-bubble outgoing-bubble';
+        bubbleDiv.textContent = content;
+        
+        // إنشاء وقت الرسالة
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.innerHTML = new Date().toLocaleString('ar-LY') + ' <span class="message-status"><i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i></span>';
+        
+        // إضافة العناصر إلى بعضها
+        bubbleDiv.appendChild(timeDiv);
+        messageDiv.appendChild(bubbleDiv);
+        
+        // إضافة عنصر clear-both
+        const clearDiv = document.createElement('div');
+        clearDiv.className = 'clear-both';
+        
+        // إضافة الرسالة المؤقتة إلى حاوية الرسائل
+        if (messageContainer) {
+          messageContainer.appendChild(messageDiv);
+          messageContainer.appendChild(clearDiv);
+          scrollToBottom();
+        }
+      }
+      
+      // استمع إلى أحداث Socket.io لتحديث الرسائل
+      const socket = io();
+      
+      // عندما يتم تحديث حالة رسالة
+      socket.on('message_status_update', function(data) {
+        // تحديث حالة الرسالة في واجهة المستخدم
+        const messageElements = document.querySelectorAll(`.message[data-external-id="${data.externalId}"]`);
+        messageElements.forEach(element => {
+          element.setAttribute('data-status', data.status);
+          const statusElement = element.querySelector('.message-status');
+          if (statusElement) {
+            updateStatusIcon(statusElement, data.status);
+          }
+        });
+      });
+      
+      // عندما تصل رسالة جديدة
+      socket.on('new_message', function(data) {
+        console.log('رسالة جديدة استلمت:', data);
+        
+        // تشغيل صوت الإشعار إذا كانت الرسالة واردة
+        if (data.direction === 'incoming') {
+          const messageSound = document.getElementById('messageSound');
+          if (messageSound) {
+            messageSound.play().catch(e => console.log('Could not play notification sound', e));
+          }
+          
+          // إضافة الرسالة إلى المحادثة ديناميكياً
+          addIncomingMessage(data);
+        }
+      });
+      
+      // وظيفة إضافة رسالة واردة إلى واجهة المستخدم
+      function addIncomingMessage(messageData) {
+        // التأكد من أن الرسالة ليست مكررة
+        if (document.querySelector(`.message[data-message-id="${messageData._id}"]`)) {
+          console.log('الرسالة موجودة بالفعل:', messageData._id);
+          return;
+        }
+        
+        // إنشاء عنصر الرسالة
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message incoming';
+        messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
+        messageDiv.setAttribute('data-status', messageData.status || 'received');
+        if (messageData.externalMessageId) {
+          messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
+        }
+        
+        // إنشاء فقاعة الرسالة
+        const bubbleDiv = document.createElement('div');
+        bubbleDiv.className = 'message-bubble incoming-bubble';
+        bubbleDiv.textContent = messageData.content;
+        
+        // إنشاء وقت الرسالة
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        const timestamp = messageData.timestamp 
+          ? new Date(messageData.timestamp).toLocaleString('ar-LY')
+          : new Date().toLocaleString('ar-LY');
+        timeDiv.textContent = timestamp;
+        
+        // إضافة العناصر إلى بعضها
+        bubbleDiv.appendChild(timeDiv);
+        messageDiv.appendChild(bubbleDiv);
+        
+        // إضافة عنصر clear-both
+        const clearDiv = document.createElement('div');
+        clearDiv.className = 'clear-both';
+        
+        // إضافة الرسالة إلى حاوية الرسائل
+        if (messageContainer) {
+          messageContainer.appendChild(messageDiv);
+          messageContainer.appendChild(clearDiv);
+          scrollToBottom();
+          
+          // تحديث عداد الرسائل في الواجهة إن وجد
+          const messageCountBadge = document.querySelector('.card-header .badge');
+          if (messageCountBadge) {
+            const currentCount = parseInt(messageCountBadge.textContent.split(' ')[0]) || 0;
+            messageCountBadge.textContent = (currentCount + 1) + ' رسالة';
+          }
+        }
+      }
+      
+      // وظيفة تحديث عنوان المحادثة وعدد الرسائل
+      socket.on('conversation_update', function(data) {
+        console.log('تحديث بيانات المحادثة:', data);
+        // يمكن هنا تحديث معلومات المحادثة مثل الحالة أو المسند إليه
+      });
+      
+      // تحديث أيقونة الحالة
+      function updateStatusIcon(statusElement, status) {
+        let icon = '';
+        switch(status) {
+          case 'sending':
+            icon = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
+            break;
+          case 'sent':
+            icon = '<i class="fas fa-check text-info" title="تم الإرسال"></i>';
+            break;
+          case 'delivered':
+            icon = '<i class="fas fa-check-double text-primary" title="تم التسليم"></i>';
+            break;
+          case 'read':
+            icon = '<i class="fas fa-check-double text-success" title="تم القراءة"></i>';
+            break;
+          case 'failed':
+            icon = '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>';
+            break;
+        }
+        statusElement.innerHTML = icon;
+      }
+      
+      // إرسال النموذج عند النقر على زر الإرسال
+      if (sendButton && replyForm) {
+        sendButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          submitForm();
         });
       }
     });
