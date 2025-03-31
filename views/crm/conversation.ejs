@@ -579,7 +579,7 @@
       socket.emit('join-conversation', '<%= conversation._id %>');
       
       // عندما يتم تحديث حالة رسالة
-      socket.on('message-status-update', function(data) {
+      socket.on('message_status_update', function(data) {
         console.log('تحديث حالة الرسالة:', data);
         // تحديث حالة الرسالة في واجهة المستخدم
         const messageElements = document.querySelectorAll(`.message[data-external-id="${data.externalId}"]`);

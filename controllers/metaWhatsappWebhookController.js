@@ -138,13 +138,8 @@ async function updateMessageStatus(externalId, newStatus, timestamp) {
       if (systemStatus === 'read' && !wMsg.readAt) wMsg.readAt = timestamp;
       await wMsg.save();
 
-      // إشعار socket
-      socketService.emitToRoom(`conversation-${wMsg.conversationId}`, 'message_status_update', {
-        externalMessageId: externalId,
-        messageId: wMsg._id,
-        status: systemStatus,
-        timestamp: new Date()
-      });
+      // إشعار socket - استخدام الطريقة الصحيحة في socketService
+      socketService.notifyMessageStatusUpdate(wMsg.conversationId, externalId, systemStatus);
     } else {
       logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage', { externalId });
     }
