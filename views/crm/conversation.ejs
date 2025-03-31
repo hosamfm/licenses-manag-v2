@@ -636,13 +636,7 @@
               selectElement.appendChild(option);
             }
           })
-          .catch(error => {
-            console.error('خطأ في جلب قائمة الموظفين:', error);
-            const option = document.createElement('option');
-            option.disabled = true;
-            option.textContent = 'حدث خطأ في تحميل الموظفين';
-            selectElement.appendChild(option);
-          });
+          .catch(error => console.error('خطأ في جلب قائمة الموظفين:', error));
       }
       
       // تحميل الموظفين عند فتح نافذة الإسناد
@@ -762,8 +756,7 @@
       fetch(`/api/conversations/<%= conversation._id %>/mark-as-read`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': '<%= csrfToken %>' // إضافة رمز CSRF إذا كان متاحًا
+          'Content-Type': 'application/json'
         },
         credentials: 'same-origin' // استخدام same-origin بدلاً من include للتأكد من إرسال الكوكيز
       })
