@@ -3,6 +3,8 @@
  */
 const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const MetaWhatsappWebhookLog = require('../models/MetaWhatsappWebhookLog');
+const SemMessage = require('../models/SemMessage');
+const MetaWhatsappMessage = require('../models/MetaWhatsappMessage');
 const logger = require('../services/loggerService');
 const crypto = require('crypto');
 
@@ -179,8 +181,8 @@ exports.handleWebhook = async (req, res) => {
                                 statusDetails: JSON.stringify(status)
                             });
                             
-                            // يمكنك التعامل مع تحديث الحالة هنا
-                            // حاليًا نقوم فقط بتسجيلها دون تخزينها في قاعدة البيانات
+                            // تحديث حالة الرسالة في قاعدة البيانات
+                            await updateMessageStatus(status);
                         }
                     }
                 }
@@ -194,3 +196,100 @@ exports.handleWebhook = async (req, res) => {
         });
     }
 };
+
+async function updateMessageStatus(status) {
+    try {
+        const messageId = status.id;
+        const newStatus = status.status;
+        const timestamp = status.timestamp ? new Date(status.timestamp * 1000) : new Date();
+        
+        logger.debug('metaWhatsappWebhookController', 'محاولة تحديث حالة الرسالة', {
+            messageId: messageId,
+            newStatus: newStatus,
+            timestamp: timestamp
+        });
+        
+        // تحويل حالة Meta WhatsApp إلى الحالة المناسبة في نظامنا
+        let systemStatus = newStatus;
+        if (newStatus === 'sent') {
+            systemStatus = 'sent';
+        } else if (newStatus === 'delivered') {
+            systemStatus = 'delivered';
+        } else if (newStatus === 'read') {
+            systemStatus = 'read';
+        } else if (newStatus === 'failed') {
+            systemStatus = 'failed';
+        }
+        
+        // 1. تحديث الرسالة في جدول MetaWhatsappMessage
+        const updateData = { status: systemStatus };
+        
+        // إضافة الحقول الخاصة بالتوقيت حسب نوع التحديث
+        if (newStatus === 'delivered') {
+            updateData.deliveredAt = timestamp;
+        } else if (newStatus === 'read') {
+            updateData.readAt = timestamp;
+        }
+        
+        // تحديث بيانات الرسالة في جدول MetaWhatsappMessage
+        const metaMessage = await MetaWhatsappMessage.findOneAndUpdate(
+            { externalMessageId: messageId },
+            {
+                $set: updateData,
+                $push: {
+                    'providerData.statusUpdates': {
+                        status: newStatus,
+                        timestamp: timestamp,
+                        rawData: status
+                    }
+                }
+            },
+            { new: true }
+        );
+        
+        // 2. تحديث الرسالة في جدول SemMessage
+        const semMessage = await SemMessage.findOneAndUpdate(
+            { externalMessageId: messageId },
+            {
+                $set: {
+                    status: systemStatus,
+                    'providerData.lastUpdate': timestamp,
+                    'providerData.statusUpdates': {
+                        status: newStatus,
+                        timestamp: timestamp
+                    }
+                }
+            },
+            { new: true }
+        );
+        
+        if (metaMessage) {
+            logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في MetaWhatsappMessage', {
+                messageId: messageId,
+                status: systemStatus
+            });
+        }
+        
+        if (semMessage) {
+            logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage', {
+                messageId: messageId,
+                status: systemStatus
+            });
+        }
+        
+        if (!metaMessage && !semMessage) {
+            logger.warn('metaWhatsappWebhookController', 'لم يتم العثور على الرسالة في قاعدة البيانات', {
+                messageId: messageId
+            });
+        }
+        
+        return { metaMessage, semMessage };
+    } catch (error) {
+        logger.error('metaWhatsappWebhookController', 'خطأ في تحديث حالة الرسالة', {
+            messageId: status.id,
+            error: error.message,
+            stack: error.stack
+        });
+        return null;
+    }
+}

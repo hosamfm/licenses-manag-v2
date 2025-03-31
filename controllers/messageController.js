@@ -461,7 +461,7 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
         }
       } else if (channel === 'metaWhatsapp') {
         // محاولة الإرسال عبر واتساب ميتا الرسمي
-        const metaWhatsappResult = await sendMetaWhatsappAndUpdate(null, client, formattedPhone, msgContent, false);
+        const metaWhatsappResult = await sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, true);
         if (metaWhatsappResult.success) {
           metaWhatsappSent = true;
           logger.info('processChannelFallback', 'تم إرسال رسالة واتساب ميتا الرسمي بنجاح');
@@ -661,7 +661,7 @@ exports.sendMessage = async (req, res) => {
               await updateClientBalance(client, false, true, msg);
             }
           } else if (canSendMetaWhatsapp && metaWhatsappInitialized) {
-            const metaResult = await sendMetaWhatsappAndUpdate(null, client, formattedPhone, msg, false);
+            const metaResult = await sendMetaWhatsappAndUpdate(semMessage, client, formattedPhone, msg, true);
             if (metaResult.success) {
               logger.info(`تم إرسال واتساب ميتا الرسمي بنجاح للعميل ${client.name}`);
               await updateClientBalance(client, false, true, msg);
