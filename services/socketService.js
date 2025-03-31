@@ -81,6 +81,20 @@ function notifyConversationUpdate(conversationId, update) {
 }
 
 /**
+ * إرسال إشعار بتحديث حالة الرسالة
+ * @param {String} conversationId - معرف المحادثة
+ * @param {String} externalId - المعرف الخارجي للرسالة
+ * @param {String} status - الحالة الجديدة
+ */
+function notifyMessageStatusUpdate(conversationId, externalId, status) {
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+  io.to(`conversation-${conversationId}`).emit('message-status-update', { externalId, status });
+  logger.info('socketService', 'تم إرسال إشعار بتحديث حالة الرسالة', { conversationId, externalId, status });
+}
+
+/**
  * إرسال إشعار شخصي لمستخدم معين
  * @param {String} userId - معرف المستخدم
  * @param {String} type - نوع الإشعار
@@ -125,6 +139,7 @@ module.exports = {
   initialize,
   notifyNewMessage,
   notifyConversationUpdate,
+  notifyMessageStatusUpdate,
   notifyUser,
   broadcastNotification,
   emitToRoom

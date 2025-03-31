@@ -575,8 +575,12 @@
       // استمع إلى أحداث Socket.io لتحديث الرسائل
       const socket = io();
       
+      // الإنضمام إلى غرفة المحادثة
+      socket.emit('join-conversation', '<%= conversation._id %>');
+      
       // عندما يتم تحديث حالة رسالة
-      socket.on('message_status_update', function(data) {
+      socket.on('message-status-update', function(data) {
+        console.log('تحديث حالة الرسالة:', data);
         // تحديث حالة الرسالة في واجهة المستخدم
         const messageElements = document.querySelectorAll(`.message[data-external-id="${data.externalId}"]`);
         messageElements.forEach(element => {
@@ -589,8 +593,14 @@
       });
       
       // عندما تصل رسالة جديدة
-      socket.on('new_message', function(data) {
+      socket.on('new-message', function(data) {
         console.log('رسالة جديدة استلمت:', data);
+        
+        // تجنب تكرار الرسالة إذا كانت موجودة بالفعل
+        if (document.querySelector(`.message[data-message-id="${data._id}"]`)) {
+          console.log('الرسالة موجودة بالفعل:', data._id);
+          return;
+        }
         
         // تشغيل صوت الإشعار إذا كانت الرسالة واردة
         if (data.direction === 'incoming') {
@@ -600,21 +610,18 @@
           }
           
           // إضافة الرسالة إلى المحادثة ديناميكياً
-          addIncomingMessage(data);
+          addNewMessage(data);
+        } else if (data.direction === 'outgoing') {
+          // تحديث الرسالة المؤقتة إذا كان هناك
+          updateTempMessage(data);
         }
       });
       
-      // وظيفة إضافة رسالة واردة إلى واجهة المستخدم
-      function addIncomingMessage(messageData) {
-        // التأكد من أن الرسالة ليست مكررة
-        if (document.querySelector(`.message[data-message-id="${messageData._id}"]`)) {
-          console.log('الرسالة موجودة بالفعل:', messageData._id);
-          return;
-        }
-        
+      // وظيفة إضافة رسالة جديدة (واردة أو صادرة) إلى واجهة المستخدم
+      function addNewMessage(messageData) {
         // إنشاء عنصر الرسالة
         const messageDiv = document.createElement('div');
-        messageDiv.className = 'message incoming';
+        messageDiv.className = `message ${messageData.direction}`;
         messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
         messageDiv.setAttribute('data-status', messageData.status || 'received');
         if (messageData.externalMessageId) {
@@ -623,7 +630,7 @@
         
         // إنشاء فقاعة الرسالة
         const bubbleDiv = document.createElement('div');
-        bubbleDiv.className = 'message-bubble incoming-bubble';
+        bubbleDiv.className = `message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
         bubbleDiv.textContent = messageData.content;
         
         // إنشاء وقت الرسالة
@@ -632,7 +639,14 @@
         const timestamp = messageData.timestamp 
           ? new Date(messageData.timestamp).toLocaleString('ar-LY')
           : new Date().toLocaleString('ar-LY');
-        timeDiv.textContent = timestamp;
+        
+        if (messageData.direction === 'outgoing') {
+          timeDiv.innerHTML = timestamp + ' <span class="message-status"></span>';
+          const statusElement = timeDiv.querySelector('.message-status');
+          updateStatusIcon(statusElement, messageData.status || 'sent');
+        } else {
+          timeDiv.textContent = timestamp;
+        }
         
         // إضافة العناصر إلى بعضها
         bubbleDiv.appendChild(timeDiv);
@@ -657,10 +671,58 @@
         }
       }
       
+      // وظيفة تحديث الرسالة المؤقتة بالبيانات الحقيقية
+      function updateTempMessage(messageData) {
+        // البحث عن الرسالة المؤقتة (آخر رسالة صادرة)
+        const tempMessages = document.querySelectorAll('.message.outgoing.temp-message');
+        if (tempMessages && tempMessages.length > 0) {
+          const tempMessage = tempMessages[tempMessages.length - 1]; // آخر رسالة مؤقتة
+          
+          // تحديث البيانات
+          tempMessage.setAttribute('data-message-id', messageData._id);
+          tempMessage.setAttribute('data-status', messageData.status);
+          tempMessage.classList.remove('temp-message');
+          
+          if (messageData.externalMessageId) {
+            tempMessage.setAttribute('data-external-id', messageData.externalMessageId);
+          }
+          
+          // تحديث حالة الرسالة
+          const statusElement = tempMessage.querySelector('.message-status');
+          if (statusElement) {
+            updateStatusIcon(statusElement, messageData.status);
+          }
+        } else {
+          // إذا لم توجد رسالة مؤقتة، نضيف الرسالة كجديدة
+          addNewMessage(messageData);
+        }
+      }
+      
       // وظيفة تحديث عنوان المحادثة وعدد الرسائل
-      socket.on('conversation_update', function(data) {
+      socket.on('conversation-update', function(data) {
         console.log('تحديث بيانات المحادثة:', data);
-        // يمكن هنا تحديث معلومات المحادثة مثل الحالة أو المسند إليه
+        
+        // إذا كان التحديث متعلق بالإسناد
+        if (data.type === 'assigned') {
+          // يمكننا تحديث معلومات الإسناد
+          const assignBadge = document.querySelector('.assigned-to-badge');
+          if (assignBadge) {
+            if (data.assignedTo) {
+              // تم الإسناد إلى موظف
+              fetch(`/api/users/${data.assignedTo}/info`)
+                .then(response => response.json())
+                .then(result => {
+                  if (result.success) {
+                    assignBadge.innerHTML = '<i class="fas fa-user-check"></i> ' + (result.user.full_name || result.user.username);
+                    assignBadge.style.display = 'inline-block';
+                  }
+                });
+            } else {
+              // تم إلغاء الإسناد
+              assignBadge.style.display = 'none';
+            }
+          }
+        }
       });
       
       // تحديث أيقونة الحالة
@@ -692,6 +754,47 @@
           e.preventDefault();
           submitForm();
         });
+      }
+      
+      // تحميل المستخدمين في نافذة الإسناد
+      const assignModal = document.getElementById('assignModal');
+      if (assignModal) {
+        assignModal.addEventListener('show.bs.modal', function() {
+          loadSupportUsers();
+        });
+      }
+      
+      // وظيفة جلب قائمة المستخدمين المتاحين للإسناد
+      function loadSupportUsers() {
+        const assignedToSelect = document.getElementById('assignedTo');
+        if (!assignedToSelect) return;
+        
+        // إظهار رسالة تحميل
+        assignedToSelect.innerHTML = '<option value="" disabled selected>جاري التحميل...</option>';
+        
+        // جلب المستخدمين من API
+        fetch('/api/users/support')
+          .then(response => response.json())
+          .then(data => {
+            if (data.success && data.users && data.users.length > 0) {
+              // إضافة خيار لإلغاء الإسناد
+              let options = '<option value="">-- إلغاء الإسناد --</option>';
+              
+              // إضافة المستخدمين للقائمة
+              data.users.forEach(user => {
+                const isSelected = user._id === '<%= conversation.assignedTo ? conversation.assignedTo.toString() : "" %>';
+                options += `<option value="${user._id}" ${isSelected ? 'selected' : ''}>${user.full_name || user.username}</option>`;
+              });
+              
+              assignedToSelect.innerHTML = options;
+            } else {
+              assignedToSelect.innerHTML = '<option value="" disabled selected>لا يوجد موظفين متاحين</option>';
+            }
+          })
+          .catch(error => {
+            console.error('خطأ في جلب المستخدمين:', error);
+            assignedToSelect.innerHTML = '<option value="" disabled selected>حدث خطأ في التحميل</option>';
+          });
       }
     });
   </script>
