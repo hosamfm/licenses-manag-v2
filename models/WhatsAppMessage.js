@@ -161,6 +161,6 @@ whatsappMessageSchema.statics.updateMessageStatus = async function(externalMessa
   }
 };
 
-const WhatsappMessage = mongoose.model('WhatsappMessage', whatsappMessageSchema);
+const WhatsAppMessage = mongoose.model('WhatsAppMessage', whatsappMessageSchema);
 
-module.exports = WhatsappMessage;
+module.exports = WhatsAppMessage;
