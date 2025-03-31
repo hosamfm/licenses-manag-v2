@@ -66,7 +66,7 @@ async function _initializeMetaWhatsappManager() {
       logger.error('messageController', 'لا يمكن العثور على إعدادات Meta الواتساب النشطة');
       return false;
     }
-    const config = settings.getProviderConfig();
+    const config = settings.config;
     const initialized = await MetaWhatsappService.initialize(config);
     if (!initialized) {
       logger.error('messageController', 'فشل في تهيئة مدير خدمة Meta الواتساب');
@@ -273,11 +273,12 @@ async function sendWhatsappAndUpdate(message, client, formattedPhone, msgContent
           status: 'sent',
           externalMessageId: whatsappResult.externalMessageId,
           providerData: {
-            rawResponse: whatsappResult.rawResponse,
+            provider: 'semysms_whatsapp',
             lastUpdate: new Date(),
             device: whatsappResult.rawResponse
               ? (whatsappResult.rawResponse.id_device || whatsappResult.rawResponse.device_id)
-              : null
+              : null,
+            rawResponse: whatsappResult.rawResponse
           }
         });
         await whatsappMsg.save();
