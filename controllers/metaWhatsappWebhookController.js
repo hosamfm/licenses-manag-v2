@@ -2,6 +2,7 @@
  * متحكم webhook واتساب الرسمي من ميتا (الإصدار 22)
  */
 const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
+const MetaWhatsappWebhookLog = require('../models/MetaWhatsappWebhookLog');
 const logger = require('../services/loggerService');
 const crypto = require('crypto');
 
@@ -58,14 +59,58 @@ exports.verifyWebhook = async (req, res) => {
 exports.handleWebhook = async (req, res) => {
     const requestId = Date.now().toString();
     
-    logger.debug('metaWhatsappWebhookController', 'استلام webhook جديد', {
+    // تسجيل كامل للبيانات الواردة
+    logger.debug('metaWhatsappWebhookController', 'استلام webhook جديد من ميتا', {
         requestId: requestId,
-        body: req.body
+        body: JSON.stringify(req.body, null, 2),
+        headers: JSON.stringify(req.headers, null, 2),
+        method: req.method,
+        url: req.originalUrl,
+        timestamp: new Date().toISOString()
     });
     
     try {
         // إرسال استجابة سريعة لتجنب إعادة الإرسال من ميتا
         res.status(200).send('EVENT_RECEIVED');
+        
+        // تخزين سجل الطلب
+        try {
+            // تحديد نوع الطلب
+            let requestType = 'unknown';
+            if (req.body && req.body.entry && req.body.entry[0] && req.body.entry[0].changes && req.body.entry[0].changes[0]) {
+                const change = req.body.entry[0].changes[0];
+                if (change.field === 'messages') {
+                    if (change.value.messages && change.value.messages.length > 0) {
+                        requestType = 'message';
+                    } else if (change.value.statuses && change.value.statuses.length > 0) {
+                        requestType = 'status';
+                    }
+                }
+            }
+            
+            // حفظ سجل الطلب في قاعدة البيانات
+            const webhookLog = new MetaWhatsappWebhookLog({
+                requestId: requestId,
+                timestamp: new Date(),
+                method: req.method,
+                url: req.originalUrl,
+                headers: req.headers,
+                body: req.body,
+                rawBody: JSON.stringify(req.body, null, 2),
+                type: requestType
+            });
+            
+            await webhookLog.save();
+            logger.info('metaWhatsappWebhookController', 'تم حفظ سجل webhook في قاعدة البيانات', { 
+                requestId: requestId,
+                type: requestType
+            });
+        } catch (logError) {
+            logger.error('metaWhatsappWebhookController', 'خطأ في حفظ سجل webhook', {
+                requestId: requestId,
+                error: logError.message
+            });
+        }
         
         // التحقق من أن البيانات بالتنسيق المتوقع
         if (!req.body || !req.body.object || !req.body.entry || !Array.isArray(req.body.entry)) {
@@ -98,6 +143,13 @@ exports.handleWebhook = async (req, res) => {
             for (const change of entry.changes) {
                 const value = change.value;
                 
+                // تسجيل كل تغيير بالتفصيل
+                logger.info('metaWhatsappWebhookController', `تغيير في ${change.field}`, {
+                    requestId: requestId,
+                    field: change.field,
+                    value: JSON.stringify(value)
+                });
+                
                 // التحقق من نوع التغيير
                 if (change.field === 'messages') {
                     // معالجة الرسائل الواردة
@@ -107,7 +159,8 @@ exports.handleWebhook = async (req, res) => {
                                 requestId: requestId,
                                 messageId: message.id,
                                 from: message.from,
-                                type: message.type
+                                type: message.type,
+                                content: JSON.stringify(message)
                             });
                             
                             // يمكنك التعامل مع الرسالة الواردة هنا
@@ -122,7 +175,8 @@ exports.handleWebhook = async (req, res) => {
                                 requestId: requestId,
                                 messageId: status.id,
                                 status: status.status,
-                                recipientId: status.recipient_id
+                                recipientId: status.recipient_id,
+                                statusDetails: JSON.stringify(status)
                             });
                             
                             // يمكنك التعامل مع تحديث الحالة هنا

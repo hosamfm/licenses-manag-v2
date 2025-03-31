@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <%- include('partials/_head') %>
+  <title>تفاصيل سجل Webhook واتساب الرسمي</title>
+</head>
+<body class="hold-transition sidebar-mini">
+<div class="wrapper">
+
+  <%- include('partials/_header') %>
+  <%- include('partials/_footerBar') %>
+
+  <!-- صفحة تفاصيل سجل webhook ميتا واتساب -->
+  <div class="content-wrapper">
+    <div class="content-header">
+      <div class="container-fluid">
+        <div class="row mb-2">
+          <div class="col-sm-6">
+            <h1 class="m-0">تفاصيل سجل Webhook</h1>
+          </div>
+          <div class="col-sm-6">
+            <ol class="breadcrumb float-sm-left">
+              <li class="breadcrumb-item"><a href="/admin/dashboard">الرئيسية</a></li>
+              <li class="breadcrumb-item"><a href="/admin/meta-whatsapp-settings">إعدادات واتساب الرسمي</a></li>
+              <li class="breadcrumb-item"><a href="/admin/meta-whatsapp-monitor">مراقبة Webhook</a></li>
+              <li class="breadcrumb-item active">تفاصيل السجل</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="container-fluid">
+        <!-- رسائل النظام -->
+        <% if (flashMessages.success) { %>
+          <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <%= flashMessages.success %>
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+        <% } %>
+        
+        <% if (flashMessages.error) { %>
+          <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <%= flashMessages.error %>
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+        <% } %>
+
+        <!-- بطاقة المعلومات الأساسية -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">معلومات أساسية</h3>
+            <div class="card-tools">
+              <a href="/admin/meta-whatsapp-monitor" class="btn btn-sm btn-secondary">
+                <i class="fas fa-arrow-right"></i> العودة للقائمة
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <dl class="row">
+                  <dt class="col-sm-4">معرّف السجل:</dt>
+                  <dd class="col-sm-8"><%= log._id %></dd>
+                  
+                  <dt class="col-sm-4">معرّف الطلب:</dt>
+                  <dd class="col-sm-8"><%= log.requestId %></dd>
+                  
+                  <dt class="col-sm-4">التاريخ والوقت:</dt>
+                  <dd class="col-sm-8"><%= new Date(log.timestamp).toLocaleString('ar-SA') %></dd>
+                </dl>
+              </div>
+              <div class="col-md-6">
+                <dl class="row">
+                  <dt class="col-sm-4">طريقة الطلب:</dt>
+                  <dd class="col-sm-8"><%= log.method %></dd>
+                  
+                  <dt class="col-sm-4">العنوان:</dt>
+                  <dd class="col-sm-8"><%= log.url %></dd>
+                  
+                  <dt class="col-sm-4">النوع:</dt>
+                  <dd class="col-sm-8">
+                    <% if (log.type === 'message') { %>
+                      <span class="badge badge-success">رسالة</span>
+                    <% } else if (log.type === 'status') { %>
+                      <span class="badge badge-warning">حالة</span>
+                    <% } else { %>
+                      <span class="badge badge-danger">غير معروف</span>
+                    <% } %>
+                  </dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- بطاقة ترويسات الطلب -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">ترويسات الطلب</h3>
+          </div>
+          <div class="card-body">
+            <pre class="json-display"><%= JSON.stringify(log.headers, null, 2) %></pre>
+          </div>
+        </div>
+
+        <!-- بطاقة محتوى الطلب -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">محتوى الطلب</h3>
+          </div>
+          <div class="card-body">
+            <pre class="json-display"><%= log.rawBody %></pre>
+          </div>
+        </div>
+
+        <!-- إذا كان النوع رسالة، نعرض تفاصيل الرسالة بطريقة سهلة القراءة -->
+        <% if (log.type === 'message' && log.body && log.body.entry && log.body.entry[0] && log.body.entry[0].changes && log.body.entry[0].changes[0] && log.body.entry[0].changes[0].value && log.body.entry[0].changes[0].value.messages) { %>
+          <% const messages = log.body.entry[0].changes[0].value.messages; %>
+          <% messages.forEach((message, index) => { %>
+            <div class="card">
+              <div class="card-header bg-success text-white">
+                <h3 class="card-title">تفاصيل الرسالة #<%= index + 1 %></h3>
+              </div>
+              <div class="card-body">
+                <div class="row">
+                  <div class="col-md-6">
+                    <dl class="row">
+                      <dt class="col-sm-4">معرّف الرسالة:</dt>
+                      <dd class="col-sm-8"><%= message.id %></dd>
+                      
+                      <dt class="col-sm-4">من:</dt>
+                      <dd class="col-sm-8"><%= message.from %></dd>
+                      
+                      <dt class="col-sm-4">نوع الرسالة:</dt>
+                      <dd class="col-sm-8"><%= message.type %></dd>
+                      
+                      <dt class="col-sm-4">الوقت:</dt>
+                      <dd class="col-sm-8"><%= new Date(message.timestamp * 1000).toLocaleString('ar-SA') %></dd>
+                    </dl>
+                  </div>
+                  <div class="col-md-6">
+                    <% if (message.type === 'text' && message.text) { %>
+                      <dl class="row">
+                        <dt class="col-sm-4">محتوى الرسالة:</dt>
+                        <dd class="col-sm-8"><%= message.text.body %></dd>
+                      </dl>
+                    <% } else if (message.type === 'image' && message.image) { %>
+                      <dl class="row">
+                        <dt class="col-sm-4">صورة:</dt>
+                        <dd class="col-sm-8">
+                          <% if (message.image.caption) { %>
+                            <p>التعليق: <%= message.image.caption %></p>
+                          <% } %>
+                          <p>معرّف الوسائط: <%= message.image.id %></p>
+                        </dd>
+                      </dl>
+                    <% } else if (message.type === 'video' && message.video) { %>
+                      <dl class="row">
+                        <dt class="col-sm-4">فيديو:</dt>
+                        <dd class="col-sm-8">
+                          <% if (message.video.caption) { %>
+                            <p>التعليق: <%= message.video.caption %></p>
+                          <% } %>
+                          <p>معرّف الوسائط: <%= message.video.id %></p>
+                        </dd>
+                      </dl>
+                    <% } else if (message.type === 'audio' && message.audio) { %>
+                      <dl class="row">
+                        <dt class="col-sm-4">صوت:</dt>
+                        <dd class="col-sm-8">
+                          <p>معرّف الوسائط: <%= message.audio.id %></p>
+                        </dd>
+                      </dl>
+                    <% } else if (message.type === 'document' && message.document) { %>
+                      <dl class="row">
+                        <dt class="col-sm-4">مستند:</dt>
+                        <dd class="col-sm-8">
+                          <p>اسم الملف: <%= message.document.filename %></p>
+                          <p>معرّف الوسائط: <%= message.document.id %></p>
+                        </dd>
+                      </dl>
+                    <% } else if (message.type === 'location' && message.location) { %>
+                      <dl class="row">
+                        <dt class="col-sm-4">موقع:</dt>
+                        <dd class="col-sm-8">
+                          <p>خط العرض: <%= message.location.latitude %></p>
+                          <p>خط الطول: <%= message.location.longitude %></p>
+                        </dd>
+                      </dl>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% }); %>
+        <% } %>
+
+        <!-- إذا كان النوع حالة، نعرض تفاصيل الحالة بطريقة سهلة القراءة -->
+        <% if (log.type === 'status' && log.body && log.body.entry && log.body.entry[0] && log.body.entry[0].changes && log.body.entry[0].changes[0] && log.body.entry[0].changes[0].value && log.body.entry[0].changes[0].value.statuses) { %>
+          <% const statuses = log.body.entry[0].changes[0].value.statuses; %>
+          <% statuses.forEach((status, index) => { %>
+            <div class="card">
+              <div class="card-header bg-warning text-white">
+                <h3 class="card-title">تفاصيل الحالة #<%= index + 1 %></h3>
+              </div>
+              <div class="card-body">
+                <dl class="row">
+                  <dt class="col-sm-3">معرّف الرسالة:</dt>
+                  <dd class="col-sm-9"><%= status.id %></dd>
+                  
+                  <dt class="col-sm-3">معرّف المستلم:</dt>
+                  <dd class="col-sm-9"><%= status.recipient_id %></dd>
+                  
+                  <dt class="col-sm-3">الحالة:</dt>
+                  <dd class="col-sm-9">
+                    <% let statusClass = 'secondary'; %>
+                    <% if (status.status === 'sent') { statusClass = 'primary'; } %>
+                    <% if (status.status === 'delivered') { statusClass = 'success'; } %>
+                    <% if (status.status === 'read') { statusClass = 'info'; } %>
+                    <% if (status.status === 'failed') { statusClass = 'danger'; } %>
+                    <span class="badge badge-<%= statusClass %>"><%= status.status %></span>
+                  </dd>
+                  
+                  <dt class="col-sm-3">وقت التحديث:</dt>
+                  <dd class="col-sm-9"><%= new Date(status.timestamp * 1000).toLocaleString('ar-SA') %></dd>
+                  
+                  <% if (status.errors && status.errors.length > 0) { %>
+                    <dt class="col-sm-3">الأخطاء:</dt>
+                    <dd class="col-sm-9">
+                      <% status.errors.forEach(error => { %>
+                        <div class="alert alert-danger mb-2">
+                          <p><strong>الكود:</strong> <%= error.code %></p>
+                          <p><strong>الوصف:</strong> <%= error.title %></p>
+                        </div>
+                      <% }); %>
+                    </dd>
+                  <% } %>
+                </dl>
+              </div>
+            </div>
+          <% }); %>
+        <% } %>
+
+      </div>
+    </div>
+  </div>
+
+  <%- include('partials/_footer') %>
+
+  <style>
+    .json-display {
+      background-color: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px;
+      max-height: 400px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      direction: ltr;
+      text-align: left;
+    }
+  </style>
+
+</div>
+</body>
+</html>
