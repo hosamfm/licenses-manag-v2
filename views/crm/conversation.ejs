@@ -30,18 +30,6 @@
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
       <% } %>
-
-      <!-- التنقل السريع -->
-      <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="/crm">لوحة التحكم</a></li>
-          <li class="breadcrumb-item"><a href="/crm/conversations">المحادثات</a></li>
-          <li class="breadcrumb-item active" aria-current="page">
-            <%= conversation.customerName || conversation.phoneNumber %>
-          </li>
-        </ol>
-      </nav>
-
       <div class="row g-3">
         <!-- تفاصيل المحادثة والإجراءات -->
         <div class="col-lg-4">
@@ -181,11 +169,11 @@
                               <% if (msg.status === 'sending') { %>
                                 <i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>
                               <% } else if (msg.status === 'sent') { %>
-                                <i class="fas fa-check text-info" title="تم الإرسال"></i>
+                                <i class="fas fa-check text-silver" title="تم الإرسال"></i>
                               <% } else if (msg.status === 'delivered') { %>
-                                <i class="fas fa-check-double text-primary" title="تم التسليم"></i>
+                                <i class="fas fa-check-double text-silver" title="تم التسليم"></i>
                               <% } else if (msg.status === 'read') { %>
-                                <i class="fas fa-check-double text-success" title="تم القراءة"></i>
+                                <i class="fas fa-check-double text-primary" title="تم القراءة"></i>
                               <% } else if (msg.status === 'failed') { %>
                                 <i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>
                               <% } %>
@@ -853,13 +841,13 @@
             icon = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
             break;
           case 'sent':
-            icon = '<i class="fas fa-check text-info" title="تم الإرسال"></i>';
+            icon = '<i class="fas fa-check text-silver" title="تم الإرسال"></i>';
             break;
           case 'delivered':
-            icon = '<i class="fas fa-check-double text-primary" title="تم التسليم"></i>';
+            icon = '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>';
             break;
           case 'read':
-            icon = '<i class="fas fa-check-double text-success" title="تم القراءة"></i>';
+            icon = '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>';
             break;
           case 'failed':
             icon = '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>';

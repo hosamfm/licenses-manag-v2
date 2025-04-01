@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('../partials/_head') %>
+  <title>المحادثات</title>
+  <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
+  <link rel="stylesheet" href="/css/crm.css">
+  <link rel="stylesheet" href="/css/conversation.css">
+  <!-- إضافة مكتبة Socket.IO - مهم لوظائف المحادثات الفورية -->
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+</head>
+<body>
+
+  <%- include('../partials/_header') %>
+
+  <div class="crm-container">
+    <!-- الشريط الجانبي الموحد -->
+    <%- include('../partials/_crm_sidebar') %>
+
+    <!-- المحتوى الرئيسي -->
+    <div class="crm-content">
+
+      <!-- رسائل فلاش إن وجدت -->
+      <% if (flashMessages && flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      <% if (flashMessages && flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+
+      <div class="row">
+
+        <!-- العمود الأيمن: قائمة المحادثات -->
+        <div class="col-lg-4">
+          <h5 class="mb-3">قائمة المحادثات</h5>
+          <% if (conversations && conversations.length > 0) { %>
+            <div class="list-group" id="conversationList">
+              <% conversations.forEach(function(conv) { %>
+                <button type="button"
+                        class="list-group-item list-group-item-action conversation-item"
+                        data-conversation-id="<%= conv._id %>">
+                  <strong><%= conv.customerName || conv.phoneNumber %></strong>
+                  <br>
+                  <% if (conv.lastMessage) { %>
+                    <small class="text-muted">
+                      <%= conv.lastMessage.direction === 'incoming' ? 'رسالة واردة: ' : 'رسالة صادرة: ' %>
+                      <%= conv.lastMessage.content
+                           ? conv.lastMessage.content.substring(0, 30)
+                           : 'محتوى وسائط' %>...
+                    </small>
+                  <% } else { %>
+                    <small class="text-muted">لا توجد رسائل</small>
+                  <% } %>
+                </button>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <div class="alert alert-info">لا توجد محادثات متاحة.</div>
+          <% } %>
+        </div>
+
+        <!-- العمود الأيسر: سيتم حقن تفاصيل المحادثة فيه بواسطة AJAX -->
+        <div class="col-lg-8" id="conversationDetailsContainer">
+          <div class="alert alert-secondary">
+            اختر محادثة من القائمة لعرض تفاصيلها...
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <%- include('../partials/_footer') %>
+
+  <!-- عنصر الصوت للتنبيه عند وصول رسالة جديدة -->
+  <audio id="messageSound" src="/sounds/new-message.mp3" preload="auto"></audio>
+
+  <!-- سكربت جافاسكربت لجلب التفاصيل بالـ AJAX -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const conversationList = document.getElementById('conversationList');
+      const detailsContainer = document.getElementById('conversationDetailsContainer');
+
+      // عند الضغط على أي محادثة في القائمة
+      if (conversationList) {
+        conversationList.addEventListener('click', function(e) {
+          const item = e.target.closest('.conversation-item'); 
+          if (!item) return;
+
+          const convId = item.getAttribute('data-conversation-id');
+          if (!convId) return;
+
+          // استدعاء AJAX
+          fetch(`/crm/conversations/ajax/details/${convId}`, {
+            method: 'GET',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          })
+          .then(response => {
+            if (!response.ok) throw new Error('HTTP error ' + response.status);
+            return response.text();
+          })
+          .then(html => {
+            // حقن الـ HTML في div التفاصيل
+            detailsContainer.innerHTML = html;
+            // التمرير لأسفل آخر الرسائل لو أردت
+            setTimeout(() => {
+              const msgContainer = document.getElementById('messageContainer');
+              if (msgContainer) {
+                msgContainer.scrollTop = msgContainer.scrollHeight;
+              }
+            }, 100);
+          })
+          .catch(err => {
+            console.error('خطأ في جلب تفاصيل المحادثة:', err);
+            detailsContainer.innerHTML = `
+              <div class="alert alert-danger">
+                حدث خطأ أثناء جلب تفاصيل المحادثة.
+              </div>
+            `;
+          });
+        });
+      }
+    });
+  </script>
+
+  <!-- إضافة كود مخصص لتحديث المحادثات ودعم الويب سوكت في صفحة AJAX -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // معرف المحادثة الحالية (إذا تم تحديدها)
+      let currentConversationId = null;
+      
+      // تكوين وتهيئة الويب سوكت
+      const socket = io();
+      
+      // الاستماع لأحداث الاتصال
+      socket.on('connect', function() {
+        console.log('تم الاتصال بالخادم');
+      });
+      
+      // الاستماع لأحداث قطع الاتصال
+      socket.on('disconnect', function() {
+        console.log('انقطع الاتصال بالخادم');
+      });
+      
+      // الاستماع لأحداث الرسائل الجديدة
+      socket.on('new-message', function(data) {
+        // تشغيل صوت الإشعار للرسائل الواردة
+        if (data.direction === 'incoming') {
+          playMessageSound();
+        }
+        
+        // تحديث قائمة المحادثات إذا كانت الرسالة تنتمي إلى المحادثة الحالية
+        if (data.conversationId === currentConversationId) {
+          refreshConversationDetails();
+        } else {
+          // تحديث قائمة المحادثات فقط
+          refreshConversationsList();
+        }
+      });
+      
+      // الاستماع لأحداث تحديث حالة الرسائل
+      socket.on('message-status-update', function(data) {
+        // إذا كانت الرسالة تنتمي إلى المحادثة الحالية، تحديث حالتها في الواجهة
+        if (data.conversationId === currentConversationId) {
+          updateMessageStatus(data.messageId, data.status);
+        }
+      });
+      
+      // الاستماع لأحداث الردود الجديدة
+      socket.on('message_reply', function(data) {
+        console.log('رد جديد على رسالة:', data);
+        
+        // إذا كانت الرسالة تنتمي إلى المحادثة الحالية، تحديث الواجهة
+        if (data.conversationId === currentConversationId) {
+          refreshConversationDetails();
+        }
+      });
+      
+      // الاستماع لأحداث التفاعلات الجديدة
+      socket.on('message_reaction', function(data) {
+        console.log('تفاعل جديد على رسالة:', data);
+        
+        // إذا كانت الرسالة تنتمي إلى المحادثة الحالية، تحديث الواجهة
+        if (data.conversationId === currentConversationId) {
+          refreshConversationDetails();
+        }
+      });
+      
+      // دالة لتشغيل صوت عند وصول رسائل جديدة
+      function playMessageSound() {
+        try {
+          const sound = document.getElementById('messageSound');
+          if (sound) {
+            sound.currentTime = 0;
+            sound.play().catch(err => {
+              console.warn('خطأ في تشغيل الصوت:', err.message);
+            });
+          } else {
+            console.warn('عنصر الصوت غير موجود');
+          }
+        } catch (error) {
+          console.error('خطأ في تشغيل صوت التنبيه:', error);
+        }
+      }
+      
+      // دالة لتحديث قائمة المحادثات من خلال AJAX
+      window.refreshConversationsList = function() {
+        fetch('/crm/conversations/ajax', {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => {
+          if (response.ok) {
+            return response.text();
+          }
+          throw new Error('فشل تحديث قائمة المحادثات');
+        })
+        .then(html => {
+          // تحديث القائمة فقط (الجزء الأيسر من الصفحة)
+          const conversationsList = document.getElementById('conversations-list');
+          if (conversationsList) {
+            conversationsList.innerHTML = html;
+            bindConversationClickEvents();
+          }
+        })
+        .catch(error => {
+          console.error('خطأ في تحديث قائمة المحادثات:', error);
+        });
+      };
+      
+      // دالة لتحديث تفاصيل المحادثة الحالية من خلال AJAX
+      window.refreshConversationDetails = function() {
+        if (!currentConversationId) return;
+        
+        fetch(`/crm/conversations/ajax/details/${currentConversationId}`, {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => {
+          if (response.ok) {
+            return response.text();
+          }
+          throw new Error('فشل تحديث تفاصيل المحادثة');
+        })
+        .then(html => {
+          // تحديث تفاصيل المحادثة (الجزء الأيمن من الصفحة)
+          const conversationDetails = document.getElementById('conversation-details');
+          if (conversationDetails) {
+            conversationDetails.innerHTML = html;
+            
+            // تمرير إلى آخر الرسائل
+            const messageContainer = document.getElementById('messageContainer');
+            if (messageContainer) {
+              messageContainer.scrollTop = messageContainer.scrollHeight;
+            }
+          }
+        })
+        .catch(error => {
+          console.error('خطأ في تحديث تفاصيل المحادثة:', error);
+        });
+      };
+      
+      // دالة لتحديث حالة رسالة معينة في الواجهة
+      function updateMessageStatus(messageId, newStatus) {
+        const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+        if (!messageElem) return;
+        
+        // تحديث سمة الحالة
+        messageElem.setAttribute('data-status', newStatus);
+        
+        // تحديث أيقونة الحالة
+        const statusSpan = messageElem.querySelector('.message-status');
+        if (!statusSpan) return;
+        
+        let statusIcon = '';
+        if (newStatus === 'sending') {
+          statusIcon = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
+        } else if (newStatus === 'sent') {
+          statusIcon = '<i class="fas fa-check text-silver" title="تم الإرسال"></i>';
+        } else if (newStatus === 'delivered') {
+          statusIcon = '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>';
+        } else if (newStatus === 'read') {
+          statusIcon = '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>';
+        } else if (newStatus === 'failed') {
+          statusIcon = '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>';
+        }
+        
+        statusSpan.innerHTML = statusIcon;
+      }
+      
+      // دالة لربط أحداث النقر على المحادثات في القائمة
+      function bindConversationClickEvents() {
+        const conversationItems = document.querySelectorAll('.conversation-item');
+        
+        conversationItems.forEach(item => {
+          item.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // إلغاء تنشيط جميع العناصر
+            conversationItems.forEach(i => i.classList.remove('active'));
+            
+            // تنشيط العنصر الحالي
+            this.classList.add('active');
+            
+            // الحصول على معرف المحادثة
+            const conversationId = this.getAttribute('data-conversation-id');
+            
+            // تحديث المحادثة الحالية
+            currentConversationId = conversationId;
+            
+            // تحميل تفاصيل المحادثة
+            refreshConversationDetails();
+            
+            // تحديث العنوان في URL بدون إعادة تحميل الصفحة
+            const url = `/crm/conversations/ajax?selected=${conversationId}`;
+            history.pushState({ conversationId }, '', url);
+          });
+        });
+      }
+      
+      // تهيئة الصفحة عند التحميل
+      function initializePage() {
+        // ربط أحداث النقر على المحادثات
+        bindConversationClickEvents();
+        
+        // البحث عن المحادثة المحددة في URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const selectedId = urlParams.get('selected');
+        
+        if (selectedId) {
+          // تحديد المحادثة النشطة
+          currentConversationId = selectedId;
+          
+          // تنشيط العنصر المناسب في القائمة
+          const selectedItem = document.querySelector(`.conversation-item[data-conversation-id="${selectedId}"]`);
+          if (selectedItem) {
+            selectedItem.classList.add('active');
+            
+            // تحميل تفاصيل المحادثة
+            refreshConversationDetails();
+          }
+        }
+      }
+      
+      // تشغيل وظائف التهيئة
+      initializePage();
+      
+      // معالجة أحداث التنقل في المتصفح (الرجوع/التقدم)
+      window.addEventListener('popstate', function(event) {
+        if (event.state && event.state.conversationId) {
+          currentConversationId = event.state.conversationId;
+          
+          // إلغاء تنشيط جميع العناصر
+          const conversationItems = document.querySelectorAll('.conversation-item');
+          conversationItems.forEach(i => i.classList.remove('active'));
+          
+          // تنشيط العنصر المناسب
+          const selectedItem = document.querySelector(`.conversation-item[data-conversation-id="${currentConversationId}"]`);
+          if (selectedItem) {
+            selectedItem.classList.add('active');
+          }
+          
+          // تحميل تفاصيل المحادثة
+          refreshConversationDetails();
+        } else {
+          // إذا لم يكن هناك معرف محادثة، أعد تحميل الصفحة
+          window.location.reload();
+        }
+      });
+      
+      // البحث في المحادثات
+      const searchInput = document.getElementById('conversation-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', function() {
+          const searchTerm = this.value.toLowerCase();
+          const conversationItems = document.querySelectorAll('.conversation-item');
+          
+          conversationItems.forEach(item => {
+            const name = item.querySelector('.conversation-name').textContent.toLowerCase();
+            const phone = item.querySelector('.conversation-phone').textContent.toLowerCase();
+            
+            if (name.includes(searchTerm) || phone.includes(searchTerm)) {
+              item.style.display = '';
+            } else {
+              item.style.display = 'none';
+            }
+          });
+        });
+      }
+    });
+  </script>
+</body>
+</html>
