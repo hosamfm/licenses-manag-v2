@@ -300,9 +300,21 @@
   window.updateMessageStatus = function(messageId, newStatus) {
     if (!messageId || !newStatus) return;
     
-    // إيجاد الرسالة في الواجهة
-    const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
-    if (!messageElem) return;
+    // البحث أولاً عن الرسالة حسب المعرف الخارجي (الذي يأتي من واتساب)
+    let messageElem = document.querySelector(`.message[data-external-id="${messageId}"]`);
+    
+    // إذا لم يتم العثور على الرسالة بالمعرف الخارجي، حاول البحث بمعرف الرسالة في قاعدة البيانات
+    if (!messageElem) {
+      messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+    }
+    
+    // إذا لم يتم العثور على الرسالة بأي من المعرفين
+    if (!messageElem) {
+      console.warn('لم يتم العثور على الرسالة لتحديث حالتها. المعرف:', messageId);
+      return;
+    }
+    
+    console.log('تم العثور على الرسالة وسيتم تحديث حالتها:', messageId, newStatus);
     
     // تحديث السمة
     messageElem.setAttribute('data-status', newStatus);

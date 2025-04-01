@@ -140,8 +140,17 @@
       socket.on('message-status-update', function(data) {
         console.log('تحديث حالة الرسالة:', data);
         
-        // إذا كانت الرسالة تنتمي إلى المحادثة الحالية، تحديث حالتها في الواجهة
-        if (data.conversationId === currentConversationId) {
+        // تحقق من وجود معرف المحادثة والتأكد من أنه يطابق المحادثة الحالية
+        if (!data.conversationId || data.conversationId !== currentConversationId) {
+          console.log('تجاهل تحديث الحالة لأنه لا يخص المحادثة الحالية');
+          return;
+        }
+        
+        // استخدم المعرف الخارجي لتحديث حالة الرسالة
+        if (data.externalId) {
+          window.updateMessageStatus(data.externalId, data.status);
+        } else if (data.messageId) {
+          // دعم للإصدارات القديمة التي قد ترسل messageId بدلاً من externalId
           window.updateMessageStatus(data.messageId, data.status);
         }
       });
