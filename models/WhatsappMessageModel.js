@@ -26,7 +26,7 @@ const whatsappMessageSchema = new mongoose.Schema({
   },
   mediaType: { 
     type: String,
-    enum: ['image', 'audio', 'video', 'document', 'sticker', 'location', null]
+    enum: ['image', 'audio', 'video', 'document', 'sticker', 'location', 'reaction', null]
   },
   timestamp: { 
     type: Date, 
