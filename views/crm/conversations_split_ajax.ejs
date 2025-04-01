@@ -178,6 +178,32 @@
         }
       });
       
+      // الاستماع لأحداث تحديث المعرف الخارجي للرسالة
+      socket.on('message-external-id-update', function(data) {
+        console.log('تحديث المعرف الخارجي للرسالة:', data);
+        
+        // التحقق من أن البيانات تخص المحادثة الحالية
+        if (!data.conversationId || data.conversationId !== currentConversationId) {
+          console.log('تجاهل تحديث المعرف الخارجي لأنه لا يخص المحادثة الحالية');
+          return;
+        }
+        
+        // البحث عن عنصر الرسالة حسب المعرف الداخلي
+        const messageElem = document.querySelector(`.message[data-message-id="${data.messageId}"]`);
+        
+        if (!messageElem) {
+          console.warn('لم يتم العثور على الرسالة لتحديث المعرف الخارجي. المعرف الداخلي:', data.messageId);
+          return;
+        }
+        
+        // إضافة المعرف الخارجي للرسالة
+        messageElem.setAttribute('data-external-id', data.externalId);
+        console.log('تم تحديث المعرف الخارجي للرسالة بنجاح:', {
+          messageId: data.messageId,
+          externalId: data.externalId
+        });
+      });
+      
       // تحديث قائمة المحادثات بدون إعادة تحميل الصفحة
       function refreshConversationsList() {
         fetch('/crm/conversations/ajax/list', {

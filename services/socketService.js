@@ -340,6 +340,31 @@ function emitToRoom(roomName, eventName, data) {
   logger.info('socketService', 'تم إرسال إشعار إلى غرفة محددة', { roomName, eventName });
 }
 
+/**
+ * إرسال إشعار بربط معرف داخلي للرسالة بمعرف خارجي من واتساب
+ * هذه الدالة تستخدم لتحديث الرسائل الصادرة عندما نتلقى معرف خارجي من واتساب بعد الإرسال
+ * @param {String} conversationId - معرف المحادثة
+ * @param {String} messageId - معرف الرسالة في قاعدة البيانات
+ * @param {String} externalId - المعرف الخارجي من واتساب
+ */
+function notifyMessageExternalIdUpdate(conversationId, messageId, externalId) {
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+  
+  if (!conversationId || !messageId || !externalId) {
+    return logger.warn('socketService', 'معلومات غير كاملة لتحديث معرف خارجي', { conversationId, messageId, externalId });
+  }
+  
+  io.to(`conversation-${conversationId}`).emit('message-external-id-update', { 
+    messageId, 
+    externalId, 
+    conversationId 
+  });
+  
+  logger.info('socketService', 'تم إرسال إشعار بتحديث معرف خارجي للرسالة', { conversationId, messageId, externalId });
+}
+
 module.exports = {
   initialize,
   notifyNewMessage,
@@ -349,5 +374,6 @@ module.exports = {
   notifyMessageReply,
   notifyUser,
   broadcastNotification,
-  emitToRoom
+  emitToRoom,
+  notifyMessageExternalIdUpdate
 };

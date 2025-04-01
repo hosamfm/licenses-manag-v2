@@ -154,6 +154,16 @@ async function updateMessageStatus(externalId, newStatus, timestamp) {
 
       // إشعار socket - استخدام الطريقة الصحيحة في socketService
       socketService.notifyMessageStatusUpdate(wMsg.conversationId, externalId, systemStatus);
+      
+      // إذا كانت الحالة "sent" وهي أول تحديث، فهذا يعني أننا استلمنا المعرف الخارجي للرسالة
+      // سنرسل إشعارًا إضافيًا لربط المعرف الداخلي بالمعرف الخارجي
+      if (systemStatus === 'sent') {
+        logger.debug('metaWhatsappWebhookController', 'إرسال تحديث بربط المعرف الخارجي بالداخلي', { 
+          messageId: wMsg._id, 
+          externalId: externalId 
+        });
+        socketService.notifyMessageExternalIdUpdate(wMsg.conversationId, wMsg._id.toString(), externalId);
+      }
     } else {
       logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage', { externalId });
     }
