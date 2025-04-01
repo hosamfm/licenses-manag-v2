@@ -127,6 +127,10 @@ exports.handleWebhook = async (req, res) => {
   }
 };
 
+// مجموعة لتتبع الرسائل التي تمت معالجتها خلال دورة حياة التطبيق
+// لمنع معالجة نفس الرسالة مرتين
+const processedMessageIds = new Set();
+
 /**
  * تحديث حالة الرسالة
  */
@@ -255,11 +259,23 @@ async function handleIncomingMessages(messages, meta) {
 
     for (const msg of messages) {
       try {
+        // التحقق من تكرار الرسالة بناءً على المعرف الخارجي
+        if (processedMessageIds.has(msg.id)) {
+          logger.warn('metaWhatsappWebhookController', 'تم تجاهل رسالة مكررة', { 
+            messageId: msg.id, 
+            from: msg.from 
+          });
+          continue;
+        }
+        
         logger.info('metaWhatsappWebhookController','رسالة واردة', {
           from: msg.from,
           id: msg.id,
           type: msg.type
         });
+
+        // إضافة معرف الرسالة لمجموعة الرسائل المعالجة
+        processedMessageIds.add(msg.id);
 
         // ابحث/أنشئ محادثة
         const conversation = await Conversation.findOrCreate(msg.from, channel._id);
@@ -272,6 +288,11 @@ async function handleIncomingMessages(messages, meta) {
 
         // أنشئ رسالة واردة في DB
         const savedMsg = await WhatsappMessage.createIncomingMessage(conversation._id, msg);
+
+        logger.debug('metaWhatsappWebhookController', 'تم حفظ رسالة واردة وسيتم إرسال إشعار', { 
+          messageId: savedMsg._id,
+          externalId: savedMsg.externalMessageId 
+        });
 
         // التحقق ما إذا كانت تفاعل
         if (savedMsg && savedMsg.isReaction) {
@@ -308,7 +329,8 @@ async function handleIncomingMessages(messages, meta) {
             direction: savedMsg.direction, // مفترض incoming
             timestamp: savedMsg.timestamp,
             status: savedMsg.status,
-            externalMessageId: savedMsg.externalMessageId
+            externalMessageId: savedMsg.externalMessageId,
+            conversationId: conversation._id.toString() // إضافة معرف المحادثة بشكل صريح
           });
         }
 
@@ -318,7 +340,6 @@ async function handleIncomingMessages(messages, meta) {
           lastMessageAt: conversation.lastMessageAt,
           status: conversation.status
         });
-
       } catch (errMsg) {
         logger.error('metaWhatsappWebhookController','خطأ في معالجة رسالة واردة', errMsg);
       }
