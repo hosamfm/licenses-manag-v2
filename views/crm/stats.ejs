@@ -4,58 +4,18 @@
   <%- include('../partials/_head') %>
   <title>الإحصائيات - إدارة العملاء</title>
   
-  <!-- إجبار تحميل ملف CSS المحدث -->
-  <link rel="stylesheet" href="/css/style.css?v=<%= new Date().getTime() %>" />
+  <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
+  <link rel="stylesheet" href="/css/crm.css">
 </head>
 <body>
   <%- include('../partials/_header') %>
   
   <div class="crm-container">
-    <!-- القائمة الجانبية -->
-    <div class="crm-sidebar w-25">
-      <ul class="crm-sidebar-nav">
-        <li>
-          <a href="/crm">
-            <i class="fas fa-tachometer-alt"></i>
-            <span>لوحة التحكم</span>
-          </a>
-        </li>
-        <li>
-          <a href="/crm/contacts">
-            <i class="fas fa-address-book"></i>
-            <span>جهات الاتصال</span>
-          </a>
-        </li>
-        <li>
-          <a href="/crm/conversations">
-            <i class="fas fa-comments"></i>
-            <span>المحادثات</span>
-          </a>
-        </li>
-        <li>
-          <a href="/crm/conversations/my">
-            <i class="fas fa-user-circle"></i>
-            <span>محادثاتي</span>
-          </a>
-        </li>
-        <li>
-          <a href="/crm/stats" class="active">
-            <i class="fas fa-chart-bar"></i>
-            <span>الإحصائيات</span>
-          </a>
-        </li>
-        <!-- يمكن إضافة روابط أخرى هنا في المستقبل -->
-        <li class="mt-4">
-          <a href="/" class="text-muted">
-            <i class="fas fa-arrow-right"></i>
-            <span>العودة للرئيسية</span>
-          </a>
-        </li>
-      </ul>
-    </div>
+    <!-- القائمة الجانبية - استخدام القالب الجزئي الموحد -->
+    <%- include('../partials/_crm_sidebar') %>
     
     <!-- المحتوى الرئيسي -->
-    <div class="crm-content w-75">
+    <div class="crm-content">
       <% if (flashMessages && flashMessages.error) { %>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
           <%= flashMessages.error %>

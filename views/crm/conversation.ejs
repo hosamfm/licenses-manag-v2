@@ -979,6 +979,152 @@
         }
       }
       
+      // إظهار منتقي التفاعلات على الرسائل
+      function showReactionPicker(messageId, externalId) {
+        if (!messageId) return;
+        
+        // العثور على الرسالة التي سيتم إضافة التفاعل لها
+        const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`) || 
+                            document.querySelector(`.message[data-external-id="${externalId}"]`);
+        
+        if (!messageElem) return;
+        
+        // التحقق من وجود منتقي تفاعلات حالي وإزالته
+        const existingPicker = document.querySelector('.reaction-picker');
+        if (existingPicker) {
+          existingPicker.remove();
+        }
+        
+        // إنشاء منتقي التفاعلات
+        const reactionPicker = document.createElement('div');
+        reactionPicker.className = 'reaction-picker card shadow-sm p-2';
+        reactionPicker.innerHTML = `
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="text-muted">اختر تفاعلاً</small>
+            <button type="button" class="btn-close btn-sm" aria-label="إغلاق"></button>
+          </div>
+          <div class="reactions-container">
+            <button class="reaction-btn" data-emoji="👍">👍</button>
+            <button class="reaction-btn" data-emoji="❤️">❤️</button>
+            <button class="reaction-btn" data-emoji="😂">😂</button>
+            <button class="reaction-btn" data-emoji="😮">😮</button>
+            <button class="reaction-btn" data-emoji="😢">😢</button>
+            <button class="reaction-btn" data-emoji="🙏">🙏</button>
+          </div>
+        `;
+        
+        // إضافة المنتقي بعد الرسالة
+        messageElem.appendChild(reactionPicker);
+        
+        // إضافة أحداث لأزرار التفاعل
+        const reactionButtons = reactionPicker.querySelectorAll('.reaction-btn');
+        reactionButtons.forEach(btn => {
+          btn.addEventListener('click', function() {
+            const emoji = this.getAttribute('data-emoji');
+            addReactionToMessage(messageId, externalId, emoji);
+            reactionPicker.remove();
+          });
+        });
+        
+        // إضافة حدث لزر الإغلاق
+        const closeButton = reactionPicker.querySelector('.btn-close');
+        closeButton.addEventListener('click', function() {
+          reactionPicker.remove();
+        });
+        
+        // إضافة نمط CSS لمنتقي التفاعلات إذا لم يكن موجوداً
+        if (!document.getElementById('reaction-picker-style')) {
+          const style = document.createElement('style');
+          style.id = 'reaction-picker-style';
+          style.innerHTML = `
+            .reaction-picker {
+              position: absolute;
+              top: 100%;
+              left: 50%;
+              transform: translateX(-50%);
+              width: auto;
+              min-width: 200px;
+              z-index: 1000;
+              background-color: white;
+              border-radius: 8px;
+              box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2) !important;
+            }
+            .reactions-container {
+              display: flex;
+              justify-content: space-between;
+              flex-wrap: wrap;
+            }
+            .reaction-picker .reaction-btn {
+              border: none;
+              background: none;
+              font-size: 1.5rem;
+              padding: 5px;
+              cursor: pointer;
+              border-radius: 50%;
+              transition: transform 0.2s, background-color 0.2s;
+            }
+            .reaction-picker .reaction-btn:hover {
+              transform: scale(1.2);
+              background-color: #f0f0f0;
+            }
+          `;
+          document.head.appendChild(style);
+        }
+      }
+      
+      // إضافة تفاعل إلى رسالة
+      function addReactionToMessage(messageId, externalId, emoji) {
+        // التحقق من وجود هذا التفاعل بالفعل
+        const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`) || 
+                            document.querySelector(`.message[data-external-id="${externalId}"]`);
+        
+        if (!messageElem) return;
+        
+        // البحث عن قسم التفاعلات أو إنشاؤه إذا لم يكن موجوداً
+        let reactionsContainer = messageElem.querySelector('.message-reactions');
+        if (!reactionsContainer) {
+          reactionsContainer = document.createElement('div');
+          reactionsContainer.className = 'message-reactions';
+          
+          // إضافة حاوية التفاعلات بعد فقاعة الرسالة
+          const messageBubble = messageElem.querySelector('.message-bubble');
+          if (messageBubble) {
+            messageBubble.appendChild(reactionsContainer);
+          }
+        }
+        
+        // التحقق مما إذا كان التفاعل موجوداً بالفعل
+        const existingReaction = reactionsContainer.querySelector(`.reaction-badge[data-emoji="${emoji}"]`);
+        if (existingReaction) {
+          // زيادة العداد إذا كان التفاعل موجوداً
+          const counterElem = existingReaction.querySelector('.reaction-count');
+          if (counterElem) {
+            const currentCount = parseInt(counterElem.textContent);
+            counterElem.textContent = (currentCount + 1).toString();
+          }
+        } else {
+          // إنشاء تفاعل جديد
+          const reactionBadge = document.createElement('span');
+          reactionBadge.className = 'reaction-badge';
+          reactionBadge.setAttribute('data-emoji', emoji);
+          reactionBadge.innerHTML = `${emoji} <span class="reaction-count">1</span>`;
+          reactionsContainer.appendChild(reactionBadge);
+        }
+        
+        // إرسال التفاعل إلى الخادم (في التطبيق الفعلي)
+        console.log('إرسال تفاعل:', { messageId, externalId, emoji });
+        
+        // هنا يمكنك إضافة شيفرة لإرسال التفاعل إلى الخادم
+        if (socket) {
+          socket.emit('add_reaction', {
+            messageId: messageId,
+            externalId: externalId,
+            reaction: emoji,
+            conversationId: conversationId
+          });
+        }
+      }
+      
       // تفعيل أزرار التفاعل والرد
       function setupMessageButtons(messageElem) {
         if (messageElem) {
