@@ -384,3 +384,41 @@ body {
   color: #2563eb;
   transform: scale(1.1);
 }
+
+/* أنماط منتقي التفاعلات (الإيموجي) */
+.reaction-picker {
+  position: absolute;
+  background-color: #fff;
+  border-radius: 20px;
+  padding: 8px 12px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  gap: 8px;
+  transition: all 0.2s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.reaction-emoji-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.reaction-emoji-btn:hover {
+  transform: scale(1.1);
+  background-color: #f0f8ff;
+}
+
+/* تأثير للتأكيد على انقر الزر */
+.reaction-emoji-btn:active {
+  transform: scale(0.9);
+}
