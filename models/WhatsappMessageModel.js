@@ -129,6 +129,12 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       context = messageData.context;
     }
     
+    // التحقق من وجود سياق في metadata (للتوافق مع تنسيق API واتساب)
+    if (!replyToMessageId && messageData.metadata && messageData.metadata.context && messageData.metadata.context.id) {
+      replyToMessageId = messageData.metadata.context.id;
+      context = messageData.metadata.context;
+    }
+    
     // إنشاء رسالة جديدة
     const message = await this.create({
       conversationId: conversationId,
