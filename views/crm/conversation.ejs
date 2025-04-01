@@ -664,256 +664,87 @@
           // تعيين معرف الرسالة المرد عليها
           data.message.replyToId = data.replyToId;
           
-          // استخدام الدالة الموجودة لإضافة رسالة مع اقتباس
-          addNewMessageWithReply(data.message);
+          // البحث عن الرسالة الأصلية في واجهة المستخدم
+          const originalMsgElem = document.querySelector(`.message[data-external-id="${data.replyToId}"]`);
+          
+          // إذا كانت الرسالة الأصلية موجودة، استخدم الدالة الموجودة
+          if (originalMsgElem) {
+            addNewMessageWithReply(data.message);
+          } else {
+            // إذا لم تكن الرسالة الأصلية موجودة في واجهة المستخدم،
+            // قم بإضافة الرسالة مع اقتباس افتراضي
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${data.message.direction}`;
+            messageDiv.setAttribute('data-message-id', data.message._id || 'temp-' + Date.now());
+            messageDiv.setAttribute('data-status', data.message.status || 'sending');
+            if (data.message.externalMessageId) {
+              messageDiv.setAttribute('data-external-id', data.message.externalMessageId);
+            }
+            
+            // إضافة قسم الاقتباس
+            const repliedDiv = document.createElement('div');
+            repliedDiv.className = 'replied-message';
+            repliedDiv.innerHTML = `
+              <div class="replied-content">
+                <i class="fas fa-reply"></i>
+                <span>رد على رسالة سابقة</span>
+              </div>
+            `;
+            messageDiv.appendChild(repliedDiv);
+            
+            // إضافة فقاعة الرسالة
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = `message-bubble ${data.message.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
+            bubbleDiv.textContent = data.message.content;
+            
+            // إضافة الوقت والحالة
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            
+            const msgDate = new Date(data.message.timestamp);
+            timeDiv.textContent = msgDate.toLocaleString('ar-LY');
+            
+            if (data.message.direction === 'outgoing') {
+              const statusSpan = document.createElement('span');
+              statusSpan.className = 'message-status';
+              updateStatusIcon(statusSpan, data.message.status);
+              timeDiv.appendChild(statusSpan);
+            }
+            
+            bubbleDiv.appendChild(timeDiv);
+            messageDiv.appendChild(bubbleDiv);
+            
+            // إضافة أزرار الإجراءات
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            actionsDiv.innerHTML = `
+              <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
+                <i class="far fa-smile"></i>
+              </button>
+              <button class="btn btn-sm text-muted message-action-btn reply-btn" 
+                      data-message-id="${data.message._id}" 
+                      data-external-id="${data.message.externalMessageId || ''}" 
+                      title="رد">
+                <i class="fas fa-reply"></i>
+              </button>
+            `;
+            messageDiv.appendChild(actionsDiv);
+            
+            // إضافة للحاوية
+            const clearDiv = document.createElement('div');
+            clearDiv.className = 'clear-both';
+            
+            messageContainer.appendChild(messageDiv);
+            messageContainer.appendChild(clearDiv);
+            
+            // إضافة أحداث للأزرار الجديدة
+            setupMessageButtons(messageDiv);
+          }
           
           // تمرير للأسفل
           messageContainer.scrollTop = messageContainer.scrollHeight;
         }
       });
-      
-      // إضافة رسالة مع إظهار الرسالة المقتبس منها
-      function addNewMessageWithReply(messageData) {
-        // إنشاء عنصر الرسالة
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${messageData.direction}`;
-        messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
-        messageDiv.setAttribute('data-status', messageData.status || 'sending');
-        if (messageData.externalMessageId) {
-          messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
-        }
-        
-        // إضافة قسم الاقتباس إذا كان هناك رد
-        if (messageData.replyToId) {
-          const originalMsgElem = document.querySelector(`.message[data-external-id="${messageData.replyToId}"]`);
-          let originalContent = 'رد على رسالة غير موجودة';
-          
-          if (originalMsgElem) {
-            const bubbleElem = originalMsgElem.querySelector('.message-bubble');
-            if (bubbleElem) {
-              originalContent = bubbleElem.textContent.trim();
-              if (originalContent.length > 50) {
-                originalContent = originalContent.substring(0, 50) + '...';
-              }
-            }
-          }
-          
-          const repliedDiv = document.createElement('div');
-          repliedDiv.className = 'replied-message';
-          repliedDiv.innerHTML = `
-            <div class="replied-content">
-              <i class="fas fa-reply"></i>
-              <span>${originalContent}</span>
-            </div>
-          `;
-          messageDiv.appendChild(repliedDiv);
-        }
-        
-        // إضافة فقاعة الرسالة
-        const bubbleDiv = document.createElement('div');
-        bubbleDiv.className = `message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
-        bubbleDiv.textContent = messageData.content;
-        
-        // إضافة الوقت والحالة
-        const timeDiv = document.createElement('div');
-        timeDiv.className = 'message-time';
-        
-        const msgDate = new Date(messageData.timestamp);
-        timeDiv.textContent = msgDate.toLocaleString('ar-LY');
-        
-        if (messageData.direction === 'outgoing') {
-          const statusSpan = document.createElement('span');
-          statusSpan.className = 'message-status';
-          updateStatusIcon(statusSpan, messageData.status);
-          timeDiv.appendChild(statusSpan);
-        }
-        
-        bubbleDiv.appendChild(timeDiv);
-        messageDiv.appendChild(bubbleDiv);
-        
-        // إضافة أزرار الإجراءات
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'message-actions';
-        actionsDiv.innerHTML = `
-          <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
-            <i class="far fa-smile"></i>
-          </button>
-          <button class="btn btn-sm text-muted message-action-btn reply-btn" 
-                  data-message-id="${messageData._id}" 
-                  data-external-id="${messageData.externalMessageId || ''}" 
-                  title="رد">
-            <i class="fas fa-reply"></i>
-          </button>
-        `;
-        messageDiv.appendChild(actionsDiv);
-        
-        // إضافة للحاوية
-        const clearDiv = document.createElement('div');
-        clearDiv.className = 'clear-both';
-        
-        messageContainer.appendChild(messageDiv);
-        messageContainer.appendChild(clearDiv);
-        
-        // إضافة أحداث للأزرار الجديدة
-        setupMessageButtons(messageDiv);
-      }
-      
-      // تعيين أحداث أزرار التفاعل والرد على كل الرسائل
-      function setupMessageButtons() {
-        // أزرار التفاعل
-        document.querySelectorAll('.reaction-btn').forEach(btn => {
-          if (!btn.hasAttribute('data-setup')) {
-            btn.setAttribute('data-setup', 'true');
-            btn.addEventListener('click', function() {
-              const messageElem = this.closest('.message');
-              if (messageElem) {
-                showReactionPicker(messageElem);
-              }
-            });
-          }
-        });
-        
-        // أزرار الرد
-        document.querySelectorAll('.reply-btn').forEach(btn => {
-          if (!btn.hasAttribute('data-setup')) {
-            btn.setAttribute('data-setup', 'true');
-            btn.addEventListener('click', function() {
-              const messageElem = this.closest('.message');
-              const externalId = this.getAttribute('data-external-id');
-              if (messageElem && externalId) {
-                setReplyToMessage(messageElem, externalId);
-              }
-            });
-          }
-        });
-      }
-      
-      // عند النقر على زر الرد، تعين الرسالة للرد عليها
-      function setReplyToMessage(messageElem, externalId) {
-        const messageBubble = messageElem.querySelector('.message-bubble');
-        if (!externalId || !messageBubble) return;
-        
-        replyToMessageId = externalId;
-        replyToInfo = {
-          content: messageBubble.textContent.trim(),
-          direction: messageElem.classList.contains('incoming') ? 'incoming' : 'outgoing'
-        };
-        
-        // إظهار قسم الرد وتحديث واجهة المستخدم
-        showReplyInterface();
-        
-        // التركيز على حقل الإدخال
-        if (replyMessage) {
-          replyMessage.focus();
-        }
-      }
-      
-      // إظهار واجهة الرد على رسالة
-      function showReplyInterface() {
-        // التحقق من وجود وإنشاء قسم معلومات الرد
-        let replyInfoElem = document.getElementById('replyInfo');
-        if (!replyInfoElem) {
-          replyInfoElem = document.createElement('div');
-          replyInfoElem.id = 'replyInfo';
-          replyInfoElem.className = 'reply-info alert alert-secondary d-flex align-items-center mb-2';
-          
-          if (replyForm) {
-            replyForm.insertBefore(replyInfoElem, replyForm.firstChild);
-          }
-        }
-        
-        // تحديث محتوى قسم معلومات الرد
-        const content = replyToInfo.content.length > 40 ? replyToInfo.content.substring(0, 40) + '...' : replyToInfo.content;
-        replyInfoElem.innerHTML = `
-          <div class="flex-grow-1">
-            <small class="d-block text-muted">ترد على:</small>
-            <span>${content}</span>
-          </div>
-          <button type="button" class="btn-close ms-2" id="cancelReplyBtn"></button>
-        `;
-        
-        // إضافة حدث إلغاء الرد
-        document.getElementById('cancelReplyBtn').addEventListener('click', function() {
-          replyToMessageId = null;
-          replyToInfo = null;
-          replyInfoElem.remove();
-        });
-      }
-      
-      // إظهار منتقي التفاعلات
-      function showReactionPicker(messageElem) {
-        const externalId = messageElem.getAttribute('data-external-id');
-        if (!externalId) return;
-        
-        // إنشاء منتقي التفاعلات
-        const picker = document.createElement('div');
-        picker.className = 'reaction-picker position-absolute';
-        picker.style.backgroundColor = '#fff';
-        picker.style.border = '1px solid #ddd';
-        picker.style.borderRadius = '8px';
-        picker.style.padding = '5px';
-        picker.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-        picker.style.zIndex = '100';
-        
-        // إضافة خيارات التفاعل
-        const reactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-        
-        reactions.forEach(emoji => {
-          const emojiBtn = document.createElement('button');
-          emojiBtn.className = 'btn btn-sm emoji-btn';
-          emojiBtn.style.fontSize = '1.2rem';
-          emojiBtn.style.margin = '0 2px';
-          emojiBtn.style.padding = '0 5px';
-          emojiBtn.textContent = emoji;
-          
-          emojiBtn.addEventListener('click', function() {
-            sendReaction(externalId, emoji);
-            picker.remove();
-          });
-          
-          picker.appendChild(emojiBtn);
-        });
-        
-        // إضافة منتقي التفاعلات بعد عنصر الرسالة
-        messageElem.style.position = 'relative';
-        messageElem.appendChild(picker);
-        
-        // إغلاق المنتقي عند النقر في أي مكان آخر
-        document.addEventListener('click', function closeReactionPicker(e) {
-          if (!picker.contains(e.target) && !messageElem.querySelector('.reaction-btn').contains(e.target)) {
-            picker.remove();
-            document.removeEventListener('click', closeReactionPicker);
-          }
-        });
-      }
-      
-      // إرسال التفاعل على رسالة
-      function sendReaction(messageId, emoji) {
-        fetch(`/crm/conversations/<%= conversation._id %>/react`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          body: JSON.stringify({
-            messageId,
-            emoji
-          })
-        })
-        .then(response => {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            return response.json();
-          }
-          throw new Error('الاستجابة ليست بتنسيق JSON');
-        })
-        .then(data => {
-          console.log('تم إرسال التفاعل بنجاح:', data);
-        })
-        .catch(error => {
-          console.error('خطأ في إرسال التفاعل:', error);
-        });
-      }
       
       // إرسال النموذج
       function submitForm() {
