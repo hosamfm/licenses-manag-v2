@@ -113,6 +113,9 @@ function initialize(server) {
     });
 
     // معالجة إضافة رد فعل على رسالة
+    // ملاحظة: هذه الطريقة تمثل ازدواجية مع مسار HTTP (/reaction و /react)
+    // يفضل استخدام مسار HTTP من خلال دالة window.sendReaction في conversation-utils.js
+    // تم الاحتفاظ بهذه الطريقة للتوافق مع العملاء القديمين والحالات الخاصة فقط
     socket.on('add_reaction', async (data) => {
       try {
         // التحقق من صحة البيانات

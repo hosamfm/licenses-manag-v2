@@ -156,50 +156,6 @@ exports.listMyConversations = async (req, res) => {
 };
 
 /**
- * عرض محادثة محددة
- */
-exports.showConversation = async (req, res) => {
-  try {
-    const { conversationId } = req.params;
-
-    const conversation = await Conversation.findById(conversationId)
-      .populate('channelId')
-      .populate('assignedTo', 'username full_name')
-      .lean();
-
-    if (!conversation) {
-      req.flash('error', 'المحادثة غير موجودة');
-      return res.redirect('/crm/conversations');
-    }
-
-    // جلب جهة الاتصال إن وجدت
-    const contact = await Contact.findOne({ phoneNumber: conversation.phoneNumber }).lean();
-
-    // جلب آخر 50 رسالة
-    const msgs = await WhatsappMessage.find({ conversationId })
-      .sort({ timestamp: -1 })
-      .limit(50)
-      .lean();
-
-    const sorted = msgs.reverse(); // الأقدم فالأحدث
-
-    res.render('crm/conversation', {
-      title: `محادثة مع ${conversation.customerName || conversation.phoneNumber}`,
-      conversation,
-      messages: sorted,
-      contact,
-      user: req.user,
-      layout: 'crm/layout',
-      flashMessages: req.flash()
-    });
-  } catch (error) {
-    logger.error('conversationController', 'خطأ في عرض المحادثة', error);
-    req.flash('error', 'حدث خطأ أثناء تحميل المحادثة');
-    res.redirect('/crm/conversations');
-  }
-};
-
-/**
  * إسناد المحادثة إلى مستخدم آخر
  */
 exports.assignConversation = async (req, res) => {

@@ -44,22 +44,14 @@ router.post('/:conversationId/assign', ensureCanAccessConversations, conversatio
 // مسار إضافة ملاحظة داخلية للمحادثة
 router.post('/:conversationId/note', ensureCanAccessConversations, conversationController.addInternalNote);
 
-// مسار تغيير حالة المحادثة (إغلاق / فتح)
-router.post('/:conversationId/status', ensureCanAccessConversations, conversationController.toggleConversationStatus);
-
 // مسار إرسال رد في المحادثة
 router.post('/:conversationId/reply', ensureCanAccessConversations, conversationController.replyToConversation);
 
-// مسار إرسال تفاعل على رسالة
-router.post('/:conversationId/react', ensureCanAccessConversations, conversationController.reactToMessage);
-
-// مسار التفاعل بالإيموجي على الرسائل (المستخدم في الواجهة الجديدة)
+// مسار التفاعل بالإيموجي على الرسائل
 router.post('/:conversationId/reaction', ensureCanAccessConversations, conversationController.reactToMessage);
 
-// مسار إغلاق المحادثة
+// مسارات تغيير حالة المحادثة
 router.post('/:conversationId/close', ensureCanAccessConversations, conversationController.toggleConversationStatus);
-
-// مسار إعادة فتح المحادثة
 router.post('/:conversationId/reopen', ensureCanAccessConversations, conversationController.toggleConversationStatus);
 
 // مسار وضع علامة "مقروء" على محادثة
