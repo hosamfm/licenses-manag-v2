@@ -579,7 +579,9 @@
       let conversationId = '<%= conversation._id %>';
       let replyToMessageId = null; // معرف الرسالة التي يتم الرد عليها
       let replyToInfo = null; // معلومات الرسالة المراد الرد عليها
-
+      let isProcessing = false; // متغير لتتبع ما إذا كانت هناك عملية إرسال جارية
+      let messageQueue = []; // طابور للرسائل المنتظرة للإرسال
+      
       // الانضمام إلى غرفة المحادثة
       socket.emit('join-conversation', conversationId);
       
@@ -712,7 +714,7 @@
         bubbleDiv.className = `message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
         bubbleDiv.textContent = messageData.content;
         
-        // إضافة الوقت وحالة الرسالة
+        // إضافة الوقت والحالة
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         
@@ -891,13 +893,20 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
           },
           body: JSON.stringify({
             messageId,
             emoji
           })
         })
-        .then(response => response.json())
+        .then(response => {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            return response.json();
+          }
+          throw new Error('الاستجابة ليست بتنسيق JSON');
+        })
         .then(data => {
           console.log('تم إرسال التفاعل بنجاح:', data);
         })
@@ -912,85 +921,123 @@
           const content = replyMessage.value.trim();
           if (!content) return;
           
-          // إظهار مؤشر الإرسال
-          if (sendingIndicator) {
-            sendingIndicator.style.display = 'inline-block';
+          // حفظ محتوى الرد وتفريغ صندوق الكتابة فورًا
+          const messageContent = content;
+          const currentReplyToMessageId = replyToMessageId;
+          
+          // تفريغ صندوق الكتابة فورًا
+          replyMessage.value = '';
+          
+          // إخفاء واجهة الرد إذا كانت موجودة
+          const replyInfoElem = document.getElementById('replyInfo');
+          if (replyInfoElem) {
+            replyInfoElem.remove();
           }
           
-          // إضافة رسالة مؤقتة
-          const tempId = 'temp-' + Date.now();
-          addTempMessage(content, tempId);
+          // إعادة تعيين معلومات الرد
+          replyToMessageId = null;
+          replyToInfo = null;
           
-          // تمرير إلى آخر الرسائل
-          messageContainer.scrollTop = messageContainer.scrollHeight;
-          
-          // الإرسال عبر AJAX
-          fetch(replyForm.action, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              content,
-              replyToMessageId
-            })
-          })
-          .then(response => response.json())
-          .then(data => {
-            console.log('تم إرسال الرد بنجاح:', data);
-            
-            // إزالة الرسالة المؤقتة
-            const tempMsg = document.querySelector(`[data-message-id="${tempId}"]`);
-            if (tempMsg) {
-              tempMsg.remove();
-            }
-            
-            // إضافة الرسالة الحقيقية مع المعرّف الصحيح
-            if (data.success && data.message) {
-              addNewMessage(data.message);
-              messageContainer.scrollTop = messageContainer.scrollHeight;
-            }
-            
-            // إعادة تعيين النموذج
-            replyForm.reset();
-            
-            // إخفاء قسم معلومات الرد إن وجد
-            const replyInfoElem = document.getElementById('replyInfo');
-            if (replyInfoElem) {
-              replyInfoElem.remove();
-            }
-            
-            // إعادة تعيين معلومات الرد
-            replyToMessageId = null;
-            replyToInfo = null;
-            
-            // إخفاء مؤشر الإرسال
-            if (sendingIndicator) {
-              sendingIndicator.style.display = 'none';
-            }
-          })
-          .catch(error => {
-            console.error('خطأ في إرسال الرسالة:', error);
-            
-            // تحديث حالة الرسالة المؤقتة إلى فشل
-            const tempMsg = document.querySelector(`[data-message-id="${tempId}"]`);
-            if (tempMsg) {
-              tempMsg.setAttribute('data-status', 'failed');
-              const statusElem = tempMsg.querySelector('.message-status');
-              if (statusElem) {
-                updateStatusIcon(statusElem, 'failed');
-              }
-            }
-            
-            // إخفاء مؤشر الإرسال
-            if (sendingIndicator) {
-              sendingIndicator.style.display = 'none';
-            }
+          // إضافة الرسالة إلى الطابور
+          messageQueue.push({
+            content: messageContent,
+            replyToMessageId: currentReplyToMessageId
           });
+          
+          // إرسال الرسالة الأولى في الطابور
+          processMessageQueue();
         }
       }
-
-      function addTempMessage(content, tempId) {
+      
+      // معالجة الطابور
+      function processMessageQueue() {
+        if (isProcessing || messageQueue.length === 0) return;
+        
+        isProcessing = true;
+        
+        const messageData = messageQueue.shift();
+        
+        // إظهار مؤشر الإرسال
+        if (sendingIndicator) {
+          sendingIndicator.style.display = 'inline-block';
+        }
+        
+        // إضافة رسالة مؤقتة
+        const tempId = 'temp-' + Date.now();
+        addTempMessage(messageData.content, tempId, messageData.replyToMessageId);
+        
+        // تمرير إلى آخر الرسائل
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+        
+        // الإرسال عبر AJAX
+        fetch(replyForm.action, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({
+            content: messageData.content,
+            replyToMessageId: messageData.replyToMessageId
+          })
+        })
+        .then(response => {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            return response.json();
+          }
+          throw new Error('الاستجابة ليست بتنسيق JSON');
+        })
+        .then(data => {
+          console.log('تم إرسال الرد بنجاح:', data);
+          
+          // إزالة الرسالة المؤقتة
+          const tempMsg = document.querySelector(`[data-message-id="${tempId}"]`);
+          if (tempMsg) {
+            tempMsg.remove();
+          }
+          
+          // إضافة الرسالة الحقيقية مع المعرّف الصحيح
+          if (data.success && data.message) {
+            addNewMessage(data.message);
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+          }
+          
+          // إخفاء مؤشر الإرسال
+          if (sendingIndicator) {
+            sendingIndicator.style.display = 'none';
+          }
+          
+          // معالجة الرسائل المتبقية في الطابور
+          isProcessing = false;
+          processMessageQueue();
+        })
+        .catch(error => {
+          console.error('خطأ في إرسال الرسالة:', error);
+          
+          // تحديث حالة الرسالة المؤقتة إلى فشل
+          const tempMsg = document.querySelector(`[data-message-id="${tempId}"]`);
+          if (tempMsg) {
+            tempMsg.setAttribute('data-status', 'failed');
+            const statusElem = tempMsg.querySelector('.message-status');
+            if (statusElem) {
+              updateStatusIcon(statusElem, 'failed');
+            }
+          }
+          
+          // إخفاء مؤشر الإرسال
+          if (sendingIndicator) {
+            sendingIndicator.style.display = 'none';
+          }
+          
+          // معالجة الرسائل المتبقية في الطابور
+          isProcessing = false;
+          processMessageQueue();
+        });
+      }
+      
+      // إضافة رسالة مؤقتة
+      function addTempMessage(content, tempId, currentReplyToId) {
         // إنشاء عنصر الرسالة
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message outgoing temp-message';
@@ -998,13 +1045,13 @@
         messageDiv.setAttribute('data-message-id', tempId);
         
         // إضافة قسم الاقتباس إذا كان هناك رد
-        if (replyToMessageId && replyToInfo) {
+        if (currentReplyToId && replyToInfo) {
           const repliedDiv = document.createElement('div');
           repliedDiv.className = 'replied-message';
           repliedDiv.innerHTML = `
             <div class="replied-content">
               <i class="fas fa-reply"></i>
-              <span>${replyToInfo.content.length > 50 ? replyToInfo.content.substring(0, 50) + '...' : replyToInfo.content}</span>
+              <span>${replyToInfo.content.length > 40 ? replyToInfo.content.substring(0, 40) + '...' : replyToInfo.content}</span>
             </div>
           `;
           messageDiv.appendChild(repliedDiv);
@@ -1038,6 +1085,7 @@
         messageContainer.appendChild(clearDiv);
       }
       
+      // إضافة رسالة جديدة
       function addNewMessage(messageData) {
         // إنشاء عنصر الرسالة
         const messageDiv = document.createElement('div');
