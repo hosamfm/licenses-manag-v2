@@ -973,7 +973,7 @@
         messageContainer.appendChild(clearDiv);
         
         // إضافة أحداث للأزرار الجديدة
-        setupMessageButtons();
+        setupMessageButtons(messageDiv);
       }
       
       // تحديث أيقونة الحالة
@@ -1008,6 +1008,50 @@
         }
       }
       
+      // إعداد أزرار التفاعل والرد للرسائل
+      function setupMessageButtons(messageElem) {
+        // إذا تم تمرير عنصر محدد، قم بإعداد الأزرار لهذا العنصر فقط
+        if (messageElem) {
+          const replyBtn = messageElem.querySelector('.reply-btn');
+          const reactionBtn = messageElem.querySelector('.reaction-btn');
+          
+          if (replyBtn) {
+            replyBtn.addEventListener('click', function() {
+              const messageId = messageElem.getAttribute('data-message-id');
+              const externalId = messageElem.getAttribute('data-external-id');
+              showReplyForm(messageId, externalId, messageElem);
+            });
+          }
+          
+          if (reactionBtn) {
+            reactionBtn.addEventListener('click', function() {
+              const messageId = messageElem.getAttribute('data-message-id');
+              const externalId = messageElem.getAttribute('data-external-id');
+              showReactionPicker(messageId, externalId);
+            });
+          }
+        } else {
+          // إعداد جميع أزرار الرد والتفاعل في الصفحة
+          document.querySelectorAll('.reply-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+              const messageElem = this.closest('.message');
+              const messageId = messageElem.getAttribute('data-message-id');
+              const externalId = messageElem.getAttribute('data-external-id');
+              showReplyForm(messageId, externalId, messageElem);
+            });
+          });
+          
+          document.querySelectorAll('.reaction-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+              const messageElem = this.closest('.message');
+              const messageId = messageElem.getAttribute('data-message-id');
+              const externalId = messageElem.getAttribute('data-external-id');
+              showReactionPicker(messageId, externalId);
+            });
+          });
+        }
+      }
+
       // إرسال النموذج عند النقر على زر الإرسال
       if (sendButton && replyForm) {
         sendButton.addEventListener('click', function(e) {
