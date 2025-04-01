@@ -113,7 +113,7 @@ function initialize(server) {
     });
 
     // معالجة إضافة رد فعل على رسالة
-    socket.on('add_reaction', (data) => {
+    socket.on('add_reaction', async (data) => {
       try {
         // التحقق من صحة البيانات
         if (!data || !data.messageId || !data.reactionType) {
@@ -141,11 +141,22 @@ function initialize(server) {
         try {
           const conversationController = require('../controllers/conversationController');
           
+          // البحث عن الرسالة باستخدام المعرف الداخلي للحصول على معرف واتساب الخارجي
+          const WhatsappMessage = require('../models/WhatsappMessageModel');
+          const message = await WhatsappMessage.findById(data.messageId);
+          
+          if (!message || !message.externalMessageId) {
+            logger.error('socketService', 'لم يتم العثور على معرف خارجي للرسالة', { 
+              messageId: data.messageId
+            });
+            return socket.emit('reaction_error', { error: 'الرسالة غير موجودة أو لا تحتوي معرف خارجي' });
+          }
+          
           // استدعاء وظيفة reactToMessage داخلياً
           // إنشاء كائنات req و res مخصصة للاستخدام الداخلي
           const req = {
             params: { conversationId: data.conversationId },
-            body: { messageId: data.messageId, emoji: data.reactionType },
+            body: { messageId: message.externalMessageId, emoji: data.reactionType },
             user: { _id: socket.userId, username: socket.username }
           };
           
@@ -156,6 +167,9 @@ function initialize(server) {
                   messageId: data.messageId,
                   emoji: data.reactionType
                 });
+                
+                // إرسال تأكيد للمستخدم الذي أضاف رد الفعل
+                socket.emit('reaction_sent', { success: true, reactionData });
               } else {
                 logger.error('socketService', 'فشل في إرسال التفاعل إلى واتساب', { 
                   error: responseData.error,
@@ -188,13 +202,13 @@ function initialize(server) {
             error: controllerError.message, 
             messageId: data.messageId
           });
+          
+          // إعلام المستخدم بالخطأ
+          socket.emit('reaction_error', { error: 'حدث خطأ في معالجة رد الفعل' });
         }
 
         // بث حدث رد الفعل لجميع المستخدمين في نفس المحادثة
         io.to(data.conversationId.toString()).emit('reaction_received', reactionData);
-        
-        // إرسال تأكيد للمستخدم الذي أضاف رد الفعل
-        socket.emit('reaction_sent', { success: true, reactionData });
       } catch (error) {
         logger.error('socketService', 'خطأ أثناء إضافة رد فعل', { 
           error: error.message, 
