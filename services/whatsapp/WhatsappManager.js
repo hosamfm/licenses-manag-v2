@@ -41,6 +41,24 @@ class WhatsappManager {
      */
     async initialize(settings = {}) {
         try {
+            // إذا لم يتم تمرير إعدادات، حاول تحميلها من قاعدة البيانات
+            if (!settings.provider) {
+                logger.info('WhatsappManager', 'جاري تحميل إعدادات الواتساب من قاعدة البيانات');
+                const dbSettings = await WhatsappSettings.findOne({ isActive: true });
+                
+                if (!dbSettings) {
+                    throw new Error('لم يتم العثور على إعدادات نشطة للواتساب في قاعدة البيانات');
+                }
+                
+                // استخدام إعدادات قاعدة البيانات
+                settings = {
+                    provider: dbSettings.provider,
+                    config: dbSettings.config[dbSettings.provider] || {}
+                };
+                
+                logger.info('WhatsappManager', 'تم تحميل إعدادات الواتساب بنجاح', { provider: settings.provider });
+            }
+
             // التحقق من وجود مزود خدمة محدد
             if (!settings.provider) {
                 throw new Error('لم يتم تحديد مزود خدمة الواتساب في الإعدادات');
