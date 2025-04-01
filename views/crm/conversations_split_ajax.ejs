@@ -8,6 +8,90 @@
   <link rel="stylesheet" href="/css/conversation.css">
   <!-- إضافة مكتبة Socket.IO - مهم لوظائف المحادثات الفورية -->
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  
+  <!-- تعريف الدوال المطلوبة عالمياً لإرسال الرسائل -->
+  <script>
+    // دالة إرسال الرد العالمية
+    function sendReply(event) {
+      if (event) event.preventDefault();
+      
+      const replyMessage = document.getElementById('replyMessage');
+      const sendButton = document.getElementById('sendButton');
+      const sendingIndicator = document.getElementById('sendingIndicator');
+      const conversationId = document.getElementById('conversationId')?.value;
+      
+      // التحقق من وجود العناصر
+      if (!replyMessage || !sendButton || !sendingIndicator || !conversationId) {
+        console.error('عناصر النموذج غير متوفرة:', { 
+          replyMessage: !!replyMessage, 
+          sendButton: !!sendButton,
+          sendingIndicator: !!sendingIndicator,
+          conversationId: conversationId 
+        });
+        return;
+      }
+      
+      // التحقق من الإدخال
+      if (!replyMessage.value.trim()) {
+        alert('يرجى كتابة نص الرسالة');
+        return;
+      }
+      
+      // تعطيل الزر وإظهار مؤشر التحميل
+      sendButton.disabled = true;
+      sendingIndicator.style.display = 'inline-block';
+      
+      // إرسال الرسالة للخادم
+      fetch(`/crm/conversations/${conversationId}/reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+          content: replyMessage.value.trim(),
+          replyToMessageId: window.currentReplyToId || null
+        })
+      })
+      .then(response => {
+        if (!response.ok) throw new Error('فشل إرسال الرسالة');
+        return response.json();
+      })
+      .then(data => {
+        console.log('تم إرسال الرسالة بنجاح:', data);
+        
+        // مسح النص من النموذج
+        replyMessage.value = '';
+        
+        // إعادة تمكين زر الإرسال وإخفاء المؤشر
+        sendButton.disabled = false;
+        sendingIndicator.style.display = 'none';
+        
+        // إزالة مؤشر الرد إن وجد
+        const replyIndicator = document.getElementById('replyIndicator');
+        if (replyIndicator) replyIndicator.remove();
+        
+        // إعادة تعيين متغير الرد
+        window.currentReplyToId = null;
+        
+        // تحديث المحادثة
+        if (window.refreshConversationDetails) window.refreshConversationDetails();
+      })
+      .catch(error => {
+        console.error('خطأ في إرسال الرسالة:', error);
+        
+        // إعادة تمكين زر الإرسال وإخفاء المؤشر
+        sendButton.disabled = false;
+        sendingIndicator.style.display = 'none';
+        
+        // عرض رسالة خطأ
+        window.showToast && window.showToast('فشل في إرسال الرسالة، يرجى المحاولة مرة أخرى.', 'danger');
+      });
+    }
+    
+    // متغير عالمي للرد على رسالة محددة
+    window.currentReplyToId = null;
+  </script>
 </head>
 <body>
 
@@ -223,7 +307,7 @@
           return response.json();
         })
         .then(data => {
-          if (data.conversations && data.conversations.length > 0) {
+          if (data.success && data.conversations && data.conversations.length > 0) {
             // إعادة بناء قائمة المحادثات
             const conversationList = document.getElementById('conversationList');
             if (conversationList) {
@@ -249,33 +333,34 @@
                       ${conv.lastMessage ? 
                         `<small class="text-muted">
                           ${conv.lastMessage.direction === 'incoming' ? 'رسالة واردة: ' : 'رسالة صادرة: '}
-                          ${conv.lastMessage.content ? 
-                            (conv.lastMessage.content.substring(0, 30) + '...') : 
-                            'محتوى وسائط'}
+                          ${conv.lastMessage.content.substring(0, 30)}${conv.lastMessage.content.length > 30 ? '...' : ''}
                         </small>` : 
-                        '<small class="text-muted">لا توجد رسائل</small>'}
+                        '<small class="text-muted">لا توجد رسائل</small>'
+                      }
                     </div>
-                    <small class="text-muted d-block">
-                      ${new Date(conv.lastMessageAt || conv.updatedAt).toLocaleString('ar-LY')}
-                    </small>
                   </button>
                 `;
               });
               
+              // تحديث المحتوى
               conversationList.innerHTML = html;
               
-              // إعادة تعيين مستمعات الأحداث للقائمة
-              attachConversationListeners();
+              // إعادة تعيين مستمعات الأحداث
+              attachConversationItemsEvents();
             }
           }
         })
-        .catch(err => {
-          console.error('خطأ في تحديث قائمة المحادثات:', err);
+        .catch(error => {
+          console.error('خطأ في تحديث قائمة المحادثات:', error);
+          // في حالة الخطأ 404، قد يكون المستخدم في الواجهة القديمة - نقوم بإعادة التوجيه إلى الواجهة الجديدة
+          if (error.message.includes('404')) {
+            window.location.href = '/crm/conversations/ajax';
+          }
         });
       }
       
       // دالة لتعيين مستمعات أحداث لعناصر قائمة المحادثات
-      function attachConversationListeners() {
+      function attachConversationItemsEvents() {
         const conversationList = document.getElementById('conversationList');
         if (!conversationList) return;
         
@@ -425,7 +510,7 @@
         if (!conversationList) return;
         
         // تعيين مستمعات الأحداث للقائمة
-        attachConversationListeners();
+        attachConversationItemsEvents();
         
         // محاولة استخراج معرف المحادثة من عنوان URL الحالي
         const urlParts = window.location.pathname.split('/');

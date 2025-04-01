@@ -651,3 +651,66 @@ exports.getConversationDetailsAjax = async (req, res) => {
     return res.status(500).send('<div class="alert alert-danger">خطأ في الخادم</div>');
   }
 };
+
+/**
+ * 5) إرجاع قائمة المحادثات لتحديثها بواسطة AJAX
+ */
+exports.listConversationsAjaxList = async (req, res) => {
+  try {
+    // إرجاع البيانات بصيغة JSON
+    // تحديد الاستعلام بناءً على صلاحيات المستخدم
+    let query = {};
+    
+    // التحقق من وجود حالة محددة في الاستعلام
+    const status = req.query.status || 'all';
+    if (status !== 'all') {
+      query.status = status;
+    }
+    
+    // إضافة فلتر إذا كان المستخدم ليس مشرفاً أو مديراً
+    if (req.user && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+      query.assignedTo = req.user._id;
+    }
+    
+    const conversations = await Conversation.find(query)
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .lean();
+
+    // احسب عدد الرسائل غير المقروءة لكل محادثة
+    const convWithUnread = await Promise.all(
+      conversations.map(async (conv) => {
+        // حساب عدد الرسائل غير المقروءة
+        const unreadCount = await WhatsappMessage.countDocuments({
+          conversationId: conv._id,
+          direction: 'incoming',
+          status: { $ne: 'read' }
+        });
+        
+        // جلب آخر رسالة
+        const lastMsg = await WhatsappMessage.findOne({ conversationId: conv._id })
+          .sort({ timestamp: -1 })
+          .lean();
+          
+        // إرجاع المحادثة مع البيانات الإضافية
+        return { 
+          ...conv, 
+          unreadCount, 
+          lastMessage: lastMsg || null 
+        };
+      })
+    );
+
+    // إرجاع البيانات بصيغة JSON
+    return res.json({
+      success: true,
+      conversations: convWithUnread
+    });
+  } catch (err) {
+    logger.error('conversationController', 'خطأ في listConversationsAjaxList', err);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'حدث خطأ أثناء تحميل المحادثات' 
+    });
+  }
+};

@@ -23,14 +23,20 @@ router.get('/my', ensureCanAccessConversations, conversationController.listMyCon
 // 1) صفحة عرض المحادثات بأسلوب AJAX (صفحة عمودين)
 router.get('/ajax', ensureCanAccessConversations, conversationController.listConversationsAjax);
 
-// 2) جلب تفاصيل محادثة (Partial) عبر AJAX
+// 2) جلب قائمة المحادثات للتحديث عبر AJAX
+router.get('/ajax/list', ensureCanAccessConversations, conversationController.listConversationsAjaxList);
+
+// 3) جلب تفاصيل محادثة (Partial) عبر AJAX
 router.get('/ajax/details/:conversationId',
   ensureCanAccessConversations,
   conversationController.getConversationDetailsAjax
 );
 
-// مسار عرض تفاصيل محادثة محددة - معطل مؤقتًا لتجنب التضارب مع واجهة AJAX
-// router.get('/:conversationId', ensureCanAccessConversations, conversationController.showConversation);
+// مسار عرض تفاصيل محادثة محددة - يقوم بتحويل المستخدم للواجهة الجديدة
+router.get('/:conversationId', ensureCanAccessConversations, (req, res) => {
+  // تحويل المستخدم للواجهة الجديدة مع الحفاظ على معرف المحادثة
+  res.redirect(`/crm/conversations/ajax?selected=${req.params.conversationId}`);
+});
 
 // مسار إسناد محادثة إلى موظف
 router.post('/:conversationId/assign', ensureCanAccessConversations, conversationController.assignConversation);
@@ -46,6 +52,9 @@ router.post('/:conversationId/reply', ensureCanAccessConversations, conversation
 
 // مسار إرسال تفاعل على رسالة
 router.post('/:conversationId/react', ensureCanAccessConversations, conversationController.reactToMessage);
+
+// مسار التفاعل بالإيموجي على الرسائل (المستخدم في الواجهة الجديدة)
+router.post('/:conversationId/reaction', ensureCanAccessConversations, conversationController.reactToMessage);
 
 // مسار إغلاق المحادثة
 router.post('/:conversationId/close', ensureCanAccessConversations, conversationController.toggleConversationStatus);
