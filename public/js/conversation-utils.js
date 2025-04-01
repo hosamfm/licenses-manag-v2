@@ -515,4 +515,63 @@
     }
   };
 
+  /**
+   * دالة لتحديث تفاعل على رسالة في الواجهة
+   * @param {string} messageId - معرف الرسالة (يمكن أن يكون معرف خارجي أو داخلي)
+   * @param {object} reaction - كائن يحتوي على معلومات التفاعل (المرسل، الإيموجي)
+   */
+  window.updateMessageReaction = function(messageId, reaction) {
+    if (!messageId || !reaction) {
+      console.warn('بيانات غير كاملة لتحديث التفاعل', { messageId, reaction });
+      return;
+    }
+    
+    // البحث أولاً عن الرسالة حسب المعرف الخارجي
+    let messageElem = document.querySelector(`.message[data-external-id="${messageId}"]`);
+    
+    // إذا لم يتم العثور على الرسالة بالمعرف الخارجي، حاول البحث بمعرف الرسالة في قاعدة البيانات
+    if (!messageElem) {
+      messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+    }
+    
+    // إذا لم يتم العثور على الرسالة بأي من المعرفين
+    if (!messageElem) {
+      console.warn('لم يتم العثور على الرسالة لإضافة التفاعل. المعرف:', messageId);
+      return;
+    }
+    
+    console.log('تم العثور على الرسالة وسيتم إضافة التفاعل:', messageId, reaction);
+    
+    // البحث عن وجود حاوية التفاعلات في الرسالة
+    let reactionsContainer = messageElem.querySelector('.message-reactions');
+    
+    // إذا لم تكن موجودة، أنشئها
+    if (!reactionsContainer) {
+      reactionsContainer = document.createElement('div');
+      reactionsContainer.className = 'message-reactions';
+      
+      // إضافة حاوية التفاعلات بعد فقاعة الرسالة
+      const messageBubble = messageElem.querySelector('.message-bubble');
+      if (messageBubble) {
+        messageBubble.insertAdjacentElement('afterend', reactionsContainer);
+      } else {
+        // إذا لم يتم العثور على فقاعة الرسالة، أضفها في نهاية الرسالة
+        messageElem.appendChild(reactionsContainer);
+      }
+    }
+    
+    // عرض التفاعل
+    // يمكننا تحديث هذا لدعم تفاعلات متعددة إذا لزم الأمر
+    reactionsContainer.innerHTML = `
+      <div class="reaction-item" title="${reaction.sender || 'غير معروف'}">
+        ${reaction.emoji || '👍'}
+      </div>
+    `;
+    
+    // تحديث سمات الرسالة لتسجيل التفاعل
+    messageElem.setAttribute('data-has-reaction', 'true');
+    
+    console.log('تم تحديث تفاعل الرسالة بنجاح');
+  };
+  
 })(window);

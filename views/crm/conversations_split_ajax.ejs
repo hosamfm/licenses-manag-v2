@@ -169,11 +169,34 @@
       });
       
       // الاستماع لأحداث التفاعلات الجديدة
-      socket.on('message_reaction', function(data) {
+      socket.on('message-reaction', function(data) {
         console.log('تفاعل جديد على رسالة:', data);
         
-        // إذا كانت الرسالة تنتمي إلى المحادثة الحالية، تحديث الواجهة
-        if (data.conversationId === currentConversationId) {
+        // التحقق من أن البيانات تخص المحادثة الحالية
+        if (!data.conversationId || data.conversationId !== currentConversationId) {
+          console.log('تجاهل تحديث التفاعل لأنه لا يخص المحادثة الحالية');
+          return;
+        }
+        
+        // استخدام الدالة الجديدة لتحديث التفاعل مباشرة بدلاً من إعادة تحميل المحادثة بالكامل
+        window.updateMessageReaction(data.externalId, data.reaction);
+      });
+      
+      // دعم للإشعارات القديمة بتنسيق الشرطة السفلية (_)
+      socket.on('message_reaction', function(data) {
+        console.log('تم استلام تفاعل بالتنسيق القديم:', data);
+        
+        // إعادة توجيه إلى المستمع الجديد إذا كان يحتوي على المعلومات الكافية
+        if (data && data.externalId && data.reaction) {
+          // إضافة معرف المحادثة إذا كان مفقوداً
+          if (!data.conversationId) {
+            data.conversationId = currentConversationId;
+          }
+          
+          // استخدام الدالة الجديدة
+          window.updateMessageReaction(data.externalId, data.reaction);
+        } else {
+          // السلوك القديم كإجراء احتياطي - إعادة تحميل المحادثة بالكامل
           refreshConversationDetails();
         }
       });

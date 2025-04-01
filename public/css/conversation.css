@@ -242,78 +242,42 @@ body {
 
 /* أنماط التفاعلات على الرسائل */
 .message-reactions {
-  position: absolute;
-  bottom: -15px;
-  right: 10px;
-  background: white;
-  padding: 2px 5px;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  direction: ltr; /* ضمان اتجاه مناسب للإيموجي */
+}
+
+.reaction-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f4f9;
+  border-radius: 1rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  cursor: default;
+  transition: transform 0.2s;
+}
+
+.reaction-item:hover {
+  transform: scale(1.1);
+  background-color: #e8f0fe;
 }
 
 .message.incoming .message-reactions {
-  left: 10px;
-  right: auto;
+  justify-content: flex-start;
+  margin-right: auto;
+  margin-left: 0.5rem;
 }
 
-/* ملاحظات النظام الداخلية */
-.message-internal-note {
-  text-align: center;
-  padding: 5px;
-  border-radius: 15px;
-  clear: both;
-  margin: 10px auto;
-  background-color: #f8f9fa;
-  border: 1px dashed #dee2e6;
-  max-width: 80%;
-  color: #6c757d;
-}
-
-.clear-both {
-  clear: both;
-}
-
-/* أنماط منتقي التفاعلات */
-.reaction-picker {
-  position: absolute;
-  background: white;
-  border-radius: 20px;
-  padding: 5px 10px;
-  display: flex;
-  gap: 5px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from { transform: translateY(10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.reaction-emoji-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 2px 5px;
-  border-radius: 50%;
-  transition: all 0.2s ease;
-}
-
-.reaction-emoji-btn:hover {
-  background-color: #f3f4f6;
-  transform: scale(1.1);
-}
-
-.reaction-emoji-btn:active {
-  transform: scale(0.9);
+.message.outgoing .message-reactions {
+  justify-content: flex-end;
+  margin-left: auto;
+  margin-right: 0.5rem;
 }
 
 /* أنماط تفاصيل المحادثة */

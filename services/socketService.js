@@ -281,8 +281,18 @@ function notifyMessageReaction(conversationId, externalId, reaction) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  io.to(`conversation-${conversationId}`).emit('message_reaction', { externalId, reaction });
-  logger.info('socketService', 'تم إرسال إشعار بتفاعل على رسالة', { conversationId, externalId });
+  
+  if (!conversationId || !externalId || !reaction) {
+    return logger.warn('socketService', 'معلومات غير كاملة لإشعار التفاعل', { conversationId, externalId, reaction });
+  }
+  
+  io.to(`conversation-${conversationId}`).emit('message-reaction', { 
+    externalId, 
+    reaction, 
+    conversationId 
+  });
+  
+  logger.info('socketService', 'تم إرسال إشعار بتفاعل على رسالة', { conversationId, externalId, reaction });
 }
 
 /**
@@ -295,7 +305,7 @@ function notifyMessageReply(conversationId, message, replyToId) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  io.to(`conversation-${conversationId}`).emit('message_reply', { message, replyToId });
+  io.to(`conversation-${conversationId}`).emit('message-reply', { message, replyToId });
   logger.info('socketService', 'تم إرسال إشعار برد على رسالة', { conversationId, replyToId });
 }
 
