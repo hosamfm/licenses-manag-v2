@@ -278,6 +278,100 @@ class MetaWhatsappService {
 
         return this.sendRequest(`/${settingsToUse.config.businessAccountId}/message_templates`, 'GET', null, settingsToUse);
     }
+
+    /**
+     * إرسال رد على رسالة محددة عبر واتساب
+     * @param {string} to رقم الهاتف المستلم
+     * @param {string} text نص الرسالة
+     * @param {string} replyMessageId معرف الرسالة التي يتم الرد عليها
+     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendReplyTextMessage(to, text, replyMessageId, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        const data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'text',
+            text: {
+                body: text
+            },
+            context: {
+                message_id: replyMessageId
+            }
+        };
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال تفاعل (إيموجي) على رسالة
+     * @param {string} to رقم الهاتف المستلم
+     * @param {string} messageId معرف الرسالة للتفاعل معها
+     * @param {string} emoji رمز الإيموجي للتفاعل
+     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendReaction(to, messageId, emoji, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        const data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'reaction',
+            reaction: {
+                message_id: messageId,
+                emoji: emoji
+            }
+        };
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
 }
 
 module.exports = new MetaWhatsappService();

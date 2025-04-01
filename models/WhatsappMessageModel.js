@@ -54,6 +54,19 @@ const whatsappMessageSchema = new mongoose.Schema({
   metadata: { 
     type: Object,
     default: {}
+  },
+  // حقول جديدة لدعم التفاعلات والردود
+  reactions: {
+    type: Array,
+    default: []
+  },
+  replyToMessageId: {
+    type: String,
+    default: null
+  },
+  context: {
+    type: Object,
+    default: null
   }
 }, {
   timestamps: true
@@ -69,6 +82,8 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
     const { from, id, type, timestamp } = messageData;
     let content = '';
     let mediaUrl = '';
+    let replyToMessageId = null;
+    let context = null;
     
     // استخراج محتوى الرسالة حسب نوعها
     if (type === 'text' && messageData.text) {
@@ -87,6 +102,19 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       if (messageData.location.name) {
         content += ` (${messageData.location.name})`;
       }
+    } else if (type === 'reaction' && messageData.reaction) {
+      // معالجة التفاعلات على الرسائل
+      content = messageData.reaction.emoji;
+      replyToMessageId = messageData.reaction.message_id;
+      
+      // تحديث التفاعل على الرسالة الأصلية
+      await this.updateReaction(replyToMessageId, from, content);
+    }
+    
+    // التحقق من وجود سياق رد على رسالة
+    if (messageData.context && messageData.context.message_id) {
+      replyToMessageId = messageData.context.message_id;
+      context = messageData.context;
     }
     
     // إنشاء رسالة جديدة
@@ -99,7 +127,9 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       timestamp: new Date(parseInt(timestamp) * 1000),
       status: 'received',
       externalMessageId: id,
-      metadata: messageData
+      metadata: messageData,
+      replyToMessageId: replyToMessageId,
+      context: context
     });
     
     return message;
@@ -114,16 +144,31 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
  * @param {Object} conversationId - معرّف المحادثة
  * @param {string} content - محتوى الرسالة
  * @param {Object} userId - معرّف المستخدم المرسل
+ * @param {string} replyToMessageId - معرّف الرسالة التي يتم الرد عليها (اختياري)
  */
-whatsappMessageSchema.statics.createOutgoingMessage = async function(conversationId, content, userId) {
+whatsappMessageSchema.statics.createOutgoingMessage = async function(conversationId, content, userId, replyToMessageId = null) {
   try {
+    // إذا كان هناك رد على رسالة، ابحث عن تفاصيلها
+    let context = null;
+    if (replyToMessageId) {
+      const originalMessage = await this.findOne({ externalMessageId: replyToMessageId });
+      if (originalMessage) {
+        context = {
+          message_id: replyToMessageId,
+          from: originalMessage.metadata ? originalMessage.metadata.from : null
+        };
+      }
+    }
+    
     const message = await this.create({
       conversationId: conversationId,
       direction: 'outgoing',
       content: content,
       timestamp: new Date(),
       status: 'sent',
-      sentBy: userId
+      sentBy: userId,
+      replyToMessageId: replyToMessageId,
+      context: context
     });
     
     return message;
@@ -159,6 +204,66 @@ whatsappMessageSchema.statics.updateMessageStatus = async function(externalMessa
     return message;
   } catch (error) {
     console.error('خطأ في تحديث حالة الرسالة:', error);
+    throw error;
+  }
+};
+
+/**
+ * تحديث التفاعل على رسالة
+ * @param {string} messageId - معرّف الرسالة الأصلية
+ * @param {string} sender - مرسل التفاعل
+ * @param {string} emoji - رمز التفاعل
+ */
+whatsappMessageSchema.statics.updateReaction = async function(messageId, sender, emoji) {
+  try {
+    const message = await this.findOne({ externalMessageId: messageId });
+    
+    if (!message) {
+      return null;
+    }
+    
+    // البحث عن تفاعل سابق من نفس المرسل وتحديثه
+    let reactions = message.reactions || [];
+    const existingReaction = reactions.findIndex(r => r.sender === sender);
+    
+    if (emoji === '') {
+      // إذا كان الإيموجي فارغاً، أزل التفاعل
+      if (existingReaction !== -1) {
+        reactions.splice(existingReaction, 1);
+      }
+    } else {
+      if (existingReaction !== -1) {
+        // تحديث التفاعل الموجود
+        reactions[existingReaction].emoji = emoji;
+        reactions[existingReaction].timestamp = new Date();
+      } else {
+        // إضافة تفاعل جديد
+        reactions.push({
+          sender,
+          emoji,
+          timestamp: new Date()
+        });
+      }
+    }
+    
+    message.reactions = reactions;
+    await message.save();
+    return message;
+  } catch (error) {
+    console.error('خطأ في تحديث التفاعل على الرسالة:', error);
+    throw error;
+  }
+};
+
+/**
+ * الحصول على رسالة بواسطة المعرف الخارجي
+ * @param {string} externalMessageId - المعرف الخارجي للرسالة
+ */
+whatsappMessageSchema.statics.getMessageByExternalId = async function(externalMessageId) {
+  try {
+    return await this.findOne({ externalMessageId });
+  } catch (error) {
+    console.error('خطأ في الحصول على الرسالة بواسطة المعرف الخارجي:', error);
     throw error;
   }
 };

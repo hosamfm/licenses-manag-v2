@@ -356,7 +356,7 @@ exports.replyToConversation = async (req, res) => {
   const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
   try {
     const { conversationId } = req.params;
-    const { content } = req.body;
+    const { content, replyToMessageId } = req.body;
 
     const conversation = await Conversation.findById(conversationId).populate('channelId');
     if (!conversation) {
@@ -371,14 +371,28 @@ exports.replyToConversation = async (req, res) => {
       return res.redirect(`/crm/conversations/${conversationId}`);
     }
 
+    // التحقق من وجود الرسالة التي يتم الرد عليها (إذا تم تحديدها)
+    let replyContext = null;
+    if (replyToMessageId) {
+      const originalMessage = await WhatsappMessage.findOne({ externalMessageId: replyToMessageId });
+      if (originalMessage) {
+        replyContext = {
+          message_id: replyToMessageId,
+          from: originalMessage.metadata ? originalMessage.metadata.from : null
+        };
+      }
+    }
+
     // إنشاء رسالة في DB
     const msg = new WhatsappMessage({
       conversationId,
       direction: 'outgoing',
       content: content.trim(),
       timestamp: new Date(),
-      sender: req.user?._id || null,
-      status: 'sent'
+      sentBy: req.user?._id || null,
+      status: 'sent',
+      replyToMessageId: replyToMessageId || null,
+      context: replyContext
     });
     await msg.save();
 
@@ -402,11 +416,26 @@ exports.replyToConversation = async (req, res) => {
         await metaWhatsappService.initialize();
       }
       const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
-      const apiResponse = await metaWhatsappService.sendTextMessage(
-        conversation.phoneNumber,
-        content,
-        phoneNumberId
-      );
+      
+      let apiResponse;
+      
+      // إذا كان رد على رسالة سابقة
+      if (replyToMessageId) {
+        apiResponse = await metaWhatsappService.sendReplyTextMessage(
+          conversation.phoneNumber,
+          content,
+          replyToMessageId,
+          phoneNumberId
+        );
+      } else {
+        // رسالة عادية
+        apiResponse = await metaWhatsappService.sendTextMessage(
+          conversation.phoneNumber,
+          content,
+          phoneNumberId
+        );
+      }
+      
       if (apiResponse?.messages?.length > 0) {
         externalId = apiResponse.messages[0].id;
       }
@@ -420,16 +449,28 @@ exports.replyToConversation = async (req, res) => {
     msg.status = finalStatus;
     await msg.save();
 
-    // إشعار Socket.io
-    socketService.notifyNewMessage(conversationId, {
-      _id: msg._id,
-      conversationId,
-      content,
-      direction: 'outgoing',
-      timestamp: msg.timestamp,
-      status: msg.status,
-      externalMessageId: externalId || null
-    });
+    // إشعار Socket.io - اعتماداً على ما إذا كانت رداً أو رسالة عادية
+    if (replyToMessageId) {
+      socketService.notifyMessageReply(conversationId, {
+        _id: msg._id,
+        conversationId,
+        content,
+        direction: 'outgoing',
+        timestamp: msg.timestamp,
+        status: msg.status,
+        externalMessageId: externalId || null
+      }, replyToMessageId);
+    } else {
+      socketService.notifyNewMessage(conversationId, {
+        _id: msg._id,
+        conversationId,
+        content,
+        direction: 'outgoing',
+        timestamp: msg.timestamp,
+        status: msg.status,
+        externalMessageId: externalId || null
+      });
+    }
 
     // إذا كان هناك مستخدم مسند غير المرسل
     if (conversation.assignedTo && req.user && conversation.assignedTo.toString() !== req.user._id.toString()) {
@@ -450,7 +491,8 @@ exports.replyToConversation = async (req, res) => {
           direction: 'outgoing',
           timestamp: msg.timestamp,
           status: msg.status,
-          externalMessageId: msg.externalMessageId || null
+          externalMessageId: msg.externalMessageId || null,
+          replyToMessageId: replyToMessageId || null
         }
       });
     } else {
@@ -464,5 +506,77 @@ exports.replyToConversation = async (req, res) => {
     }
     req.flash('error', 'حدث خطأ أثناء الإرسال');
     res.redirect(`/crm/conversations/${req.params.conversationId || ''}`);
+  }
+};
+
+/**
+ * إرسال تفاعل على رسالة
+ */
+exports.reactToMessage = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { messageId, emoji } = req.body;
+
+    if (!messageId || !emoji) {
+      return res.json({ success: false, error: 'بيانات غير كافية، يجب تحديد معرف الرسالة والإيموجي' });
+    }
+
+    // التحقق من وجود المحادثة
+    const conversation = await Conversation.findById(conversationId).populate('channelId');
+    if (!conversation) {
+      return res.json({ success: false, error: 'المحادثة غير موجودة' });
+    }
+
+    // البحث عن الرسالة للتفاعل معها
+    const message = await WhatsappMessage.findOne({ externalMessageId: messageId });
+    if (!message) {
+      return res.json({ success: false, error: 'الرسالة غير موجودة' });
+    }
+
+    try {
+      // إرسال التفاعل عبر واتساب
+      const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
+      if (!metaWhatsappService.initialized) {
+        await metaWhatsappService.initialize();
+      }
+
+      const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
+      await metaWhatsappService.sendReaction(
+        conversation.phoneNumber,
+        messageId,
+        emoji,
+        phoneNumberId
+      );
+
+      // تحديث التفاعل في قاعدة البيانات
+      const updatedMessage = await WhatsappMessage.updateReaction(
+        messageId,
+        req.user ? req.user._id.toString() : 'system',
+        emoji
+      );
+
+      // إرسال إشعار عبر Socket
+      socketService.notifyMessageReaction(
+        conversationId,
+        messageId,
+        {
+          sender: req.user ? req.user._id.toString() : 'system',
+          emoji,
+          timestamp: new Date()
+        }
+      );
+
+      return res.json({
+        success: true,
+        message: 'تم إرسال التفاعل بنجاح'
+      });
+
+    } catch (error) {
+      logger.error('conversationController', 'خطأ في إرسال التفاعل', error);
+      return res.json({ success: false, error: 'حدث خطأ أثناء إرسال التفاعل' });
+    }
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في معالجة طلب التفاعل', error);
+    return res.status(500).json({ success: false, error: 'حدث خطأ في الخادم' });
   }
 };

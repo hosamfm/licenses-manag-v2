@@ -31,6 +31,9 @@ router.post('/:conversationId/status', ensureCanAccessConversations, conversatio
 // مسار إرسال رد في المحادثة
 router.post('/:conversationId/reply', ensureCanAccessConversations, conversationController.replyToConversation);
 
+// مسار إرسال تفاعل على رسالة
+router.post('/:conversationId/react', ensureCanAccessConversations, conversationController.reactToMessage);
+
 // مسار إغلاق المحادثة
 router.post('/:conversationId/close', ensureCanAccessConversations, conversationController.toggleConversationStatus);
 

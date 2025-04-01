@@ -95,6 +95,34 @@ function notifyMessageStatusUpdate(conversationId, externalId, status) {
 }
 
 /**
+ * إرسال إشعار بتفاعل على رسالة
+ * @param {String} conversationId - معرف المحادثة
+ * @param {String} externalId - المعرف الخارجي للرسالة
+ * @param {Object} reaction - بيانات التفاعل (المرسل، الإيموجي)
+ */
+function notifyMessageReaction(conversationId, externalId, reaction) {
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+  io.to(`conversation-${conversationId}`).emit('message_reaction', { externalId, reaction });
+  logger.info('socketService', 'تم إرسال إشعار بتفاعل على رسالة', { conversationId, externalId });
+}
+
+/**
+ * إرسال إشعار برد على رسالة
+ * @param {String} conversationId - معرف المحادثة
+ * @param {Object} message - الرسالة الجديدة
+ * @param {String} replyToId - معرف الرسالة المرد عليها
+ */
+function notifyMessageReply(conversationId, message, replyToId) {
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+  io.to(`conversation-${conversationId}`).emit('message_reply', { message, replyToId });
+  logger.info('socketService', 'تم إرسال إشعار برد على رسالة', { conversationId, replyToId });
+}
+
+/**
  * إرسال إشعار شخصي لمستخدم معين
  * @param {String} userId - معرف المستخدم
  * @param {String} type - نوع الإشعار
@@ -140,6 +168,8 @@ module.exports = {
   notifyNewMessage,
   notifyConversationUpdate,
   notifyMessageStatusUpdate,
+  notifyMessageReaction,
+  notifyMessageReply,
   notifyUser,
   broadcastNotification,
   emitToRoom

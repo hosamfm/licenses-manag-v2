@@ -152,6 +152,36 @@
     textarea#replyMessage {
       resize: none; /* منع تغيير حجم الحقل */
     }
+    
+    /* تنسيقات الردود المقتبسة */
+    .replied-message {
+      background-color: #f0f0f0;
+      padding: 5px 10px;
+      border-radius: 5px;
+      margin-bottom: 5px;
+    }
+    .replied-content {
+      font-size: 0.85rem;
+      color: #666;
+    }
+    
+    /* تنسيقات التفاعلات */
+    .message-reactions {
+      margin-top: 5px;
+      font-size: 0.85rem;
+    }
+    .reaction-emoji {
+      margin-right: 5px;
+    }
+    
+    /* تنسيقات قائمة خيارات الرسالة */
+    .message-actions {
+      margin-top: 5px;
+      font-size: 0.85rem;
+    }
+    .message-action-btn {
+      margin-right: 10px;
+    }
   </style>
 </head>
 <body>
@@ -306,6 +336,25 @@
                          data-message-id="<%= msg._id %>"
                          data-status="<%= msg.status %>"
                          <% if (msg.externalMessageId) { %> data-external-id="<%= msg.externalMessageId %>" <% } %>>
+                      
+                      <% if (msg.replyToMessageId) { %>
+                        <!-- عرض الرسالة المقتبسة في حالة وجود رد -->
+                        <div class="replied-message">
+                          <% const repliedMsg = messages.find(m => m.externalMessageId === msg.replyToMessageId); %>
+                          <% if (repliedMsg) { %>
+                            <div class="replied-content">
+                              <i class="fas fa-reply"></i>
+                              <span><%= repliedMsg.content.length > 50 ? repliedMsg.content.substring(0, 50) + '...' : repliedMsg.content %></span>
+                            </div>
+                          <% } else { %>
+                            <div class="replied-content text-muted">
+                              <i class="fas fa-reply"></i>
+                              <span>رد على رسالة غير موجودة</span>
+                            </div>
+                          <% } %>
+                        </div>
+                      <% } %>
+                      
                       <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %>">
                         <%= msg.content %>
                         <div class="message-time">
@@ -328,6 +377,31 @@
                           <% } %>
                         </div>
                       </div>
+                      
+                      <!-- عرض التفاعلات على الرسالة -->
+                      <% if (msg.reactions && msg.reactions.length > 0) { %>
+                        <div class="message-reactions">
+                          <% msg.reactions.forEach(function(reaction) { %>
+                            <span class="reaction-emoji" title="تفاعل من <%= reaction.sender %>">
+                              <%= reaction.emoji %>
+                            </span>
+                          <% }); %>
+                        </div>
+                      <% } %>
+                      
+                      <!-- قائمة خيارات الرسالة -->
+                      <div class="message-actions">
+                        <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
+                          <i class="far fa-smile"></i>
+                        </button>
+                        <button class="btn btn-sm text-muted message-action-btn reply-btn" 
+                                data-message-id="<%= msg._id %>" 
+                                data-external-id="<%= msg.externalMessageId %>" 
+                                title="رد">
+                          <i class="fas fa-reply"></i>
+                        </button>
+                      </div>
+                      
                     </div>
                     <div class="clear-both"></div>
                     
@@ -500,25 +574,23 @@
       const sendButton = document.getElementById('sendButton');
       const sendingIndicator = document.getElementById('sendingIndicator');
       const messageContainer = document.getElementById('messageContainer');
-      
-      // طابور الرسائل التي تنتظر الإرسال
-      let messageQueue = [];
-      // هل هناك عملية إرسال جارية
-      let isMessageSending = false;
-      
-      // التمرير إلى أخر رسالة عند تحميل الصفحة
-      scrollToBottom();
-      
-      function scrollToBottom() {
-        if (messageContainer) {
-          messageContainer.scrollTop = messageContainer.scrollHeight;
-        }
-      }
 
-      // إرسال الرسالة بالضغط على Enter مع منع السطر الجديد
-      if (replyMessage && replyForm) {
-        replyMessage.addEventListener('keypress', function(e) {
-          // إذا ضغط على Enter مع عدم وجود Shift
+      let socket = io();
+      let conversationId = '<%= conversation._id %>';
+      let replyToMessageId = null; // معرف الرسالة التي يتم الرد عليها
+      let replyToInfo = null; // معلومات الرسالة المراد الرد عليها
+
+      // الانضمام إلى غرفة المحادثة
+      socket.emit('join-conversation', conversationId);
+      
+      // التمرير إلى آخر الرسائل عند التحميل
+      if (messageContainer) {
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+      }
+      
+      // الإرسال عند الضغط على Enter (بدون Shift)
+      if (replyMessage) {
+        replyMessage.addEventListener('keydown', function(e) {
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             submitForm();
@@ -526,170 +598,452 @@
         });
       }
       
-      // وظيفة لإضافة رسائل للطابور وبدء معالجتها
-      function submitForm() {
-        if (replyForm && replyMessage.value.trim() !== '') {
-          // إضافة الرسالة إلى طابور الإرسال
-          const messageContent = replyMessage.value.trim();
-          addMessageToQueue(messageContent);
+      // استماع لأحداث الرسائل الجديدة
+      socket.on('new-message', function(data) {
+        if (data.direction === 'incoming') {
+          playMessageSound();
+          addNewMessage(data);
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+      });
+
+      // استماع لأحداث تحديث الحالة
+      socket.on('message_status_update', function(data) {
+        console.log('تحديث حالة الرسالة:', data);
+        const msgElem = document.querySelector(`.message[data-external-id="${data.externalId}"]`);
+        if (msgElem) {
+          const statusElem = msgElem.querySelector('.message-status');
+          if (statusElem) {
+            updateStatusIcon(statusElem, data.status);
+          }
+          msgElem.setAttribute('data-status', data.status);
+        }
+      });
+      
+      // استماع لأحداث تحديث التفاعلات
+      socket.on('message_reaction', function(data) {
+        console.log('تفاعل جديد على رسالة:', data);
+        const msgElem = document.querySelector(`.message[data-external-id="${data.externalId}"]`);
+        if (msgElem) {
+          // التحقق من وجود قسم التفاعلات
+          let reactionsContainer = msgElem.querySelector('.message-reactions');
+          if (!reactionsContainer) {
+            reactionsContainer = document.createElement('div');
+            reactionsContainer.className = 'message-reactions';
+            msgElem.appendChild(reactionsContainer);
+          }
           
-          // مسح صندوق الإدخال فوراً
-          replyMessage.value = '';
+          // إضافة التفاعل الجديد
+          const reactionSpan = document.createElement('span');
+          reactionSpan.className = 'reaction-emoji';
+          reactionSpan.title = `تفاعل من ${data.reaction.sender}`;
+          reactionSpan.textContent = data.reaction.emoji;
           
-          // إظهار مؤشر الإرسال إذا لم يكن مرئياً
-          sendingIndicator.style.display = 'flex';
+          // تحقق مما إذا كان التفاعل موجودًا بالفعل (نفس المرسل)
+          const existingReaction = Array.from(reactionsContainer.querySelectorAll('.reaction-emoji')).find(
+            r => r.getAttribute('data-sender') === data.reaction.sender
+          );
           
-          // بدء معالجة الطابور إذا لم تكن هناك عملية إرسال جارية
-          if (!isMessageSending) {
-            processQueue();
+          if (existingReaction) {
+            existingReaction.textContent = data.reaction.emoji;
+          } else {
+            reactionSpan.setAttribute('data-sender', data.reaction.sender);
+            reactionsContainer.appendChild(reactionSpan);
           }
         }
-      }
+      });
       
-      // إضافة رسالة إلى طابور الإرسال وإظهارها مؤقتاً
-      function addMessageToQueue(content) {
-        // إنشاء معرف فريد للرسالة
-        const tempId = 'temp-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+      // استماع لأحداث الردود على الرسائل
+      socket.on('message_reply', function(data) {
+        console.log('رد جديد على رسالة:', data);
         
-        // إضافة الرسالة إلى الطابور
-        messageQueue.push({
-          id: tempId,
-          content: content
-        });
-        
-        // إظهار الرسالة مؤقتاً في واجهة المستخدم
-        addTempMessage(content, tempId);
-      }
+        // إذا كان رد وارد على رسالة أرسلناها
+        if (data.message.direction === 'incoming') {
+          playMessageSound();
+          const messageData = {
+            ...data.message,
+            replyToId: data.replyToId
+          };
+          
+          addNewMessageWithReply(messageData);
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+      });
       
-      // معالجة طابور الرسائل وإرسالها واحدة تلو الأخرى
-      function processQueue() {
-        if (messageQueue.length === 0) {
-          // الطابور فارغ، إيقاف المعالجة
-          isMessageSending = false;
-          sendingIndicator.style.display = 'none';
-          return;
+      // إضافة رسالة مع إظهار الرسالة المقتبس منها
+      function addNewMessageWithReply(messageData) {
+        // إنشاء عنصر الرسالة
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${messageData.direction}`;
+        messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
+        messageDiv.setAttribute('data-status', messageData.status || 'sending');
+        if (messageData.externalMessageId) {
+          messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
         }
         
-        // تعيين علم الإرسال
-        isMessageSending = true;
+        // إضافة قسم الاقتباس
+        if (messageData.replyToId) {
+          const originalMsgElem = document.querySelector(`.message[data-external-id="${messageData.replyToId}"]`);
+          let originalContent = 'رد على رسالة غير موجودة';
+          
+          if (originalMsgElem) {
+            const bubbleElem = originalMsgElem.querySelector('.message-bubble');
+            if (bubbleElem) {
+              originalContent = bubbleElem.textContent.trim();
+              if (originalContent.length > 50) {
+                originalContent = originalContent.substring(0, 50) + '...';
+              }
+            }
+          }
+          
+          const repliedDiv = document.createElement('div');
+          repliedDiv.className = 'replied-message';
+          repliedDiv.innerHTML = `
+            <div class="replied-content">
+              <i class="fas fa-reply"></i>
+              <span>${originalContent}</span>
+            </div>
+          `;
+          messageDiv.appendChild(repliedDiv);
+        }
         
-        // أخذ الرسالة التالية من طابور الإرسال
-        const nextMessage = messageQueue.shift();
+        // إضافة فقاعة الرسالة
+        const bubbleDiv = document.createElement('div');
+        bubbleDiv.className = `message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
+        bubbleDiv.textContent = messageData.content;
         
-        // إرسال الرسالة باستخدام AJAX
-        fetch(replyForm.action, {
+        // إضافة الوقت وحالة الرسالة
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        
+        const msgDate = new Date(messageData.timestamp);
+        timeDiv.textContent = msgDate.toLocaleString('ar-LY');
+        
+        if (messageData.direction === 'outgoing') {
+          const statusSpan = document.createElement('span');
+          statusSpan.className = 'message-status';
+          updateStatusIcon(statusSpan, messageData.status);
+          timeDiv.appendChild(statusSpan);
+        }
+        
+        bubbleDiv.appendChild(timeDiv);
+        messageDiv.appendChild(bubbleDiv);
+        
+        // إضافة أزرار الإجراءات
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+        actionsDiv.innerHTML = `
+          <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
+            <i class="far fa-smile"></i>
+          </button>
+          <button class="btn btn-sm text-muted message-action-btn reply-btn" 
+                  data-message-id="${messageData._id}" 
+                  data-external-id="${messageData.externalMessageId || ''}" 
+                  title="رد">
+            <i class="fas fa-reply"></i>
+          </button>
+        `;
+        messageDiv.appendChild(actionsDiv);
+        
+        // إضافة للحاوية
+        const clearDiv = document.createElement('div');
+        clearDiv.className = 'clear-both';
+        
+        messageContainer.appendChild(messageDiv);
+        messageContainer.appendChild(clearDiv);
+        
+        // إضافة أحداث للأزرار الجديدة
+        setupMessageButtons(messageDiv);
+      }
+      
+      // تعيين أحداث أزرار التفاعل والرد على كل الرسائل
+      function setupMessageButtons() {
+        // أزرار التفاعل
+        document.querySelectorAll('.reaction-btn').forEach(btn => {
+          if (!btn.hasAttribute('data-setup')) {
+            btn.setAttribute('data-setup', 'true');
+            btn.addEventListener('click', function() {
+              const messageElem = this.closest('.message');
+              if (messageElem) {
+                showReactionPicker(messageElem);
+              }
+            });
+          }
+        });
+        
+        // أزرار الرد
+        document.querySelectorAll('.reply-btn').forEach(btn => {
+          if (!btn.hasAttribute('data-setup')) {
+            btn.setAttribute('data-setup', 'true');
+            btn.addEventListener('click', function() {
+              const messageElem = this.closest('.message');
+              const externalId = this.getAttribute('data-external-id');
+              if (messageElem && externalId) {
+                setReplyToMessage(messageElem, externalId);
+              }
+            });
+          }
+        });
+      }
+      
+      // عند النقر على زر الرد، تعين الرسالة للرد عليها
+      function setReplyToMessage(messageElem, externalId) {
+        const messageBubble = messageElem.querySelector('.message-bubble');
+        if (!externalId || !messageBubble) return;
+        
+        replyToMessageId = externalId;
+        replyToInfo = {
+          content: messageBubble.textContent.trim(),
+          direction: messageElem.classList.contains('incoming') ? 'incoming' : 'outgoing'
+        };
+        
+        // إظهار قسم الرد وتحديث واجهة المستخدم
+        showReplyInterface();
+        
+        // التركيز على حقل الإدخال
+        if (replyMessage) {
+          replyMessage.focus();
+        }
+      }
+      
+      // إظهار واجهة الرد على رسالة
+      function showReplyInterface() {
+        // التحقق من وجود وإنشاء قسم معلومات الرد
+        let replyInfoElem = document.getElementById('replyInfo');
+        if (!replyInfoElem) {
+          replyInfoElem = document.createElement('div');
+          replyInfoElem.id = 'replyInfo';
+          replyInfoElem.className = 'reply-info alert alert-secondary d-flex align-items-center mb-2';
+          
+          if (replyForm) {
+            replyForm.insertBefore(replyInfoElem, replyForm.firstChild);
+          }
+        }
+        
+        // تحديث محتوى قسم معلومات الرد
+        const content = replyToInfo.content.length > 40 ? replyToInfo.content.substring(0, 40) + '...' : replyToInfo.content;
+        replyInfoElem.innerHTML = `
+          <div class="flex-grow-1">
+            <small class="d-block text-muted">ترد على:</small>
+            <span>${content}</span>
+          </div>
+          <button type="button" class="btn-close ms-2" id="cancelReplyBtn"></button>
+        `;
+        
+        // إضافة حدث إلغاء الرد
+        document.getElementById('cancelReplyBtn').addEventListener('click', function() {
+          replyToMessageId = null;
+          replyToInfo = null;
+          replyInfoElem.remove();
+        });
+      }
+      
+      // إظهار منتقي التفاعلات
+      function showReactionPicker(messageElem) {
+        const externalId = messageElem.getAttribute('data-external-id');
+        if (!externalId) return;
+        
+        // إنشاء منتقي التفاعلات
+        const picker = document.createElement('div');
+        picker.className = 'reaction-picker position-absolute';
+        picker.style.backgroundColor = '#fff';
+        picker.style.border = '1px solid #ddd';
+        picker.style.borderRadius = '8px';
+        picker.style.padding = '5px';
+        picker.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+        picker.style.zIndex = '100';
+        
+        // إضافة خيارات التفاعل
+        const reactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+        
+        reactions.forEach(emoji => {
+          const emojiBtn = document.createElement('button');
+          emojiBtn.className = 'btn btn-sm emoji-btn';
+          emojiBtn.style.fontSize = '1.2rem';
+          emojiBtn.style.margin = '0 2px';
+          emojiBtn.style.padding = '0 5px';
+          emojiBtn.textContent = emoji;
+          
+          emojiBtn.addEventListener('click', function() {
+            sendReaction(externalId, emoji);
+            picker.remove();
+          });
+          
+          picker.appendChild(emojiBtn);
+        });
+        
+        // إضافة منتقي التفاعلات بعد عنصر الرسالة
+        messageElem.style.position = 'relative';
+        messageElem.appendChild(picker);
+        
+        // إغلاق المنتقي عند النقر في أي مكان آخر
+        document.addEventListener('click', function closeReactionPicker(e) {
+          if (!picker.contains(e.target) && !messageElem.querySelector('.reaction-btn').contains(e.target)) {
+            picker.remove();
+            document.removeEventListener('click', closeReactionPicker);
+          }
+        });
+      }
+      
+      // إرسال التفاعل على رسالة
+      function sendReaction(messageId, emoji) {
+        fetch(`/crm/conversations/<%= conversation._id %>/react`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
           },
-          body: JSON.stringify({ content: nextMessage.content })
+          body: JSON.stringify({
+            messageId,
+            emoji
+          })
         })
         .then(response => response.json())
         .then(data => {
-          // إذا كان هناك خطأ، نعرضه
-          if (!data.success) {
-            alert(data.error || 'حدث خطأ أثناء إرسال الرسالة');
-          }
-          
-          // معالجة الرسالة التالية في الطابور
-          processQueue();
+          console.log('تم إرسال التفاعل بنجاح:', data);
         })
         .catch(error => {
-          console.error('Error:', error);
-          alert('حدث خطأ أثناء إرسال الرسالة');
-          
-          // معالجة الرسالة التالية في الطابور حتى في حالة وجود خطأ
-          processQueue();
+          console.error('خطأ في إرسال التفاعل:', error);
         });
       }
       
-      // إضافة رسالة مؤقتة إلى حاوية الرسائل
+      // إرسال النموذج
+      function submitForm() {
+        if (replyForm && replyMessage) {
+          const content = replyMessage.value.trim();
+          if (!content) return;
+          
+          // إظهار مؤشر الإرسال
+          if (sendingIndicator) {
+            sendingIndicator.style.display = 'inline-block';
+          }
+          
+          // إضافة رسالة مؤقتة
+          const tempId = 'temp-' + Date.now();
+          addTempMessage(content, tempId);
+          
+          // تمرير إلى آخر الرسائل
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+          
+          // الإرسال عبر AJAX
+          fetch(replyForm.action, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              content,
+              replyToMessageId
+            })
+          })
+          .then(response => response.json())
+          .then(data => {
+            console.log('تم إرسال الرد بنجاح:', data);
+            
+            // إزالة الرسالة المؤقتة
+            const tempMsg = document.querySelector(`[data-message-id="${tempId}"]`);
+            if (tempMsg) {
+              tempMsg.remove();
+            }
+            
+            // إضافة الرسالة الحقيقية مع المعرّف الصحيح
+            if (data.success && data.message) {
+              addNewMessage(data.message);
+              messageContainer.scrollTop = messageContainer.scrollHeight;
+            }
+            
+            // إعادة تعيين النموذج
+            replyForm.reset();
+            
+            // إخفاء قسم معلومات الرد إن وجد
+            const replyInfoElem = document.getElementById('replyInfo');
+            if (replyInfoElem) {
+              replyInfoElem.remove();
+            }
+            
+            // إعادة تعيين معلومات الرد
+            replyToMessageId = null;
+            replyToInfo = null;
+            
+            // إخفاء مؤشر الإرسال
+            if (sendingIndicator) {
+              sendingIndicator.style.display = 'none';
+            }
+          })
+          .catch(error => {
+            console.error('خطأ في إرسال الرسالة:', error);
+            
+            // تحديث حالة الرسالة المؤقتة إلى فشل
+            const tempMsg = document.querySelector(`[data-message-id="${tempId}"]`);
+            if (tempMsg) {
+              tempMsg.setAttribute('data-status', 'failed');
+              const statusElem = tempMsg.querySelector('.message-status');
+              if (statusElem) {
+                updateStatusIcon(statusElem, 'failed');
+              }
+            }
+            
+            // إخفاء مؤشر الإرسال
+            if (sendingIndicator) {
+              sendingIndicator.style.display = 'none';
+            }
+          });
+        }
+      }
+
       function addTempMessage(content, tempId) {
         // إنشاء عنصر الرسالة
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message outgoing temp-message';
         messageDiv.setAttribute('data-status', 'sending');
-        messageDiv.setAttribute('data-temp-id', tempId);
+        messageDiv.setAttribute('data-message-id', tempId);
+        
+        // إضافة قسم الاقتباس إذا كان هناك رد
+        if (replyToMessageId && replyToInfo) {
+          const repliedDiv = document.createElement('div');
+          repliedDiv.className = 'replied-message';
+          repliedDiv.innerHTML = `
+            <div class="replied-content">
+              <i class="fas fa-reply"></i>
+              <span>${replyToInfo.content.length > 50 ? replyToInfo.content.substring(0, 50) + '...' : replyToInfo.content}</span>
+            </div>
+          `;
+          messageDiv.appendChild(repliedDiv);
+        }
         
         // إنشاء فقاعة الرسالة
         const bubbleDiv = document.createElement('div');
         bubbleDiv.className = 'message-bubble outgoing-bubble';
         bubbleDiv.textContent = content;
         
-        // إنشاء وقت الرسالة
+        // إضافة الوقت والحالة
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
-        timeDiv.innerHTML = new Date().toLocaleString('ar-LY') + ' <span class="message-status"><i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i></span>';
         
-        // إضافة العناصر إلى بعضها
+        const now = new Date();
+        timeDiv.textContent = now.toLocaleString('ar-LY');
+        
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'message-status';
+        statusSpan.innerHTML = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
+        
+        timeDiv.appendChild(statusSpan);
         bubbleDiv.appendChild(timeDiv);
         messageDiv.appendChild(bubbleDiv);
         
-        // إضافة عنصر clear-both
+        // إضافة للحاوية
         const clearDiv = document.createElement('div');
         clearDiv.className = 'clear-both';
         
-        // إضافة الرسالة المؤقتة إلى حاوية الرسائل
-        if (messageContainer) {
-          messageContainer.appendChild(messageDiv);
-          messageContainer.appendChild(clearDiv);
-          scrollToBottom();
-        }
+        messageContainer.appendChild(messageDiv);
+        messageContainer.appendChild(clearDiv);
       }
       
-      // استمع إلى أحداث Socket.io لتحديث الرسائل
-      const socket = io();
-      
-      // الإنضمام إلى غرفة المحادثة
-      socket.emit('join-conversation', '<%= conversation._id %>');
-      
-      // عندما يتم تحديث حالة رسالة
-      socket.on('message_status_update', function(data) {
-        console.log('تحديث حالة الرسالة:', data);
-        // تحديث حالة الرسالة في واجهة المستخدم
-        const messageElements = document.querySelectorAll(`.message[data-external-id="${data.externalId}"]`);
-        messageElements.forEach(element => {
-          element.setAttribute('data-status', data.status);
-          const statusElement = element.querySelector('.message-status');
-          if (statusElement) {
-            updateStatusIcon(statusElement, data.status);
-          }
-        });
-      });
-      
-      // عندما تصل رسالة جديدة
-      socket.on('new-message', function(data) {
-        console.log('رسالة جديدة استلمت:', data);
-        
-        // تجنب تكرار الرسالة إذا كانت موجودة بالفعل
-        if (document.querySelector(`.message[data-message-id="${data._id}"]`)) {
-          console.log('الرسالة موجودة بالفعل:', data._id);
-          return;
-        }
-        
-        // تشغيل صوت الإشعار إذا كانت الرسالة واردة
-        if (data.direction === 'incoming') {
-          const messageSound = document.getElementById('messageSound');
-          if (messageSound) {
-            messageSound.play().catch(e => console.log('Could not play notification sound', e));
-          }
-          
-          // إضافة الرسالة إلى المحادثة ديناميكياً
-          addNewMessage(data);
-        } else if (data.direction === 'outgoing') {
-          // تحديث الرسالة المؤقتة إذا كان هناك
-          updateTempMessage(data);
-        }
-      });
-      
-      // وظيفة إضافة رسالة جديدة (واردة أو صادرة) إلى واجهة المستخدم
       function addNewMessage(messageData) {
         // إنشاء عنصر الرسالة
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${messageData.direction}`;
         messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
-        messageDiv.setAttribute('data-status', messageData.status || 'received');
+        messageDiv.setAttribute('data-status', messageData.status || 'sending');
         if (messageData.externalMessageId) {
           messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
         }
@@ -699,97 +1053,49 @@
         bubbleDiv.className = `message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
         bubbleDiv.textContent = messageData.content;
         
-        // إنشاء وقت الرسالة
+        // إضافة الوقت والحالة
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
-        const timestamp = messageData.timestamp 
-          ? new Date(messageData.timestamp).toLocaleString('ar-LY')
-          : new Date().toLocaleString('ar-LY');
+        
+        const msgDate = new Date(messageData.timestamp);
+        timeDiv.textContent = msgDate.toLocaleString('ar-LY');
         
         if (messageData.direction === 'outgoing') {
-          timeDiv.innerHTML = timestamp + ' <span class="message-status"></span>';
-          const statusElement = timeDiv.querySelector('.message-status');
-          updateStatusIcon(statusElement, messageData.status || 'sent');
-        } else {
-          timeDiv.textContent = timestamp;
+          const statusSpan = document.createElement('span');
+          statusSpan.className = 'message-status';
+          updateStatusIcon(statusSpan, messageData.status);
+          timeDiv.appendChild(statusSpan);
         }
         
-        // إضافة العناصر إلى بعضها
         bubbleDiv.appendChild(timeDiv);
         messageDiv.appendChild(bubbleDiv);
         
-        // إضافة عنصر clear-both
+        // إضافة أزرار الإجراءات
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+        actionsDiv.innerHTML = `
+          <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
+            <i class="far fa-smile"></i>
+          </button>
+          <button class="btn btn-sm text-muted message-action-btn reply-btn" 
+                  data-message-id="${messageData._id}" 
+                  data-external-id="${messageData.externalMessageId || ''}" 
+                  title="رد">
+            <i class="fas fa-reply"></i>
+          </button>
+        `;
+        messageDiv.appendChild(actionsDiv);
+        
+        // إضافة للحاوية
         const clearDiv = document.createElement('div');
         clearDiv.className = 'clear-both';
         
-        // إضافة الرسالة إلى حاوية الرسائل
-        if (messageContainer) {
-          messageContainer.appendChild(messageDiv);
-          messageContainer.appendChild(clearDiv);
-          scrollToBottom();
-          
-          // تحديث عداد الرسائل في الواجهة إن وجد
-          const messageCountBadge = document.querySelector('.card-header .badge');
-          if (messageCountBadge) {
-            const currentCount = parseInt(messageCountBadge.textContent.split(' ')[0]) || 0;
-            messageCountBadge.textContent = (currentCount + 1) + ' رسالة';
-          }
-        }
-      }
-      
-      // وظيفة تحديث الرسالة المؤقتة بالبيانات الحقيقية
-      function updateTempMessage(messageData) {
-        // البحث عن الرسالة المؤقتة (آخر رسالة صادرة)
-        const tempMessages = document.querySelectorAll('.message.outgoing.temp-message');
-        if (tempMessages && tempMessages.length > 0) {
-          const tempMessage = tempMessages[tempMessages.length - 1]; // آخر رسالة مؤقتة
-          
-          // تحديث البيانات
-          tempMessage.setAttribute('data-message-id', messageData._id);
-          tempMessage.setAttribute('data-status', messageData.status);
-          tempMessage.classList.remove('temp-message');
-          
-          if (messageData.externalMessageId) {
-            tempMessage.setAttribute('data-external-id', messageData.externalMessageId);
-          }
-          
-          // تحديث حالة الرسالة
-          const statusElement = tempMessage.querySelector('.message-status');
-          if (statusElement) {
-            updateStatusIcon(statusElement, messageData.status);
-          }
-        } else {
-          // إذا لم توجد رسالة مؤقتة، نضيف الرسالة كجديدة
-          addNewMessage(messageData);
-        }
-      }
-      
-      // وظيفة تحديث عنوان المحادثة وعدد الرسائل
-      socket.on('conversation-update', function(data) {
-        console.log('تحديث بيانات المحادثة:', data);
+        messageContainer.appendChild(messageDiv);
+        messageContainer.appendChild(clearDiv);
         
-        // إذا كان التحديث متعلق بالإسناد
-        if (data.type === 'assigned') {
-          // يمكننا تحديث معلومات الإسناد
-          const assignBadge = document.querySelector('.assigned-to-badge');
-          if (assignBadge) {
-            if (data.assignedTo) {
-              // تم الإسناد إلى موظف
-              fetch(`/api/users/${data.assignedTo}/info`)
-                .then(response => response.json())
-                .then(result => {
-                  if (result.success) {
-                    assignBadge.innerHTML = '<i class="fas fa-user-check"></i> ' + (result.user.full_name || result.user.username);
-                    assignBadge.style.display = 'inline-block';
-                  }
-                });
-            } else {
-              // تم إلغاء الإسناد
-              assignBadge.style.display = 'none';
-            }
-          }
-        }
-      });
+        // إضافة أحداث للأزرار الجديدة
+        setupMessageButtons();
+      }
       
       // تحديث أيقونة الحالة
       function updateStatusIcon(statusElement, status) {
@@ -812,6 +1118,15 @@
             break;
         }
         statusElement.innerHTML = icon;
+      }
+      
+      // تشغيل الصوت عند استلام رسالة
+      function playMessageSound() {
+        const sound = document.getElementById('messageSound');
+        if (sound) {
+          sound.currentTime = 0;
+          sound.play().catch(e => console.log('خطأ في تشغيل الصوت:', e));
+        }
       }
       
       // إرسال النموذج عند النقر على زر الإرسال
@@ -862,6 +1177,9 @@
             assignedToSelect.innerHTML = '<option value="" disabled selected>حدث خطأ في التحميل</option>';
           });
       }
+      
+      // إعداد أزرار التفاعل والرد
+      setupMessageButtons();
     });
   </script>
 

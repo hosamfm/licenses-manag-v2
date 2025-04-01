@@ -72,6 +72,8 @@ exports.handleWebhook = async (req, res) => {
                   requestType = 'message';
                 } else if (change.value.statuses && change.value.statuses.length > 0) {
                   requestType = 'status';
+                } else if (change.value.reactions && change.value.reactions.length > 0) {
+                  requestType = 'reaction';
                 }
               }
 
@@ -90,6 +92,14 @@ exports.handleWebhook = async (req, res) => {
                   });
                   await updateMessageStatus(st.id, st.status, new Date(st.timestamp * 1000));
                 }
+              }
+
+              // معالجة التفاعلات
+              if (change.field === 'messages' && change.value.reactions?.length > 0) {
+                await handleReactions(change.value.reactions, {
+                  phone_number_id: change.value.metadata?.phone_number_id,
+                  metadata: change.value.metadata || {}
+                });
               }
 
               // رسائل واردة
@@ -165,6 +175,68 @@ async function updateMessageStatus(externalId, newStatus, timestamp) {
 }
 
 /**
+ * معالجة التفاعلات على الرسائل
+ */
+async function handleReactions(reactions, meta) {
+  try {
+    const phoneNumberId = meta.phone_number_id;
+    logger.debug('metaWhatsappWebhookController', 'تفاعلات واردة', {
+      phoneNumberId, count: reactions.length
+    });
+
+    // الحصول على القناة
+    let channel = await WhatsAppChannel.getChannelByPhoneNumberId(phoneNumberId);
+    if (!channel) {
+      channel = await WhatsAppChannel.getDefaultChannel();
+      logger.info('metaWhatsappWebhookController', 'القناة غير موجودة، تم استخدام الافتراضية', { phoneNumberId });
+    }
+
+    for (const reaction of reactions) {
+      try {
+        const sender = reaction.from;
+        const messageId = reaction.message_id;
+        const emoji = reaction.emoji || '';
+        
+        logger.info('metaWhatsappWebhookController', 'تفاعل وارد', {
+          from: sender,
+          messageId,
+          emoji
+        });
+
+        // ابحث عن المحادثة المرتبطة بالهاتف المرسل
+        const conversation = await Conversation.findOne({ phoneNumber: sender });
+        if (!conversation) {
+          logger.warn('metaWhatsappWebhookController', 'محادثة غير موجودة للتفاعل', { sender });
+          continue;
+        }
+
+        // ابحث عن الرسالة المتفاعل معها
+        const originalMessage = await WhatsappMessage.findOne({ externalMessageId: messageId });
+        if (!originalMessage) {
+          logger.warn('metaWhatsappWebhookController', 'الرسالة المتفاعل معها غير موجودة', { messageId });
+          continue;
+        }
+
+        // تحديث التفاعل في الرسالة
+        const updatedMessage = await WhatsappMessage.updateReaction(messageId, sender, emoji);
+        
+        // إرسال إشعار بالتفاعل
+        socketService.notifyMessageReaction(
+          conversation._id.toString(),
+          messageId,
+          { sender, emoji, timestamp: new Date() }
+        );
+
+      } catch (errReaction) {
+        logger.error('metaWhatsappWebhookController', 'خطأ في معالجة تفاعل وارد', errReaction);
+      }
+    }
+  } catch (err) {
+    logger.error('metaWhatsappWebhookController', 'خطأ في handleReactions', err);
+  }
+}
+
+/**
  * معالجة الرسائل الواردة
  */
 async function handleIncomingMessages(messages, meta) {
@@ -201,16 +273,35 @@ async function handleIncomingMessages(messages, meta) {
         // أنشئ رسالة واردة في DB
         const savedMsg = await WhatsappMessage.createIncomingMessage(conversation._id, msg);
 
-        // إشعار Socket.io
-        socketService.notifyNewMessage(conversation._id.toString(), {
-          _id: savedMsg._id,
-          content: savedMsg.content,
-          mediaUrl: savedMsg.mediaUrl,
-          mediaType: savedMsg.mediaType,
-          direction: savedMsg.direction, // مفترض incoming
-          timestamp: savedMsg.timestamp,
-          status: savedMsg.status
-        });
+        // التحقق إذا كانت رد على رسالة وإرسال إشعار خاص بالرد
+        if (savedMsg.replyToMessageId) {
+          socketService.notifyMessageReply(
+            conversation._id.toString(),
+            {
+              _id: savedMsg._id,
+              content: savedMsg.content,
+              mediaUrl: savedMsg.mediaUrl,
+              mediaType: savedMsg.mediaType,
+              direction: savedMsg.direction,
+              timestamp: savedMsg.timestamp,
+              status: savedMsg.status,
+              externalMessageId: savedMsg.externalMessageId
+            },
+            savedMsg.replyToMessageId
+          );
+        } else {
+          // إشعار Socket.io بالرسالة الجديدة
+          socketService.notifyNewMessage(conversation._id.toString(), {
+            _id: savedMsg._id,
+            content: savedMsg.content,
+            mediaUrl: savedMsg.mediaUrl,
+            mediaType: savedMsg.mediaType,
+            direction: savedMsg.direction, // مفترض incoming
+            timestamp: savedMsg.timestamp,
+            status: savedMsg.status,
+            externalMessageId: savedMsg.externalMessageId
+          });
+        }
 
         // إشعار بتحديث المحادثة
         socketService.notifyConversationUpdate(conversation._id.toString(), {
