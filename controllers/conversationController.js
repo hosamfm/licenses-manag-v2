@@ -297,9 +297,6 @@ exports.addInternalNote = async (req, res) => {
     });
     await noteMsg.save();
 
-    // يمكنك أيضًا حفظ noteContent في conversation.notes إذا أردت دمجه
-    // أو استخدام آلية أخرى لتخزين الملاحظات
-
     req.flash('success', 'تمت إضافة الملاحظة بنجاح');
     res.redirect(`/crm/conversations/${conversationId}`);
   } catch (error) {
@@ -548,12 +545,8 @@ exports.reactToMessage = async (req, res) => {
         phoneNumberId
       );
 
-      // تحديث التفاعل في قاعدة البيانات
-      const updatedMessage = await WhatsappMessage.updateReaction(
-        messageId,
-        req.user ? req.user._id.toString() : 'system',
-        emoji
-      );
+      // تحديث التفاعل في قاعدة البيانات (لو عندك آلية لذلك)
+      // مثال: WhatsappMessage.updateReaction(...)
 
       // إرسال إشعار عبر Socket
       socketService.notifyMessageReaction(
@@ -578,5 +571,82 @@ exports.reactToMessage = async (req, res) => {
   } catch (error) {
     logger.error('conversationController', 'خطأ في معالجة طلب التفاعل', error);
     return res.status(500).json({ success: false, error: 'حدث خطأ في الخادم' });
+  }
+};
+
+/* -------------------------------------------
+ *            الدوال الجديدة بالأسفل
+ * ------------------------------------------- */
+
+/**
+ * 3) عرض صفحة المحادثات بـ AJAX (فيها عمودين)
+ */
+exports.listConversationsAjax = async (req, res) => {
+  try {
+    // يمكنك تنفيذ نفس منطق الفلترة كما في listConversations
+    const status = req.query.status || 'all';
+    const filter = {};
+    if (status !== 'all') filter.status = status;
+
+    // أحضر المحادثات مثلاً بحد أقصى 50
+    const conversations = await Conversation.find(filter)
+      .sort({ lastMessageAt: -1 })
+      .limit(50)
+      .populate('assignedTo', 'username full_name')
+      .lean();
+
+    // جلب آخر رسالة
+    const convWithLast = await Promise.all(
+      conversations.map(async (c) => {
+        const lastMsg = await WhatsappMessage.findOne({ conversationId: c._id })
+          .sort({ timestamp: -1 })
+          .lean();
+        return { ...c, lastMessage: lastMsg || null };
+      })
+    );
+
+    // عرض صفحة جديدة: views/crm/conversations_split_ajax.ejs
+    res.render('crm/conversations_split_ajax', {
+      title: 'المحادثات AJAX',
+      conversations: convWithLast,
+      user: req.user,
+      flashMessages: req.flash()
+    });
+  } catch (err) {
+    logger.error('conversationController', 'خطأ في listConversationsAjax', err);
+    req.flash('error', 'حدث خطأ أثناء تحميل المحادثات (AJAX)');
+    res.redirect('/'); 
+  }
+};
+
+
+/**
+ * 4) إرجاع تفاصيل محادثة جزئيًا لاستخدامه مع AJAX
+ */
+exports.getConversationDetailsAjax = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    const conversation = await Conversation.findById(conversationId).lean();
+    if (!conversation) {
+      return res.status(404).send('<div class="alert alert-danger">المحادثة غير موجودة</div>');
+    }
+
+    // جلب 50 رسالة مثلاً
+    const msgs = await WhatsappMessage.find({ conversationId })
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .lean();
+    const sorted = msgs.reverse();
+
+    // نعيد الـ Partial فقط (layout: false)
+    return res.render('crm/partials/_conversation_details_ajax', {
+      layout: false,
+      conversation,
+      messages: sorted
+    });
+  } catch (err) {
+    logger.error('conversationController', 'خطأ في getConversationDetailsAjax', err);
+    return res.status(500).send('<div class="alert alert-danger">خطأ في الخادم</div>');
   }
 };

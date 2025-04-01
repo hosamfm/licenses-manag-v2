@@ -165,6 +165,10 @@ app.get('/conversations/my', (req, res) => {
   res.redirect('/crm/conversations/my');
 });
 
+app.get('/conversations/ajax', (req, res) => {
+  res.redirect('/crm/conversations/ajax');
+});
+
 // مسار لعرض صفحة سجل رسائل العميل
 app.get('/client_messages', isAuthenticated, async (req, res) => {
     try {

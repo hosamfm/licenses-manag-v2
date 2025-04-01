@@ -16,6 +16,19 @@ router.get('/', ensureCanAccessConversations, conversationController.listConvers
 // مسار عرض المحادثات المسندة للمستخدم الحالي
 router.get('/my', ensureCanAccessConversations, conversationController.listMyConversations);
 
+/* -------------------------------------------
+ *          مسارات AJAX الجديدة
+ * ------------------------------------------- */
+
+// 1) صفحة عرض المحادثات بأسلوب AJAX (صفحة عمودين)
+router.get('/ajax', ensureCanAccessConversations, conversationController.listConversationsAjax);
+
+// 2) جلب تفاصيل محادثة (Partial) عبر AJAX
+router.get('/ajax/details/:conversationId',
+  ensureCanAccessConversations,
+  conversationController.getConversationDetailsAjax
+);
+
 // مسار عرض تفاصيل محادثة محددة
 router.get('/:conversationId', ensureCanAccessConversations, conversationController.showConversation);
 
@@ -40,18 +53,14 @@ router.post('/:conversationId/close', ensureCanAccessConversations, conversation
 // مسار إعادة فتح المحادثة
 router.post('/:conversationId/reopen', ensureCanAccessConversations, conversationController.toggleConversationStatus);
 
-// مسار وضع علامة "مقروء" على محادثة (بدون التحقق من صلاحية الوصول)
+// مسار وضع علامة "مقروء" على محادثة
 router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    
-    // تحديث حالة قراءة الرسائل (تنفيذ بسيط)
-    // في التطبيق الحقيقي، يمكنك تحديث نموذج الرسائل لتسجيل قراءة المستخدم
     logger.info('conversationRoutes', 'تحديث حالة قراءة المحادثة', { 
       conversationId, 
       userId: req.user?._id 
     });
-    
     res.json({ success: true, message: 'تم تحديث حالة القراءة' });
   } catch (error) {
     logger.error('conversationRoutes', 'خطأ في تحديث حالة قراءة المحادثة', error);
