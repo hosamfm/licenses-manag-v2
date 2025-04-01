@@ -356,6 +356,180 @@
   
   // تشغيل الوظيفة عند تحميل المحتوى
   window.attachConversationEventListeners();
+
+  // دالة تحديث قائمة المحادثات (المفقودة)
+  window.refreshConversationsList = function() {
+    if (window.updateConversationListTimer) {
+      clearTimeout(window.updateConversationListTimer);
+    }
+    
+    // تحديد مؤقت لمنع التحديثات المتكررة جدًا
+    window.updateConversationListTimer = setTimeout(() => {
+      fetch('/crm/conversations/ajax/list', {
+        method: 'GET',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => {
+        if (!response.ok) throw new Error('فشل في تحديث قائمة المحادثات');
+        return response.text();
+      })
+      .then(html => {
+        const conversationListContainer = document.getElementById('conversation-list-container');
+        if (conversationListContainer) {
+          conversationListContainer.innerHTML = html;
+          console.log('تم تحديث قائمة المحادثات بنجاح');
+        } else {
+          console.warn('لم يتم العثور على عنصر قائمة المحادثات');
+        }
+      })
+      .catch(error => {
+        console.error('خطأ في تحديث قائمة المحادثات:', error);
+      });
+    }, 1000); // تأخير 1 ثانية
+  };
+
+  // دالة إضافة رسالة جديدة إلى المحادثة
+  window.addNewMessageToConversation = function(message) {
+    if (!message || !message._id) {
+      console.error('بيانات الرسالة غير كاملة:', message);
+      return;
+    }
+
+    // التحقق مما إذا كانت الرسالة موجودة بالفعل
+    const existingMessage = document.querySelector(`.message[data-message-id="${message._id}"]`);
+    if (existingMessage) {
+      console.log('الرسالة موجودة بالفعل، تخطي إضافتها مرة أخرى:', message._id);
+      return;
+    }
+
+    // إنشاء عنصر الرسالة الجديدة
+    const messageContainer = document.getElementById('messageContainer');
+    if (!messageContainer) {
+      console.error('لم يتم العثور على حاوية الرسائل!');
+      return;
+    }
+
+    // إنشاء عنصر div للرسالة
+    const messageElem = document.createElement('div');
+    messageElem.className = `message ${message.direction}`;
+    messageElem.setAttribute('data-message-id', message._id);
+    
+    // إضافة المعرف الخارجي للرسالة إذا كان متوفرًا (مهم لتحديثات الحالة)
+    if (message.externalMessageId) {
+      messageElem.setAttribute('data-external-id', message.externalMessageId);
+    }
+
+    // تنسيق التاريخ والوقت للعرض
+    const timestamp = new Date(message.timestamp);
+    const formattedDate = timestamp.toLocaleDateString('ar-SA');
+    const formattedTime = timestamp.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+
+    // إنشاء محتوى الرسالة
+    const mediaHtml = message.mediaUrl && message.mediaType ? 
+      `<div class="message-media mb-2">
+        ${message.mediaType.startsWith('image/') ? 
+          `<img src="${message.mediaUrl}" alt="صورة" class="img-fluid rounded">` : 
+          message.mediaType.startsWith('video/') ? 
+          `<video controls class="rounded w-100"><source src="${message.mediaUrl}" type="${message.mediaType}"></video>` :
+          message.mediaType.startsWith('audio/') ? 
+          `<audio controls class="w-100"><source src="${message.mediaUrl}" type="${message.mediaType}"></audio>` :
+          `<a href="${message.mediaUrl}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-download"></i> تنزيل المرفق</a>`
+        }
+      </div>` : '';
+
+    // بناء هيكل الرسالة
+    messageElem.innerHTML = `
+      <div class="message-content">
+        ${message.direction === 'incoming' ? `<div class="sender-name">${message.senderName || 'العميل'}</div>` : ''}
+        ${mediaHtml}
+        <div class="message-bubble">
+          ${message.content || ''}
+        </div>
+        <div class="message-meta">
+          <small class="message-time" dir="ltr">${formattedDate} ${formattedTime}</small>
+          ${message.direction === 'outgoing' ? 
+            `<small class="message-status ${message.status}">
+              <i class="fas ${message.status === 'sent' ? 'fa-check' : 
+                            message.status === 'delivered' ? 'fa-check-double' : 
+                            message.status === 'read' ? 'fa-check-double text-primary' : 
+                            'fa-clock'}"></i>
+            </small>` : ''
+          }
+        </div>
+      </div>
+      <div class="message-actions">
+        <button type="button" class="btn btn-sm text-secondary reaction-btn">
+          <i class="far fa-smile"></i>
+        </button>
+        <button type="button" class="btn btn-sm text-secondary reply-btn">
+          <i class="fas fa-reply"></i>
+        </button>
+      </div>
+    `;
+
+    // إضافة الرسالة إلى نهاية الحاوية
+    messageContainer.appendChild(messageElem);
+
+    // التمرير إلى أسفل إلى الرسالة الجديدة
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+
+    // إضافة أحداث التفاعل والرد
+    setupMessageActions(messageElem);
+  };
+
+  // الاستماع لأحداث Socket.io
+  window.addEventListener('DOMContentLoaded', function() {
+    if (typeof io !== 'undefined') {
+      // الاتصال بـ Socket.io
+      const socket = io();
+      
+      // الانضمام إلى غرفة المحادثة
+      const conversationId = document.getElementById('conversationId')?.value;
+      if (conversationId) {
+        socket.emit('join-conversation', conversationId);
+        console.log('تم الاتصال بالخادم');
+        console.log('تم الانضمام إلى غرفة المحادثة:', conversationId);
+      }
+      
+      // الاستماع للرسائل الجديدة
+      socket.on('new_message', function(data) {
+        console.log('رسالة جديدة وصلت:', data);
+        addNewMessageToConversation(data);
+        refreshConversationsList();
+      });
+      
+      // الاستماع لتحديث حالة الرسائل
+      socket.on('message_status_update', function(data) {
+        if (data.externalId && data.status) {
+          // تحديث حالة الرسالة في واجهة المستخدم
+          const messages = document.querySelectorAll(`.message[data-external-id="${data.externalId}"]`);
+          messages.forEach(messageElem => {
+            const statusElem = messageElem.querySelector('.message-status');
+            if (statusElem) {
+              statusElem.className = `message-status ${data.status}`;
+              statusElem.innerHTML = `<i class="fas ${
+                data.status === 'sent' ? 'fa-check' : 
+                data.status === 'delivered' ? 'fa-check-double' : 
+                data.status === 'read' ? 'fa-check-double text-primary' : 
+                'fa-clock'
+              }"></i>`;
+            }
+          });
+        }
+      });
+      
+      // الاستماع للردود على الرسائل
+      socket.on('message_reply', function(data) {
+        console.log('رد جديد على رسالة:', data);
+        if (data.message) {
+          addNewMessageToConversation(data.message);
+          refreshConversationsList();
+        }
+      });
+    }
+  });
 </script>
 
 <div class="card">

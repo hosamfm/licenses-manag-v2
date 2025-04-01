@@ -512,9 +512,9 @@ exports.replyToConversation = async (req, res) => {
 exports.reactToMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { messageId, emoji } = req.body;
+    const { messageId, emoji, externalMessageId } = req.body;
 
-    if (!messageId || !emoji) {
+    if (!emoji || (!messageId && !externalMessageId)) {
       return res.json({ success: false, error: 'بيانات غير كافية، يجب تحديد معرف الرسالة والإيموجي' });
     }
 
@@ -524,9 +524,26 @@ exports.reactToMessage = async (req, res) => {
       return res.json({ success: false, error: 'المحادثة غير موجودة' });
     }
 
-    // البحث عن الرسالة للتفاعل معها
-    const message = await WhatsappMessage.findOne({ externalMessageId: messageId });
+    // البحث عن الرسالة للتفاعل معها (إما باستخدام المعرف الداخلي أو الخارجي)
+    let message;
+    
+    if (externalMessageId) {
+      // البحث باستخدام المعرف الخارجي أولًا إذا كان متوفرًا
+      message = await WhatsappMessage.findOne({ externalMessageId: externalMessageId });
+    }
+    
+    if (!message && messageId) {
+      // إذا لم يتم العثور على الرسالة بالمعرف الخارجي أو لم يتم توفيره، نبحث عن الرسالة بالمعرف الداخلي
+      message = await WhatsappMessage.findById(messageId);
+    }
+    
     if (!message) {
+      // تسجيل المزيد من التفاصيل للتشخيص
+      logger.error('conversationController', 'الرسالة غير موجودة في التفاعل', { 
+        messageId, 
+        externalMessageId, 
+        conversationId 
+      });
       return res.json({ success: false, error: 'الرسالة غير موجودة' });
     }
 
@@ -538,9 +555,20 @@ exports.reactToMessage = async (req, res) => {
       }
 
       const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
+      // استخدام المعرف الخارجي للرسالة المخزن في قاعدة البيانات
+      const messageIdToUse = message.externalMessageId;
+      
+      if (!messageIdToUse) {
+        logger.error('conversationController', 'المعرف الخارجي للرسالة غير موجود', { 
+          internalId: message._id,
+          externalId: message.externalMessageId
+        });
+        return res.json({ success: false, error: 'المعرف الخارجي للرسالة غير موجود' });
+      }
+      
       await metaWhatsappService.sendReaction(
         conversation.phoneNumber,
-        messageId,
+        messageIdToUse,
         emoji,
         phoneNumberId
       );
@@ -551,7 +579,7 @@ exports.reactToMessage = async (req, res) => {
       // إرسال إشعار عبر Socket
       socketService.notifyMessageReaction(
         conversationId,
-        messageId,
+        messageIdToUse,
         {
           sender: req.user ? req.user._id.toString() : 'system',
           emoji,
