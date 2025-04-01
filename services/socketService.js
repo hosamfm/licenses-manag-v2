@@ -32,9 +32,23 @@ function initialize(server) {
             socket.userId = user._id.toString();
             socket.username = user.username;
             socket.userRole = user.user_role;
+            
+            logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم من الجلسة', { 
+              socketId: socket.id, 
+              userId: socket.userId, 
+              username: socket.username, 
+              userRole: socket.userRole
+            });
+          } else {
+            logger.warning('socketService', 'لم يتم العثور على المستخدم رغم وجود معرف في الجلسة', { 
+              socketId: socket.id, 
+              sessionUserId: socket.handshake.session.userId 
+            });
           }
         } catch (err) {
           logger.error('socketService', 'خطأ في استخراج بيانات المستخدم من قاعدة البيانات', { 
+            socketId: socket.id, 
+            sessionUserId: socket.handshake.session.userId,
             error: err.message 
           });
         }
@@ -43,13 +57,25 @@ function initialize(server) {
       else if (socket.handshake.auth && socket.handshake.auth.userId && socket.handshake.auth.userId !== 'guest') {
         socket.userId = socket.handshake.auth.userId;
         socket.username = socket.handshake.auth.username;
+        
+        logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم من بيانات المصادقة', { 
+          socketId: socket.id, 
+          userId: socket.userId, 
+          username: socket.username 
+        });
       } else {
         // لا توجد معلومات مستخدم متاحة
         socket.userId = 'guest';
         socket.username = 'زائر';
+        
+        logger.info('socketService', 'اتصال جديد بواسطة Socket.io بدون معلومات المستخدم', { 
+          socketId: socket.id,
+          source: socket.handshake.headers.referer || 'غير معروف'
+        });
       }
     } catch (error) {
       logger.error('socketService', 'خطأ في معالجة معلومات المستخدم عند الاتصال', { 
+        socketId: socket.id, 
         error: error.message 
       });
       
@@ -87,7 +113,7 @@ function initialize(server) {
     });
 
     // معالجة إضافة رد فعل على رسالة
-    socket.on('add_reaction', async (data) => {
+    socket.on('add_reaction', (data) => {
       try {
         // التحقق من صحة البيانات
         if (!data || !data.messageId || !data.reactionType) {
@@ -95,34 +121,14 @@ function initialize(server) {
           return socket.emit('reaction_error', { error: 'بيانات غير كافية' });
         }
 
-        // التأكد من وجود معرف المحادثة
-        const conversationId = data.conversationId;
-        if (!conversationId) {
-          logger.warning('socketService', 'محاولة إضافة رد فعل بدون معرف محادثة', { messageId: data.messageId });
-          return socket.emit('reaction_error', { error: 'معرف المحادثة غير متوفر' });
-        }
-
-        // تسجيل البيانات للتشخيص
-        logger.info('socketService', 'بيانات طلب إضافة رد فعل', { 
-          originalData: data,
-          hasConversationId: !!data.conversationId
-        });
-
         // استخدام معلومات المستخدم المخزنة في كائن socket بدلاً من الاعتماد على البيانات المرسلة
         const reactionData = {
           messageId: data.messageId,
           reactionType: data.reactionType,
           userId: socket.userId,         // استخدام معرف المستخدم من الجلسة
           username: socket.username,     // استخدام اسم المستخدم من الجلسة
-          conversationId: conversationId,  // استخدام المتغير المحلي بدلاً من الوصول المباشر
-          platform: data.platform || 'whatsapp' // إضافة حقل منصة التواصل
+          conversationId: data.conversationId
         };
-
-        // التأكد مرة أخرى من وجود معرف المحادثة في البيانات النهائية
-        if (!reactionData.conversationId) {
-          logger.warning('socketService', 'معرف المحادثة غير موجود في بيانات التفاعل النهائية', { reactionData });
-          reactionData.conversationId = data.conversattionId || data.conversationId || null;
-        }
 
         logger.info('socketService', 'إضافة رد فعل على رسالة', { 
           messageId: reactionData.messageId,
@@ -130,73 +136,69 @@ function initialize(server) {
           userId: reactionData.userId,
           username: reactionData.username
         });
-
-        // إرسال التفاعل عبر واتس أب إذا كانت المنصة واتس أب
-        if (reactionData.platform === 'whatsapp' && reactionData.conversationId) {
-          try {
-            // استخدام mongoose للوصول إلى النموذج بدلاً من إعادة استيراده لتجنب إعادة التعريف
-            const mongoose = require('mongoose');
-            const WhatsAppMessage = mongoose.model('WhatsAppMessage');
-            const Conversation = mongoose.model('Conversation');
-            const WhatsappManager = require('./whatsapp/WhatsappManager');
-            
-            // البحث عن تفاصيل الرسالة والمحادثة
-            const message = await WhatsAppMessage.findById(reactionData.messageId);
-            const conversation = await Conversation.findById(reactionData.conversationId);
-            
-            if (message && conversation) {
-              // إنشاء رسالة رد تحتوي على التفاعل
-              const reactionContent = `${reactionData.username} تفاعل بـ ${reactionData.reactionType} على رسالة: "${message.content.substring(0, 50)}${message.content.length > 50 ? '...' : ''}"`;
-              
-              // إرسال رسالة التفاعل كرد في المحادثة
-              const outgoingMessage = await WhatsAppMessage.createOutgoingMessage(
-                conversation._id,
-                reactionContent,
-                reactionData.userId
-              );
-              
-              // إذا تم إنشاء الرسالة بنجاح، قم بإرسالها عبر واتس أب
-              if (outgoingMessage) {
-                // تهيئة WhatsappManager إذا لم يكن مهيئًا بالفعل
-                if (!WhatsappManager.initialized) {
-                  await WhatsappManager.initialize();
-                }
+        
+        // إرسال التفاعل إلى واتساب ميتا من خلال استدعاء وظيفة في مدير التفاعلات
+        try {
+          const conversationController = require('../controllers/conversationController');
+          
+          // استدعاء وظيفة reactToMessage داخلياً
+          // إنشاء كائنات req و res مخصصة للاستخدام الداخلي
+          const req = {
+            params: { conversationId: data.conversationId },
+            body: { messageId: data.messageId, emoji: data.reactionType },
+            user: { _id: socket.userId, username: socket.username }
+          };
+          
+          const res = {
+            json: (responseData) => {
+              if (responseData.success) {
+                logger.info('socketService', 'تم إرسال التفاعل إلى واتساب بنجاح', { 
+                  messageId: data.messageId,
+                  emoji: data.reactionType
+                });
+              } else {
+                logger.error('socketService', 'فشل في إرسال التفاعل إلى واتساب', { 
+                  error: responseData.error,
+                  messageId: data.messageId
+                });
                 
-                // إرسال الرسالة عبر واتس أب
-                const sendResult = await WhatsappManager.sendWhatsapp(
-                  conversation.phoneNumber,
-                  reactionContent,
-                  {
-                    skipMessageRecord: true,  // لأننا أنشأنا سجل رسالة WhatsAppMessage بالفعل
-                    conversationId: conversation._id,
-                    originalMessageId: message._id
-                  }
-                );
-                
-                // تحديث معرف الرسالة الخارجي إذا نجح الإرسال
-                if (sendResult.success && sendResult.externalMessageId) {
-                  outgoingMessage.externalMessageId = sendResult.externalMessageId;
-                  await outgoingMessage.save();
-                }
+                // إعلام المستخدم بالخطأ
+                socket.emit('reaction_error', { error: responseData.error || 'فشل في إرسال التفاعل إلى واتساب' });
               }
+            },
+            status: (code) => {
+              return {
+                json: (responseData) => {
+                  logger.error('socketService', `فشل في إرسال التفاعل إلى واتساب (${code})`, { 
+                    error: responseData.error,
+                    messageId: data.messageId
+                  });
+                  
+                  // إعلام المستخدم بالخطأ
+                  socket.emit('reaction_error', { error: responseData.error || 'فشل في إرسال التفاعل إلى واتساب' });
+                }
+              };
             }
-          } catch (error) {
-            logger.error('socketService', 'فشل في إرسال التفاعل عبر واتس أب', { 
-              error: error.message,
-              reactionData 
-            });
-            // الاستمرار في تنفيذ العملية رغم الخطأ في إرسال التفاعل عبر واتس أب
-          }
+          };
+          
+          // استدعاء وظيفة المتحكم بشكل غير متزامن
+          conversationController.reactToMessage(req, res);
+        } catch (controllerError) {
+          logger.error('socketService', 'خطأ في استدعاء متحكم التفاعلات', { 
+            error: controllerError.message, 
+            messageId: data.messageId
+          });
         }
 
         // بث حدث رد الفعل لجميع المستخدمين في نفس المحادثة
-        io.to(reactionData.conversationId.toString()).emit('reaction_received', reactionData);
+        io.to(data.conversationId.toString()).emit('reaction_received', reactionData);
         
         // إرسال تأكيد للمستخدم الذي أضاف رد الفعل
         socket.emit('reaction_sent', { success: true, reactionData });
       } catch (error) {
         logger.error('socketService', 'خطأ أثناء إضافة رد فعل', { 
           error: error.message, 
+          socketId: socket.id,
           data
         });
         socket.emit('reaction_error', { error: 'حدث خطأ في معالجة رد الفعل' });
