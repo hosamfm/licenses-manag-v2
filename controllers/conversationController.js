@@ -6,7 +6,6 @@ const Conversation = require('../models/Conversation');
 const Contact = require('../models/Contact');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const WhatsappChannel = require('../models/WhatsAppChannel');
-const SemMessage = require('../models/SemMessage'); // إن احتجته
 const User = require('../models/User');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');

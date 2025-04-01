@@ -263,7 +263,7 @@ function notifyMessageStatusUpdate(conversationId, externalId, status) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  io.to(`conversation-${conversationId}`).emit('message_status_update', { externalId, status });
+  io.to(`conversation-${conversationId}`).emit('message-status-update', { externalId, status });
   logger.info('socketService', 'تم إرسال إشعار بتحديث حالة الرسالة', { conversationId, externalId, status });
 }
 
