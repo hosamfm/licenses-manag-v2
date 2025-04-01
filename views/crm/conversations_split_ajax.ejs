@@ -74,8 +74,13 @@
         // إعادة تعيين متغير الرد
         window.currentReplyToId = null;
         
-        // تحديث المحادثة
-        if (window.refreshConversationDetails) window.refreshConversationDetails();
+        // إضافة الرسالة المرسلة للمحادثة
+        if (data.message) {
+          window.addMessageToConversation(data.message);
+        }
+        
+        // تحديث قائمة المحادثات
+        refreshConversationsList();
       })
       .catch(error => {
         console.error('خطأ في إرسال الرسالة:', error);
@@ -199,15 +204,15 @@
         
         // تشغيل صوت الإشعار للرسائل الواردة
         if (data.direction === 'incoming') {
-          playMessageSound();
+          playNotificationSound();
         }
         
-        // تحديث قائمة المحادثات إذا كانت الرسالة تنتمي إلى المحادثة الحالية
+        // تحديث قائمة المحادثات
+        refreshConversationsList();
+        
+        // إذا كانت الرسالة تخص المحادثة المفتوحة حالياً، أضفها للمحادثة
         if (data.conversationId === currentConversationId) {
-          refreshConversationDetails();
-        } else {
-          // تحديث قائمة المحادثات فقط
-          refreshConversationsList();
+          window.addMessageToConversation(data);
         }
       });
       
@@ -245,7 +250,7 @@
       });
       
       // دالة لتشغيل صوت عند وصول رسائل جديدة
-      function playMessageSound() {
+      function playNotificationSound() {
         try {
           const sound = document.getElementById('messageSound');
           if (sound) {
@@ -459,6 +464,161 @@
           loadConversationDetails(currentConversationId);
         }
       };
+      
+      // دالة لإضافة رسالة جديدة للمحادثة الحالية
+      window.addMessageToConversation = function(messageData) {
+        if (!messageData || !currentConversationId) return;
+        
+        // التأكد من أن الرسالة تخص المحادثة الحالية
+        if (messageData.conversationId !== currentConversationId) return;
+        
+        // الحصول على حاوية الرسائل
+        const messageContainer = document.getElementById('messageContainer');
+        if (!messageContainer) return;
+        
+        // تنسيق التاريخ
+        const messageDate = new Date(messageData.createdAt || Date.now());
+        const formattedDate = messageDate.toLocaleString('ar-LY');
+        
+        // إنشاء عنصر الرسالة
+        const messageElem = document.createElement('div');
+        messageElem.className = `message ${messageData.direction}`;
+        messageElem.setAttribute('data-message-id', messageData._id);
+        messageElem.setAttribute('data-status', messageData.status || 'sent');
+        
+        if (messageData.externalId) {
+          messageElem.setAttribute('data-external-id', messageData.externalId);
+        }
+        
+        // تحديد HTML الخاص بالرسالة بناءً على نوع الرسالة ونوع المحتوى
+        let messageHTML = '';
+        const isMedia = messageData.mediaType && messageData.mediaType !== 'text';
+        
+        if (isMedia) {
+          // هنا يمكن إضافة عرض مناسب لنوع الوسائط
+          messageHTML = `
+            <div class="message-bubble media-message">
+              <div class="media-content">
+                <i class="fas fa-paperclip me-1"></i>
+                محتوى وسائط (${messageData.mediaType})
+              </div>
+            </div>
+          `;
+        } else {
+          // رسالة نصية عادية
+          messageHTML = `
+            <div class="message-bubble">
+              ${messageData.content || ''}
+            </div>
+          `;
+        }
+        
+        // إضافة معلومات الرسالة والأزرار
+        messageHTML += `
+          <div class="message-info">
+            <small class="message-time">${formattedDate}</small>
+            ${messageData.direction === 'outgoing' ? 
+              `<span class="message-status">
+                <i class="${messageData.status === 'sent' ? 'fas fa-check' : 
+                          messageData.status === 'delivered' ? 'fas fa-check-double text-silver' : 
+                          messageData.status === 'read' ? 'fas fa-check-double text-primary' : 
+                          'fas fa-clock'}" title="${messageData.status || 'مرسلة'}"></i>
+              </span>` : ''}
+          </div>
+          <div class="message-actions">
+            <button type="button" class="btn btn-sm reply-btn" 
+                    data-message-id="${messageData._id}" 
+                    ${messageData.externalId ? `data-external-id="${messageData.externalId}"` : ''}>
+              <i class="fas fa-reply"></i>
+            </button>
+            <!-- يمكن إضافة أزرار إضافية هنا مثل زر التفاعل إلخ -->
+          </div>
+        `;
+        
+        // تعيين المحتوى
+        messageElem.innerHTML = messageHTML;
+        
+        // إضافة الرسالة لحاوية الرسائل
+        messageContainer.appendChild(messageElem);
+        
+        // تمرير المحادثة لأسفل
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+        
+        // إضافة مستمعات الأحداث للرسالة الجديدة
+        setupMessageActions(messageElem);
+      }
+      
+      // دالة لإعداد مستمعات الأحداث للرسائل
+      function setupMessageActions(messageElem) {
+        if (!messageElem) return;
+        
+        // زر الرد
+        const replyButton = messageElem.querySelector('.reply-btn');
+        if (replyButton) {
+          replyButton.addEventListener('click', function() {
+            const messageId = this.getAttribute('data-message-id');
+            const externalId = this.getAttribute('data-external-id');
+            showReplyForm(messageId, externalId, messageElem);
+          });
+        }
+        
+        // يمكن إضافة مستمعات أحداث أخرى مثل زر التفاعل، إخفاء الرسالة، إلخ
+      }
+      
+      // دالة لعرض نموذج الرد على رسالة معينة
+      function showReplyForm(messageId, externalId, messageElem) {
+        if (!messageElem || !messageId) return;
+        
+        // تخزين معرف الرسالة للرد عليها
+        window.currentReplyToId = messageId;
+        
+        // عرض مؤشر الرد
+        let replyIndicator = document.getElementById('replyIndicator');
+        
+        if (!replyIndicator) {
+          replyIndicator = document.createElement('div');
+          replyIndicator.id = 'replyIndicator';
+          replyIndicator.className = 'reply-indicator alert alert-info d-flex justify-content-between align-items-center py-2 mb-2';
+          
+          // الحصول على محتوى الرسالة للعرض
+          const messageContent = messageElem.querySelector('.message-bubble').textContent.trim().substring(0, 50);
+          
+          replyIndicator.innerHTML = `
+            <div>
+              <i class="fas fa-reply me-1"></i>
+              <small>رد على: ${messageContent}${messageContent.length > 50 ? '...' : ''}</small>
+            </div>
+            <button type="button" class="btn btn-sm text-secondary cancel-reply-btn">
+              <i class="fas fa-times"></i>
+            </button>
+          `;
+          
+          // إضافة المؤشر قبل حقل الإدخال
+          const replyForm = document.getElementById('replyForm');
+          if (replyForm) {
+            replyForm.insertBefore(replyIndicator, replyForm.firstChild);
+          }
+          
+          // إضافة حدث إلغاء الرد
+          const cancelButton = replyIndicator.querySelector('.cancel-reply-btn');
+          if (cancelButton) {
+            cancelButton.addEventListener('click', function() {
+              replyIndicator.remove();
+              window.currentReplyToId = null;
+            });
+          }
+        } else {
+          // تحديث المحتوى إذا كان موجوداً
+          const messageContent = messageElem.querySelector('.message-bubble').textContent.trim().substring(0, 50);
+          replyIndicator.querySelector('small').innerHTML = `رد على: ${messageContent}${messageContent.length > 50 ? '...' : ''}`;
+        }
+        
+        // التركيز على حقل الإدخال
+        const replyMessage = document.getElementById('replyMessage');
+        if (replyMessage) {
+          replyMessage.focus();
+        }
+      }
       
       // عرض إشعارات للمستخدم
       window.showToast = function(message, type = 'info') {
