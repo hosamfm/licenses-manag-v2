@@ -1,4 +1,11 @@
 <!-- هذا الملف الجزئي (Partial) يعرض تفاصيل المحادثة والرسائل -->
+<!-- تعريف متغيرات المستخدم عالمياً -->
+<script>
+  // تعريف معلومات المستخدم كمتغيرات عامة
+  window.currentUserId = "<%= typeof user !== 'undefined' && user ? user._id : 'system' %>";
+  window.currentUsername = "<%= typeof user !== 'undefined' && user ? user.username : 'مستخدم النظام' %>";
+</script>
+
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="mb-0">
@@ -242,293 +249,563 @@
 <!-- إضافة JavaScript لتمكين وظائف الرد والتفاعل في الملف الجديد -->
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    // الحصول على الإشارات إلى عناصر DOM
-    const replyForm = document.getElementById('replyForm');
-    const replyMessage = document.getElementById('replyMessage');
-    const sendButton = document.getElementById('sendButton');
-    const sendingIndicator = document.getElementById('sendingIndicator');
-    const messageContainer = document.getElementById('messageContainer');
-    
-    // متغيرات للرد على الرسائل
-    let currentReplyToId = null;
-    let currentReplyToExternalId = null;
-    let replyIndicator = null;
-    
-    // إضافة مستمع حدث لنموذج الرد
-    if (replyForm) {
-      replyForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // التحقق من وجود محتوى في الرد
-        if (!replyMessage.value.trim()) {
-          return;
-        }
-        
-        // تعطيل زر الإرسال وإظهار مؤشر الإرسال
-        sendButton.disabled = true;
-        sendingIndicator.style.display = 'inline-block';
-        
-        // إنشاء كائن FormData
-        const formData = new FormData(replyForm);
-        
-        // إضافة معرف الرسالة المُرَد عليها إذا كان موجودًا
-        if (currentReplyToExternalId) {
-          formData.append('replyToMessageId', currentReplyToExternalId);
-        }
-        
-        // إرسال الطلب باستخدام fetch API
-        fetch(replyForm.action, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        })
-        .then(response => response.json())
-        .then(data => {
-          // إعادة تمكين زر الإرسال وإخفاء مؤشر الإرسال
-          sendButton.disabled = false;
-          sendingIndicator.style.display = 'none';
+    // إنشاء وظيفة عامة لإعادة تعيين مستمعات الأحداث بعد التحميل
+    window.attachConversationEventListeners = function() {
+      // الحصول على الإشارات إلى عناصر DOM
+      const replyForm = document.getElementById('replyForm');
+      const replyMessage = document.getElementById('replyMessage');
+      const sendButton = document.getElementById('sendButton');
+      const sendingIndicator = document.getElementById('sendingIndicator');
+      const conversationId = '<%= conversation._id %>';
+      
+      // متغيرات للرد على رسالة
+      let currentReplyToId = null;  // معرف الرسالة التي يتم الرد عليها
+      let currentReplyMessageElem = null;  // عنصر الرسالة
+      
+      // صف الرسائل المطلوب إرسالها
+      let messageQueue = [];
+      let isProcessing = false;  // هل نقوم بمعالجة الصف حالياً؟
+      
+      // التعامل مع إرسال الرد
+      if (replyForm) {
+        replyForm.addEventListener('submit', function(e) {
+          e.preventDefault();
           
-          if (data.success) {
-            // مسح محتوى حقل الرد وإزالة مؤشر الرد
-            replyMessage.value = '';
-            resetReplyState();
-            
-            // تحديث واجهة المستخدم (يمكن إما إعادة تحميل جزء من الصفحة أو إضافة الرسالة الجديدة)
-            // هنا نفترض أن هناك دالة refreshConversation() يتم تعريفها في الصفحة الأم
-            if (typeof refreshConversationDetails === 'function') {
-              refreshConversationDetails();
-            }
+          // التأكد من وجود محتوى
+          const messageContent = replyMessage.value.trim();
+          if (!messageContent) return;
+          
+          // تغيير حالة الواجهة للإرسال
+          sendButton.disabled = true;
+          sendingIndicator.style.display = 'inline-block';
+          
+          // إنشاء بيانات الرسالة
+          const messageData = {
+            content: messageContent,
+            timestamp: new Date().toISOString(),
+            direction: 'outgoing',
+            status: 'sending',
+            _id: 'temp-' + Date.now(),
+            externalMessageId: null
+          };
+          
+          // إذا كان هناك رد على رسالة
+          if (currentReplyToId) {
+            messageData.replyToMessageId = currentReplyToId;
+            messageData.replyToMessageElem = currentReplyMessageElem;
+          }
+          
+          // إضافة الرسالة إلى قائمة الانتظار
+          messageQueue.push(messageData);
+          
+          // إضافة رسالة مؤقتة للواجهة
+          if (currentReplyToId) {
+            addNewMessageWithReply(messageData);
           } else {
-            // عرض رسالة خطأ
-            alert(data.error || 'حدث خطأ أثناء إرسال الرد.');
+            addNewMessage(messageData);
+          }
+          
+          // تمرير للأسفل
+          const messageContainer = document.getElementById('messageContainer');
+          if (messageContainer) {
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+          }
+          
+          // مسح نموذج الإدخال
+          replyMessage.value = '';
+          
+          // إعادة تعيين متغيرات الرد
+          resetReplyState();
+          
+          // معالجة صف الرسائل
+          processMessageQueue();
+        });
+        
+        // استخدام Enter للإرسال
+        replyMessage.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            
+            if (replyMessage.value.trim()) {
+              replyForm.dispatchEvent(new Event('submit'));
+            }
+          }
+        });
+      }
+      
+      // دالة لمعالجة صف الرسائل
+      function processMessageQueue() {
+        if (isProcessing || messageQueue.length === 0) return;
+        
+        isProcessing = true;
+        const messageData = messageQueue.shift();
+        
+        // الحصول على معرف الرسالة التي يتم الرد عليها (إن وجدت)
+        const replyToId = messageData.replyToMessageId ? messageData.replyToMessageId : null;
+        
+        // إرسال الرسالة للخادم
+        fetch(`/crm/conversations/<%= conversation._id %>/reply`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({
+            content: messageData.content,
+            replyToMessageId: replyToId,
+            tempId: messageData._id
+          })
+        })
+        .then(response => {
+          if (!response.ok) throw new Error('فشل إرسال الرسالة');
+          return response.json();
+        })
+        .then(data => {
+          console.log('تم إرسال الرسالة بنجاح:', data);
+          
+          // تحديث حالة الرسالة المؤقتة
+          const tempMsgElem = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
+          if (tempMsgElem && data.message) {
+            // تحديث رقم المعرف بالمعرف الحقيقي من الخادم
+            tempMsgElem.setAttribute('data-message-id', data.message._id);
+            
+            // إذا كان هناك معرف خارجي
+            if (data.message.externalMessageId) {
+              tempMsgElem.setAttribute('data-external-id', data.message.externalMessageId);
+            }
+            
+            // تحديث الحالة
+            tempMsgElem.setAttribute('data-status', 'sent');
+            
+            // تحديث أيقونة الحالة
+            const statusIcon = tempMsgElem.querySelector('.message-status i');
+            if (statusIcon) {
+              statusIcon.className = 'fas fa-check text-silver';
+              statusIcon.title = 'تم الإرسال';
+            }
+          }
+          
+          // إنهاء المعالجة والانتقال للرسالة التالية
+          isProcessing = false;
+          
+          // إعادة تمكين نموذج الإرسال
+          if (sendButton) sendButton.disabled = false;
+          if (sendingIndicator) sendingIndicator.style.display = 'none';
+          
+          // معالجة الرسالة التالية إن وجدت
+          if (messageQueue.length > 0) {
+            processMessageQueue();
           }
         })
         .catch(error => {
-          // إعادة تمكين زر الإرسال وإخفاء مؤشر الإرسال
-          sendButton.disabled = false;
-          sendingIndicator.style.display = 'none';
-          console.error('خطأ في إرسال الرد:', error);
-          alert('حدث خطأ أثناء إرسال الرد. يرجى المحاولة مرة أخرى.');
+          console.error('خطأ في إرسال الرسالة:', error);
+          
+          // تحديث حالة الرسالة للإشارة إلى الفشل
+          const tempMsgElem = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
+          if (tempMsgElem) {
+            tempMsgElem.setAttribute('data-status', 'failed');
+            
+            // تحديث أيقونة الحالة
+            const statusIcon = tempMsgElem.querySelector('.message-status i');
+            if (statusIcon) {
+              statusIcon.className = 'fas fa-exclamation-triangle text-danger';
+              statusIcon.title = 'فشل الإرسال';
+            }
+          }
+          
+          // إنهاء المعالجة
+          isProcessing = false;
+          
+          // إعادة تمكين نموذج الإرسال
+          if (sendButton) sendButton.disabled = false;
+          if (sendingIndicator) sendingIndicator.style.display = 'none';
+          
+          // عرض رسالة خطأ
+          window.showToast && window.showToast('فشل في إرسال الرسالة، يرجى المحاولة مرة أخرى.', 'danger');
+          
+          // معالجة الرسالة التالية إن وجدت
+          if (messageQueue.length > 0) {
+            processMessageQueue();
+          }
         });
-      });
-    }
-    
-    // إضافة مستمعي الحدث لأزرار الرد والتفاعل
-    messageContainer.addEventListener('click', function(e) {
-      // زر الرد
-      if (e.target.closest('.reply-btn')) {
-        const replyBtn = e.target.closest('.reply-btn');
-        const messageId = replyBtn.getAttribute('data-message-id');
-        const externalId = replyBtn.getAttribute('data-external-id');
-        const messageElem = replyBtn.closest('.message');
-        showReplyForm(messageId, externalId, messageElem);
       }
       
-      // زر التفاعل
-      if (e.target.closest('.reaction-btn')) {
-        const reactionBtn = e.target.closest('.reaction-btn');
-        const messageElem = reactionBtn.closest('.message');
-        const messageId = messageElem.getAttribute('data-message-id');
-        const externalId = messageElem.getAttribute('data-external-id');
-        showReactionPicker(messageId, externalId);
-      }
-    });
-    
-    // تمرير المحادثة إلى النهاية عند التحميل
-    messageContainer.scrollTop = messageContainer.scrollHeight;
-    
-    // دالة لإظهار نموذج الرد مع إشارة إلى الرسالة التي يتم الرد عليها
-    function showReplyForm(messageId, externalId, messageElem) {
-      if (!messageElem || !messageId) return;
-      
-      // تخزين معرف الرسالة للرد عليها
-      currentReplyToId = messageId;
-      currentReplyToExternalId = externalId;
-      
-      // إزالة أي مؤشر رد سابق
-      if (replyIndicator) {
-        replyIndicator.remove();
-      }
-      
-      // إنشاء مؤشر الرد
-      replyIndicator = document.createElement('div');
-      replyIndicator.className = 'reply-indicator alert alert-info alert-dismissible fade show';
-      
-      // استخراج محتوى الرسالة
-      const msgContent = messageElem.querySelector('.message-bubble').textContent.trim();
-      const truncatedContent = msgContent.length > 50 ? msgContent.substring(0, 50) + '...' : msgContent;
-      
-      replyIndicator.innerHTML = `
-        <strong>الرد على:</strong> ${truncatedContent}
-        <button type="button" class="btn-close" onclick="resetReplyState()"></button>
-      `;
-      
-      // إضافة مؤشر الرد قبل نموذج الرد
-      if (replyForm) {
-        replyForm.insertAdjacentElement('beforebegin', replyIndicator);
+      // دالة لإضافة رسالة جديدة إلى واجهة المستخدم
+      function addNewMessage(messageData) {
+        const messageContainer = document.getElementById('messageContainer');
+        if (!messageContainer) return;
         
-        // التركيز في حقل الرد
-        replyMessage.focus();
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${messageData.direction}`;
+        messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
+        messageDiv.setAttribute('data-status', messageData.status || 'sending');
+        
+        if (messageData.externalMessageId) {
+          messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
+        }
+        
+        let statusIcon = '';
+        if (messageData.direction === 'outgoing') {
+          if (messageData.status === 'sending') {
+            statusIcon = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
+          } else if (messageData.status === 'sent') {
+            statusIcon = '<i class="fas fa-check text-silver" title="تم الإرسال"></i>';
+          } else if (messageData.status === 'delivered') {
+            statusIcon = '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>';
+          } else if (messageData.status === 'read') {
+            statusIcon = '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>';
+          } else if (messageData.status === 'failed') {
+            statusIcon = '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>';
+          }
+        }
+        
+        messageDiv.innerHTML = `
+          <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
+            ${messageData.content}
+            <div class="message-time">
+              ${new Date(messageData.timestamp).toLocaleString('ar-LY')}
+              ${messageData.direction === 'outgoing' ? `<span class="message-status">${statusIcon}</span>` : ''}
+            </div>
+          </div>
+          
+          <div class="message-actions">
+            <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
+              <i class="far fa-smile"></i>
+            </button>
+            <button class="btn btn-sm text-muted message-action-btn reply-btn" 
+                    data-message-id="${messageData._id}" 
+                    data-external-id="${messageData.externalMessageId || ''}" 
+                    title="رد">
+              <i class="fas fa-reply"></i>
+            </button>
+          </div>
+        `;
+        
+        // إضافة الرسالة إلى حاوية الرسائل
+        messageContainer.appendChild(messageDiv);
+        
+        // إضافة عنصر clear-both
+        const clearDiv = document.createElement('div');
+        clearDiv.className = 'clear-both';
+        messageContainer.appendChild(clearDiv);
+        
+        // إضافة أحداث التفاعل والرد
+        setupMessageActions(messageDiv);
       }
-    }
-    
-    // دالة لإعادة تعيين حالة الرد
-    window.resetReplyState = function() {
-      currentReplyToId = null;
-      currentReplyToExternalId = null;
       
-      if (replyIndicator) {
-        replyIndicator.remove();
-        replyIndicator = null;
+      // دالة لإضافة رسالة جديدة مع اقتباس رد
+      function addNewMessageWithReply(messageData) {
+        const messageContainer = document.getElementById('messageContainer');
+        if (!messageContainer) return;
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${messageData.direction}`;
+        messageDiv.setAttribute('data-message-id', messageData._id);
+        messageDiv.setAttribute('data-status', messageData.status || 'sending');
+        
+        if (messageData.externalMessageId) {
+          messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
+        }
+        
+        // الحصول على الرسالة المقتبسة
+        let repliedContent = 'رد على رسالة';
+        let repliedMessageElem = null;
+        
+        if (messageData.replyToMessageId) {
+          repliedMessageElem = document.querySelector(`.message[data-message-id="${messageData.replyToMessageId}"]`);
+          
+          if (repliedMessageElem) {
+            const contentElem = repliedMessageElem.querySelector('.message-bubble');
+            if (contentElem) {
+              repliedContent = contentElem.textContent.trim();
+              
+              // اقتصار طول النص
+              if (repliedContent.length > 50) {
+                repliedContent = repliedContent.substring(0, 50) + '...';
+              }
+            }
+          }
+        }
+        
+        let statusIcon = '';
+        if (messageData.direction === 'outgoing') {
+          if (messageData.status === 'sending') {
+            statusIcon = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
+          } else if (messageData.status === 'sent') {
+            statusIcon = '<i class="fas fa-check text-silver" title="تم الإرسال"></i>';
+          } else if (messageData.status === 'delivered') {
+            statusIcon = '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>';
+          } else if (messageData.status === 'read') {
+            statusIcon = '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>';
+          } else if (messageData.status === 'failed') {
+            statusIcon = '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>';
+          }
+        }
+        
+        messageDiv.innerHTML = `
+          <div class="replied-message">
+            <div class="replied-content">
+              <i class="fas fa-reply"></i>
+              <span>${repliedContent}</span>
+            </div>
+          </div>
+          
+          <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
+            ${messageData.content}
+            <div class="message-time">
+              ${new Date(messageData.timestamp).toLocaleString('ar-LY')}
+              ${messageData.direction === 'outgoing' ? `<span class="message-status">${statusIcon}</span>` : ''}
+            </div>
+          </div>
+          
+          <div class="message-actions">
+            <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
+              <i class="far fa-smile"></i>
+            </button>
+            <button class="btn btn-sm text-muted message-action-btn reply-btn" 
+                    data-message-id="${messageData._id}" 
+                    data-external-id="${messageData.externalMessageId || ''}" 
+                    title="رد">
+              <i class="fas fa-reply"></i>
+            </button>
+          </div>
+        `;
+        
+        // إضافة الرسالة إلى حاوية الرسائل
+        messageContainer.appendChild(messageDiv);
+        
+        // إضافة عنصر clear-both
+        const clearDiv = document.createElement('div');
+        clearDiv.className = 'clear-both';
+        messageContainer.appendChild(clearDiv);
+        
+        // إضافة أحداث التفاعل والرد
+        setupMessageActions(messageDiv);
+      }
+      
+      // دالة لإعداد أحداث التفاعل مع الرسائل
+      function setupMessageActions(messageElem) {
+        if (!messageElem) return;
+        
+        // زر الرد
+        const replyButton = messageElem.querySelector('.reply-btn');
+        if (replyButton) {
+          replyButton.addEventListener('click', function() {
+            const messageId = this.getAttribute('data-message-id');
+            const externalId = this.getAttribute('data-external-id');
+            showReplyForm(messageId, externalId, messageElem);
+          });
+        }
+        
+        // زر التفاعل
+        const reactionButton = messageElem.querySelector('.reaction-btn');
+        if (reactionButton) {
+          reactionButton.addEventListener('click', function() {
+            const messageId = messageElem.getAttribute('data-message-id');
+            const externalId = messageElem.getAttribute('data-external-id');
+            showReactionPicker(messageId, externalId);
+          });
+        }
+      }
+      
+      // إضافة أحداث للأزرار في الرسائل الموجودة
+      const allMessages = document.querySelectorAll('.message');
+      allMessages.forEach(message => {
+        setupMessageActions(message);
+      });
+      
+      // دالة لعرض نموذج الرد على رسالة معينة
+      function showReplyForm(messageId, externalId, messageElem) {
+        if (!messageElem || !messageId) return;
+        
+        // تخزين معرف الرسالة للرد عليها
+        currentReplyToId = messageId;
+        currentReplyMessageElem = messageElem;
+        
+        // عرض مؤشر الرد
+        let replyIndicator = document.getElementById('replyIndicator');
+        
+        if (!replyIndicator) {
+          replyIndicator = document.createElement('div');
+          replyIndicator.id = 'replyIndicator';
+          replyIndicator.className = 'reply-indicator alert alert-info d-flex justify-content-between align-items-center py-2 mb-2';
+          
+          // الحصول على محتوى الرسالة للعرض
+          const messageContent = messageElem.querySelector('.message-bubble').textContent.trim().substring(0, 50);
+          
+          replyIndicator.innerHTML = `
+            <div>
+              <i class="fas fa-reply me-1"></i>
+              <small>رد على: ${messageContent}${messageContent.length > 50 ? '...' : ''}</small>
+            </div>
+            <button type="button" class="btn btn-sm text-secondary cancel-reply-btn">
+              <i class="fas fa-times"></i>
+            </button>
+          `;
+          
+          // إضافة المؤشر قبل حقل الإدخال
+          if (replyForm) {
+            replyForm.insertBefore(replyIndicator, replyForm.firstChild);
+          }
+          
+          // إضافة حدث إلغاء الرد
+          const cancelButton = replyIndicator.querySelector('.cancel-reply-btn');
+          if (cancelButton) {
+            cancelButton.addEventListener('click', resetReplyState);
+          }
+        } else {
+          // تحديث المحتوى إذا كان موجوداً
+          const messageContent = messageElem.querySelector('.message-bubble').textContent.trim().substring(0, 50);
+          replyIndicator.querySelector('small').innerHTML = `رد على: ${messageContent}${messageContent.length > 50 ? '...' : ''}`;
+        }
+        
+        // التركيز على حقل الإدخال
+        if (replyMessage) {
+          replyMessage.focus();
+        }
+      }
+      
+      // دالة لإعادة تعيين حالة الرد
+      function resetReplyState() {
+        currentReplyToId = null;
+        currentReplyMessageElem = null;
+        
+        // إزالة مؤشر الرد إن وجد
+        const replyIndicator = document.getElementById('replyIndicator');
+        if (replyIndicator) {
+          replyIndicator.remove();
+        }
+      }
+      
+      // دالة لعرض منتقي التفاعلات
+      function showReactionPicker(messageId, externalId) {
+        if (!messageId) return;
+        
+        // العثور على الرسالة التي سيتم إضافة التفاعل لها
+        const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+        if (!messageElem) return;
+        
+        // إنشاء أو تحديث منتقي التفاعلات
+        let reactionPicker = document.getElementById('reactionPicker');
+        
+        if (!reactionPicker) {
+          reactionPicker = document.createElement('div');
+          reactionPicker.id = 'reactionPicker';
+          reactionPicker.className = 'reaction-picker';
+          
+          const reactions = ['👍', '❤️', '😂', '😮', '😢', '👏'];
+          
+          let buttonsHTML = '';
+          reactions.forEach(emoji => {
+            buttonsHTML += `<button class="reaction-emoji-btn" data-emoji="${emoji}">${emoji}</button>`;
+          });
+          
+          reactionPicker.innerHTML = buttonsHTML;
+          document.body.appendChild(reactionPicker);
+          
+          // إضافة أحداث للأزرار
+          reactionPicker.querySelectorAll('.reaction-emoji-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+              const emoji = this.getAttribute('data-emoji');
+              sendReaction(messageId, emoji, externalId);
+              reactionPicker.remove();
+            });
+          });
+          
+          // إغلاق عند النقر في أي مكان آخر
+          document.addEventListener('click', function closeReactionPicker(e) {
+            if (!reactionPicker.contains(e.target) && 
+                !e.target.classList.contains('reaction-btn') && 
+                !e.target.closest('.reaction-btn')) {
+              reactionPicker.remove();
+              document.removeEventListener('click', closeReactionPicker);
+            }
+          });
+        }
+        
+        // تحديد موقع منتقي التفاعلات بالنسبة للرسالة
+        const reactionBtn = messageElem.querySelector('.reaction-btn');
+        if (reactionBtn) {
+          const rect = reactionBtn.getBoundingClientRect();
+          const isRTL = document.dir === 'rtl';
+          
+          if (isRTL) {
+            reactionPicker.style.right = `${rect.right}px`;
+          } else {
+            reactionPicker.style.left = `${rect.left}px`;
+          }
+          
+          reactionPicker.style.top = `${rect.bottom + window.scrollY + 5}px`;
+        }
+      }
+      
+      // دالة لإرسال تفاعل
+      function sendReaction(messageId, emoji, externalId) {
+        if (!messageId || !emoji) return;
+        
+        // إرسال التفاعل إلى الخادم
+        fetch(`/crm/conversations/<%= conversation._id %>/reaction`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({
+            messageId: messageId,
+            externalMessageId: externalId,
+            emoji: emoji,
+            senderId: window.currentUserId,
+            senderName: window.currentUsername
+          })
+        })
+        .then(response => {
+          if (!response.ok) throw new Error('فشل إرسال التفاعل');
+          return response.json();
+        })
+        .then(data => {
+          console.log('تم إرسال التفاعل بنجاح:', data);
+          
+          // إضافة التفاعل مؤقتاً للواجهة
+          addReactionToMessage(messageId, emoji, window.currentUserId, window.currentUsername);
+        })
+        .catch(error => {
+          console.error('خطأ في إرسال التفاعل:', error);
+          window.showToast && window.showToast('فشل في إرسال التفاعل، يرجى المحاولة مرة أخرى.', 'danger');
+        });
+      }
+      
+      // دالة لإضافة تفاعل إلى رسالة في الواجهة
+      function addReactionToMessage(messageId, emoji, userId, username) {
+        const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+        if (!messageElem) return;
+        
+        // التحقق من وجود حاوية التفاعلات
+        let reactionsDiv = messageElem.querySelector('.message-reactions');
+        
+        if (!reactionsDiv) {
+          reactionsDiv = document.createElement('div');
+          reactionsDiv.className = 'message-reactions';
+          
+          // إضافة بعد فقاعة الرسالة
+          const bubbleDiv = messageElem.querySelector('.message-bubble');
+          if (bubbleDiv) {
+            bubbleDiv.insertAdjacentElement('afterend', reactionsDiv);
+          } else {
+            messageElem.appendChild(reactionsDiv);
+          }
+        }
+        
+        // إضافة التفاعل
+        const reactionSpan = document.createElement('span');
+        reactionSpan.className = 'reaction-emoji';
+        reactionSpan.title = `تفاعل من ${username}`;
+        reactionSpan.textContent = emoji;
+        
+        reactionsDiv.appendChild(reactionSpan);
       }
     };
     
-    // دالة لإظهار منتقي التفاعلات
-    function showReactionPicker(messageId, externalId) {
-      if (!messageId) return;
-      
-      // العثور على الرسالة التي سيتم إضافة التفاعل لها
-      const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
-      
-      if (!messageElem) return;
-      
-      // التحقق من وجود منتقي تفاعلات موجود بالفعل
-      const existingPicker = document.querySelector('.reaction-picker');
-      if (existingPicker) {
-        existingPicker.remove();
-      }
-      
-      // إنشاء منتقي التفاعلات
-      const reactionPicker = document.createElement('div');
-      reactionPicker.className = 'reaction-picker';
-      reactionPicker.innerHTML = `
-        <button class="emoji-btn" data-emoji="👍">👍</button>
-        <button class="emoji-btn" data-emoji="👎">👎</button>
-        <button class="emoji-btn" data-emoji="❤️">❤️</button>
-        <button class="emoji-btn" data-emoji="😂">😂</button>
-        <button class="emoji-btn" data-emoji="😮">😮</button>
-        <button class="emoji-btn" data-emoji="😢">😢</button>
-      `;
-      
-      // إضافة أنماط CSS المضمنة
-      reactionPicker.style.cssText = `
-        position: absolute;
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        padding: 5px 10px;
-        z-index: 1000;
-        display: flex;
-      `;
-      
-      // تحديد موقع منتقي التفاعلات
-      if (messageElem.classList.contains('incoming')) {
-        reactionPicker.style.left = '40px';
-      } else {
-        reactionPicker.style.right = '40px';
-      }
-      reactionPicker.style.bottom = '-20px';
-      
-      // إضافة أنماط لأزرار الرموز التعبيرية
-      const emojiButtons = reactionPicker.querySelectorAll('.emoji-btn');
-      emojiButtons.forEach(btn => {
-        btn.style.cssText = `
-          background: none;
-          border: none;
-          font-size: 1.2rem;
-          margin: 0 2px;
-          cursor: pointer;
-          transition: transform 0.2s;
-        `;
-        
-        // إضافة مستمع حدث للنقر على الرمز التعبيري
-        btn.addEventListener('click', function() {
-          const emoji = this.getAttribute('data-emoji');
-          sendReaction(messageId, externalId, emoji);
-          reactionPicker.remove();
-        });
-        
-        // إضافة تأثير تحويم
-        btn.addEventListener('mouseover', function() {
-          this.style.transform = 'scale(1.3)';
-        });
-        
-        btn.addEventListener('mouseout', function() {
-          this.style.transform = 'scale(1)';
-        });
-      });
-      
-      // إضافة منتقي التفاعلات إلى الرسالة
-      messageElem.appendChild(reactionPicker);
-      
-      // إضافة مستمع حدث لإغلاق منتقي التفاعلات عند النقر في مكان آخر
-      document.addEventListener('click', function closeReactionPicker(e) {
-        if (!reactionPicker.contains(e.target) && !e.target.closest('.reaction-btn')) {
-          reactionPicker.remove();
-          document.removeEventListener('click', closeReactionPicker);
-        }
-      });
-    }
-    
-    // دالة لإرسال التفاعل
-    function sendReaction(messageId, externalId, emoji) {
-      // إرسال طلب لإضافة تفاعل
-      fetch(`/crm/conversations/${conversationId}/react`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify({
-          messageId: messageId,
-          externalMessageId: externalId,
-          emoji: emoji
-        })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          // تحديث واجهة المستخدم
-          if (typeof refreshConversationDetails === 'function') {
-            refreshConversationDetails();
-          } else {
-            // أو إضافة التفاعل مباشرة إلى واجهة المستخدم
-            addReactionToMessage(messageId, emoji, data.userId, data.username);
-          }
-        } else {
-          alert(data.error || 'حدث خطأ أثناء إضافة التفاعل.');
-        }
-      })
-      .catch(error => {
-        console.error('خطأ في إرسال التفاعل:', error);
-        alert('حدث خطأ أثناء إرسال التفاعل. يرجى المحاولة مرة أخرى.');
-      });
-    }
-    
-    // دالة لإضافة تفاعل إلى الرسالة في واجهة المستخدم
-    function addReactionToMessage(messageId, emoji, userId, username) {
-      const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
-      if (!messageElem) return;
-      
-      // التحقق من وجود حاوية التفاعلات
-      let reactionsContainer = messageElem.querySelector('.message-reactions');
-      
-      // إنشاء حاوية التفاعلات إذا لم تكن موجودة
-      if (!reactionsContainer) {
-        reactionsContainer = document.createElement('div');
-        reactionsContainer.className = 'message-reactions';
-        messageElem.appendChild(reactionsContainer);
-      }
-      
-      // إضافة التفاعل الجديد
-      const reactionSpan = document.createElement('span');
-      reactionSpan.className = 'reaction-emoji';
-      reactionSpan.setAttribute('title', `تفاعل من ${username}`);
-      reactionSpan.textContent = emoji;
-      
-      reactionsContainer.appendChild(reactionSpan);
-    }
+    // تشغيل الوظيفة عند تحميل محتوى AJAX
+    window.attachConversationEventListeners();
   });
 </script>

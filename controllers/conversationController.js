@@ -643,7 +643,8 @@ exports.getConversationDetailsAjax = async (req, res) => {
     return res.render('crm/partials/_conversation_details_ajax', {
       layout: false,
       conversation,
-      messages: sorted
+      messages: sorted,
+      user: req.user // إضافة معلومات المستخدم المطلوبة في القالب
     });
   } catch (err) {
     logger.error('conversationController', 'خطأ في getConversationDetailsAjax', err);

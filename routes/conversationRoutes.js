@@ -29,8 +29,8 @@ router.get('/ajax/details/:conversationId',
   conversationController.getConversationDetailsAjax
 );
 
-// مسار عرض تفاصيل محادثة محددة
-router.get('/:conversationId', ensureCanAccessConversations, conversationController.showConversation);
+// مسار عرض تفاصيل محادثة محددة - معطل مؤقتًا لتجنب التضارب مع واجهة AJAX
+// router.get('/:conversationId', ensureCanAccessConversations, conversationController.showConversation);
 
 // مسار إسناد محادثة إلى موظف
 router.post('/:conversationId/assign', ensureCanAccessConversations, conversationController.assignConversation);
