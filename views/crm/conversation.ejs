@@ -1218,46 +1218,46 @@
             setupMessageButtons();
 
 // دالة لعرض إشعارات للمستخدم
-function showToast(message, type = 'info') {
-  // التأكد من وجود حاوية الإشعارات
-  let toastContainer = document.getElementById('toast-container');
-  if (!toastContainer) {
-    toastContainer = document.createElement('div');
-    toastContainer.id = 'toast-container';
-    toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-    document.body.appendChild(toastContainer);
-  }
-  
-  // إنشاء عنصر الإشعار
-  const toastId = 'toast-' + Date.now();
-  const toast = document.createElement('div');
-  toast.id = toastId;
-  toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'primary'} border-0`;
-  toast.setAttribute('role', 'alert');
-  toast.setAttribute('aria-live', 'assertive');
-  toast.setAttribute('aria-atomic', 'true');
-  
-  toast.innerHTML = `
-    <div class="d-flex">
-      <div class="toast-body">
-        ${message}
-      </div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="إغلاق"></button>
-    </div>
-  `;
-  
-  // إضافة الإشعار للحاوية
-  toastContainer.appendChild(toast);
-  
-  // تهيئة وإظهار الإشعار
-  const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 5000 });
-  bsToast.show();
-  
-  // إزالة الإشعار بعد إخفائه
-  toast.addEventListener('hidden.bs.toast', function() {
-    toast.remove();
-  });
-}
+      function showToast(message, type = 'info') {
+        // التأكد من وجود حاوية الإشعارات
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+          toastContainer = document.createElement('div');
+          toastContainer.id = 'toast-container';
+          toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+          document.body.appendChild(toastContainer);
+        }
+        
+        // إنشاء عنصر الإشعار
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'primary'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+          <div class="d-flex">
+            <div class="toast-body">
+              ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="إغلاق"></button>
+          </div>
+        `;
+        
+        // إضافة الإشعار للحاوية
+        toastContainer.appendChild(toast);
+        
+        // تهيئة وإظهار الإشعار
+        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 5000 });
+        bsToast.show();
+        
+        // إزالة الإشعار بعد إخفائه
+        toast.addEventListener('hidden.bs.toast', function() {
+          toast.remove();
+        });
+      }
     });
   </script>
 
