@@ -6,6 +6,9 @@
 
 // نافذة عالمية للوظائف المشتركة
 (function(window) {
+  // تعيين وضع التصحيح (اجعله false لإيقاف رسائل التصحيح)
+  window.debugMode = false;
+  
   // تعريف الدوال العالمية للتفاعل مع الرسائل
   
   /**
@@ -17,64 +20,99 @@
   window.showReactionPicker = function(messageId, externalId, buttonElement) {
     if (!messageId) return;
     
-    console.log('تنفيذ دالة showReactionPicker مع المعرف:', messageId);
+    if (window.debugMode === true) {
+      console.log('تنفيذ دالة showReactionPicker مع المعرف:', messageId);
+    }
+    
+    // إزالة أي منتقي سابق موجود
+    const existingPicker = document.getElementById('reactionPicker');
+    if (existingPicker) {
+      existingPicker.remove();
+    }
     
     // العثور على الرسالة التي سيتم إضافة التفاعل لها
     const messageElem = buttonElement.closest('.message');
     if (!messageElem) {
-      console.error('لم يتم العثور على عنصر الرسالة!');
+      if (window.debugMode === true) {
+        console.error('لم يتم العثور على عنصر الرسالة!');
+      }
       return;
     }
     
-    // إنشاء أو تحديث منتقي التفاعلات
-    let reactionPicker = document.getElementById('reactionPicker');
+    // إنشاء منتقي التفاعلات
+    const reactionPicker = document.createElement('div');
+    reactionPicker.id = 'reactionPicker';
+    reactionPicker.className = 'reaction-picker';
     
-    if (!reactionPicker) {
-      reactionPicker = document.createElement('div');
-      reactionPicker.id = 'reactionPicker';
-      reactionPicker.className = 'reaction-picker';
-      
-      const reactions = ['👍', '❤️', '😂', '😮', '😢', '👏'];
-      
-      let buttonsHTML = '';
-      reactions.forEach(emoji => {
-        buttonsHTML += `<button class="reaction-emoji-btn" data-emoji="${emoji}">${emoji}</button>`;
-      });
-      
-      reactionPicker.innerHTML = buttonsHTML;
-      document.body.appendChild(reactionPicker);
-      
-      // إضافة أحداث للأزرار
-      reactionPicker.querySelectorAll('.reaction-emoji-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const emoji = this.getAttribute('data-emoji');
-          window.sendReaction(messageId, emoji, externalId);
-          reactionPicker.remove();
-        });
-      });
-      
-      // إغلاق عند النقر في أي مكان آخر
-      document.addEventListener('click', function closeReactionPicker(e) {
-        if (!reactionPicker.contains(e.target) && 
-            !e.target.classList.contains('reaction-btn') && 
-            !e.target.closest('.reaction-btn')) {
-          reactionPicker.remove();
-          document.removeEventListener('click', closeReactionPicker);
-        }
-      });
-    }
+    const reactions = ['👍', '❤️', '😂', '😮', '😢', '👏'];
     
-    // تحديد موقع منتقي التفاعلات بالنسبة للرسالة
+    let buttonsHTML = '';
+    reactions.forEach(emoji => {
+      buttonsHTML += `<button class="reaction-emoji-btn" data-emoji="${emoji}">${emoji}</button>`;
+    });
+    
+    reactionPicker.innerHTML = buttonsHTML;
+    document.body.appendChild(reactionPicker);
+    
+    // إضافة أحداث للأزرار
+    reactionPicker.querySelectorAll('.reaction-emoji-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const emoji = this.getAttribute('data-emoji');
+        window.sendReaction(messageId, emoji, externalId);
+        reactionPicker.remove();
+      });
+    });
+    
+    // إغلاق عند النقر في أي مكان آخر
+    document.addEventListener('click', function closeReactionPicker(e) {
+      if (!reactionPicker.contains(e.target) && 
+          !e.target.classList.contains('reaction-btn') && 
+          !e.target.closest('.reaction-btn')) {
+        reactionPicker.remove();
+        document.removeEventListener('click', closeReactionPicker);
+      }
+    });
+    
+    // التأكد من أن منتقي التفاعلات ليس خارج حدود الشاشة
     const rect = buttonElement.getBoundingClientRect();
-    const isRTL = document.dir === 'rtl';
     
+    // الحصول على اتجاه المستند
+    const isRTL = document.dir === 'rtl' || getComputedStyle(document.body).direction === 'rtl';
+    
+    // تحديد إحداثيات العرض
+    const windowWidth = window.innerWidth;
+    const pickerWidth = 250; // تقدير عرض منتقي التفاعلات
+    
+    // تحديد الموضع الأفقي
+    let left, right;
     if (isRTL) {
-      reactionPicker.style.right = `${rect.right}px`;
+      right = windowWidth - rect.right;
+      reactionPicker.style.right = `${right}px`;
     } else {
-      reactionPicker.style.left = `${rect.left}px`;
+      left = rect.left;
+      // التأكد من أن المنتقي لا يتجاوز حدود الشاشة
+      if (left + pickerWidth > windowWidth) {
+        left = windowWidth - pickerWidth - 10;
+      }
+      reactionPicker.style.left = `${left}px`;
     }
     
-    reactionPicker.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    // تحديد الموضع الرأسي (فوق أو تحت الزر حسب المساحة المتاحة)
+    const pickerHeight = 60; // تقدير ارتفاع منتقي التفاعلات
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    
+    if (spaceBelow < pickerHeight && spaceAbove > pickerHeight) {
+      // وضع المنتقي فوق الزر إذا لم تكن هناك مساحة كافية بالأسفل
+      reactionPicker.style.top = `${rect.top - pickerHeight - 5 + window.scrollY}px`;
+    } else {
+      // وضع المنتقي تحت الزر (الوضع الافتراضي)
+      reactionPicker.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    }
+    
+    if (window.debugMode === true) {
+      console.log('تم إنشاء منتقي التفاعلات بنجاح:', reactionPicker);
+    }
   };
   
   /**
@@ -91,12 +129,16 @@
   window.sendReaction = function(messageId, emoji, externalId) {
     if (!messageId || !emoji) return;
     
-    console.log('إرسال تفاعل:', messageId, emoji);
+    if (window.debugMode === true) {
+      console.log('إرسال تفاعل:', messageId, emoji);
+    }
     
     // الحصول على معرف المحادثة
     const conversationId = document.getElementById('conversationId')?.value;
     if (!conversationId) {
-      console.error('معرف المحادثة غير موجود!');
+      if (window.debugMode === true) {
+        console.error('معرف المحادثة غير موجود!');
+      }
       return;
     }
     
@@ -120,10 +162,14 @@
       return response.json();
     })
     .then(data => {
-      console.log('تم إرسال التفاعل بنجاح:', data);
+      if (window.debugMode === true) {
+        console.log('تم إرسال التفاعل بنجاح:', data);
+      }
     })
     .catch(error => {
-      console.error('خطأ في إرسال التفاعل:', error);
+      if (window.debugMode === true) {
+        console.error('خطأ في إرسال التفاعل:', error);
+      }
       window.showToast && window.showToast('فشل في إرسال التفاعل، يرجى المحاولة مرة أخرى.', 'danger');
     });
   };
@@ -136,11 +182,15 @@
    */
   window.showReplyForm = function(messageId, externalId, messageElem) {
     if (!messageElem || !messageId) {
-      console.error('بيانات غير كافية لعرض نموذج الرد:', { messageId, messageElem });
+      if (window.debugMode === true) {
+        console.error('بيانات غير كافية لعرض نموذج الرد:', { messageId, messageElem });
+      }
       return;
     }
     
-    console.log('تنفيذ دالة showReplyForm مع المعرف:', messageId);
+    if (window.debugMode === true) {
+      console.log('تنفيذ دالة showReplyForm مع المعرف:', messageId);
+    }
     
     // تخزين معرف الرسالة للرد عليها
     window.currentReplyToId = messageId;
@@ -217,12 +267,14 @@
     
     // التحقق من وجود العناصر
     if (!replyMessage || !sendButton || !sendingIndicator || !conversationId) {
-      console.error('عناصر النموذج غير متوفرة:', { 
-        replyMessage: !!replyMessage, 
-        sendButton: !!sendButton,
-        sendingIndicator: !!sendingIndicator,
-        conversationId: conversationId 
-      });
+      if (window.debugMode === true) {
+        console.error('عناصر النموذج غير متوفرة:', { 
+          replyMessage: !!replyMessage, 
+          sendButton: !!sendButton,
+          sendingIndicator: !!sendingIndicator,
+          conversationId: conversationId 
+        });
+      }
       return;
     }
     
@@ -253,7 +305,9 @@
       return response.json();
     })
     .then(data => {
-      console.log('تم إرسال الرسالة بنجاح:', data);
+      if (window.debugMode === true) {
+        console.log('تم إرسال الرسالة بنجاح:', data);
+      }
       
       // مسح النص من النموذج
       replyMessage.value = '';
@@ -281,7 +335,9 @@
       }
     })
     .catch(error => {
-      console.error('خطأ في إرسال الرسالة:', error);
+      if (window.debugMode === true) {
+        console.error('خطأ في إرسال الرسالة:', error);
+      }
       
       // إعادة تمكين زر الإرسال وإخفاء المؤشر
       sendButton.disabled = false;
@@ -310,11 +366,15 @@
     
     // إذا لم يتم العثور على الرسالة بأي من المعرفين
     if (!messageElem) {
-      console.warn('لم يتم العثور على الرسالة لتحديث حالتها. المعرف:', messageId);
+      if (window.debugMode === true) {
+        console.warn('لم يتم العثور على الرسالة لتحديث حالتها. المعرف:', messageId);
+      }
       return;
     }
     
-    console.log('تم العثور على الرسالة وسيتم تحديث حالتها:', messageId, newStatus);
+    if (window.debugMode === true) {
+      console.log('تم العثور على الرسالة وسيتم تحديث حالتها:', messageId, newStatus);
+    }
     
     // تحديث السمة
     messageElem.setAttribute('data-status', newStatus);
@@ -405,12 +465,16 @@
   window.setupMessageActions = function(messageElem) {
     if (!messageElem) return;
     
-    console.log('إعداد أحداث الرسالة للعنصر:', messageElem);
+    if (window.debugMode === true) {
+      console.log('إعداد أحداث الرسالة للعنصر:', messageElem);
+    }
     
     // زر الرد
     const replyButton = messageElem.querySelector('.reply-btn');
     if (replyButton) {
-      console.log('تم العثور على زر الرد:', replyButton);
+      if (window.debugMode === true) {
+        console.log('تم العثور على زر الرد:', replyButton);
+      }
       
       // إزالة أي مستمعات سابقة لتجنب التكرار
       const oldReplyHandler = replyButton.onclick;
@@ -420,7 +484,9 @@
       
       // إضافة مستمع جديد
       replyButton.addEventListener('click', function() {
-        console.log('تم النقر على زر الرد');
+        if (window.debugMode === true) {
+          console.log('تم النقر على زر الرد');
+        }
         const messageId = messageElem.getAttribute('data-message-id');
         const externalId = messageElem.getAttribute('data-external-id');
         window.showReplyForm(messageId, externalId, messageElem);
@@ -430,7 +496,9 @@
     // زر التفاعل
     const reactionButton = messageElem.querySelector('.reaction-btn');
     if (reactionButton) {
-      console.log('تم العثور على زر التفاعل:', reactionButton);
+      if (window.debugMode === true) {
+        console.log('تم العثور على زر التفاعل:', reactionButton);
+      }
       
       // إزالة أي مستمعات سابقة لتجنب التكرار
       const oldReactionHandler = reactionButton.onclick;
@@ -440,7 +508,9 @@
       
       // إضافة مستمع جديد
       reactionButton.addEventListener('click', function(event) {
-        console.log('تم النقر على زر التفاعل');
+        if (window.debugMode === true) {
+          console.log('تم النقر على زر التفاعل');
+        }
         const messageId = messageElem.getAttribute('data-message-id');
         const externalId = messageElem.getAttribute('data-external-id');
         window.showReactionPicker(messageId, externalId, event.target);
@@ -456,10 +526,16 @@
       const sound = document.getElementById('messageSound');
       if (sound) {
         sound.currentTime = 0;
-        sound.play().catch(err => console.error('خطأ تشغيل الصوت:', err));
+        sound.play().catch(err => {
+          if (window.debugMode === true) {
+            console.error('خطأ تشغيل الصوت:', err);
+          }
+        });
       }
     } catch (error) {
-      console.error('خطأ في تشغيل صوت الإشعار:', error);
+      if (window.debugMode === true) {
+        console.error('خطأ في تشغيل صوت الإشعار:', error);
+      }
     }
   };
 
@@ -467,7 +543,9 @@
    * دالة لتعليق مستمعات الأحداث للمحادثة في الواجهة المفصلة
    */
   window.attachConversationEventListeners = function() {
-    console.log('بدء تطبيق مستمعات الأحداث للمحادثة...');
+    if (window.debugMode === true) {
+      console.log('بدء تطبيق مستمعات الأحداث للمحادثة...');
+    }
     
     // الحصول على الإشارات إلى عناصر DOM
     const replyForm = document.getElementById('replyForm');
@@ -477,14 +555,20 @@
     const conversationId = document.getElementById('conversationId')?.value;
     
     if (!conversationId) {
-      console.error('معرف المحادثة غير موجود! replyForm:', replyForm, 'conversationId element:', document.getElementById('conversationId'));
+      if (window.debugMode === true) {
+        console.error('معرف المحادثة غير موجود! replyForm:', replyForm, 'conversationId element:', document.getElementById('conversationId'));
+      }
       return;
     }
     
-    console.log('تهيئة النموذج للمحادثة:', conversationId);
+    if (window.debugMode === true) {
+      console.log('تهيئة النموذج للمحادثة:', conversationId);
+    }
     
     // إضافة مستمعات الأحداث للرسائل الموجودة حالياً
-    console.log('إضافة مستمعات الأحداث للرسائل...');
+    if (window.debugMode === true) {
+      console.log('إضافة مستمعات الأحداث للرسائل...');
+    }
     const allMessages = document.querySelectorAll('.message');
     allMessages.forEach(message => {
       window.setupMessageActions(message);
@@ -511,7 +595,9 @@
         });
       }
     } else {
-      console.warn('نموذج الرد غير موجود! قد تكون المحادثة مغلقة.');
+      if (window.debugMode === true) {
+        console.warn('نموذج الرد غير موجود! قد تكون المحادثة مغلقة.');
+      }
     }
   };
 
@@ -522,7 +608,9 @@
    */
   window.updateMessageReaction = function(messageId, reaction) {
     if (!messageId || !reaction) {
-      console.warn('بيانات غير كاملة لتحديث التفاعل', { messageId, reaction });
+      if (window.debugMode === true) {
+        console.warn('بيانات غير كاملة لتحديث التفاعل', { messageId, reaction });
+      }
       return;
     }
     
@@ -536,11 +624,15 @@
     
     // إذا لم يتم العثور على الرسالة بأي من المعرفين
     if (!messageElem) {
-      console.warn('لم يتم العثور على الرسالة لإضافة التفاعل. المعرف:', messageId);
+      if (window.debugMode === true) {
+        console.warn('لم يتم العثور على الرسالة لإضافة التفاعل. المعرف:', messageId);
+      }
       return;
     }
     
-    console.log('تم العثور على الرسالة وسيتم إضافة التفاعل:', messageId, reaction);
+    if (window.debugMode === true) {
+      console.log('تم العثور على الرسالة وسيتم إضافة التفاعل:', messageId, reaction);
+    }
     
     // البحث عن وجود حاوية التفاعلات في الرسالة
     let reactionsContainer = messageElem.querySelector('.message-reactions');
@@ -571,7 +663,9 @@
     // تحديث سمات الرسالة لتسجيل التفاعل
     messageElem.setAttribute('data-has-reaction', 'true');
     
-    console.log('تم تحديث تفاعل الرسالة بنجاح');
+    if (window.debugMode === true) {
+      console.log('تم تحديث تفاعل الرسالة بنجاح');
+    }
   };
   
 })(window);
