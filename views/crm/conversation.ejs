@@ -3,207 +3,18 @@
 <head>
   <%- include('../partials/_head') %>
   <title><%= title %></title>
-  
-  <style>
-    /* تنسيقات عامة للـ CRM */
-    .crm-container {
-      display: flex;
-      min-height: calc(100vh - 60px);
-    }
-    .crm-sidebar {
-      width: 250px;
-      background-color: #f8f9fa;
-      border-left: 1px solid #dee2e6;
-      padding: 20px 0;
-    }
-    .crm-content {
-      flex: 1;
-      padding: 20px;
-      background-color: #f5f5f5;
-    }
-    .crm-sidebar-nav {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    .crm-sidebar-nav li {
-      margin-bottom: 5px;
-    }
-    .crm-sidebar-nav a {
-      display: block;
-      padding: 10px 20px;
-      color: #6c757d;
-      text-decoration: none;
-      border-right: 3px solid transparent;
-      transition: all 0.2s;
-    }
-    .crm-sidebar-nav a:hover {
-      background-color: #f0f0f0;
-      color: #495057;
-      border-right-color: #6c757d;
-    }
-    .crm-sidebar-nav a.active {
-      color: #007bff;
-      background-color: #e9f2ff;
-      border-right-color: #007bff;
-    }
-
-    /* تنسيقات واجهة المحادثة */
-    .message-container {
-      max-height: 450px;
-      overflow-y: auto;
-      padding: 15px;
-      background-color: #f9f9f9;
-      border-radius: 5px;
-      scroll-behavior: smooth;
-    }
-    .message {
-      margin-bottom: 15px;
-      max-width: 80%;
-      position: relative;
-    }
-    .incoming {
-      float: right;
-      margin-left: auto;
-    }
-    .outgoing {
-      float: left;
-      margin-right: auto;
-    }
-    .message-bubble {
-      padding: 10px 15px;
-      border-radius: 10px;
-      position: relative;
-      word-wrap: break-word;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
-    .incoming-bubble {
-      background-color: #e6f2ff;
-      border-top-left-radius: 0;
-      text-align: right;
-    }
-    .outgoing-bubble {
-      background-color: #dcf8c6;
-      border-top-right-radius: 0;
-      text-align: left;
-    }
-    .message-time {
-      font-size: 0.75rem;
-      color: #888;
-      margin-top: 5px;
-      display: flex;
-      align-items: center;
-    }
-    .incoming .message-time {
-      justify-content: flex-start;
-    }
-    .outgoing .message-time {
-      justify-content: flex-end;
-    }
-    .message-status {
-      display: inline-block;
-      margin-right: 5px;
-    }
-    .clear-both {
-      clear: both;
-      width: 100%;
-      height: 1px;
-    }
-    .message[data-status="sending"] .message-bubble {
-      opacity: 0.85;
-    }
-    .message[data-status="failed"] .message-bubble {
-      border: 1px solid #ff4d4f;
-    }
-    .reply-form {
-      padding: 15px;
-      border-top: 1px solid #eee;
-      background-color: #fff;
-      border-radius: 0 0 8px 8px;
-    }
-    .sending-indicator {
-      display: none;
-      color: #007bff;
-      align-items: center;
-      margin-right: 10px;
-      font-size: 0.9rem;
-    }
-    .sending-indicator i {
-      margin-left: 5px;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* تنسيقات النوافذ المنبثقة */
-    .modal-content {
-      border-radius: 8px;
-    }
-    .modal-header {
-      border-bottom: 1px solid #dee2e6;
-    }
-    .modal-footer {
-      border-top: 1px solid #dee2e6;
-    }
-
-    /* زر إرسال بالإنتر */
-    textarea#replyMessage {
-      resize: none; /* منع تغيير حجم الحقل */
-    }
-    
-    /* تنسيقات الردود المقتبسة */
-    .replied-message {
-      background-color: #f0f0f0;
-      padding: 5px 10px;
-      border-radius: 5px;
-      margin-bottom: 5px;
-    }
-    .replied-content {
-      font-size: 0.85rem;
-      color: #666;
-    }
-    
-    /* تنسيقات التفاعلات */
-    .message-reactions {
-      margin-top: 5px;
-      font-size: 0.85rem;
-    }
-    .reaction-emoji {
-      margin-right: 5px;
-    }
-    
-    /* تنسيقات قائمة خيارات الرسالة */
-    .message-actions {
-      margin-top: 5px;
-      font-size: 0.85rem;
-    }
-    .message-action-btn {
-      margin-right: 10px;
-    }
-  </style>
+  <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
+  <link rel="stylesheet" href="/css/crm.css">
+  <!-- ربط ملف التنسيقات الخاص بصفحة المحادثة -->
+  <link rel="stylesheet" href="/css/conversation.css">
 </head>
 <body>
   <%- include('../partials/_header') %>
 
   <div class="crm-container">
-    <!-- القائمة الجانبية -->
-    <div class="crm-sidebar">
-      <ul class="crm-sidebar-nav">
-        <li><a href="/crm"><i class="fas fa-tachometer-alt"></i> لوحة التحكم</a></li>
-        <li><a href="/crm/contacts"><i class="fas fa-address-book"></i> جهات الاتصال</a></li>
-        <li><a href="/crm/conversations" class="active"><i class="fas fa-comments"></i> المحادثات</a></li>
-        <li><a href="/crm/conversations/my"><i class="fas fa-user-circle"></i> محادثاتي</a></li>
-        <li><a href="/crm/stats"><i class="fas fa-chart-bar"></i> الإحصائيات</a></li>
-        <li class="mt-4">
-          <a href="/" class="text-muted">
-            <i class="fas fa-arrow-right"></i> العودة للرئيسية
-          </a>
-        </li>
-      </ul>
-    </div>
-
+    <!-- القائمة الجانبية - استخدام القالب الجزئي الموحد -->
+    <%- include('../partials/_crm_sidebar') %>
+    
     <!-- المحتوى الرئيسي -->
     <div class="crm-content">
       <% if (flashMessages && flashMessages.error) { %>
@@ -231,7 +42,7 @@
         </ol>
       </nav>
 
-      <div class="row">
+      <div class="row g-3">
         <!-- تفاصيل المحادثة والإجراءات -->
         <div class="col-lg-4">
           <div class="card conversation-info-card p-3 mb-4">
@@ -319,17 +130,22 @@
         </div>
 
         <!-- الرسائل والرد -->
-        <div class="col-lg-8">
-          <div class="card mb-4">
+        <div class="col-lg-8 d-flex flex-column" style="height: 100%;">
+          <!-- زر إظهار تفاصيل المحادثة في الهاتف المحمول -->
+          <button class="btn btn-outline-secondary mb-2 d-lg-none conversation-details-toggle" type="button">
+            <i class="fas fa-info-circle me-1"></i> إظهار تفاصيل المحادثة
+          </button>
+          
+          <div class="card mb-4" style="flex: 1; display: flex; flex-direction: column;">
             <div class="card-header d-flex justify-content-between align-items-center">
               <h5 class="mb-0">
                 <i class="fas fa-comments me-1"></i> المحادثة مع <%= conversation.customerName || conversation.phoneNumber %>
               </h5>
               <span class="badge bg-primary"><%= messages.length %> رسالة</span>
             </div>
-            <div class="card-body p-0">
+            <div class="card-body p-0" style="flex: 1; display: flex; flex-direction: column;">
               <!-- حاوية الرسائل -->
-              <div class="message-container p-3" id="messageContainer">
+              <div class="message-container" id="messageContainer">
                 <% if (messages && messages.length > 0) { %>
                   <% messages.forEach(function(msg, index) { %>
                     <div class="message <%= msg.direction %>"
@@ -564,6 +380,7 @@
 
   <%- include('../partials/_footer') %>
 
+  <!-- سكربتات الجافاسكربت -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 
@@ -585,9 +402,53 @@
       // الانضمام إلى غرفة المحادثة
       socket.emit('join-conversation', conversationId);
       
-      // التمرير إلى آخر الرسائل عند التحميل
+      // زر تبديل تفاصيل المحادثة في الهاتف المحمول
+      const detailsToggleBtn = document.querySelector('.conversation-details-toggle');
+      if (detailsToggleBtn) {
+        detailsToggleBtn.addEventListener('click', function() {
+          const row = document.querySelector('.crm-content > .row');
+          row.classList.toggle('show-details');
+          
+          // تغيير نص الزر حسب الحالة
+          if (row.classList.contains('show-details')) {
+            this.innerHTML = '<i class="fas fa-times-circle me-1"></i> إخفاء تفاصيل المحادثة';
+            this.classList.add('active');
+          } else {
+            this.innerHTML = '<i class="fas fa-info-circle me-1"></i> إظهار تفاصيل المحادثة';
+            this.classList.remove('active');
+          }
+          
+          // تمرير لأسفل بعد ظهور/إخفاء التفاصيل للتأكد من رؤية آخر الرسائل
+          setTimeout(scrollToBottom, 100);
+        });
+      }
+      
+      // وظيفة للتمرير إلى أسفل الرسائل
+      function scrollToBottom() {
+        if (messageContainer) {
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+      }
+      
+      // التمرير إلى آخر الرسائل عند التحميل (مع تأخير أطول لضمان اكتمال تحميل الصفحة)
+      // نحاول عدة مرات للتأكد من أن التمرير يعمل
       if (messageContainer) {
-        messageContainer.scrollTop = messageContainer.scrollHeight;
+        // محاولة أولى: بعد تحميل DOM مباشرة
+        scrollToBottom();
+        
+        // محاولة ثانية: بعد 100 ميلي ثانية
+        setTimeout(scrollToBottom, 100);
+        
+        // محاولة ثالثة: بعد 500 ميلي ثانية
+        setTimeout(scrollToBottom, 500);
+        
+        // محاولة رابعة: بعد ثانية واحدة (للتأكد)
+        setTimeout(scrollToBottom, 1000);
+        
+        // استمع أيضًا لحدث load للنافذة بالكامل (للصور وغيرها)
+        window.addEventListener('load', function() {
+          scrollToBottom();
+        });
       }
       
       // الإرسال عند الضغط على Enter (بدون Shift)
@@ -600,7 +461,7 @@
         });
       }
       
-      // استماع لأحداث الرسائل الجديدة
+      // استقبال رسالة جديدة
       socket.on('new-message', function(data) {
         if (data.direction === 'incoming') {
           playMessageSound();
@@ -609,10 +470,10 @@
         }
       });
 
-      // استماع لأحداث تحديث الحالة
+      // تحديث حالة الرسالة
       socket.on('message_status_update', function(data) {
         console.log('تحديث حالة الرسالة:', data);
-        const msgElem = document.querySelector(`.message[data-external-id="${data.externalId}"]`);
+        const msgElem = document.querySelector(`.message[data-external-id='${data.externalId}']`); 
         if (msgElem) {
           const statusElem = msgElem.querySelector('.message-status');
           if (statusElem) {
@@ -622,10 +483,10 @@
         }
       });
       
-      // استماع لأحداث تحديث التفاعلات
+      // تحديث تفاعلات الرسائل
       socket.on('message_reaction', function(data) {
         console.log('تفاعل جديد على رسالة:', data);
-        const msgElem = document.querySelector(`.message[data-external-id="${data.externalId}"]`);
+        const msgElem = document.querySelector(`.message[data-external-id='${data.externalId}']`);
         if (msgElem) {
           // التحقق من وجود قسم التفاعلات
           let reactionsContainer = msgElem.querySelector('.message-reactions');
@@ -641,7 +502,7 @@
           reactionSpan.title = `تفاعل من ${data.reaction.sender}`;
           reactionSpan.textContent = data.reaction.emoji;
           
-          // تحقق مما إذا كان التفاعل موجودًا بالفعل (نفس المرسل)
+          // التحقق ما إذا كان التفاعل نفسه (نفس المرسل) موجودًا
           const existingReaction = Array.from(reactionsContainer.querySelectorAll('.reaction-emoji')).find(
             r => r.getAttribute('data-sender') === data.reaction.sender
           );
@@ -655,24 +516,18 @@
         }
       });
       
-      // استماع لأحداث الرد على الرسائل
+      // استقبال رد على رسالة
       socket.on('message_reply', function(data) {
         console.log('رد جديد على رسالة:', data);
         
-        // إذا كان رد وارد على رسالة أرسلناها
         if (data.message && data.replyToId) {
-          // تعيين معرف الرسالة المرد عليها
           data.message.replyToId = data.replyToId;
+          const originalMsgElem = document.querySelector(`.message[data-external-id='${data.replyToId}']`);
           
-          // البحث عن الرسالة الأصلية في واجهة المستخدم
-          const originalMsgElem = document.querySelector(`.message[data-external-id="${data.replyToId}"]`);
-          
-          // إذا كانت الرسالة الأصلية موجودة، استخدم الدالة الموجودة
           if (originalMsgElem) {
             addNewMessageWithReply(data.message);
           } else {
-            // إذا لم تكن الرسالة الأصلية موجودة في واجهة المستخدم،
-            // قم بإضافة الرسالة مع اقتباس افتراضي
+            // إذا لم تكن الرسالة الأصلية موجودة حاليًا في الواجهة
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${data.message.direction}`;
             messageDiv.setAttribute('data-message-id', data.message._id || 'temp-' + Date.now());
@@ -681,7 +536,7 @@
               messageDiv.setAttribute('data-external-id', data.message.externalMessageId);
             }
             
-            // إضافة قسم الاقتباس
+            // قسم الاقتباس
             const repliedDiv = document.createElement('div');
             repliedDiv.className = 'replied-message';
             repliedDiv.innerHTML = `
@@ -692,12 +547,12 @@
             `;
             messageDiv.appendChild(repliedDiv);
             
-            // إضافة فقاعة الرسالة
+            // فقاعة الرسالة
             const bubbleDiv = document.createElement('div');
             bubbleDiv.className = `message-bubble ${data.message.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
             bubbleDiv.textContent = data.message.content;
             
-            // إضافة الوقت والحالة
+            // الوقت والحالة
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
             
@@ -714,7 +569,7 @@
             bubbleDiv.appendChild(timeDiv);
             messageDiv.appendChild(bubbleDiv);
             
-            // إضافة أزرار الإجراءات
+            // أزرار الإجراءات
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions';
             actionsDiv.innerHTML = `
@@ -737,53 +592,48 @@
             messageContainer.appendChild(messageDiv);
             messageContainer.appendChild(clearDiv);
             
-            // إضافة أحداث للأزرار الجديدة
+            // تفعيل الأزرار
             setupMessageButtons(messageDiv);
           }
           
-          // تمرير للأسفل
           messageContainer.scrollTop = messageContainer.scrollHeight;
         }
       });
       
-      // إرسال النموذج
+      // إرسال النموذج (Submit)
       function submitForm() {
         if (replyForm && replyMessage) {
           const content = replyMessage.value.trim();
           if (!content) return;
           
-          // حفظ محتوى الرد وتفريغ صندوق الكتابة فورًا
           const messageContent = content;
           const currentReplyToMessageId = replyToMessageId;
           
-          // تفريغ صندوق الكتابة فورًا
+          // تفريغ النص فورًا
           replyMessage.value = '';
           
-          // إخفاء واجهة الرد إذا كانت موجودة
+          // إخفاء معلومات الرد إن وجدت
           const replyInfoElem = document.getElementById('replyInfo');
           if (replyInfoElem) {
             replyInfoElem.remove();
           }
           
-          // إعادة تعيين معلومات الرد
           replyToMessageId = null;
           replyToInfo = null;
           
-          // إضافة الرسالة إلى الطابور
+          // إضافة الرسالة إلى طابور الإرسال
           messageQueue.push({
             content: messageContent,
             replyToMessageId: currentReplyToMessageId
           });
           
-          // إرسال الرسالة الأولى في الطابور
           processMessageQueue();
         }
       }
       
-      // معالجة الطابور
+      // معالجة طابور الرسائل
       function processMessageQueue() {
         if (isProcessing || messageQueue.length === 0) return;
-        
         isProcessing = true;
         
         const messageData = messageQueue.shift();
@@ -793,14 +643,14 @@
           sendingIndicator.style.display = 'inline-block';
         }
         
-        // إضافة رسالة مؤقتة
+        // رسالة مؤقتة في الواجهة
         const tempId = 'temp-' + Date.now();
         addTempMessage(messageData.content, tempId, messageData.replyToMessageId);
         
-        // تمرير إلى آخر الرسائل
+        // تمرير لأسفل
         messageContainer.scrollTop = messageContainer.scrollHeight;
         
-        // الإرسال عبر AJAX
+        // إرسال عبر Fetch
         fetch(replyForm.action, {
           method: 'POST',
           headers: {
@@ -828,25 +678,25 @@
             tempMsg.remove();
           }
           
-          // إضافة الرسالة الحقيقية مع المعرّف الصحيح
+          // عرض الرسالة الفعلية
           if (data.success && data.message) {
             addNewMessage(data.message);
             messageContainer.scrollTop = messageContainer.scrollHeight;
           }
           
-          // إخفاء مؤشر الإرسال
+          // إخفاء المؤشر
           if (sendingIndicator) {
             sendingIndicator.style.display = 'none';
           }
           
-          // معالجة الرسائل المتبقية في الطابور
+          // تابع بقية الطابور
           isProcessing = false;
           processMessageQueue();
         })
         .catch(error => {
           console.error('خطأ في إرسال الرسالة:', error);
           
-          // تحديث حالة الرسالة المؤقتة إلى فشل
+          // تحويل الرسالة المؤقتة إلى فشل
           const tempMsg = document.querySelector(`[data-message-id="${tempId}"]`);
           if (tempMsg) {
             tempMsg.setAttribute('data-status', 'failed');
@@ -856,26 +706,23 @@
             }
           }
           
-          // إخفاء مؤشر الإرسال
           if (sendingIndicator) {
             sendingIndicator.style.display = 'none';
           }
           
-          // معالجة الرسائل المتبقية في الطابور
           isProcessing = false;
           processMessageQueue();
         });
       }
       
-      // إضافة رسالة مؤقتة
+      // إنشاء رسالة مؤقتة
       function addTempMessage(content, tempId, currentReplyToId) {
-        // إنشاء عنصر الرسالة
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message outgoing temp-message';
         messageDiv.setAttribute('data-status', 'sending');
         messageDiv.setAttribute('data-message-id', tempId);
         
-        // إضافة قسم الاقتباس إذا كان هناك رد
+        // إذا كان هناك رد مقتبس
         if (currentReplyToId && replyToInfo) {
           const repliedDiv = document.createElement('div');
           repliedDiv.className = 'replied-message';
@@ -888,12 +735,12 @@
           messageDiv.appendChild(repliedDiv);
         }
         
-        // إنشاء فقاعة الرسالة
+        // فقاعة الرسالة
         const bubbleDiv = document.createElement('div');
         bubbleDiv.className = 'message-bubble outgoing-bubble';
         bubbleDiv.textContent = content;
         
-        // إضافة الوقت والحالة
+        // الوقت والحالة
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         
@@ -908,7 +755,6 @@
         bubbleDiv.appendChild(timeDiv);
         messageDiv.appendChild(bubbleDiv);
         
-        // إضافة للحاوية
         const clearDiv = document.createElement('div');
         clearDiv.className = 'clear-both';
         
@@ -918,21 +764,21 @@
       
       // إضافة رسالة جديدة
       function addNewMessage(messageData) {
-        // إنشاء عنصر الرسالة
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${messageData.direction}`;
         messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
         messageDiv.setAttribute('data-status', messageData.status || 'sending');
+        
         if (messageData.externalMessageId) {
           messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
         }
         
-        // إنشاء فقاعة الرسالة
+        // الفقاعة
         const bubbleDiv = document.createElement('div');
         bubbleDiv.className = `message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
         bubbleDiv.textContent = messageData.content;
         
-        // إضافة الوقت والحالة
+        // الوقت والحالة
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         
@@ -949,7 +795,7 @@
         bubbleDiv.appendChild(timeDiv);
         messageDiv.appendChild(bubbleDiv);
         
-        // إضافة أزرار الإجراءات
+        // أزرار التفاعل والرد
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions';
         actionsDiv.innerHTML = `
@@ -965,18 +811,16 @@
         `;
         messageDiv.appendChild(actionsDiv);
         
-        // إضافة للحاوية
         const clearDiv = document.createElement('div');
         clearDiv.className = 'clear-both';
         
         messageContainer.appendChild(messageDiv);
         messageContainer.appendChild(clearDiv);
         
-        // إضافة أحداث للأزرار الجديدة
         setupMessageButtons(messageDiv);
       }
       
-      // تحديث أيقونة الحالة
+      // تحديث أيقونة حالة الرسالة
       function updateStatusIcon(statusElement, status) {
         let icon = '';
         switch(status) {
@@ -999,7 +843,7 @@
         statusElement.innerHTML = icon;
       }
       
-      // تشغيل الصوت عند استلام رسالة
+      // تشغيل الصوت عند وصول رسالة
       function playMessageSound() {
         const sound = document.getElementById('messageSound');
         if (sound) {
@@ -1008,9 +852,77 @@
         }
       }
       
-      // إعداد أزرار التفاعل والرد للرسائل
+      // إضافة رسالة جديدة مع مقتبسة
+      function addNewMessageWithReply(messageData) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${messageData.direction}`;
+        messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
+        messageDiv.setAttribute('data-status', messageData.status || 'sending');
+        
+        if (messageData.externalMessageId) {
+          messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
+        }
+        
+        // قسم الاقتباس
+        const repliedDiv = document.createElement('div');
+        repliedDiv.className = 'replied-message';
+        repliedDiv.innerHTML = `
+          <div class="replied-content">
+            <i class="fas fa-reply"></i>
+            <span>رد على رسالة سابقة</span>
+          </div>
+        `;
+        messageDiv.appendChild(repliedDiv);
+        
+        // الفقاعة
+        const bubbleDiv = document.createElement('div');
+        bubbleDiv.className = `message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}`;
+        bubbleDiv.textContent = messageData.content;
+        
+        // الوقت والحالة
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        
+        const msgDate = new Date(messageData.timestamp);
+        timeDiv.textContent = msgDate.toLocaleString('ar-LY');
+        
+        if (messageData.direction === 'outgoing') {
+          const statusSpan = document.createElement('span');
+          statusSpan.className = 'message-status';
+          updateStatusIcon(statusSpan, messageData.status);
+          timeDiv.appendChild(statusSpan);
+        }
+        
+        bubbleDiv.appendChild(timeDiv);
+        messageDiv.appendChild(bubbleDiv);
+        
+        // أزرار التفاعل والرد
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+        actionsDiv.innerHTML = `
+          <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
+            <i class="far fa-smile"></i>
+          </button>
+          <button class="btn btn-sm text-muted message-action-btn reply-btn"
+                  data-message-id="${messageData._id}"
+                  data-external-id="${messageData.externalMessageId || ''}"
+                  title="رد">
+            <i class="fas fa-reply"></i>
+          </button>
+        `;
+        messageDiv.appendChild(actionsDiv);
+        
+        const clearDiv = document.createElement('div');
+        clearDiv.className = 'clear-both';
+        
+        messageContainer.appendChild(messageDiv);
+        messageContainer.appendChild(clearDiv);
+        
+        setupMessageButtons(messageDiv);
+      }
+      
+      // تفعيل أزرار التفاعل والرد
       function setupMessageButtons(messageElem) {
-        // إذا تم تمرير عنصر محدد، قم بإعداد الأزرار لهذا العنصر فقط
         if (messageElem) {
           const replyBtn = messageElem.querySelector('.reply-btn');
           const reactionBtn = messageElem.querySelector('.reaction-btn');
@@ -1031,7 +943,7 @@
             });
           }
         } else {
-          // إعداد جميع أزرار الرد والتفاعل في الصفحة
+          // تفعيل لجميع الرسائل في الصفحة إذا لم يمرر عنصر محدد
           document.querySelectorAll('.reply-btn').forEach(btn => {
             btn.addEventListener('click', function() {
               const messageElem = this.closest('.message');
@@ -1052,7 +964,7 @@
         }
       }
 
-      // إرسال النموذج عند النقر على زر الإرسال
+      // منع إرسال النموذج بالطريقة التقليدية واستخدام AJAX
       if (sendButton && replyForm) {
         sendButton.addEventListener('click', function(e) {
           e.preventDefault();
@@ -1060,7 +972,7 @@
         });
       }
       
-      // تحميل المستخدمين في نافذة الإسناد
+      // عند فتح نافذة "إسناد المحادثة" (assignModal)
       const assignModal = document.getElementById('assignModal');
       if (assignModal) {
         assignModal.addEventListener('show.bs.modal', function() {
@@ -1068,23 +980,19 @@
         });
       }
       
-      // وظيفة جلب قائمة المستخدمين المتاحين للإسناد
+      // جلب قائمة الموظفين من الـ API
       function loadSupportUsers() {
         const assignedToSelect = document.getElementById('assignedTo');
         if (!assignedToSelect) return;
         
-        // إظهار رسالة تحميل
         assignedToSelect.innerHTML = '<option value="" disabled selected>جاري التحميل...</option>';
         
-        // جلب المستخدمين من API
         fetch('/api/users/support')
           .then(response => response.json())
           .then(data => {
             if (data.success && data.users && data.users.length > 0) {
-              // إضافة خيار لإلغاء الإسناد
               let options = '<option value="">-- إلغاء الإسناد --</option>';
               
-              // إضافة المستخدمين للقائمة
               data.users.forEach(user => {
                 const isSelected = user._id === '<%= conversation.assignedTo ? conversation.assignedTo.toString() : "" %>';
                 options += `<option value="${user._id}" ${isSelected ? 'selected' : ''}>${user.full_name || user.username}</option>`;
@@ -1101,12 +1009,12 @@
           });
       }
       
-      // إعداد أزرار التفاعل والرد
+      // تفعيل الأزرار لجميع الرسائل بعد تحميل الصفحة
       setupMessageButtons();
     });
   </script>
 
-  <!-- يمكن تشغيل الصوت عند وصول رسالة incoming -->
+  <!-- صوت التنبيه عند وصول رسالة -->
   <audio id="messageSound" src="/sounds/new-message.mp3" preload="auto"></audio>
 </body>
 </html>

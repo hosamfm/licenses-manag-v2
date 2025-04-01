@@ -1,0 +1,227 @@
+/* ========== style.css ========== */
+
+/* لإزالة الهوامش الافتراضية وجعل الصفحة تملأ نافذة المتصفح */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+/* جعل حاوية الرسائل تتمدد وتأخذ المساحة المتوفرة، مع تمرير داخلي */
+.message-container {
+  /* Removed fixed height: 60vh; */
+  overflow-y: auto;
+  padding: 1rem;
+  flex-grow: 1; /* Allow message container to take available space */
+  background-color: #ffffff; /* Optional: explicit background */
+  border: 1px solid #dee2e6; /* Add border for clarity */
+  border-radius: 0.25rem; /* Match card style */
+  scroll-behavior: smooth;
+  max-height: 400px; /* تحديد ارتفاع أقصى للحاوية */
+}
+
+/* كل رسالة */
+.message {
+  display: flex;
+  margin-bottom: 1rem;
+  max-width: 75%; /* Limit width of message bubbles */
+}
+
+.message.outgoing {
+  margin-left: auto; /* Push to right (LTR) / left (RTL) */
+  flex-direction: row-reverse; /* Keep avatar/content order consistent */
+}
+
+.message.incoming {
+  margin-right: auto; /* Push to left (LTR) / right (RTL) */
+  flex-direction: row;
+}
+
+/* فقاعة الرسالة */
+.message-bubble {
+  padding: 0.6rem 1rem;
+  border-radius: 1rem;
+  word-wrap: break-word; /* Ensure long words break */
+  position: relative; /* For potential absolute elements like timestamps */
+  max-width: 100%; /* Ensure bubble does not overflow flex item */
+}
+
+.message.incoming .message-bubble {
+  background-color: #e9ecef; /* Light grey for incoming */
+  color: #212529;
+  border-bottom-left-radius: 0.25rem; /* Slightly flatten corner */
+}
+
+.message.outgoing .message-bubble {
+  background-color: #0d6efd; /* Bootstrap primary blue for outgoing */
+  color: #fff;
+  border-bottom-right-radius: 0.25rem; /* Slightly flatten corner */
+}
+
+/* توقيت الرسالة وحالتها */
+.message-time {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+}
+.incoming .message-time {
+  justify-content: flex-start;
+}
+.outgoing .message-time {
+  justify-content: flex-end;
+}
+.message-status {
+  display: inline-block;
+  margin-right: 5px;
+}
+
+/* حالات الرسالة */
+.message[data-status="sending"] .message-bubble {
+  opacity: 0.85;
+}
+.message[data-status="failed"] .message-bubble {
+  border: 1px solid #ff4d4f;
+}
+
+/* صندوق كتابة الرد */
+.reply-form {
+  /* Removed position: sticky; bottom: 0; */
+  padding: 1rem;
+  border-top: 1px solid #dee2e6;
+  background-color: #f8f9fa; /* Light background for the form */
+}
+
+/* مؤشّر الإرسال */
+.sending-indicator {
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
+/* تنسيقات الرد المقتبس */
+.replied-message {
+    background-color: #f0f0f0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border-left: 3px solid #0d6efd; /* Or a distinct color */
+    font-size: 0.9em;
+    color: #555;
+    display: flex;
+    align-items: center;
+}
+
+.replied-content {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* قائمة خيارات الرسالة */
+.message-actions {
+    display: none; /* Hidden by default */
+    position: absolute;
+    top: -15px; /* Position above the bubble */
+    background-color: white;
+    border-radius: 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    padding: 2px 5px;
+    z-index: 10;
+}
+
+.message:hover .message-actions {
+    display: inline-flex; /* Show on hover */
+    gap: 5px;
+}
+
+/* Adjust action button position based on message direction */
+.message.incoming .message-actions {
+    left: 10px; /* Adjust as needed */
+}
+
+.message.outgoing .message-actions {
+    right: 10px; /* Adjust as needed */
+}
+
+.message-action-btn {
+    background: none;
+    border: none;
+    padding: 3px 5px;
+    cursor: pointer;
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+.message-action-btn:hover {
+    color: #000;
+}
+
+/* Ensure the card containing messages stretches */
+.crm-content .col-lg-8 .card {
+    flex-grow: 1; /* Allow card to grow */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent content overflow issues */
+    margin-bottom: 1rem; /* Space between card and reply form */
+}
+
+/* Ensure card body takes up remaining space in the card */
+.crm-content .col-lg-8 .card .card-body {
+    flex-grow: 1;
+    padding: 0; /* Remove padding to allow message-container full control */
+    display: flex; /* Make card-body flex to contain message-container */
+    flex-direction: column; /* Stack content vertically */
+    overflow: hidden; /* Needed for child overflow:auto */
+}
+
+/* --- Responsiveness --- */
+@media (max-width: 991.98px) { /* Below large breakpoint (Bootstrap lg) */
+  /* Ensure columns take full width */
+   .crm-content > .row > [class^="col-"] {
+      width: 100%;
+      max-width: 100%; /* Override Bootstrap column widths */
+      flex: none; /* Reset flex basis/grow/shrink */
+      margin-bottom: 1rem; /* Add space between stacked columns */
+   }
+
+   .message-container {
+       /* Adjust height for mobile if needed, but flex-grow should handle it mostly */
+       max-height: 60vh; /* زيادة الارتفاع في الموبايل */
+   }
+   
+   /* تبديل نص الزر عند تفعيله */
+   .conversation-details-toggle.active {
+      background-color: #0d6efd;
+      color: white;
+   }
+   
+   /* إخفاء قسم تفاصيل المحادثة افتراضيًا في الهاتف المحمول */
+  .crm-content > .row > .col-lg-4 {
+    display: none; /* إخفاء بشكل افتراضي */
+  }
+  
+  /* عند إضافة فئة show-details للصف، سيتم إظهار تفاصيل المحادثة */
+  .crm-content > .row.show-details > .col-lg-4 {
+    display: block;
+  }
+}
+
+/*===========================
+  استجابة للموبايل
+===========================*/
+@media (max-width: 767px) {
+  /* تكبير عرض فقاعة الرسالة في الجوال */
+  .message {
+    max-width: 90%;
+  }
+
+  /* تصغير الحواف في صندوق الرد */
+  .reply-form {
+    padding: 10px;
+  }
+}
+
+/*===========================
+= الإضافات لتفاصيل المحادثة =
+===========================*/

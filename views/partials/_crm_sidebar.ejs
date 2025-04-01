@@ -1,0 +1,42 @@
+<!-- القائمة الجانبية لنظام CRM -->
+<div class="crm-sidebar">
+  <ul class="crm-sidebar-nav">
+    <li>
+      <a href="/crm" class="<%= typeof isDashboardPage !== 'undefined' && isDashboardPage ? 'active' : '' %>">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>لوحة التحكم</span>
+      </a>
+    </li>
+    <li>
+      <a href="/crm/contacts" class="<%= typeof isContactsPage !== 'undefined' && isContactsPage ? 'active' : '' %>">
+        <i class="fas fa-address-book"></i>
+        <span>جهات الاتصال</span>
+      </a>
+    </li>
+    <li>
+      <a href="/crm/conversations" class="<%= typeof isConversationsPage !== 'undefined' && isConversationsPage ? 'active' : '' %>">
+        <i class="fas fa-comments"></i>
+        <span>المحادثات</span>
+      </a>
+    </li>
+    <li>
+      <a href="/crm/conversations/my" class="<%= typeof isMyConversationsPage !== 'undefined' && isMyConversationsPage ? 'active' : '' %>">
+        <i class="fas fa-user-circle"></i>
+        <span>محادثاتي</span>
+      </a>
+    </li>
+    <li>
+      <a href="/crm/stats" class="<%= typeof isStatsPage !== 'undefined' && isStatsPage ? 'active' : '' %>">
+        <i class="fas fa-chart-bar"></i>
+        <span>الإحصائيات</span>
+      </a>
+    </li>
+    <!-- يمكن إضافة روابط أخرى هنا في المستقبل -->
+    <li class="mt-4">
+      <a href="/" class="text-muted">
+        <i class="fas fa-arrow-right"></i>
+        <span>العودة للرئيسية</span>
+      </a>
+    </li>
+  </ul>
+</div>
