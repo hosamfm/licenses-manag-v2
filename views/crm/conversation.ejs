@@ -409,10 +409,24 @@
       // الانضمام إلى غرفة المحادثة
       socket.emit('join-conversation', conversationId);
       
-      // استقبال تأكيد التفاعل
-      socket.on('reaction_confirmed', function(data) {
-        console.log('تم تأكيد التفاعل:', data);
-        // هنا يمكن إضافة تنبيه بسيط أو تأثير مرئي يظهر نجاح التفاعل
+      // استقبال تأكيد إرسال رد الفعل
+      socket.on('reaction_sent', function(data) {
+        console.log('تم إرسال رد الفعل بنجاح:', data);
+        // هنا يمكن إضافة تنبيه بسيط أو تأثير مرئي يظهر نجاح إرسال رد الفعل
+      });
+      
+      // استقبال رد فعل من مستخدم آخر
+      socket.on('reaction_received', function(data) {
+        console.log('تم استلام رد فعل:', data);
+        // إضافة رد الفعل إلى الرسالة المناسبة في واجهة المستخدم
+        addReactionToMessage(data.messageId, data.reactionType, data.userId, data.username);
+      });
+      
+      // استقبال خطأ في إرسال رد الفعل
+      socket.on('reaction_error', function(data) {
+        console.error('خطأ في إرسال رد الفعل:', data.error);
+        // إظهار رسالة خطأ للمستخدم
+        showToast('خطأ: ' + data.error, 'error');
       });
       
       // زر تبديل تفاصيل المحادثة في الهاتف المحمول
@@ -914,9 +928,9 @@
           <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
             <i class="far fa-smile"></i>
           </button>
-          <button class="btn btn-sm text-muted message-action-btn reply-btn"
-                  data-message-id="${messageData._id}"
-                  data-external-id="${messageData.externalMessageId || ''}"
+          <button class="btn btn-sm text-muted message-action-btn reply-btn" 
+                  data-message-id="${messageData._id}" 
+                  data-external-id="${messageData.externalMessageId || ''}" 
                   title="رد">
             <i class="fas fa-reply"></i>
           </button>
@@ -1032,108 +1046,84 @@
         reactionButtons.forEach(btn => {
           btn.addEventListener('click', function() {
             const emoji = this.getAttribute('data-emoji');
-            addReactionToMessage(messageId, externalId, emoji);
+            sendReaction(messageId, emoji);
             reactionPicker.remove();
           });
         });
         
         // إضافة حدث لزر الإغلاق
         const closeButton = reactionPicker.querySelector('.btn-close');
-        closeButton.addEventListener('click', function() {
-          reactionPicker.remove();
-        });
-        
-        // إضافة نمط CSS لمنتقي التفاعلات إذا لم يكن موجوداً
-        if (!document.getElementById('reaction-picker-style')) {
-          const style = document.createElement('style');
-          style.id = 'reaction-picker-style';
-          style.innerHTML = `
-            .reaction-picker {
-              position: absolute;
-              top: 100%;
-              left: 50%;
-              transform: translateX(-50%);
-              width: auto;
-              min-width: 200px;
-              z-index: 1000;
-              background-color: white;
-              border-radius: 8px;
-              box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2) !important;
-            }
-            .reactions-container {
-              display: flex;
-              justify-content: space-between;
-              flex-wrap: wrap;
-            }
-            .reaction-picker .reaction-btn {
-              border: none;
-              background: none;
-              font-size: 1.5rem;
-              padding: 5px;
-              cursor: pointer;
-              border-radius: 50%;
-              transition: transform 0.2s, background-color 0.2s;
-            }
-            .reaction-picker .reaction-btn:hover {
-              transform: scale(1.2);
-              background-color: #f0f0f0;
-            }
-          `;
-          document.head.appendChild(style);
-        }
-      }
-      
-      // إضافة تفاعل إلى رسالة
-      function addReactionToMessage(messageId, externalId, emoji) {
-        // التحقق من وجود هذا التفاعل بالفعل
-        const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`) || 
-                            document.querySelector(`.message[data-external-id="${externalId}"]`);
-        
-        if (!messageElem) return;
-        
-        // البحث عن قسم التفاعلات أو إنشاؤه إذا لم يكن موجوداً
-        let reactionsContainer = messageElem.querySelector('.message-reactions');
-        if (!reactionsContainer) {
-          reactionsContainer = document.createElement('div');
-          reactionsContainer.className = 'message-reactions';
-          
-          // إضافة حاوية التفاعلات بعد فقاعة الرسالة
-          const messageBubble = messageElem.querySelector('.message-bubble');
-          if (messageBubble) {
-            messageBubble.appendChild(reactionsContainer);
-          }
-        }
-        
-        // التحقق مما إذا كان التفاعل موجوداً بالفعل
-        const existingReaction = reactionsContainer.querySelector(`.reaction-badge[data-emoji="${emoji}"]`);
-        if (existingReaction) {
-          // زيادة العداد إذا كان التفاعل موجوداً
-          const counterElem = existingReaction.querySelector('.reaction-count');
-          if (counterElem) {
-            const currentCount = parseInt(counterElem.textContent);
-            counterElem.textContent = (currentCount + 1).toString();
-          }
-        } else {
-          // إنشاء تفاعل جديد
-          const reactionBadge = document.createElement('span');
-          reactionBadge.className = 'reaction-badge';
-          reactionBadge.setAttribute('data-emoji', emoji);
-          reactionBadge.innerHTML = `${emoji} <span class="reaction-count">1</span>`;
-          reactionsContainer.appendChild(reactionBadge);
-        }
-        
-        // إرسال التفاعل إلى الخادم (في التطبيق الفعلي)
-        console.log('إرسال تفاعل:', { messageId, externalId, emoji });
-        
-        // هنا يمكنك إضافة شيفرة لإرسال التفاعل إلى الخادم
-        if (socket) {
-          socket.emit('add_reaction', {
-            messageId: messageId,
-            externalId: externalId,
-            reaction: emoji,
-            conversationId: conversationId
+        if (closeButton) {
+          closeButton.addEventListener('click', function() {
+            reactionPicker.remove();
           });
         }
+        
+        // إغلاق المنتقي عند النقر خارجه
+        document.addEventListener('click', function closeReactionPicker(e) {
+          if (!reactionPicker.contains(e.target) && !e.target.closest('.reaction-btn')) {
+            reactionPicker.remove();
+            document.removeEventListener('click', closeReactionPicker);
+          }
+        });
+      }
+      
+      // إرسال رد فعل
+      function sendReaction(messageId, emoji) {
+        if (!messageId || !emoji || !conversationId) return;
+        
+        console.log('إرسال رد فعل:', messageId, emoji);
+        
+        // إرسال رد الفعل عبر Socket.IO
+        socket.emit('add_reaction', {
+          messageId: messageId,
+          reactionType: emoji,
+          conversationId: conversationId
+        });
+      }
+      
+      // إضافة رد فعل إلى الرسالة
+      function addReactionToMessage(messageId, reactionType, userId, username) {
+        if (!messageId || !reactionType) return;
+        
+        // العثور على الرسالة
+        const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+        if (!messageElem) return;
+        
+        // التحقق مما إذا كانت هناك منطقة ردود أفعال للرسالة بالفعل
+        let reactionsContainer = messageElem.querySelector('.message-reactions');
+        
+        // إنشاء منطقة ردود أفعال إذا لم تكن موجودة
+        if (!reactionsContainer) {
+          reactionsContainer = document.createElement('div');
+          reactionsContainer.className = 'message-reactions mt-1';
+          
+          // إضافة منطقة ردود الأفعال بعد فقاعة الرسالة
+          const messageBubble = messageElem.querySelector('.message-bubble');
+          if (messageBubble) {
+            messageBubble.insertAdjacentElement('afterend', reactionsContainer);
+          }
+        }
+        
+        // التحقق مما إذا كان هناك رد فعل من نفس النوع ونفس المستخدم مسبقًا
+        const existingReaction = Array.from(reactionsContainer.querySelectorAll('.reaction')).find(reaction => {
+          return reaction.querySelector('span').textContent === reactionType && 
+                 reaction.getAttribute('data-user-id') === userId;
+        });
+        
+        // إذا وجد رد فعل مماثل فلا تضيف واحدًا جديدًا
+        if (existingReaction) return;
+        
+        // إنشاء عنصر رد الفعل
+        const reactionElem = document.createElement('span');
+        reactionElem.className = 'reaction badge bg-light text-dark me-1 mb-1';
+        reactionElem.setAttribute('data-user-id', userId);
+        reactionElem.setAttribute('data-username', username);
+        reactionElem.setAttribute('title', `${username || 'مستخدم'}`);
+        reactionElem.innerHTML = `<span>${reactionType}</span>`;
+        
+        // إضافة رد الفعل إلى المنطقة
+        reactionsContainer.appendChild(reactionElem);
       }
       
       // تفعيل أزرار التفاعل والرد
@@ -1178,7 +1168,7 @@
           });
         }
       }
-
+      
       // منع إرسال النموذج بالطريقة التقليدية واستخدام AJAX
       if (sendButton && replyForm) {
         sendButton.addEventListener('click', function(e) {

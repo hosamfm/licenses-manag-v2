@@ -103,14 +103,16 @@ mongoose
     process.exit(1);
   });
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({ mongoUrl: process.env.DATABASE_URL }),
-  }),
-);
+// تعريف وسيط الجلسة ليتم استخدامه مع Express و Socket.IO معًا
+const sessionMiddleware = session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({ mongoUrl: process.env.DATABASE_URL }),
+});
+
+// استخدام وسيط الجلسة مع Express
+app.use(sessionMiddleware);
 
 app.use(flash());
 
@@ -328,6 +330,11 @@ const http = require('http').createServer(app);
 // تهيئة خدمة Socket.io
 const socketService = require('./services/socketService');
 const io = socketService.initialize(http);
+
+// مشاركة الجلسة بين Express و Socket.IO
+io.use((socket, next) => {
+  sessionMiddleware(socket.handshake, {}, next);
+});
 
 createDefaultAdmin().then(() => {
   // إنشاء مستخدم للموقع بعد إنشاء المدير الافتراضي
