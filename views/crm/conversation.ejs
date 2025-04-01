@@ -655,19 +655,19 @@
         }
       });
       
-      // استماع لأحداث الردود على الرسائل
+      // استماع لأحداث الرد على الرسائل
       socket.on('message_reply', function(data) {
         console.log('رد جديد على رسالة:', data);
         
         // إذا كان رد وارد على رسالة أرسلناها
-        if (data.message.direction === 'incoming') {
-          playMessageSound();
-          const messageData = {
-            ...data.message,
-            replyToId: data.replyToId
-          };
+        if (data.message && data.replyToId) {
+          // تعيين معرف الرسالة المرد عليها
+          data.message.replyToId = data.replyToId;
           
-          addNewMessageWithReply(messageData);
+          // استخدام الدالة الموجودة لإضافة رسالة مع اقتباس
+          addNewMessageWithReply(data.message);
+          
+          // تمرير للأسفل
           messageContainer.scrollTop = messageContainer.scrollHeight;
         }
       });
@@ -683,7 +683,7 @@
           messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
         }
         
-        // إضافة قسم الاقتباس
+        // إضافة قسم الاقتباس إذا كان هناك رد
         if (messageData.replyToId) {
           const originalMsgElem = document.querySelector(`.message[data-external-id="${messageData.replyToId}"]`);
           let originalContent = 'رد على رسالة غير موجودة';

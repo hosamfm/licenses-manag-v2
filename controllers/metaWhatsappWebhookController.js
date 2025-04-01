@@ -220,7 +220,7 @@ async function handleReactions(reactions, meta) {
         // تحديث التفاعل في الرسالة
         const updatedMessage = await WhatsappMessage.updateReaction(messageId, sender, emoji);
         
-        // إرسال إشعار بالتفاعل
+        // إشعار بالتفاعل
         socketService.notifyMessageReaction(
           conversation._id.toString(),
           messageId,
@@ -273,8 +273,17 @@ async function handleIncomingMessages(messages, meta) {
         // أنشئ رسالة واردة في DB
         const savedMsg = await WhatsappMessage.createIncomingMessage(conversation._id, msg);
 
+        // التحقق ما إذا كانت تفاعل
+        if (savedMsg && savedMsg.isReaction) {
+          // إرسال إشعار بالتفاعل على الرسالة الأصلية
+          socketService.notifyMessageReaction(
+            conversation._id.toString(),
+            savedMsg.originalMessageId,
+            savedMsg.reaction
+          );
+        }
         // التحقق إذا كانت رد على رسالة وإرسال إشعار خاص بالرد
-        if (savedMsg.replyToMessageId) {
+        else if (savedMsg && savedMsg.replyToMessageId) {
           socketService.notifyMessageReply(
             conversation._id.toString(),
             {
@@ -289,7 +298,7 @@ async function handleIncomingMessages(messages, meta) {
             },
             savedMsg.replyToMessageId
           );
-        } else {
+        } else if (savedMsg) {
           // إشعار Socket.io بالرسالة الجديدة
           socketService.notifyNewMessage(conversation._id.toString(), {
             _id: savedMsg._id,

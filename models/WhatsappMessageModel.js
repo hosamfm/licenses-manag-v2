@@ -108,7 +108,19 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       replyToMessageId = messageData.reaction.message_id;
       
       // تحديث التفاعل على الرسالة الأصلية
-      await this.updateReaction(replyToMessageId, from, content);
+      const updatedMessage = await this.updateReaction(replyToMessageId, from, content);
+      
+      // إرجاع الرسالة المحدثة مع علامة خاصة لتمييزها كتفاعل وليس كرسالة جديدة
+      if (updatedMessage) {
+        return { 
+          isReaction: true, 
+          originalMessageId: replyToMessageId,
+          reaction: { 
+            sender: from, 
+            emoji: content 
+          }
+        };
+      }
     }
     
     // التحقق من وجود سياق رد على رسالة
