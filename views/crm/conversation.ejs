@@ -921,6 +921,64 @@
         setupMessageButtons(messageDiv);
       }
       
+      // إظهار نموذج الرد على رسالة محددة
+      function showReplyForm(messageId, externalId, messageElem) {
+        // التأكد من أن معرف الرسالة وعنصر الرسالة متوفران
+        if (!messageElem || !messageId) return;
+        
+        // تخزين معرف الرسالة للرد عليها
+        replyToMessageId = externalId || messageId;
+        
+        // الحصول على محتوى الرسالة المراد الرد عليها
+        const messageBubble = messageElem.querySelector('.message-bubble');
+        if (messageBubble) {
+          const messageContent = messageBubble.textContent.trim();
+          replyToInfo = {
+            messageId: messageId,
+            externalId: externalId,
+            content: messageContent
+          };
+          
+          // إزالة أي معلومات رد سابقة
+          const existingReplyInfo = document.getElementById('replyInfo');
+          if (existingReplyInfo) {
+            existingReplyInfo.remove();
+          }
+          
+          // إضافة إشارة الرد فوق مربع النص
+          const replyInfoDiv = document.createElement('div');
+          replyInfoDiv.id = 'replyInfo';
+          replyInfoDiv.className = 'alert alert-secondary d-flex align-items-center p-2 mb-2';
+          replyInfoDiv.innerHTML = `
+            <div class="flex-grow-1">
+              <small><i class="fas fa-reply me-1"></i> رد على: ${messageContent.length > 40 ? messageContent.substring(0, 40) + '...' : messageContent}</small>
+            </div>
+            <button type="button" class="btn-close btn-sm" aria-label="إلغاء الرد"></button>
+          `;
+          
+          // إضافة الإشارة قبل مربع النص
+          const formGroup = document.querySelector('.reply-form .form-group');
+          if (formGroup) {
+            formGroup.insertBefore(replyInfoDiv, formGroup.firstChild);
+          }
+          
+          // إضافة حدث لزر إلغاء الرد
+          const cancelButton = replyInfoDiv.querySelector('.btn-close');
+          if (cancelButton) {
+            cancelButton.addEventListener('click', function() {
+              replyInfoDiv.remove();
+              replyToMessageId = null;
+              replyToInfo = null;
+            });
+          }
+          
+          // تركيز مربع النص تلقائيًا
+          if (replyMessage) {
+            replyMessage.focus();
+          }
+        }
+      }
+      
       // تفعيل أزرار التفاعل والرد
       function setupMessageButtons(messageElem) {
         if (messageElem) {

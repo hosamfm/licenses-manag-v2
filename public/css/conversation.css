@@ -10,22 +10,28 @@ body {
 
 /* جعل حاوية الرسائل تتمدد وتأخذ المساحة المتوفرة، مع تمرير داخلي */
 .message-container {
-  /* Removed fixed height: 60vh; */
   overflow-y: auto;
-  padding: 1rem;
+  padding: 1.25rem;
   flex-grow: 1; /* Allow message container to take available space */
-  background-color: #ffffff; /* Optional: explicit background */
-  border: 1px solid #dee2e6; /* Add border for clarity */
-  border-radius: 0.25rem; /* Match card style */
+  background-color: #f8fafc; /* لون خلفية فاتح وناعم */
+  border: 1px solid #e2e8f0; /* حدود أخف */
+  border-radius: 0.5rem; /* تدوير أكبر للزوايا */
   scroll-behavior: smooth;
-  max-height: 400px; /* تحديد ارتفاع أقصى للحاوية */
+  max-height: 550px; /* زيادة الارتفاع الأقصى */
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.03); /* ظل داخلي خفيف */
 }
 
 /* كل رسالة */
 .message {
   display: flex;
-  margin-bottom: 1rem;
-  max-width: 75%; /* Limit width of message bubbles */
+  margin-bottom: 1.25rem;
+  max-width: 80%; /* زيادة عرض فقاعة الرسالة قليلاً */
+  position: relative; /* للتحكم في العناصر الداخلية */
+  transition: transform 0.2s ease; /* إضافة تأثير عند التفاعل */
+}
+
+.message:hover {
+  transform: translateY(-2px); /* تأثير رفع خفيف عند مرور المؤشر */
 }
 
 .message.outgoing {
@@ -40,21 +46,24 @@ body {
 
 /* فقاعة الرسالة */
 .message-bubble {
-  padding: 0.6rem 1rem;
-  border-radius: 1rem;
+  padding: 0.75rem 1.25rem; /* زيادة التباطن */
+  border-radius: 1.25rem; /* تدوير أكبر للزوايا */
   word-wrap: break-word; /* Ensure long words break */
   position: relative; /* For potential absolute elements like timestamps */
   max-width: 100%; /* Ensure bubble does not overflow flex item */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); /* ظل خفيف لإضافة عمق */
+  line-height: 1.5; /* تباعد أفضل بين الأسطر */
 }
 
 .message.incoming .message-bubble {
-  background-color: #e9ecef; /* Light grey for incoming */
-  color: #212529;
+  background-color: #ffffff; /* أبيض نقي للرسائل الواردة */
+  color: #1e293b; /* لون نص داكن أكثر */
+  border: 1px solid #e2e8f0; /* حدود خفيفة */
   border-bottom-left-radius: 0.25rem; /* Slightly flatten corner */
 }
 
 .message.outgoing .message-bubble {
-  background-color: #0d6efd; /* Bootstrap primary blue for outgoing */
+  background: linear-gradient(135deg, #3b82f6, #2563eb); /* تدرج جميل للرسائل الصادرة */
   color: #fff;
   border-bottom-right-radius: 0.25rem; /* Slightly flatten corner */
 }
@@ -62,17 +71,27 @@ body {
 /* توقيت الرسالة وحالتها */
 .message-time {
   font-size: 0.75rem;
-  color: #888;
-  margin-top: 5px;
+  opacity: 0.7; /* شفافية معتدلة بدلاً من لون ثابت */
+  margin-top: 8px;
   display: flex;
   align-items: center;
+  transition: opacity 0.3s; /* تأثير عند مرور المؤشر */
 }
+
+.message:hover .message-time {
+  opacity: 1; /* إظهار بشكل كامل عند مرور المؤشر */
+}
+
 .incoming .message-time {
   justify-content: flex-start;
+  color: #64748b; /* لون مناسب للرسائل الواردة */
 }
+
 .outgoing .message-time {
   justify-content: flex-end;
+  color: rgba(255, 255, 255, 0.9); /* لون مناسب للرسائل الصادرة */
 }
+
 .message-status {
   display: inline-block;
   margin-right: 5px;
@@ -82,97 +101,258 @@ body {
 .message[data-status="sending"] .message-bubble {
   opacity: 0.85;
 }
+
 .message[data-status="failed"] .message-bubble {
-  border: 1px solid #ff4d4f;
+  border: 1px solid #f43f5e; /* لون أحمر أكثر حداثة */
+  position: relative;
+}
+
+.message[data-status="failed"]::after {
+  content: "فشل الإرسال";
+  position: absolute;
+  bottom: -5px;
+  right: 15px;
+  font-size: 0.7rem;
+  color: #f43f5e;
+  background-color: #fff;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid #f43f5e;
 }
 
 /* صندوق كتابة الرد */
 .reply-form {
-  /* Removed position: sticky; bottom: 0; */
-  padding: 1rem;
-  border-top: 1px solid #dee2e6;
-  background-color: #f8f9fa; /* Light background for the form */
+  padding: 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background-color: #ffffff; /* خلفية بيضاء نقية */
+  border-radius: 0 0 0.5rem 0.5rem; /* تدوير الزوايا السفلية */
+  box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.03); /* ظل خفيف للفصل */
+}
+
+/* تحسين شكل نموذج الإرسال */
+.reply-form textarea {
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  resize: none; /* منع تغيير الحجم */
+}
+
+.reply-form textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.reply-form .btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: none;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
+  transition: all 0.3s ease;
+}
+
+.reply-form .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.4);
 }
 
 /* مؤشّر الإرسال */
 .sending-indicator {
-  font-size: 0.8rem;
-  color: #6c757d;
+  font-size: 0.85rem;
+  color: #64748b;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 
 /* تنسيقات الرد المقتبس */
 .replied-message {
-    background-color: #f0f0f0;
-    padding: 8px 12px;
-    border-radius: 8px;
-    margin-bottom: 6px;
-    border-left: 3px solid #0d6efd; /* Or a distinct color */
-    font-size: 0.9em;
-    color: #555;
-    display: flex;
-    align-items: center;
+  background-color: rgba(240, 240, 240, 0.7);
+  backdrop-filter: blur(4px); /* تأثير زجاجي خفيف */
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border-right: 3px solid #2563eb; /* تغيير للوضع RTL */
+  font-size: 0.9em;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.replied-message:hover {
+  background-color: rgba(240, 240, 240, 0.9);
 }
 
 .replied-content {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* قائمة خيارات الرسالة */
 .message-actions {
-    display: none; /* Hidden by default */
-    position: absolute;
-    top: -15px; /* Position above the bubble */
-    background-color: white;
-    border-radius: 15px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    padding: 2px 5px;
-    z-index: 10;
+  display: none; /* Hidden by default */
+  position: absolute;
+  top: -15px; /* Position above the bubble */
+  background-color: white;
+  border-radius: 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 3px 8px;
+  z-index: 10;
+  transition: all 0.3s ease;
+  border: 1px solid #e2e8f0;
 }
 
 .message:hover .message-actions {
-    display: inline-flex; /* Show on hover */
-    gap: 5px;
+  display: inline-flex; /* Show on hover */
+  gap: 8px;
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Adjust action button position based on message direction */
 .message.incoming .message-actions {
-    left: 10px; /* Adjust as needed */
+  left: 10px; /* Adjust as needed */
 }
 
 .message.outgoing .message-actions {
-    right: 10px; /* Adjust as needed */
+  right: 10px; /* Adjust as needed */
 }
 
 .message-action-btn {
-    background: none;
-    border: none;
-    padding: 3px 5px;
-    cursor: pointer;
-    color: #6c757d;
-    font-size: 0.9rem;
+  background: none;
+  border: none;
+  padding: 3px 5px;
+  cursor: pointer;
+  color: #64748b;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
 }
+
 .message-action-btn:hover {
-    color: #000;
+  color: #2563eb;
+  transform: scale(1.1);
+}
+
+/* تصميم التفاعلات على الرسائل */
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+  transition: all 0.2s ease;
+}
+
+.reaction-badge {
+  background-color: rgba(240, 240, 240, 0.7);
+  border-radius: 15px;
+  padding: 3px 8px;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+}
+
+.reaction-badge:hover {
+  background-color: rgba(240, 240, 240, 0.9);
+  transform: scale(1.05);
+}
+
+/* تنسيقات صفحة المحادثة */
+.conversation-info-card {
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: none;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.conversation-info-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.conversation-info-card .card-title {
+  font-weight: 600;
+  color: #1e293b;
+  position: relative;
+  padding-bottom: 10px;
+}
+
+.conversation-info-card .card-title::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 50px;
+  height: 3px;
+  background: linear-gradient(to left, #3b82f6, #2563eb);
+  border-radius: 3px;
+}
+
+/* تحسين أزرار الإجراءات */
+.conversation-action-buttons .btn {
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: all 0.3s ease;
+  border: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+.conversation-action-buttons .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+}
+
+.conversation-action-buttons .btn-warning {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border-color: transparent;
+}
+
+.conversation-action-buttons .btn-danger {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  border-color: transparent;
+}
+
+.conversation-action-buttons .btn-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: transparent;
 }
 
 /* Ensure the card containing messages stretches */
 .crm-content .col-lg-8 .card {
-    flex-grow: 1; /* Allow card to grow */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden; /* Prevent content overflow issues */
-    margin-bottom: 1rem; /* Space between card and reply form */
+  flex-grow: 1; /* Allow card to grow */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Prevent content overflow issues */
+  margin-bottom: 1rem; /* Space between card and reply form */
+  border-radius: 0.5rem;
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.crm-content .col-lg-8 .card .card-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem 1.25rem;
 }
 
 /* Ensure card body takes up remaining space in the card */
 .crm-content .col-lg-8 .card .card-body {
-    flex-grow: 1;
-    padding: 0; /* Remove padding to allow message-container full control */
-    display: flex; /* Make card-body flex to contain message-container */
-    flex-direction: column; /* Stack content vertically */
-    overflow: hidden; /* Needed for child overflow:auto */
+  flex-grow: 1;
+  padding: 0; /* Remove padding to allow message-container full control */
+  display: flex; /* Make card-body flex to contain message-container */
+  flex-direction: column; /* Stack content vertically */
+  overflow: hidden; /* Needed for child overflow:auto */
 }
 
 /* --- Responsiveness --- */
@@ -187,41 +367,51 @@ body {
 
    .message-container {
        /* Adjust height for mobile if needed, but flex-grow should handle it mostly */
-       max-height: 60vh; /* زيادة الارتفاع في الموبايل */
+       max-height: 65vh; /* زيادة الارتفاع في الموبايل */
+   }
+   
+   /* تحسين زر التنقل للتفاصيل */
+   .conversation-details-toggle {
+     padding: 10px 16px;
+     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+     border-radius: 8px;
+     transition: all 0.3s ease;
+     border: 1px solid #e2e8f0;
+     width: 100%;
    }
    
    /* تبديل نص الزر عند تفعيله */
    .conversation-details-toggle.active {
-      background-color: #0d6efd;
+      background-color: #2563eb;
       color: white;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
    }
    
    /* إخفاء قسم تفاصيل المحادثة افتراضيًا في الهاتف المحمول */
   .crm-content > .row > .col-lg-4 {
     display: none; /* إخفاء بشكل افتراضي */
+    animation: slideDown 0.3s ease-in-out;
   }
   
-  /* عند إضافة فئة show-details للصف، سيتم إظهار تفاصيل المحادثة */
-  .crm-content > .row.show-details > .col-lg-4 {
+  /* عرض قسم التفاصيل عند تفعيل الزر */
+  .crm-content > .row > .col-lg-4.visible {
     display: block;
+    animation: slideDown 0.3s ease-in-out;
   }
-}
-
-/*===========================
-  استجابة للموبايل
-===========================*/
-@media (max-width: 767px) {
-  /* تكبير عرض فقاعة الرسالة في الجوال */
+  
+  @keyframes slideDown {
+    from { 
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* تحسين حجم الرسائل في الموبايل */
   .message {
     max-width: 90%;
   }
-
-  /* تصغير الحواف في صندوق الرد */
-  .reply-form {
-    padding: 10px;
-  }
 }
-
-/*===========================
-= الإضافات لتفاصيل المحادثة =
-===========================*/
