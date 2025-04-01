@@ -395,8 +395,8 @@
       // إعداد اتصال Socket.IO مع إرسال بيانات تعريف
       const socket = io({
         auth: {
-          userId: '<%= currentUser._id %>',
-          username: '<%= currentUser.username %>'
+          userId: '<%= user ? user._id : "guest" %>',
+          username: '<%= user ? user.username : "زائر" %>'
         }
       });
       
@@ -458,13 +458,13 @@
         // محاولة رابعة: بعد ثانية واحدة (للتأكد)
         setTimeout(scrollToBottom, 1000);
         
-        // استمع أيضًا لحدث load للنافذة بالكامل (للصور وغيرها)
+        // استمع أيضًا لحدث load للنافذة بالكامل (للطابع وغيرها)
         window.addEventListener('load', function() {
           scrollToBottom();
         });
       }
       
-      // الإرسال عند الضغط على Enter (بدون Shift)
+      // إرسال عند الضغط على Enter (بدون Shift)
       if (replyMessage) {
         replyMessage.addEventListener('keydown', function(e) {
           if (e.key === 'Enter' && !e.shiftKey) {
