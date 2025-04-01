@@ -392,7 +392,14 @@
       const sendingIndicator = document.getElementById('sendingIndicator');
       const messageContainer = document.getElementById('messageContainer');
 
-      let socket = io();
+      // إعداد اتصال Socket.IO مع إرسال بيانات تعريف
+      const socket = io({
+        auth: {
+          userId: '<%= currentUser._id %>',
+          username: '<%= currentUser.username %>'
+        }
+      });
+      
       let conversationId = '<%= conversation._id %>';
       let replyToMessageId = null; // معرف الرسالة التي يتم الرد عليها
       let replyToInfo = null; // معلومات الرسالة المراد الرد عليها
@@ -401,6 +408,12 @@
       
       // الانضمام إلى غرفة المحادثة
       socket.emit('join-conversation', conversationId);
+      
+      // استقبال تأكيد التفاعل
+      socket.on('reaction_confirmed', function(data) {
+        console.log('تم تأكيد التفاعل:', data);
+        // هنا يمكن إضافة تنبيه بسيط أو تأثير مرئي يظهر نجاح التفاعل
+      });
       
       // زر تبديل تفاصيل المحادثة في الهاتف المحمول
       const detailsToggleBtn = document.querySelector('.conversation-details-toggle');
@@ -585,14 +598,12 @@
             `;
             messageDiv.appendChild(actionsDiv);
             
-            // إضافة للحاوية
             const clearDiv = document.createElement('div');
             clearDiv.className = 'clear-both';
             
             messageContainer.appendChild(messageDiv);
             messageContainer.appendChild(clearDiv);
             
-            // تفعيل الأزرار
             setupMessageButtons(messageDiv);
           }
           

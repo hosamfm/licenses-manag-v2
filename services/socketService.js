@@ -19,7 +19,18 @@ function initialize(server) {
   });
 
   io.on('connection', (socket) => {
-    logger.info('socketService', 'اتصال جديد بواسطة Socket.io', { socketId: socket.id });
+    // استقبال وتخزين معلومات المستخدم
+    if (socket.handshake.auth) {
+      socket.userId = socket.handshake.auth.userId;
+      socket.username = socket.handshake.auth.username;
+      logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم', { 
+        socketId: socket.id, 
+        userId: socket.userId, 
+        username: socket.username 
+      });
+    } else {
+      logger.info('socketService', 'اتصال جديد بواسطة Socket.io بدون معلومات المستخدم', { socketId: socket.id });
+    }
 
     // الانضمام لغرفة المستخدم
     socket.on('join-user-room', (userId) => {
@@ -47,6 +58,44 @@ function initialize(server) {
 
     socket.on('disconnect', () => {
       logger.info('socketService', 'انقطع الاتصال', { socketId: socket.id });
+    });
+
+    // معالجة إضافة تفاعل على رسالة
+    socket.on('add_reaction', (data) => {
+      logger.info('socketService', 'طلب إضافة تفاعل على رسالة', { 
+        messageId: data.messageId,
+        externalId: data.externalId,
+        reaction: data.reaction,
+        conversationId: data.conversationId,
+        userId: socket.userId || 'غير معروف',
+        username: socket.username || 'غير معروف'
+      });
+
+      // التحقق من صحة البيانات
+      if (!data.conversationId) {
+        logger.error('socketService', 'خطأ في إضافة تفاعل: معرف المحادثة غير متوفر', data);
+        return;
+      }
+
+      // هنا يمكن إضافة الكود لحفظ التفاعل في قاعدة البيانات
+      // لأغراض العرض فقط، سنقوم بإرسال إشعار بالتفاعل لجميع المتصلين بنفس المحادثة
+      notifyMessageReaction(
+        data.conversationId,
+        data.externalId || data.messageId,
+        { 
+          emoji: data.reaction, 
+          userId: socket.userId || 'unknown',
+          username: socket.username || 'unknown'
+        }
+      );
+      
+      // تأكيد استلام التفاعل
+      socket.emit('reaction_confirmed', { 
+        success: true, 
+        messageId: data.messageId,
+        externalId: data.externalId,
+        reaction: data.reaction
+      });
     });
   });
 
