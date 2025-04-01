@@ -340,6 +340,13 @@
           // تحديث المحتوى
           detailsContainer.innerHTML = html;
           
+          // تحديث معرف المحادثة الحالية
+          currentConversationId = conversationId;
+          
+          // الانضمام إلى غرفة المحادثة عبر الويب سوكت
+          socket.emit('join-conversation', conversationId);
+          console.log('تم الانضمام إلى غرفة المحادثة:', conversationId);
+          
           // التمرير لأسفل آخر الرسائل
           setTimeout(() => {
             const msgContainer = document.getElementById('messageContainer');

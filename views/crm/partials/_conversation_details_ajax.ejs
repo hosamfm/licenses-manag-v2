@@ -108,7 +108,8 @@
   
   <!-- نموذج إرسال الرد (إذا كانت المحادثة غير مغلقة) -->
   <% if (conversation.status !== 'closed') { %>
-    <form id="replyForm" action="/crm/conversations/<%= conversation._id %>/reply" method="POST" class="mt-3">
+    <form id="replyForm" class="mt-3">
+      <input type="hidden" id="conversationId" value="<%= conversation._id %>">
       <div class="mb-3">
         <label for="replyMessage" class="form-label">إرسال رد</label>
         <textarea class="form-control" id="replyMessage" name="content"
@@ -256,105 +257,54 @@
       const replyMessage = document.getElementById('replyMessage');
       const sendButton = document.getElementById('sendButton');
       const sendingIndicator = document.getElementById('sendingIndicator');
-      const conversationId = '<%= conversation._id %>';
+      const conversationId = document.getElementById('conversationId').value;
       
       // متغيرات للرد على رسالة
       let currentReplyToId = null;  // معرف الرسالة التي يتم الرد عليها
       let currentReplyMessageElem = null;  // عنصر الرسالة
       
-      // صف الرسائل المطلوب إرسالها
-      let messageQueue = [];
-      let isProcessing = false;  // هل نقوم بمعالجة الصف حالياً؟
-      
-      // التعامل مع إرسال الرد
+      // حدث إرسال نموذج الرد
       if (replyForm) {
         replyForm.addEventListener('submit', function(e) {
-          e.preventDefault();
+          e.preventDefault(); // منع السلوك الافتراضي للنموذج
           
-          // التأكد من وجود محتوى
-          const messageContent = replyMessage.value.trim();
-          if (!messageContent) return;
+          // التحقق من إدخال المستخدم
+          if (!replyMessage.value.trim()) {
+            alert('يرجى إدخال نص الرسالة');
+            return;
+          }
           
-          // تغيير حالة الواجهة للإرسال
+          // إظهار مؤشر الإرسال وتعطيل زر الإرسال
           sendButton.disabled = true;
           sendingIndicator.style.display = 'inline-block';
           
-          // إنشاء بيانات الرسالة
+          // إنشاء كائن البيانات
           const messageData = {
-            content: messageContent,
-            timestamp: new Date().toISOString(),
-            direction: 'outgoing',
-            status: 'sending',
-            _id: 'temp-' + Date.now(),
-            externalMessageId: null
+            content: replyMessage.value.trim(),
+            replyToMessageId: currentReplyToId
           };
           
-          // إذا كان هناك رد على رسالة
-          if (currentReplyToId) {
-            messageData.replyToMessageId = currentReplyToId;
-            messageData.replyToMessageElem = currentReplyMessageElem;
-          }
+          // إرسال الرسالة للخادم باستخدام AJAX
+          sendMessage(messageData);
           
-          // إضافة الرسالة إلى قائمة الانتظار
-          messageQueue.push(messageData);
-          
-          // إضافة رسالة مؤقتة للواجهة
-          if (currentReplyToId) {
-            addNewMessageWithReply(messageData);
-          } else {
-            addNewMessage(messageData);
-          }
-          
-          // تمرير للأسفل
-          const messageContainer = document.getElementById('messageContainer');
-          if (messageContainer) {
-            messageContainer.scrollTop = messageContainer.scrollHeight;
-          }
-          
-          // مسح نموذج الإدخال
+          // إعادة تعيين النموذج
           replyMessage.value = '';
           
-          // إعادة تعيين متغيرات الرد
-          resetReplyState();
-          
-          // معالجة صف الرسائل
-          processMessageQueue();
-        });
-        
-        // استخدام Enter للإرسال
-        replyMessage.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            
-            if (replyMessage.value.trim()) {
-              replyForm.dispatchEvent(new Event('submit'));
-            }
-          }
+          // إزالة مؤشر الرد
+          clearReplyIndicator();
         });
       }
       
-      // دالة لمعالجة صف الرسائل
-      function processMessageQueue() {
-        if (isProcessing || messageQueue.length === 0) return;
-        
-        isProcessing = true;
-        const messageData = messageQueue.shift();
-        
-        // الحصول على معرف الرسالة التي يتم الرد عليها (إن وجدت)
-        const replyToId = messageData.replyToMessageId ? messageData.replyToMessageId : null;
-        
+      // دالة إرسال الرسالة
+      function sendMessage(messageData) {
         // إرسال الرسالة للخادم
-        fetch(`/crm/conversations/<%= conversation._id %>/reply`, {
+        fetch(`/crm/conversations/${conversationId}/reply`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
           },
-          body: JSON.stringify({
-            content: messageData.content,
-            replyToMessageId: replyToId,
-            tempId: messageData._id
-          })
+          body: JSON.stringify(messageData)
         })
         .then(response => {
           if (!response.ok) throw new Error('فشل إرسال الرسالة');
@@ -363,224 +313,28 @@
         .then(data => {
           console.log('تم إرسال الرسالة بنجاح:', data);
           
-          // تحديث حالة الرسالة المؤقتة
-          const tempMsgElem = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
-          if (tempMsgElem && data.message) {
-            // تحديث رقم المعرف بالمعرف الحقيقي من الخادم
-            tempMsgElem.setAttribute('data-message-id', data.message._id);
-            
-            // إذا كان هناك معرف خارجي
-            if (data.message.externalMessageId) {
-              tempMsgElem.setAttribute('data-external-id', data.message.externalMessageId);
-            }
-            
-            // تحديث الحالة
-            tempMsgElem.setAttribute('data-status', 'sent');
-            
-            // تحديث أيقونة الحالة
-            const statusIcon = tempMsgElem.querySelector('.message-status i');
-            if (statusIcon) {
-              statusIcon.className = 'fas fa-check text-silver';
-              statusIcon.title = 'تم الإرسال';
-            }
-          }
-          
-          // إنهاء المعالجة والانتقال للرسالة التالية
-          isProcessing = false;
-          
           // إعادة تمكين نموذج الإرسال
-          if (sendButton) sendButton.disabled = false;
-          if (sendingIndicator) sendingIndicator.style.display = 'none';
-          
-          // معالجة الرسالة التالية إن وجدت
-          if (messageQueue.length > 0) {
-            processMessageQueue();
-          }
+          sendButton.disabled = false;
+          sendingIndicator.style.display = 'none';
         })
         .catch(error => {
           console.error('خطأ في إرسال الرسالة:', error);
           
-          // تحديث حالة الرسالة للإشارة إلى الفشل
-          const tempMsgElem = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
-          if (tempMsgElem) {
-            tempMsgElem.setAttribute('data-status', 'failed');
-            
-            // تحديث أيقونة الحالة
-            const statusIcon = tempMsgElem.querySelector('.message-status i');
-            if (statusIcon) {
-              statusIcon.className = 'fas fa-exclamation-triangle text-danger';
-              statusIcon.title = 'فشل الإرسال';
-            }
-          }
-          
-          // إنهاء المعالجة
-          isProcessing = false;
-          
           // إعادة تمكين نموذج الإرسال
-          if (sendButton) sendButton.disabled = false;
-          if (sendingIndicator) sendingIndicator.style.display = 'none';
+          sendButton.disabled = false;
+          sendingIndicator.style.display = 'none';
           
           // عرض رسالة خطأ
           window.showToast && window.showToast('فشل في إرسال الرسالة، يرجى المحاولة مرة أخرى.', 'danger');
-          
-          // معالجة الرسالة التالية إن وجدت
-          if (messageQueue.length > 0) {
-            processMessageQueue();
-          }
         });
       }
       
-      // دالة لإضافة رسالة جديدة إلى واجهة المستخدم
-      function addNewMessage(messageData) {
-        const messageContainer = document.getElementById('messageContainer');
-        if (!messageContainer) return;
-        
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${messageData.direction}`;
-        messageDiv.setAttribute('data-message-id', messageData._id || 'temp-' + Date.now());
-        messageDiv.setAttribute('data-status', messageData.status || 'sending');
-        
-        if (messageData.externalMessageId) {
-          messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
+      // دالة لإزالة مؤشر الرد
+      function clearReplyIndicator() {
+        const replyIndicator = document.getElementById('replyIndicator');
+        if (replyIndicator) {
+          replyIndicator.remove();
         }
-        
-        let statusIcon = '';
-        if (messageData.direction === 'outgoing') {
-          if (messageData.status === 'sending') {
-            statusIcon = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
-          } else if (messageData.status === 'sent') {
-            statusIcon = '<i class="fas fa-check text-silver" title="تم الإرسال"></i>';
-          } else if (messageData.status === 'delivered') {
-            statusIcon = '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>';
-          } else if (messageData.status === 'read') {
-            statusIcon = '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>';
-          } else if (messageData.status === 'failed') {
-            statusIcon = '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>';
-          }
-        }
-        
-        messageDiv.innerHTML = `
-          <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
-            ${messageData.content}
-            <div class="message-time">
-              ${new Date(messageData.timestamp).toLocaleString('ar-LY')}
-              ${messageData.direction === 'outgoing' ? `<span class="message-status">${statusIcon}</span>` : ''}
-            </div>
-          </div>
-          
-          <div class="message-actions">
-            <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
-              <i class="far fa-smile"></i>
-            </button>
-            <button class="btn btn-sm text-muted message-action-btn reply-btn" 
-                    data-message-id="${messageData._id}" 
-                    data-external-id="${messageData.externalMessageId || ''}" 
-                    title="رد">
-              <i class="fas fa-reply"></i>
-            </button>
-          </div>
-        `;
-        
-        // إضافة الرسالة إلى حاوية الرسائل
-        messageContainer.appendChild(messageDiv);
-        
-        // إضافة عنصر clear-both
-        const clearDiv = document.createElement('div');
-        clearDiv.className = 'clear-both';
-        messageContainer.appendChild(clearDiv);
-        
-        // إضافة أحداث التفاعل والرد
-        setupMessageActions(messageDiv);
-      }
-      
-      // دالة لإضافة رسالة جديدة مع اقتباس رد
-      function addNewMessageWithReply(messageData) {
-        const messageContainer = document.getElementById('messageContainer');
-        if (!messageContainer) return;
-        
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${messageData.direction}`;
-        messageDiv.setAttribute('data-message-id', messageData._id);
-        messageDiv.setAttribute('data-status', messageData.status || 'sending');
-        
-        if (messageData.externalMessageId) {
-          messageDiv.setAttribute('data-external-id', messageData.externalMessageId);
-        }
-        
-        // الحصول على الرسالة المقتبسة
-        let repliedContent = 'رد على رسالة';
-        let repliedMessageElem = null;
-        
-        if (messageData.replyToMessageId) {
-          repliedMessageElem = document.querySelector(`.message[data-message-id="${messageData.replyToMessageId}"]`);
-          
-          if (repliedMessageElem) {
-            const contentElem = repliedMessageElem.querySelector('.message-bubble');
-            if (contentElem) {
-              repliedContent = contentElem.textContent.trim();
-              
-              // اقتصار طول النص
-              if (repliedContent.length > 50) {
-                repliedContent = repliedContent.substring(0, 50) + '...';
-              }
-            }
-          }
-        }
-        
-        let statusIcon = '';
-        if (messageData.direction === 'outgoing') {
-          if (messageData.status === 'sending') {
-            statusIcon = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
-          } else if (messageData.status === 'sent') {
-            statusIcon = '<i class="fas fa-check text-silver" title="تم الإرسال"></i>';
-          } else if (messageData.status === 'delivered') {
-            statusIcon = '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>';
-          } else if (messageData.status === 'read') {
-            statusIcon = '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>';
-          } else if (messageData.status === 'failed') {
-            statusIcon = '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>';
-          }
-        }
-        
-        messageDiv.innerHTML = `
-          <div class="replied-message">
-            <div class="replied-content">
-              <i class="fas fa-reply"></i>
-              <span>${repliedContent}</span>
-            </div>
-          </div>
-          
-          <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
-            ${messageData.content}
-            <div class="message-time">
-              ${new Date(messageData.timestamp).toLocaleString('ar-LY')}
-              ${messageData.direction === 'outgoing' ? `<span class="message-status">${statusIcon}</span>` : ''}
-            </div>
-          </div>
-          
-          <div class="message-actions">
-            <button class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
-              <i class="far fa-smile"></i>
-            </button>
-            <button class="btn btn-sm text-muted message-action-btn reply-btn" 
-                    data-message-id="${messageData._id}" 
-                    data-external-id="${messageData.externalMessageId || ''}" 
-                    title="رد">
-              <i class="fas fa-reply"></i>
-            </button>
-          </div>
-        `;
-        
-        // إضافة الرسالة إلى حاوية الرسائل
-        messageContainer.appendChild(messageDiv);
-        
-        // إضافة عنصر clear-both
-        const clearDiv = document.createElement('div');
-        clearDiv.className = 'clear-both';
-        messageContainer.appendChild(clearDiv);
-        
-        // إضافة أحداث التفاعل والرد
-        setupMessageActions(messageDiv);
       }
       
       // دالة لإعداد أحداث التفاعل مع الرسائل
@@ -651,7 +405,7 @@
           // إضافة حدث إلغاء الرد
           const cancelButton = replyIndicator.querySelector('.cancel-reply-btn');
           if (cancelButton) {
-            cancelButton.addEventListener('click', resetReplyState);
+            cancelButton.addEventListener('click', clearReplyIndicator);
           }
         } else {
           // تحديث المحتوى إذا كان موجوداً
@@ -662,18 +416,6 @@
         // التركيز على حقل الإدخال
         if (replyMessage) {
           replyMessage.focus();
-        }
-      }
-      
-      // دالة لإعادة تعيين حالة الرد
-      function resetReplyState() {
-        currentReplyToId = null;
-        currentReplyMessageElem = null;
-        
-        // إزالة مؤشر الرد إن وجد
-        const replyIndicator = document.getElementById('replyIndicator');
-        if (replyIndicator) {
-          replyIndicator.remove();
         }
       }
       
@@ -744,7 +486,7 @@
         if (!messageId || !emoji) return;
         
         // إرسال التفاعل إلى الخادم
-        fetch(`/crm/conversations/<%= conversation._id %>/reaction`, {
+        fetch(`/crm/conversations/${conversationId}/reaction`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -764,44 +506,11 @@
         })
         .then(data => {
           console.log('تم إرسال التفاعل بنجاح:', data);
-          
-          // إضافة التفاعل مؤقتاً للواجهة
-          addReactionToMessage(messageId, emoji, window.currentUserId, window.currentUsername);
         })
         .catch(error => {
           console.error('خطأ في إرسال التفاعل:', error);
           window.showToast && window.showToast('فشل في إرسال التفاعل، يرجى المحاولة مرة أخرى.', 'danger');
         });
-      }
-      
-      // دالة لإضافة تفاعل إلى رسالة في الواجهة
-      function addReactionToMessage(messageId, emoji, userId, username) {
-        const messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
-        if (!messageElem) return;
-        
-        // التحقق من وجود حاوية التفاعلات
-        let reactionsDiv = messageElem.querySelector('.message-reactions');
-        
-        if (!reactionsDiv) {
-          reactionsDiv = document.createElement('div');
-          reactionsDiv.className = 'message-reactions';
-          
-          // إضافة بعد فقاعة الرسالة
-          const bubbleDiv = messageElem.querySelector('.message-bubble');
-          if (bubbleDiv) {
-            bubbleDiv.insertAdjacentElement('afterend', reactionsDiv);
-          } else {
-            messageElem.appendChild(reactionsDiv);
-          }
-        }
-        
-        // إضافة التفاعل
-        const reactionSpan = document.createElement('span');
-        reactionSpan.className = 'reaction-emoji';
-        reactionSpan.title = `تفاعل من ${username}`;
-        reactionSpan.textContent = emoji;
-        
-        reactionsDiv.appendChild(reactionSpan);
       }
     };
     
