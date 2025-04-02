@@ -411,76 +411,97 @@
           return;
         }
         
-        // تنسيق التاريخ
-        const messageDate = new Date(messageData.timestamp || messageData.createdAt || Date.now());
-        const formattedDate = messageDate.toLocaleString('ar-LY');
+        // إنشاء HTML للرسالة مطابق تمامًا لبنية القالب في _conversation_details_ajax.ejs
+        let messageHTML = `
+          <div class="message ${messageData.direction}" 
+              data-message-id="${messageData._id}" 
+              data-status="${messageData.status || 'sent'}"
+              ${messageData.externalMessageId ? `data-external-id="${messageData.externalMessageId}"` : ''}>
+        `;
         
-        // إنشاء عنصر الرسالة
-        const messageElem = document.createElement('div');
-        messageElem.className = `message ${messageData.direction}`;
-        messageElem.setAttribute('data-message-id', messageData._id);
-        messageElem.setAttribute('data-status', messageData.status || 'sent');
-        
-        if (messageData.externalId) {
-          messageElem.setAttribute('data-external-id', messageData.externalId);
-        }
-        
-        // تحديد HTML الخاص بالرسالة بناءً على نوع الرسالة ونوع المحتوى
-        let messageHTML = '';
-        const isMedia = messageData.mediaType && messageData.mediaType !== 'text';
-        
-        if (isMedia) {
-          // هنا يمكن إضافة عرض مناسب لنوع الوسائط
-          messageHTML = `
-            <div class="message-bubble media-message">
-              <div class="media-content">
-                <i class="fas fa-paperclip me-1"></i>
-                محتوى وسائط (${messageData.mediaType})
+        // إضافة قسم الرد على رسالة (إذا كان موجودًا)
+        if (messageData.replyToMessageId) {
+          // البحث عن الرسالة المرد عليها
+          const repliedMsg = document.querySelector(`.message[data-external-id="${messageData.replyToMessageId}"], .message[data-message-id="${messageData.replyToMessageId}"]`);
+          
+          messageHTML += `
+            <div class="replied-message">
+              <div class="replied-content">
+                <i class="fas fa-reply"></i>
+                <span>${repliedMsg ? 
+                  (repliedMsg.querySelector('.message-bubble').textContent.trim().substring(0, 50) + 
+                   (repliedMsg.querySelector('.message-bubble').textContent.trim().length > 50 ? '...' : '')) : 
+                  `رد على رسالة غير موجودة<small class="text-muted d-block">(المعرف: ${messageData.replyToMessageId.substring(0, 10)}...)</small>`}</span>
               </div>
             </div>
           `;
-        } else {
-          // رسالة نصية عادية
-          messageHTML = `
-            <div class="message-bubble">
-              ${messageData.content || ''}
+        }
+        
+        // إضافة فقاعة الرسالة
+        messageHTML += `
+          <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
+            ${messageData.content || ''}
+            <div class="message-time">
+              ${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString('ar-LY')}
+              
+              ${messageData.direction === 'outgoing' ? `
+                <span class="message-status">
+                  ${messageData.status === 'sending' ? '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>' : ''}
+                  ${messageData.status === 'sent' ? '<i class="fas fa-check text-silver" title="تم الإرسال"></i>' : ''}
+                  ${messageData.status === 'delivered' ? '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>' : ''}
+                  ${messageData.status === 'read' ? '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>' : ''}
+                  ${messageData.status === 'failed' ? '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>' : ''}
+                </span>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        
+        // إضافة قسم التفاعلات (إذا وجدت)
+        if (messageData.reactions && messageData.reactions.length > 0) {
+          messageHTML += `
+            <div class="message-reactions">
+              ${messageData.reactions.map(reaction => `
+                <span class="reaction-emoji" title="تفاعل من ${reaction.sender}">
+                  ${reaction.emoji}
+                </span>
+              `).join('')}
             </div>
           `;
         }
         
-        // إضافة معلومات الرسالة والأزرار
+        // إضافة قسم أزرار التفاعل مع الرسالة
         messageHTML += `
-          <div class="message-info">
-            <small class="message-time">${formattedDate}</small>
-            ${messageData.direction === 'outgoing' ? 
-              `<span class="message-status">
-                <i class="${messageData.status === 'sent' ? 'fas fa-check' : 
-                          messageData.status === 'delivered' ? 'fas fa-check-double text-silver' : 
-                          messageData.status === 'read' ? 'fas fa-check-double text-primary' : 
-                          'fas fa-clock'}" title="${messageData.status || 'مرسلة'}"></i>
-              </span>` : ''}
-          </div>
           <div class="message-actions">
-            <button type="button" class="btn btn-sm reply-btn" 
+            <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('${messageData._id}', '${messageData.externalMessageId || ''}', this)">
+              <i class="far fa-smile"></i>
+            </button>
+            <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
                     data-message-id="${messageData._id}" 
-                    ${messageData.externalId ? `data-external-id="${messageData.externalId}"` : ''}>
+                    data-external-id="${messageData.externalMessageId || ''}" 
+                    title="رد" onclick="window.showReplyForm('${messageData._id}', '${messageData.externalMessageId || ''}', this.closest('.message'))">
               <i class="fas fa-reply"></i>
             </button>
-            <!-- يمكن إضافة أزرار إضافية هنا مثل زر التفاعل إلخ -->
           </div>
         `;
         
-        // تعيين المحتوى
-        messageElem.innerHTML = messageHTML;
+        // إغلاق عنصر الرسالة
+        messageHTML += `</div><div class="clear-both"></div>`;
         
         // إضافة الرسالة لحاوية الرسائل
-        messageContainer.appendChild(messageElem);
+        messageContainer.insertAdjacentHTML('beforeend', messageHTML);
         
         // تمرير المحادثة لأسفل
         messageContainer.scrollTop = messageContainer.scrollHeight;
         
         // إضافة مستمعات الأحداث للرسالة الجديدة
-        window.setupMessageActions(messageElem);
+        const newMessageElem = messageContainer.lastElementChild;
+        window.setupMessageActions(newMessageElem);
+        
+        // تشغيل صوت الإشعار إذا كانت رسالة واردة
+        if (messageData.direction === 'incoming') {
+          window.playNotificationSound();
+        }
       }
       
       // تهيئة الصفحة عند التحميل

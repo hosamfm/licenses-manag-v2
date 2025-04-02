@@ -642,6 +642,19 @@
             return console.warn('معرف الرسالة المراد الرد عليها غير موجود!', data);
           }
           
+          // ضبط خاصية replyToMessageId في كائن الرسالة لضمان معالجتها كرد
+          if (!message.replyToMessageId) {
+            message.replyToMessageId = replyToId;
+          }
+          
+          // استخدام طريقة addMessageToConversation إذا كانت متاحة
+          if (typeof window.addMessageToConversation === 'function') {
+            // استخدام نفس الواجهة للرسائل الجديدة
+            window.addMessageToConversation(message);
+            return;
+          }
+          
+          // الطريقة القديمة (احتياطي) - نستخدمها فقط إذا لم تكن الدالة الجديدة متاحة
           // 1. إنشاء عنصر الرسالة الجديدة
           const messageContainer = document.getElementById('messageContainer');
           if (!messageContainer) {
@@ -662,7 +675,7 @@
                   <i class="fas fa-reply"></i>
                   <span>${repliedMsg ? 
                     (repliedMsg.querySelector('.message-bubble').textContent.trim().substring(0, 50) + (repliedMsg.querySelector('.message-bubble').textContent.trim().length > 50 ? '...' : '')) : 
-                    'رد على رسالة غير موجودة'}</span>
+                    `رد على رسالة غير موجودة<small class="text-muted d-block">(المعرف: ${replyToId.substring(0, 10)}...)</small>`}</span>
                 </div>
               </div>
               <div class="message-bubble ${message.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
@@ -684,11 +697,15 @@
                 <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('${message._id}', '${message.externalMessageId || ''}', this)">
                   <i class="far fa-smile"></i>
                 </button>
-                <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" title="رد" onclick="window.showReplyForm('${message._id}', '${message.externalMessageId || ''}', this.closest('.message'))">
+                <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
+                      data-message-id="${message._id}" 
+                      data-external-id="${message.externalMessageId || ''}" 
+                      title="رد" onclick="window.showReplyForm('${message._id}', '${message.externalMessageId || ''}', this.closest('.message'))">
                   <i class="fas fa-reply"></i>
                 </button>
               </div>
             </div>
+            <div class="clear-both"></div>
           `;
           
           // إضافة الرسالة إلى النهاية
