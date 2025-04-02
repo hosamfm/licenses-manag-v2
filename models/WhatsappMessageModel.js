@@ -229,16 +229,26 @@ whatsappMessageSchema.statics.updateMessageStatus = async function(externalMessa
 /**
  * تحديث التفاعل على رسالة
  * @param {string} messageId - معرّف الرسالة الأصلية
- * @param {string} sender - مرسل التفاعل
- * @param {string} emoji - رمز التفاعل
+ * @param {Object} reactionData - بيانات التفاعل (المرسل، الإيموجي، التوقيت)
  */
-whatsappMessageSchema.statics.updateReaction = async function(messageId, sender, emoji) {
+whatsappMessageSchema.statics.updateReaction = async function(messageId, reactionData) {
   try {
-    const message = await this.findOne({ externalMessageId: messageId });
+    // البحث عن الرسالة باستخدام المعرف الخارجي أو المعرف الداخلي
+    const message = await this.findOne({ 
+      $or: [
+        { externalMessageId: messageId },
+        { _id: messageId }
+      ]
+    });
     
     if (!message) {
       return null;
     }
+    
+    // تحضير بيانات التفاعل
+    const sender = reactionData.sender;
+    const emoji = reactionData.emoji || '';
+    const timestamp = reactionData.timestamp || new Date();
     
     // البحث عن تفاعل سابق من نفس المرسل وتحديثه
     let reactions = message.reactions || [];
@@ -253,13 +263,13 @@ whatsappMessageSchema.statics.updateReaction = async function(messageId, sender,
       if (existingReaction !== -1) {
         // تحديث التفاعل الموجود
         reactions[existingReaction].emoji = emoji;
-        reactions[existingReaction].timestamp = new Date();
+        reactions[existingReaction].timestamp = timestamp;
       } else {
         // إضافة تفاعل جديد
         reactions.push({
           sender,
           emoji,
-          timestamp: new Date()
+          timestamp
         });
       }
     }
@@ -269,6 +279,51 @@ whatsappMessageSchema.statics.updateReaction = async function(messageId, sender,
     return message;
   } catch (error) {
     console.error('خطأ في تحديث التفاعل على الرسالة:', error);
+    throw error;
+  }
+};
+
+/**
+ * إنشاء رسالة رد صادرة جديدة
+ * @param {Object} conversationId - معرّف المحادثة
+ * @param {string} content - محتوى الرسالة
+ * @param {Object} userId - معرّف المستخدم المرسل
+ * @param {string} replyToMessageId - معرّف الرسالة التي يتم الرد عليها
+ */
+whatsappMessageSchema.statics.createReplyMessage = async function(conversationId, content, userId, replyToMessageId) {
+  try {
+    // البحث عن الرسالة الأصلية للرد عليها
+    const originalMessage = await this.findOne({ 
+      $or: [
+        { externalMessageId: replyToMessageId },
+        { _id: replyToMessageId }
+      ] 
+    });
+    
+    // تحضير سياق الرد
+    let context = null;
+    if (originalMessage) {
+      context = {
+        message_id: originalMessage.externalMessageId || replyToMessageId,
+        from: originalMessage.metadata ? originalMessage.metadata.from : null
+      };
+    }
+    
+    // إنشاء رسالة الرد
+    const message = await this.create({
+      conversationId: conversationId,
+      direction: 'outgoing',
+      content: content,
+      timestamp: new Date(),
+      status: 'sent',
+      sentBy: userId,
+      replyToMessageId: replyToMessageId,
+      context: context
+    });
+    
+    return message;
+  } catch (error) {
+    console.error('خطأ في إنشاء رسالة رد:', error);
     throw error;
   }
 };

@@ -326,27 +326,42 @@ exports.replyToConversation = async (req, res) => {
     // التحقق من وجود الرسالة التي يتم الرد عليها (إذا تم تحديدها)
     let replyContext = null;
     if (replyToMessageId) {
-      const originalMessage = await WhatsappMessage.findOne({ externalMessageId: replyToMessageId });
+      const originalMessage = await WhatsappMessage.findOne({ 
+        $or: [
+          { externalMessageId: replyToMessageId },
+          { _id: replyToMessageId }
+        ]
+      });
       if (originalMessage) {
         replyContext = {
-          message_id: replyToMessageId,
+          message_id: originalMessage.externalMessageId || replyToMessageId,
           from: originalMessage.metadata ? originalMessage.metadata.from : null
         };
       }
     }
 
-    // إنشاء رسالة في DB
-    const msg = new WhatsappMessage({
-      conversationId,
-      direction: 'outgoing',
-      content: content.trim(),
-      timestamp: new Date(),
-      sentBy: req.user?._id || null,
-      status: 'sent',
-      replyToMessageId: replyToMessageId || null,
-      context: replyContext
-    });
-    await msg.save();
+    // إنشاء رسالة في قاعدة البيانات باستخدام الدالة الجديدة
+    let msg;
+    if (replyToMessageId) {
+      // استخدام الدالة الجديدة لإنشاء رسالة رد
+      msg = await WhatsappMessage.createReplyMessage(
+        conversationId,
+        content.trim(),
+        req.user?._id || null,
+        replyToMessageId
+      );
+    } else {
+      // إنشاء رسالة عادية
+      msg = new WhatsappMessage({
+        conversationId,
+        direction: 'outgoing',
+        content: content.trim(),
+        timestamp: new Date(),
+        sentBy: req.user?._id || null,
+        status: 'sent'
+      });
+      await msg.save();
+    }
 
     // تحديث آخر رسالة
     conversation.lastMessageAt = new Date();
@@ -528,18 +543,21 @@ exports.reactToMessage = async (req, res) => {
         phoneNumberId
       );
 
-      // تحديث التفاعل في قاعدة البيانات (لو عندك آلية لذلك)
-      // مثال: WhatsappMessage.updateReaction(...)
+      // تحديث التفاعل في قاعدة البيانات
+      const reactionData = {
+        sender: req.user ? req.user._id.toString() : 'system',
+        emoji,
+        timestamp: new Date()
+      };
+      
+      // استدعاء الدالة الجديدة لتحديث التفاعل
+      await WhatsappMessage.updateReaction(messageIdToUse, reactionData);
 
       // إرسال إشعار عبر Socket
       socketService.notifyMessageReaction(
         conversationId,
         messageIdToUse,
-        {
-          sender: req.user ? req.user._id.toString() : 'system',
-          emoji,
-          timestamp: new Date()
-        }
+        reactionData
       );
 
       return res.json({
