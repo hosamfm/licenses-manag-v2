@@ -231,14 +231,14 @@ async function handleReactions(reactions, meta) {
           continue;
         }
 
-        // تحديث التفاعل في الرسالة باستخدام الدالة الجديدة
+        // تحديث التفاعل في الرسالة
         const reactionData = {
           sender,
           emoji,
-          timestamp: new Date()
+          timestamp: new Date(parseInt(reaction.timestamp) * 1000 || Date.now())
         };
         
-        await WhatsappMessage.updateReaction(messageId, reactionData);
+        const updatedMessage = await WhatsappMessage.updateReaction(messageId, reactionData);
         
         // إشعار بالتفاعل
         socketService.notifyMessageReaction(

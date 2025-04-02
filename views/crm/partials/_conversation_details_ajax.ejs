@@ -28,7 +28,13 @@
             <% if (msg.replyToMessageId) { %>
               <!-- عرض الرسالة المقتبسة في حالة وجود رد -->
               <div class="replied-message">
-                <% const repliedMsg = messages.find(m => m.externalMessageId === msg.replyToMessageId); %>
+                <% 
+                  // البحث عن الرسالة التي تم الرد عليها باستخدام المعرف الخارجي أو الداخلي
+                  const repliedMsg = messages.find(m => 
+                    (m.externalMessageId && m.externalMessageId === msg.replyToMessageId) || 
+                    (m._id && m._id.toString() === msg.replyToMessageId)
+                  ); 
+                %>
                 <% if (repliedMsg) { %>
                   <div class="replied-content">
                     <i class="fas fa-reply"></i>
@@ -38,6 +44,7 @@
                   <div class="replied-content text-muted">
                     <i class="fas fa-reply"></i>
                     <span>رد على رسالة غير موجودة</span>
+                    <small class="text-muted d-block">(المعرف: <%= msg.replyToMessageId.substring(0, 10) %>...)</small>
                   </div>
                 <% } %>
               </div>

@@ -323,15 +323,17 @@ exports.replyToConversation = async (req, res) => {
       return res.redirect(`/crm/conversations/${conversationId}`);
     }
 
-    // التحقق من وجود الرسالة التي يتم الرد عليها (إذا تم تحديدها)
+    // التحقق من وجود سياق رد على رسالة
     let replyContext = null;
     if (replyToMessageId) {
-      const originalMessage = await WhatsappMessage.findOne({ 
+      // البحث عن الرسالة الأصلية التي يتم الرد عليها - بمعرفها الخارجي أو الداخلي
+      const originalMessage = await WhatsappMessage.findOne({
         $or: [
           { externalMessageId: replyToMessageId },
           { _id: replyToMessageId }
         ]
       });
+      
       if (originalMessage) {
         replyContext = {
           message_id: originalMessage.externalMessageId || replyToMessageId,
@@ -340,10 +342,9 @@ exports.replyToConversation = async (req, res) => {
       }
     }
 
-    // إنشاء رسالة في قاعدة البيانات باستخدام الدالة الجديدة
+    // استخدام دالة createReplyMessage مباشرة إذا كان رداً على رسالة، وإلا createOutgoingMessage
     let msg;
     if (replyToMessageId) {
-      // استخدام الدالة الجديدة لإنشاء رسالة رد
       msg = await WhatsappMessage.createReplyMessage(
         conversationId,
         content.trim(),
@@ -351,7 +352,6 @@ exports.replyToConversation = async (req, res) => {
         replyToMessageId
       );
     } else {
-      // إنشاء رسالة عادية
       msg = new WhatsappMessage({
         conversationId,
         direction: 'outgoing',
@@ -543,21 +543,18 @@ exports.reactToMessage = async (req, res) => {
         phoneNumberId
       );
 
-      // تحديث التفاعل في قاعدة البيانات
-      const reactionData = {
-        sender: req.user ? req.user._id.toString() : 'system',
-        emoji,
-        timestamp: new Date()
-      };
-      
-      // استدعاء الدالة الجديدة لتحديث التفاعل
-      await WhatsappMessage.updateReaction(messageIdToUse, reactionData);
+      // تحديث التفاعل في قاعدة البيانات (لو عندك آلية لذلك)
+      // مثال: WhatsappMessage.updateReaction(...)
 
       // إرسال إشعار عبر Socket
       socketService.notifyMessageReaction(
         conversationId,
         messageIdToUse,
-        reactionData
+        {
+          sender: req.user ? req.user._id.toString() : 'system',
+          emoji,
+          timestamp: new Date()
+        }
       );
 
       return res.json({
