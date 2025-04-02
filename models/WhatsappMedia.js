@@ -11,7 +11,7 @@ const whatsappMediaSchema = new mongoose.Schema({
   messageId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'WhatsAppMessage',
-    required: true,
+    required: false, // تغيير من true إلى false للسماح بإنشاء وسائط بدون ربطها برسالة في البداية
     index: true
   },
   conversationId: {
