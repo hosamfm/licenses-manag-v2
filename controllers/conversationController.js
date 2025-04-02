@@ -759,7 +759,8 @@ exports.getConversationDetailsAjax = async (req, res) => {
       layout: false,
       conversation,
       messages: sorted,
-      user: req.user // إضافة معلومات المستخدم المطلوبة في القالب
+      user: req.user, // إضافة معلومات المستخدم المطلوبة في القالب
+      triggerMessagesLoaded: true // إضافة متغير لتفعيل حدث تحميل الرسائل في JavaScript
     });
   } catch (err) {
     logger.error('conversationController', 'خطأ في getConversationDetailsAjax', err);

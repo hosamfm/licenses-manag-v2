@@ -400,6 +400,116 @@ body {
   width: 100%;
   display: block;
   margin: 0.5rem 0;
+  border-radius: 24px;
+  height: 40px;
+  background-color: #f0f0f0;
+  direction: ltr; /* ضمان اتجاه من اليسار لليمين للتحكم بالصوت */
+  min-width: 200px;
+  outline: none;
+}
+
+/* تحسين عناصر التحكم في الصوت في المتصفحات */
+.media-audio::-webkit-media-controls-panel {
+  background-color: #f8f9fa;
+  border-radius: 24px;
+  padding: 5px;
+}
+
+.media-audio::-webkit-media-controls-play-button {
+  background-color: #2563eb;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+}
+
+.media-audio::-webkit-media-controls-current-time-display,
+.media-audio::-webkit-media-controls-time-remaining-display {
+  color: #4a5568;
+  font-size: 12px;
+}
+
+.media-audio::-webkit-media-controls-volume-slider,
+.media-audio::-webkit-media-controls-timeline {
+  background-color: #e2e8f0;
+  border-radius: 10px;
+  height: 6px;
+}
+
+/* دعم Firefox */
+.media-audio::-moz-range-track {
+  background-color: #e2e8f0;
+  border-radius: 10px;
+  height: 6px;
+}
+
+.media-audio::-moz-range-thumb {
+  background-color: #3182ce;
+  border-radius: 50%;
+  height: 12px;
+  width: 12px;
+  border: none;
+}
+
+/* دعم متصفح Edge */
+.media-audio::-ms-track {
+  background-color: #e2e8f0;
+  border-radius: 10px;
+  height: 6px;
+  border: none;
+  color: transparent;
+}
+
+.media-audio::-ms-thumb {
+  background-color: #3182ce;
+  border-radius: 50%;
+  height: 12px;
+  width: 12px;
+  border: none;
+}
+
+.media-audio::-ms-fill-lower {
+  background-color: #3182ce;
+  border-radius: 10px;
+}
+
+.media-audio::-ms-fill-upper {
+  background-color: #e2e8f0;
+  border-radius: 10px;
+}
+
+/* تخصيص مؤشر شريط التقدم */
+.media-audio::-webkit-slider-thumb {
+  background-color: #3182ce;
+  border-radius: 50%;
+  height: 12px;
+  width: 12px;
+}
+
+/* تغيير لون ومظهر شريط التقدم */
+.media-audio::-webkit-media-controls-timeline {
+  /* لتحسين وضوح شريط التقدم */
+  background-color: #e2e8f0;
+}
+
+/* تنسيق خاص للوسائط الصوتية في رسائل واردة */
+.message.incoming .media-audio {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+/* تنسيق خاص للوسائط الصوتية في رسائل صادرة */
+.message.outgoing .media-audio {
+  background-color: #eff6ff;
+  border: 1px solid #3b82f6;
+}
+
+/* تحسين حاوية الوسائط الصوتية */
+.message.incoming .media-container {
+  background-color: #f8fafc;
+}
+
+.message.outgoing .media-container {
+  background-color: #eff6ff;
 }
 
 .document-container {

@@ -909,44 +909,110 @@
    * @param {string} type - نوع الوسائط
    */
   window.openMediaPreview = function(url, type) {
-    const content = document.getElementById('mediaPreviewContent');
-    content.innerHTML = '';
+    // تفعيل النموذج
+    const mediaModal = document.getElementById('mediaPreviewModal');
+    if (!mediaModal) return;
     
-    // إضافة عنصر وسائط مناسب حسب النوع
-    switch (type) {
-      case 'image':
-        content.innerHTML = `<img src="${url}" class="img-fluid" alt="صورة">`;
-        break;
-      case 'video':
-        content.innerHTML = `
-          <video controls class="img-fluid">
-            <source src="${url}" type="video/mp4">
-            المتصفح لا يدعم تشغيل الفيديو
-          </video>
-        `;
-        break;
-      case 'audio':
-        content.innerHTML = `
-          <audio controls style="width: 100%;">
-            <source src="${url}" type="audio/ogg">
-            المتصفح لا يدعم تشغيل الملفات الصوتية
-          </audio>
-        `;
-        break;
-      default:
-        content.innerHTML = `
-          <div class="alert alert-info">
-            <i class="fas fa-file-alt me-2"></i>
-            يمكنك تنزيل هذا الملف لعرضه
-          </div>
-        `;
+    const mediaContent = document.getElementById('mediaPreviewContent');
+    const downloadButton = document.getElementById('downloadMediaBtn');
+    
+    if (mediaContent && downloadButton) {
+      mediaContent.innerHTML = '';
+      
+      // تعيين الرابط للتحميل
+      downloadButton.href = url;
+      
+      // إنشاء العنصر المناسب حسب النوع
+      if (type === 'image') {
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'img-fluid';
+        img.alt = 'صورة';
+        mediaContent.appendChild(img);
+      } else if (type === 'video') {
+        const video = document.createElement('video');
+        video.controls = true;
+        video.className = 'w-100';
+        
+        const source = document.createElement('source');
+        source.src = url;
+        source.type = 'video/mp4';
+        
+        video.appendChild(source);
+        mediaContent.appendChild(video);
+      } else if (type === 'audio') {
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.className = 'w-100 media-audio';
+        audio.preload = 'metadata';
+        
+        const source = document.createElement('source');
+        source.src = url;
+        source.type = 'audio/ogg';
+        
+        audio.appendChild(source);
+        mediaContent.appendChild(audio);
+      }
     }
     
-    // تحديث رابط التنزيل
-    document.getElementById('downloadMediaBtn').href = url;
-    
-    // عرض النافذة
-    const modal = new bootstrap.Modal(document.getElementById('mediaPreviewModal'));
-    modal.show();
+    // تفعيل النموذج (تحتاج إلى Bootstrap JS)
+    const bsModal = new bootstrap.Modal(mediaModal);
+    bsModal.show();
   };
+  
+  /**
+   * دالة لتحسين تجربة تشغيل الملفات الصوتية
+   * تقوم بمعالجة أحداث تشغيل الملفات الصوتية وضمان عرضها بشكل صحيح
+   */
+  window.setupAudioPlayers = function() {
+    // الحصول على جميع عناصر الصوت في الصفحة
+    const audioElements = document.querySelectorAll('.media-audio');
+    
+    // إضافة مستمعي الأحداث لكل عنصر صوت
+    audioElements.forEach(audio => {
+      // إضافة حدث تحميل البيانات
+      audio.addEventListener('loadedmetadata', function() {
+        // تحسين عرض المدة عند تحميل الملف
+        if (this.duration) {
+          const durationMinutes = Math.floor(this.duration / 60);
+          const durationSeconds = Math.floor(this.duration % 60);
+          const formattedDuration = `${durationMinutes}:${durationSeconds < 10 ? '0' : ''}${durationSeconds}`;
+          
+          // إضافة سمة بيانات للمدة
+          this.setAttribute('data-duration', formattedDuration);
+          
+          // تحسين قابلية وصول العنصر
+          this.setAttribute('aria-label', `ملف صوتي، المدة ${formattedDuration}`);
+        }
+      });
+      
+      // إضافة حدث عند النقر
+      audio.addEventListener('click', function(e) {
+        // منع انتشار الحدث إذا كان النقر على عناصر التحكم
+        if (e.target !== this) {
+          e.stopPropagation();
+        }
+      });
+      
+      // إضافة حدث عند بدء التشغيل
+      audio.addEventListener('play', function() {
+        // إيقاف تشغيل أي ملفات صوتية أخرى عند تشغيل ملف
+        audioElements.forEach(otherAudio => {
+          if (otherAudio !== this && !otherAudio.paused) {
+            otherAudio.pause();
+          }
+        });
+      });
+    });
+  };
+
+  // استدعاء دالة إعداد مشغلات الصوت عند تحميل الصفحة
+  window.addEventListener('DOMContentLoaded', function() {
+    window.setupAudioPlayers();
+    
+    // إضافة حدث لتحديث التنسيق بعد تحديث محتوى الرسائل بالـ AJAX
+    document.addEventListener('messages-loaded', function() {
+      window.setupAudioPlayers();
+    });
+  });
 })(window);

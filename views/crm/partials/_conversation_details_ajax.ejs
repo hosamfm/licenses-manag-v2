@@ -101,7 +101,7 @@
                   </div>
                 <% } else if (msg.mediaType === 'audio') { %>
                   <div class="media-container">
-                    <audio controls class="media-audio">
+                    <audio controls class="media-audio" preload="metadata" controlsList="nodownload">
                       <source src="/whatsapp/media/content/<%= msg._id %>" type="audio/ogg">
                       المتصفح لا يدعم تشغيل الملفات الصوتية
                     </audio>
@@ -320,4 +320,11 @@
       <i class="fas fa-lock me-1"></i>
       المحادثة مغلقة، لا يمكن الرد.
     </div>
+  <% } %>
+  
+  <% if (typeof triggerMessagesLoaded !== 'undefined' && triggerMessagesLoaded) { %>
+  <script>
+    // إطلاق حدث تحميل الرسائل لتنفيذ setupAudioPlayers
+    document.dispatchEvent(new CustomEvent('messages-loaded'));
+  </script>
   <% } %>
