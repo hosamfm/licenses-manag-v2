@@ -7,6 +7,7 @@ const { isAuthenticated, checkCanAccessConversations } = require('../middleware/
 const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const logger = require('../services/loggerService');
+const storageService = require('../services/storageService');
 
 // التحقق من الصلاحيات
 const ensureCanAccessAPI = [isAuthenticated, checkCanAccessConversations];
@@ -186,6 +187,27 @@ router.get('/users/:userId/stats', ensureCanAccessAPI, async (req, res) => {
   } catch (error) {
     logger.error('apiRoutes', 'خطأ في جلب إحصائيات المستخدم', error);
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء جلب إحصائيات المستخدم' });
+  }
+});
+
+/**
+ * تحديث رابط مؤقت للملف في كلاود فلير
+ * يستخدم لتجديد الروابط منتهية الصلاحية
+ */
+router.get('/storage/refresh-url', ensureCanAccessAPI, async (req, res) => {
+  const { key } = req.query;
+  
+  if (!key) {
+    return res.status(400).json({ success: false, error: 'مفتاح الملف مطلوب' });
+  }
+  
+  try {
+    // الحصول على رابط مؤقت جديد صالح لمدة 24 ساعة
+    const url = await storageService.getSignedUrl(key);
+    res.json({ success: true, url });
+  } catch (error) {
+    logger.error('apiRoutes', 'خطأ في تحديث رابط الملف', { key, error: error.message });
+    res.status(500).json({ success: false, error: 'حدث خطأ أثناء تحديث رابط الملف' });
   }
 });
 

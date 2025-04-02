@@ -896,4 +896,66 @@
     messageElem.setAttribute('data-has-reaction', 'true');
   };
   
+  /**
+   * تحديث روابط الوسائط في الرسائل
+   * يقوم بإرسال طلب للحصول على رابط محدث للوسائط من الخادم
+   * @param {string} r2Key - مفتاح الملف في كلاود فلير
+   * @returns {Promise<string>} - رابط محدث للملف
+   */
+  window.refreshMediaUrl = async function(r2Key) {
+    if (!r2Key) return null;
+    
+    try {
+      const response = await fetch(`/api/storage/refresh-url?key=${encodeURIComponent(r2Key)}`);
+      if (!response.ok) throw new Error('فشل في تحديث رابط الملف');
+      
+      const data = await response.json();
+      return data.url;
+    } catch (error) {
+      console.error('خطأ في تحديث رابط الملف:', error);
+      return null;
+    }
+  }
+
+  /**
+   * تحديث جميع عناصر الوسائط في الصفحة
+   * يبحث عن جميع عناصر الوسائط التي تحتوي على مفتاح R2 ويحدث روابطها
+   */
+  window.refreshAllMediaUrls = async function() {
+    console.log('جاري تحديث روابط الوسائط...');
+    // تحديث الصور
+    const mediaElements = document.querySelectorAll('[data-r2-key]');
+    
+    console.log(`تم العثور على ${mediaElements.length} عنصر وسائط لتحديثه`);
+    
+    for (const element of mediaElements) {
+      const r2Key = element.getAttribute('data-r2-key');
+      if (!r2Key) continue;
+      
+      console.log(`تحديث عنصر بمفتاح: ${r2Key}`);
+      const newUrl = await refreshMediaUrl(r2Key);
+      if (!newUrl) continue;
+      
+      // تحديث المصدر بناءً على نوع العنصر
+      if (element.tagName === 'IMG') {
+        element.src = newUrl;
+        console.log('تم تحديث صورة');
+      } else if (element.tagName === 'VIDEO') {
+        const source = element.querySelector('source');
+        if (source) source.src = newUrl;
+        element.load(); // إعادة تحميل الفيديو
+        console.log('تم تحديث فيديو');
+      } else if (element.tagName === 'AUDIO') {
+        const source = element.querySelector('source');
+        if (source) source.src = newUrl;
+        element.load(); // إعادة تحميل الصوت
+        console.log('تم تحديث ملف صوتي');
+      } else if (element.tagName === 'A' && element.classList.contains('file-download')) {
+        element.href = newUrl;
+        console.log('تم تحديث رابط تنزيل');
+      }
+    }
+    console.log('اكتمل تحديث روابط الوسائط');
+  }
+
 })(window);

@@ -86,7 +86,7 @@
                   <!-- عرض الصور -->
                   <% if (mediaUrl) { %>
                     <div class="message-media">
-                      <img src="<%= mediaUrl %>" alt="<%= fileName %>" class="message-image" onclick="showFullScreenImage(this.src)">
+                      <img src="<%= mediaUrl %>" alt="<%= fileName %>" class="message-image" onclick="showFullScreenImage(this.src)" data-r2-key="<%= msg.fileDetails?.r2Key || '' %>">
                       <% if (msg.content && msg.content.trim() !== '') { %>
                         <div class="image-caption"><%= msg.content %></div>
                       <% } %>
@@ -99,7 +99,7 @@
                   <!-- عرض الفيديو -->
                   <% if (mediaUrl) { %>
                     <div class="message-media">
-                      <video controls class="message-video">
+                      <video controls class="message-video" data-r2-key="<%= msg.fileDetails?.r2Key || '' %>">
                         <source src="<%= mediaUrl %>" type="<%= mimeType || 'video/mp4' %>">
                         لا يمكن تشغيل الفيديو على متصفحك.
                       </video>
@@ -134,7 +134,7 @@
                           <span></span>
                         </div>
                       </div>
-                      <audio controls class="audio-player" preload="metadata">
+                      <audio controls class="audio-player" preload="metadata" data-r2-key="<%= msg.fileDetails?.r2Key || '' %>">
                         <source src="<%= mediaUrl %>" type="<%= mimeType || 'audio/mpeg' %>">
                         لا يمكن تشغيل الملف الصوتي على متصفحك.
                       </audio>
@@ -178,7 +178,7 @@
                           <% } %>
                         </div>
                       </div>
-                      <a href="<%= mediaUrl %>" target="_blank" class="file-download" download="<%= fileName %>">
+                      <a href="<%= mediaUrl %>" target="_blank" class="file-download" download="<%= fileName %>" data-r2-key="<%= msg.fileDetails?.r2Key || '' %>">
                         <i class="fas fa-download"></i> تنزيل
                       </a>
                     </div>
@@ -190,12 +190,12 @@
                   <!-- عرض الملصقات -->
                   <% if (mediaUrl) { %>
                     <div class="message-media">
-                      <img src="<%= mediaUrl %>" alt="ملصق" class="message-sticker">
+                      <img src="<%= mediaUrl %>" alt="ملصق" class="message-sticker" data-r2-key="<%= msg.fileDetails?.r2Key || '' %>">
                     </div>
                   <% } else { %>
                     <div class="text-muted">[ملصق غير متاح]</div>
                   <% } %>
-                
+
                 <% } else { %>
                   <!-- أنواع وسائط أخرى غير معروفة -->
                   <div class="text-muted">[وسائط غير مدعومة: <%= msg.mediaType %>]</div>
