@@ -308,7 +308,7 @@ exports.replyToConversation = async (req, res) => {
   const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
   try {
     const { conversationId } = req.params;
-    const { content, replyToMessageId } = req.body;
+    const { content, replyToMessageId, mediaId, mediaType } = req.body;
 
     const conversation = await Conversation.findById(conversationId).populate('channelId');
     if (!conversation) {
@@ -317,7 +317,8 @@ exports.replyToConversation = async (req, res) => {
       return res.redirect('/crm/conversations');
     }
 
-    if (!content || !content.trim()) {
+    // التحقق من وجود محتوى أو وسائط على الأقل
+    if ((!content || !content.trim()) && !mediaId) {
       if (isAjax) return res.json({ success: false, error: 'لا يمكن إرسال رسالة فارغة' });
       req.flash('error', 'لا يمكن إرسال رسالة فارغة');
       return res.redirect(`/crm/conversations/${conversationId}`);
@@ -353,7 +354,7 @@ exports.replyToConversation = async (req, res) => {
     if (replyToMessageId) {
       msg = await WhatsappMessage.createReplyMessage(
         conversationId,
-        content.trim(),
+        content ? content.trim() : '',
         req.user?._id || null,
         replyToMessageId
       );
@@ -361,7 +362,7 @@ exports.replyToConversation = async (req, res) => {
       msg = new WhatsappMessage({
         conversationId,
         direction: 'outgoing',
-        content: content.trim(),
+        content: content ? content.trim() : '',
         timestamp: new Date(),
         sentBy: req.user?._id || null,
         status: 'sent'
@@ -371,7 +372,7 @@ exports.replyToConversation = async (req, res) => {
 
     // تحديث آخر رسالة
     conversation.lastMessageAt = new Date();
-    conversation.lastMessage = content;
+    conversation.lastMessage = content || 'مرفق وسائط';
     // إذا كانت المحادثة مغلقة، نفتحها تلقائياً
     if (conversation.status === 'closed') {
       conversation.status = 'open';
@@ -392,40 +393,99 @@ exports.replyToConversation = async (req, res) => {
       
       let apiResponse;
       
-      // إذا كان رد على رسالة سابقة
-      if (replyToMessageId) {
-        // استخدام المعرف الخارجي للرسالة الأصلية عند إرسال الرد
-        if (externalReplyId) {
-          apiResponse = await metaWhatsappService.sendReplyTextMessage(
-            conversation.phoneNumber,
-            content,
-            externalReplyId, // استخدام المعرف الخارجي بدلاً من replyToMessageId
-            phoneNumberId
-          );
-          
-          logger.info('conversationController', 'إرسال رد على رسالة', { 
-            originalMessageId: replyToMessageId,
-            externalReplyId,
-            phoneNumber: conversation.phoneNumber
-          });
+      // التحقق من وجود وسائط
+      if (mediaId && mediaType) {
+        // جلب معلومات الوسائط
+        const whatsappMediaController = require('./whatsappMediaController');
+        const media = await WhatsappMedia.findById(mediaId);
+        
+        if (!media) {
+          throw new Error('الوسائط غير موجودة');
+        }
+        
+        logger.info('conversationController', 'إرسال رسالة مع وسائط', {
+          mediaId,
+          mediaType,
+          conversationId
+        });
+        
+        // تحديث معرف الرسالة في سجل الوسائط
+        await whatsappMediaController.updateMessageIdForMedia(mediaId, msg._id);
+        
+        // إرسال الوسائط حسب النوع
+        switch (mediaType) {
+          case 'image':
+            apiResponse = await metaWhatsappService.sendImage(
+              conversation.phoneNumber,
+              media.fileData,
+              content || '',  // استخدام المحتوى كوصف للصورة
+              phoneNumberId
+            );
+            break;
+          case 'document':
+            apiResponse = await metaWhatsappService.sendDocument(
+              conversation.phoneNumber,
+              media.fileData,
+              media.fileName || 'document',
+              content || '',
+              phoneNumberId
+            );
+            break;
+          case 'video':
+            apiResponse = await metaWhatsappService.sendVideo(
+              conversation.phoneNumber,
+              media.fileData,
+              content || '',
+              phoneNumberId
+            );
+            break;
+          case 'audio':
+            apiResponse = await metaWhatsappService.sendAudio(
+              conversation.phoneNumber,
+              media.fileData,
+              phoneNumberId
+            );
+            break;
+          default:
+            throw new Error(`نوع وسائط غير مدعوم: ${mediaType}`);
+        }
+      } else {
+        // إرسال رسالة نصية عادية
+        // إذا كان رد على رسالة سابقة
+        if (replyToMessageId) {
+          // استخدام المعرف الخارجي للرسالة الأصلية عند إرسال الرد
+          if (externalReplyId) {
+            apiResponse = await metaWhatsappService.sendReplyTextMessage(
+              conversation.phoneNumber,
+              content,
+              externalReplyId, // استخدام المعرف الخارجي بدلاً من replyToMessageId
+              phoneNumberId
+            );
+            
+            logger.info('conversationController', 'إرسال رد على رسالة', { 
+              originalMessageId: replyToMessageId,
+              externalReplyId,
+              phoneNumber: conversation.phoneNumber
+            });
+          } else {
+            // في حالة عدم وجود معرف خارجي، نرسل رسالة عادية
+            apiResponse = await metaWhatsappService.sendTextMessage(
+              conversation.phoneNumber,
+              content,
+              phoneNumberId
+            );
+            logger.warn('conversationController', 'تم تحويل الرد إلى رسالة عادية (المعرف الخارجي غير موجود)', {
+              originalMessageId: replyToMessageId
+            });
+          }
         } else {
-          // في حالة عدم وجود معرف خارجي، نرسل رسالة عادية
+          // رسالة عادية
           apiResponse = await metaWhatsappService.sendTextMessage(
             conversation.phoneNumber,
             content,
             phoneNumberId
           );
-          logger.warn('conversationController', 'تم تحويل الرد إلى رسالة عادية (المعرف الخارجي غير موجود)', {
-            originalMessageId: replyToMessageId
-          });
         }
-      } else {
-        // رسالة عادية
-        apiResponse = await metaWhatsappService.sendTextMessage(
-          conversation.phoneNumber,
-          content,
-          phoneNumberId
-        );
       }
       
       if (apiResponse?.messages?.length > 0) {
@@ -446,7 +506,7 @@ exports.replyToConversation = async (req, res) => {
       socketService.notifyMessageReply(conversationId, {
         _id: msg._id,
         conversationId,
-        content,
+        content: msg.content,
         direction: 'outgoing',
         timestamp: msg.timestamp,
         status: msg.status,
@@ -456,7 +516,7 @@ exports.replyToConversation = async (req, res) => {
       socketService.notifyNewMessage(conversationId, {
         _id: msg._id,
         conversationId,
-        content,
+        content: msg.content,
         direction: 'outgoing',
         timestamp: msg.timestamp,
         status: msg.status,
@@ -469,7 +529,7 @@ exports.replyToConversation = async (req, res) => {
       socketService.notifyUser(conversation.assignedTo, 'new_message', {
         conversationId,
         messageCount: 1,
-        preview: content.substring(0, 80),
+        preview: content ? content.substring(0, 80) : 'مرفق وسائط',
       });
     }
 
@@ -479,7 +539,7 @@ exports.replyToConversation = async (req, res) => {
         message: {
           _id: msg._id,
           conversationId,
-          content,
+          content: msg.content,
           direction: 'outgoing',
           timestamp: msg.timestamp,
           status: msg.status,
