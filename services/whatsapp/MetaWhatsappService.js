@@ -158,7 +158,7 @@ class MetaWhatsappService {
     }
 
     /**
-     * إرسال رسالة نصية عبر واتساب الرسمي
+     * إرسال رسالة نصية عبر واتساب
      * @param {string} to رقم الهاتف المستلم
      * @param {string} text نص الرسالة
      * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
@@ -202,7 +202,7 @@ class MetaWhatsappService {
     }
 
     /**
-     * إرسال رسالة قالب عبر واتساب الرسمي
+     * إرسال رسالة قالب عبر واتساب
      * @param {string} to رقم الهاتف المستلم
      * @param {string} templateName اسم القالب
      * @param {string} language رمز اللغة
@@ -399,10 +399,177 @@ class MetaWhatsappService {
     }
 
     /**
+     * تحميل وسائط إلى خوادم واتساب
+     * @param {string|Buffer} fileData - محتوى الملف (base64 أو بيانات الملف)
+     * @param {string} mimeType - نوع MIME للملف
+     * @param {string} phoneNumberId - معرف رقم الهاتف (اختياري)
+     * @returns {Promise<object>} استجابة تحميل الوسائط تحتوي على معرف الوسائط
+     */
+    async uploadMedia(fileData, mimeType, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        logger.info('MetaWhatsappService', 'بدء تحميل وسائط إلى خوادم واتساب', {
+            mimeType
+        });
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        try {
+            // تحويل البيانات إلى FormData
+            const FormData = require('form-data');
+            const form = new FormData();
+            
+            // إضافة المنتج المطلوب حسب وثائق واتساب
+            form.append('messaging_product', 'whatsapp');
+            
+            // إذا كانت البيانات بتنسيق base64، نحولها إلى buffer
+            let fileBuffer;
+            if (typeof fileData === 'string') {
+                // إزالة prefix إذا كان موجوداً
+                if (fileData.includes('base64,')) {
+                    fileData = fileData.split('base64,')[1];
+                }
+                fileBuffer = Buffer.from(fileData, 'base64');
+            } else {
+                fileBuffer = fileData;
+            }
+            
+            // التحقق من نوع الوسائط وحجمها حسب قيود واتساب
+            const mediaType = this.getMediaTypeFromMimeType(mimeType);
+            const maxSize = this.getMaxSizeForMediaType(mediaType);
+            
+            if (fileBuffer.length > maxSize) {
+                throw new Error(`حجم الملف (${fileBuffer.length} بايت) يتجاوز الحد الأقصى المسموح به (${maxSize} بايت) لنوع الوسائط ${mediaType}`);
+            }
+            
+            // إضافة الملف إلى النموذج
+            form.append('file', fileBuffer, {
+                filename: `media_file.${this.getFileExtensionFromMimeType(mimeType)}`,
+                contentType: mimeType
+            });
+            
+            // إرسال طلب تحميل الوسائط
+            const url = `${this.baseUrl}/${targetPhoneId}/media`;
+            const headers = {
+                'Authorization': `Bearer ${settingsToUse.config.accessToken}`
+            };
+            
+            // استخدام axios مع FormData
+            const axios = require('axios');
+            const response = await axios.post(url, form, {
+                headers: {
+                    ...headers,
+                    ...form.getHeaders()
+                }
+            });
+            
+            logger.info('MetaWhatsappService', 'تم تحميل الوسائط بنجاح', {
+                mediaId: response.data.id
+            });
+            
+            return response.data;
+        } catch (error) {
+            logger.error('MetaWhatsappService', 'خطأ في تحميل الوسائط', {
+                error: error.message,
+                response: error.response?.data
+            });
+            throw error;
+        }
+    }
+    
+    /**
+     * الحصول على نوع الوسائط من نوع MIME
+     * @param {string} mimeType - نوع MIME
+     * @returns {string} نوع الوسائط (image, video, audio, document)
+     */
+    getMediaTypeFromMimeType(mimeType) {
+        if (mimeType.startsWith('image/')) {
+            return 'image';
+        } else if (mimeType.startsWith('video/')) {
+            return 'video';
+        } else if (mimeType.startsWith('audio/')) {
+            return 'audio';
+        } else {
+            return 'document';
+        }
+    }
+    
+    /**
+     * الحصول على الحد الأقصى لحجم الملف حسب نوع الوسائط
+     * @param {string} mediaType - نوع الوسائط
+     * @returns {number} الحد الأقصى لحجم الملف بالبايت
+     */
+    getMaxSizeForMediaType(mediaType) {
+        // حدود الحجم حسب وثائق واتساب
+        const MB = 1024 * 1024;
+        switch (mediaType) {
+            case 'image':
+                return 5 * MB; // 5 ميجابايت للصور
+            case 'video':
+            case 'audio':
+                return 16 * MB; // 16 ميجابايت للفيديو والصوت
+            case 'document':
+                return 100 * MB; // 100 ميجابايت للمستندات
+            default:
+                return 5 * MB; // افتراضي
+        }
+    }
+    
+    /**
+     * الحصول على امتداد الملف من نوع MIME
+     * @param {string} mimeType - نوع MIME
+     * @returns {string} امتداد الملف
+     */
+    getFileExtensionFromMimeType(mimeType) {
+        const mimeToExt = {
+            'image/jpeg': 'jpg',
+            'image/png': 'png',
+            'image/webp': 'webp',
+            'video/mp4': 'mp4',
+            'video/3gpp': '3gp',
+            'audio/mp3': 'mp3',
+            'audio/mpeg': 'mp3',
+            'audio/ogg': 'ogg',
+            'audio/amr': 'amr',
+            'audio/aac': 'aac',
+            'audio/mp4': 'm4a',
+            'application/pdf': 'pdf',
+            'application/msword': 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+            'application/vnd.ms-excel': 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+            'application/vnd.ms-powerpoint': 'ppt',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+            'text/plain': 'txt'
+        };
+        
+        return mimeToExt[mimeType] || 'bin';
+    }
+
+    /**
      * إرسال صورة عبر واتساب
      * @param {string} to - رقم الهاتف المستلم
      * @param {string} imageUrl - رابط الصورة أو بيانات base64
-     * @param {string} caption - نص وصفي للصورة (اختياري)
+     * @param {string} caption - نصوصفي للصورة (اختياري)
      * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
      * @returns {Promise<object>} نتيجة الإرسال
      */
@@ -439,31 +606,49 @@ class MetaWhatsappService {
             image: {}
         };
 
-        // تحديد مصدر الصورة (رابط أو base64)
-        if (imageUrl.startsWith('http')) {
-            // استخدام رابط خارجي
-            data.image = {
-                link: imageUrl
-            };
-        } else if (imageUrl.startsWith('data:image')) {
-            // استخدام بيانات base64
-            const base64Data = imageUrl.split(',')[1];
-            data.image = {
-                id: base64Data
-            };
-        } else {
-            // افتراض أنها بيانات base64 بدون prefix
-            data.image = {
-                id: imageUrl
-            };
-        }
+        try {
+            // تحديد مصدر الصورة (رابط أو base64)
+            if (imageUrl.startsWith('http')) {
+                // استخدام رابط خارجي
+                data.image.link = imageUrl;
+            } else {
+                // استخدام بيانات base64 - تحميل الصورة أولاً إلى خوادم واتساب
+                let base64Data = imageUrl;
+                let mimeType = 'image/jpeg'; // افتراضي
+                
+                // استخراج نوع MIME والبيانات إذا كان التنسيق كاملاً
+                if (imageUrl.startsWith('data:')) {
+                    const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    if (matches && matches.length === 3) {
+                        mimeType = matches[1];
+                        base64Data = matches[2];
+                    } else {
+                        base64Data = imageUrl.split('base64,')[1] || imageUrl;
+                    }
+                }
+                
+                // تحميل الصورة إلى خوادم واتساب
+                logger.info('MetaWhatsappService', 'تحميل صورة إلى خوادم واتساب قبل الإرسال');
+                const uploadResult = await this.uploadMedia(base64Data, mimeType, phoneNumberId);
+                
+                // استخدام معرف الوسائط الناتج
+                data.image.id = uploadResult.id;
+                logger.info('MetaWhatsappService', 'تم تحميل الصورة بنجاح', { mediaId: uploadResult.id });
+            }
 
-        // إضافة وصف الصورة إذا كان موجوداً
-        if (caption && caption.trim()) {
-            data.image.caption = caption;
-        }
+            // إضافة وصف الصورة إذا كان موجوداً
+            if (caption && caption.trim()) {
+                data.image.caption = caption;
+            }
 
-        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+            return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+        } catch (error) {
+            logger.error('MetaWhatsappService', 'خطأ في إرسال صورة', {
+                error: error.message,
+                response: error.response?.data
+            });
+            throw error;
+        }
     }
 
     /**
@@ -510,25 +695,49 @@ class MetaWhatsappService {
             }
         };
 
-        // تحديد مصدر المستند (رابط أو base64)
-        if (documentUrl.startsWith('http')) {
-            // استخدام رابط خارجي
-            data.document.link = documentUrl;
-        } else if (documentUrl.startsWith('data:')) {
-            // استخدام بيانات base64
-            const base64Data = documentUrl.split(',')[1];
-            data.document.id = base64Data;
-        } else {
-            // افتراض أنها بيانات base64 بدون prefix
-            data.document.id = documentUrl;
-        }
+        try {
+            // تحديد مصدر المستند (رابط أو base64)
+            if (documentUrl.startsWith('http')) {
+                // استخدام رابط خارجي
+                data.document.link = documentUrl;
+            } else {
+                // استخدام بيانات base64 - تحميل المستند أولاً إلى خوادم واتساب
+                let base64Data = documentUrl;
+                let mimeType = 'application/octet-stream'; // افتراضي
+                
+                // استخراج نوع MIME والبيانات إذا كان التنسيق كاملاً
+                if (documentUrl.startsWith('data:')) {
+                    const matches = documentUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    if (matches && matches.length === 3) {
+                        mimeType = matches[1];
+                        base64Data = matches[2];
+                    } else {
+                        base64Data = documentUrl.split('base64,')[1] || documentUrl;
+                    }
+                }
+                
+                // تحميل المستند إلى خوادم واتساب
+                logger.info('MetaWhatsappService', 'تحميل مستند إلى خوادم واتساب قبل الإرسال');
+                const uploadResult = await this.uploadMedia(base64Data, mimeType, phoneNumberId);
+                
+                // استخدام معرف الوسائط الناتج
+                data.document.id = uploadResult.id;
+                logger.info('MetaWhatsappService', 'تم تحميل المستند بنجاح', { mediaId: uploadResult.id });
+            }
 
-        // إضافة وصف المستند إذا كان موجوداً
-        if (caption && caption.trim()) {
-            data.document.caption = caption;
-        }
+            // إضافة وصف المستند إذا كان موجوداً
+            if (caption && caption.trim()) {
+                data.document.caption = caption;
+            }
 
-        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+            return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+        } catch (error) {
+            logger.error('MetaWhatsappService', 'خطأ في إرسال مستند', {
+                error: error.message,
+                response: error.response?.data
+            });
+            throw error;
+        }
     }
 
     /**
@@ -572,25 +781,49 @@ class MetaWhatsappService {
             video: {}
         };
 
-        // تحديد مصدر الفيديو (رابط أو base64)
-        if (videoUrl.startsWith('http')) {
-            // استخدام رابط خارجي
-            data.video.link = videoUrl;
-        } else if (videoUrl.startsWith('data:video')) {
-            // استخدام بيانات base64
-            const base64Data = videoUrl.split(',')[1];
-            data.video.id = base64Data;
-        } else {
-            // افتراض أنها بيانات base64 بدون prefix
-            data.video.id = videoUrl;
-        }
+        try {
+            // تحديد مصدر الفيديو (رابط أو base64)
+            if (videoUrl.startsWith('http')) {
+                // استخدام رابط خارجي
+                data.video.link = videoUrl;
+            } else {
+                // استخدام بيانات base64 - تحميل الفيديو أولاً إلى خوادم واتساب
+                let base64Data = videoUrl;
+                let mimeType = 'video/mp4'; // افتراضي
+                
+                // استخراج نوع MIME والبيانات إذا كان التنسيق كاملاً
+                if (videoUrl.startsWith('data:')) {
+                    const matches = videoUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    if (matches && matches.length === 3) {
+                        mimeType = matches[1];
+                        base64Data = matches[2];
+                    } else {
+                        base64Data = videoUrl.split('base64,')[1] || videoUrl;
+                    }
+                }
+                
+                // تحميل الفيديو إلى خوادم واتساب
+                logger.info('MetaWhatsappService', 'تحميل فيديو إلى خوادم واتساب قبل الإرسال');
+                const uploadResult = await this.uploadMedia(base64Data, mimeType, phoneNumberId);
+                
+                // استخدام معرف الوسائط الناتج
+                data.video.id = uploadResult.id;
+                logger.info('MetaWhatsappService', 'تم تحميل الفيديو بنجاح', { mediaId: uploadResult.id });
+            }
 
-        // إضافة وصف الفيديو إذا كان موجوداً
-        if (caption && caption.trim()) {
-            data.video.caption = caption;
-        }
+            // إضافة وصف الفيديو إذا كان موجوداً
+            if (caption && caption.trim()) {
+                data.video.caption = caption;
+            }
 
-        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+            return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+        } catch (error) {
+            logger.error('MetaWhatsappService', 'خطأ في إرسال فيديو', {
+                error: error.message,
+                response: error.response?.data
+            });
+            throw error;
+        }
     }
 
     /**
@@ -633,20 +866,44 @@ class MetaWhatsappService {
             audio: {}
         };
 
-        // تحديد مصدر الملف الصوتي (رابط أو base64)
-        if (audioUrl.startsWith('http')) {
-            // استخدام رابط خارجي
-            data.audio.link = audioUrl;
-        } else if (audioUrl.startsWith('data:audio')) {
-            // استخدام بيانات base64
-            const base64Data = audioUrl.split(',')[1];
-            data.audio.id = base64Data;
-        } else {
-            // افتراض أنها بيانات base64 بدون prefix
-            data.audio.id = audioUrl;
-        }
+        try {
+            // تحديد مصدر الملف الصوتي (رابط أو base64)
+            if (audioUrl.startsWith('http')) {
+                // استخدام رابط خارجي
+                data.audio.link = audioUrl;
+            } else {
+                // استخدام بيانات base64 - تحميل الملف الصوتي أولاً إلى خوادم واتساب
+                let base64Data = audioUrl;
+                let mimeType = 'audio/mp3'; // افتراضي
+                
+                // استخراج نوع MIME والبيانات إذا كان التنسيق كاملاً
+                if (audioUrl.startsWith('data:')) {
+                    const matches = audioUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    if (matches && matches.length === 3) {
+                        mimeType = matches[1];
+                        base64Data = matches[2];
+                    } else {
+                        base64Data = audioUrl.split('base64,')[1] || audioUrl;
+                    }
+                }
+                
+                // تحميل الملف الصوتي إلى خوادم واتساب
+                logger.info('MetaWhatsappService', 'تحميل ملف صوتي إلى خوادم واتساب قبل الإرسال');
+                const uploadResult = await this.uploadMedia(base64Data, mimeType, phoneNumberId);
+                
+                // استخدام معرف الوسائط الناتج
+                data.audio.id = uploadResult.id;
+                logger.info('MetaWhatsappService', 'تم تحميل الملف الصوتي بنجاح', { mediaId: uploadResult.id });
+            }
 
-        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+            return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+        } catch (error) {
+            logger.error('MetaWhatsappService', 'خطأ في إرسال ملف صوتي', {
+                error: error.message,
+                response: error.response?.data
+            });
+            throw error;
+        }
     }
 
     /**
@@ -747,7 +1004,7 @@ class MetaWhatsappService {
             // استخدام رابط خارجي
             data.sticker.link = stickerUrl;
         } else {
-            // افتراض أنها معرف ملصق
+            // افتراضي
             data.sticker.id = stickerUrl;
         }
 
