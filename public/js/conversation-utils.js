@@ -171,6 +171,59 @@
   };
   
   /**
+   * تحديث واجهة المستخدم بعد إرسال تفاعل
+   * @param {string} messageId - معرف الرسالة
+   * @param {string} externalId - المعرف الخارجي للرسالة (اختياري)
+   * @param {string} emoji - رمز التفاعل
+   * @param {string} senderId - معرف المرسل
+   * @param {string} senderName - اسم المرسل
+   */
+  window.updateReactionInUI = function(messageId, externalId, emoji, senderId, senderName) {
+    // البحث عن الرسالة باستخدام المعرف الداخلي أو الخارجي
+    let messageElem;
+    
+    if (messageId) {
+      messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+    }
+    
+    if (!messageElem && externalId) {
+      messageElem = document.querySelector(`.message[data-external-id="${externalId}"]`);
+    }
+    
+    if (!messageElem) {
+      if (window.debugMode) console.error('لم يتم العثور على الرسالة لتحديث التفاعل:', { messageId, externalId });
+      return;
+    }
+    
+    // البحث عن حاوية التفاعلات أو إنشاء واحدة جديدة
+    let reactionsContainer = messageElem.querySelector('.message-reactions');
+    
+    if (!reactionsContainer) {
+      reactionsContainer = document.createElement('div');
+      reactionsContainer.className = 'message-reactions';
+      
+      // إضافة حاوية التفاعلات بعد فقاعة الرسالة
+      const messageBubble = messageElem.querySelector('.message-bubble');
+      if (messageBubble) {
+        messageBubble.insertAdjacentElement('afterend', reactionsContainer);
+      } else {
+        messageElem.appendChild(reactionsContainer);
+      }
+    }
+    
+    // إنشاء عنصر التفاعل
+    const reactionElem = document.createElement('span');
+    reactionElem.className = 'reaction-emoji';
+    reactionElem.title = `تفاعل من ${senderName || senderId || 'مستخدم'}`;
+    reactionElem.textContent = emoji;
+    
+    // إضافة التفاعل إلى الحاوية
+    reactionsContainer.appendChild(reactionElem);
+    
+    if (window.debugMode) console.log('تم تحديث التفاعل في واجهة المستخدم:', { messageId, emoji });
+  };
+  
+  /**
    * دالة لعرض نموذج الرد على رسالة معينة
    * @param {string} messageId - معرف الرسالة
    * @param {string} externalId - المعرف الخارجي للرسالة (اختياري)
