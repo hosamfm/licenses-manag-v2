@@ -431,15 +431,17 @@ class MetaWhatsappService {
      * @param {string|Buffer} fileData - محتوى الملف (base64 أو بيانات الملف)
      * @param {string} mimeType - نوع MIME للملف
      * @param {string} phoneNumberId - معرف رقم الهاتف (اختياري)
+     * @param {string} originalFilename - اسم الملف الأصلي (اختياري)
      * @returns {Promise<object>} استجابة تحميل الوسائط تحتوي على معرف الوسائط
      */
-    async uploadMedia(fileData, mimeType, phoneNumberId = null) {
+    async uploadMedia(fileData, mimeType, phoneNumberId = null, originalFilename = null) {
         if (!this.initialized) {
             await this.initialize();
         }
 
         logger.info('MetaWhatsappService', 'بدء تحميل وسائط إلى خوادم واتساب', {
-            mimeType
+            mimeType,
+            hasOriginalFilename: !!originalFilename
         });
         
         // التحقق من دعم نوع الملف
@@ -494,9 +496,26 @@ class MetaWhatsappService {
                 throw new Error(`حجم الملف (${fileBuffer.length} بايت) يتجاوز الحد الأقصى المسموح به (${maxSize} بايت) لنوع الوسائط ${mediaType}`);
             }
             
+            // تحديد اسم الملف المناسب - استخدام الاسم الأصلي إذا كان متوفرًا
+            let filename;
+            if (originalFilename) {
+                // الاحتفاظ بالاسم الأصلي للملف مع الامتداد المناسب
+                const fileExt = this.getFileExtensionFromMimeType(mimeType);
+                if (originalFilename.includes('.')) {
+                    // الملف له امتداد بالفعل، نستخدمه كما هو
+                    filename = originalFilename;
+                } else {
+                    // إضافة الامتداد إذا لم يكن موجودًا
+                    filename = `${originalFilename}.${fileExt}`;
+                }
+            } else {
+                // استخدام اسم ملف افتراضي مع الامتداد المناسب
+                filename = `media_file.${this.getFileExtensionFromMimeType(mimeType)}`;
+            }
+            
             // إضافة الملف إلى النموذج
             form.append('file', fileBuffer, {
-                filename: `media_file.${this.getFileExtensionFromMimeType(mimeType)}`,
+                filename: filename,
                 contentType: mimeType
             });
             
@@ -516,7 +535,8 @@ class MetaWhatsappService {
             });
             
             logger.info('MetaWhatsappService', 'تم تحميل الوسائط بنجاح', {
-                mediaId: response.data.id
+                mediaId: response.data.id,
+                filename: filename
             });
             
             return response.data;
@@ -792,9 +812,22 @@ class MetaWhatsappService {
                     }
                 }
                 
+                // تحديد نوع MIME بناءً على امتداد الملف إذا كان نوع MIME الحالي هو octet-stream
+                if (mimeType === 'application/octet-stream' && filename) {
+                    const fileExt = filename.split('.').pop().toLowerCase();
+                    if (fileExt === 'pdf') {
+                        mimeType = 'application/pdf';
+                    } else if (['doc', 'docx'].includes(fileExt)) {
+                        mimeType = fileExt === 'doc' ? 'application/msword' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                    } else if (['xls', 'xlsx'].includes(fileExt)) {
+                        mimeType = fileExt === 'xls' ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                    }
+                    logger.info('MetaWhatsappService', 'تم تصحيح نوع MIME بناءً على امتداد الملف', { originalType: 'application/octet-stream', newType: mimeType, fileExt });
+                }
+                
                 // تحميل المستند إلى خوادم واتساب
-                logger.info('MetaWhatsappService', 'تحميل مستند إلى خوادم واتساب قبل الإرسال');
-                const uploadResult = await this.uploadMedia(base64Data, mimeType, phoneNumberId);
+                logger.info('MetaWhatsappService', 'تحميل مستند إلى خوادم واتساب قبل الإرسال', { mimeType, filename });
+                const uploadResult = await this.uploadMedia(base64Data, mimeType, phoneNumberId, filename);
                 
                 // استخدام معرف الوسائط الناتج
                 data.document.id = uploadResult.id;
