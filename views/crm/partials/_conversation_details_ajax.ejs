@@ -52,48 +52,52 @@
             
             <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %>">
               <% if (msg.mediaType) { %>
-                <!-- عرض الوسائط حسب النوع -->
-                <% if (msg.mediaType === 'image') { %>
-                  <div class="media-container">
-                    <img src="/whatsapp/media/message-content/<%= msg._id %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
+              <!-- عرض الوسائط حسب النوع -->
+              <% 
+                // البحث عن الوسائط المرتبطة بالرسالة
+                let mediaUrl = '/whatsapp/media/message-content/' + msg._id;
+              %>
+              <% if (msg.mediaType === 'image') { %>
+                <div class="media-container">
+                  <img src="<%= mediaUrl %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
+                </div>
+              <% } else if (msg.mediaType === 'video') { %>
+                <div class="media-container">
+                  <video controls class="media-video">
+                    <source src="<%= mediaUrl %>" type="video/mp4">
+                    المتصفح لا يدعم عرض الفيديو
+                  </video>
+                </div>
+              <% } else if (msg.mediaType === 'audio') { %>
+                <div class="media-container">
+                  <audio controls class="media-audio">
+                    <source src="<%= mediaUrl %>" type="audio/ogg">
+                    المتصفح لا يدعم تشغيل الملفات الصوتية
+                  </audio>
+                </div>
+              <% } else if (msg.mediaType === 'document') { %>
+                <div class="media-container document-container">
+                  <a href="<%= mediaUrl %>" target="_blank" class="document-link">
+                    <i class="fas fa-file-alt"></i>
+                    <span><%= msg.content || 'مستند' %></span>
+                  </a>
+                </div>
+              <% } else if (msg.mediaType === 'sticker') { %>
+                <div class="media-container">
+                  <img src="<%= mediaUrl %>" class="media-sticker" alt="ملصق">
+                </div>
+              <% } else if (msg.mediaType === 'location') { %>
+                <div class="media-container location-container">
+                  <div class="location-info">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span><%= msg.content || 'موقع' %></span>
                   </div>
-                <% } else if (msg.mediaType === 'video') { %>
-                  <div class="media-container">
-                    <video controls class="media-video">
-                      <source src="/whatsapp/media/message-content/<%= msg._id %>" type="video/mp4">
-                      المتصفح لا يدعم عرض الفيديو
-                    </video>
-                  </div>
-                <% } else if (msg.mediaType === 'audio') { %>
-                  <div class="media-container">
-                    <audio controls class="media-audio">
-                      <source src="/whatsapp/media/message-content/<%= msg._id %>" type="audio/ogg">
-                      المتصفح لا يدعم تشغيل الملفات الصوتية
-                    </audio>
-                  </div>
-                <% } else if (msg.mediaType === 'document') { %>
-                  <div class="media-container document-container">
-                    <a href="/whatsapp/media/message-content/<%= msg._id %>" target="_blank" class="document-link">
-                      <i class="fas fa-file-alt"></i>
-                      <span><%= msg.content || 'مستند' %></span>
-                    </a>
-                  </div>
-                <% } else if (msg.mediaType === 'sticker') { %>
-                  <div class="media-container">
-                    <img src="/whatsapp/media/message-content/<%= msg._id %>" class="media-sticker" alt="ملصق">
-                  </div>
-                <% } else if (msg.mediaType === 'location') { %>
-                  <div class="media-container location-container">
-                    <div class="location-info">
-                      <i class="fas fa-map-marker-alt"></i>
-                      <span><%= msg.content || 'موقع' %></span>
-                    </div>
-                    <a href="https://www.google.com/maps/search/?api=1&query=<%= msg.content %>" target="_blank" class="btn btn-sm btn-outline-primary mt-2">
-                      <i class="fas fa-external-link-alt"></i> فتح في خرائط جوجل
-                    </a>
-                  </div>
-                <% } %>
+                  <a href="https://www.google.com/maps/search/?api=1&query=<%= msg.content %>" target="_blank" class="btn btn-sm btn-outline-primary mt-2">
+                    <i class="fas fa-external-link-alt"></i> فتح في خرائط جوجل
+                  </a>
+                </div>
               <% } %>
+            <% } %>
               <%= msg.content %>
               <div class="message-time">
                 <%= new Date(msg.timestamp).toLocaleString('ar-LY') %>
