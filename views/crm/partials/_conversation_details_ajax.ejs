@@ -55,32 +55,32 @@
                 <!-- عرض الوسائط حسب النوع -->
                 <% if (msg.mediaType === 'image') { %>
                   <div class="media-container">
-                    <img src="/whatsapp/media/content/<%= msg._id %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
+                    <img src="/whatsapp/media/message-content/<%= msg._id %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
                   </div>
                 <% } else if (msg.mediaType === 'video') { %>
                   <div class="media-container">
                     <video controls class="media-video">
-                      <source src="/whatsapp/media/content/<%= msg._id %>" type="video/mp4">
+                      <source src="/whatsapp/media/message-content/<%= msg._id %>" type="video/mp4">
                       المتصفح لا يدعم عرض الفيديو
                     </video>
                   </div>
                 <% } else if (msg.mediaType === 'audio') { %>
                   <div class="media-container">
                     <audio controls class="media-audio">
-                      <source src="/whatsapp/media/content/<%= msg._id %>" type="audio/ogg">
+                      <source src="/whatsapp/media/message-content/<%= msg._id %>" type="audio/ogg">
                       المتصفح لا يدعم تشغيل الملفات الصوتية
                     </audio>
                   </div>
                 <% } else if (msg.mediaType === 'document') { %>
                   <div class="media-container document-container">
-                    <a href="/whatsapp/media/content/<%= msg._id %>" target="_blank" class="document-link">
+                    <a href="/whatsapp/media/message-content/<%= msg._id %>" target="_blank" class="document-link">
                       <i class="fas fa-file-alt"></i>
                       <span><%= msg.content || 'مستند' %></span>
                     </a>
                   </div>
                 <% } else if (msg.mediaType === 'sticker') { %>
                   <div class="media-container">
-                    <img src="/whatsapp/media/content/<%= msg._id %>" class="media-sticker" alt="ملصق">
+                    <img src="/whatsapp/media/message-content/<%= msg._id %>" class="media-sticker" alt="ملصق">
                   </div>
                 <% } else if (msg.mediaType === 'location') { %>
                   <div class="media-container location-container">

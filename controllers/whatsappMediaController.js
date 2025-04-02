@@ -223,7 +223,7 @@ exports.getMediaByMessage = async (req, res) => {
 };
 
 /**
- * استرجاع محتوى ملف الوسائط
+ * استرجاع محتوى الوسائط
  * @param {Object} req - كائن الطلب
  * @param {Object} res - كائن الاستجابة
  */
@@ -280,6 +280,42 @@ exports.getMediaContent = async (req, res) => {
     logger.error('whatsappMediaController', 'خطأ في استرجاع محتوى الوسائط', {
       error: error.message,
       mediaId: req.params.mediaId
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'خطأ في معالجة الطلب'
+    });
+  }
+};
+
+/**
+ * استرجاع محتوى الوسائط باستخدام معرف الرسالة
+ * @param {Object} req - كائن الطلب
+ * @param {Object} res - كائن الاستجابة
+ */
+exports.getMediaContentByMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    
+    if (!messageId) {
+      return res.status(400).json({ success: false, error: 'معرف الرسالة مطلوب' });
+    }
+    
+    // البحث عن الوسائط باستخدام معرف الرسالة
+    const media = await WhatsappMedia.getMediaByMessageId(messageId);
+    
+    if (!media) {
+      return res.status(404).json({ success: false, error: 'لم يتم العثور على وسائط للرسالة المحددة' });
+    }
+    
+    // إعادة توجيه الطلب إلى مسار content مع معرف الوسائط
+    return res.redirect(`/whatsapp/media/content/${media._id}`);
+    
+  } catch (error) {
+    logger.error('whatsappMediaController', 'خطأ في استرجاع محتوى الوسائط بواسطة معرف الرسالة', {
+      error: error.message,
+      messageId: req.params.messageId
     });
     
     return res.status(500).json({

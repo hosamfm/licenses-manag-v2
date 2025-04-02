@@ -17,8 +17,11 @@ const upload = multer({
 // الحصول على وسائط رسالة محددة
 router.get('/message/:messageId', isAuthenticated, whatsappMediaController.getMediaByMessage);
 
-// استرجاع محتوى الوسائط برابط مباشر
+// استرجاع محتوى الوسائط برابط مباشر (يمكن استخدام إما معرف الوسائط أو معرف الرسالة)
 router.get('/content/:mediaId', whatsappMediaController.getMediaContent);
+
+// مسار إضافي لاسترجاع الوسائط باستخدام معرف الرسالة مباشرة
+router.get('/message-content/:messageId', whatsappMediaController.getMediaContentByMessage);
 
 // تحميل وسائط جديدة للإرسال
 router.post('/upload', 
