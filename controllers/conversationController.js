@@ -543,8 +543,27 @@ exports.reactToMessage = async (req, res) => {
         phoneNumberId
       );
 
-      // تحديث التفاعل في قاعدة البيانات (لو عندك آلية لذلك)
-      // مثال: WhatsappMessage.updateReaction(...)
+      // تحديث التفاعل في قاعدة البيانات
+      const reactionData = {
+        sender: req.user ? req.user.username || req.user._id.toString() : 'system',
+        emoji,
+        timestamp: new Date()
+      };
+      
+      // تحديث التفاعل في قاعدة البيانات
+      const updatedMessage = await WhatsappMessage.updateReaction(messageIdToUse, reactionData);
+      
+      if (!updatedMessage) {
+        logger.warn('conversationController', 'فشل تحديث التفاعل في قاعدة البيانات', {
+          messageId: messageIdToUse,
+          reaction: reactionData
+        });
+      } else {
+        logger.info('conversationController', 'تم تحديث التفاعل في قاعدة البيانات بنجاح', {
+          messageId: messageIdToUse,
+          reactionCount: updatedMessage.reactions.length
+        });
+      }
 
       // إرسال إشعار عبر Socket
       socketService.notifyMessageReaction(
