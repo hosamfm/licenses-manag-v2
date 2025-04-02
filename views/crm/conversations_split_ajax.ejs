@@ -156,15 +156,41 @@
       });
       
       // الاستماع لأحداث الردود الجديدة
-      socket.on('message_reply', function(data) {
+      socket.on('message-reply', function(data) {
         console.log('رد جديد على رسالة:', data);
         
-        // إذا كانت الرسالة تنتمي إلى المحادثة الحالية، تحديث الواجهة
-        if (data.conversationId === currentConversationId) {
-          refreshConversationDetails();
+        // التحقق من وجود البيانات المطلوبة
+        if (!data || !data.message) {
+          console.warn('بيانات رد غير مكتملة:', data);
+          return;
+        }
+        
+        // إذا وُجدت بيانات الرسالة والرد، استخدم دالة إضافة الرسالة مباشرةً
+        if (data.message && data.replyToId) {
+          // إضافة معرف المحادثة للرسالة إذا لم يكن موجودًا
+          if (!data.message.conversationId) {
+            data.message.conversationId = currentConversationId;
+          }
+          
+          // ضمان وجود replyToMessageId في الرسالة
+          if (!data.message.replyToMessageId) {
+            data.message.replyToMessageId = data.replyToId;
+          }
+          
+          // إضافة الرسالة للواجهة إذا كانت المحادثة الحالية
+          if (data.message.conversationId === currentConversationId) {
+            window.addMessageToConversation(data.message);
+          } else {
+            // تحديث قائمة المحادثات فقط إذا كانت محادثة أخرى
+            refreshConversationsList();
+          }
         } else {
-          // تحديث قائمة المحادثات فقط
-          refreshConversationsList();
+          // السلوك القديم - إعادة تحميل المحادثة بالكامل كإجراء احتياطي
+          if (data.conversationId === currentConversationId) {
+            refreshConversationDetails();
+          } else {
+            refreshConversationsList();
+          }
         }
       });
       
@@ -180,25 +206,6 @@
         
         // استخدام الدالة الجديدة لتحديث التفاعل مباشرة بدلاً من إعادة تحميل المحادثة بالكامل
         window.updateMessageReaction(data.externalId, data.reaction);
-      });
-      
-      // دعم للإشعارات القديمة بتنسيق الشرطة السفلية (_)
-      socket.on('message_reaction', function(data) {
-        console.log('تم استلام تفاعل بالتنسيق القديم:', data);
-        
-        // إعادة توجيه إلى المستمع الجديد إذا كان يحتوي على المعلومات الكافية
-        if (data && data.externalId && data.reaction) {
-          // إضافة معرف المحادثة إذا كان مفقوداً
-          if (!data.conversationId) {
-            data.conversationId = currentConversationId;
-          }
-          
-          // استخدام الدالة الجديدة
-          window.updateMessageReaction(data.externalId, data.reaction);
-        } else {
-          // السلوك القديم كإجراء احتياطي - إعادة تحميل المحادثة بالكامل
-          refreshConversationDetails();
-        }
       });
       
       // الاستماع لأحداث تحديث المعرف الخارجي للرسالة
