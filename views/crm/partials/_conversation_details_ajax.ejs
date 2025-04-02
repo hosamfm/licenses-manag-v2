@@ -282,34 +282,6 @@
                     </div>
                   </div>
                 </div>
-                
-                <!-- إضافة قسم تسجيل الصوت -->
-                <div class="mt-3 text-center">
-                  <p>أو سجل صوتاً مباشرةً</p>
-                  <div class="audio-recorder-wrapper">
-                    <button type="button" id="startRecordBtn" class="btn btn-outline-primary">
-                      <i class="fas fa-microphone"></i> بدء التسجيل
-                    </button>
-                    <button type="button" id="stopRecordBtn" class="btn btn-danger" style="display: none;">
-                      <i class="fas fa-stop"></i> إيقاف التسجيل
-                    </button>
-                    <div id="recordingStatus" class="mt-2" style="display: none;">
-                      <span class="badge bg-danger recording-indicator">جارٍ التسجيل...</span>
-                      <span id="recordingTimer">00:00</span>
-                    </div>
-                    <div id="audioPreview" class="mt-2" style="display: none;">
-                      <audio id="recordedAudio" controls class="w-100"></audio>
-                      <div class="d-flex justify-content-center mt-2">
-                        <button type="button" id="useRecordingBtn" class="btn btn-sm btn-success me-2">
-                          <i class="fas fa-check"></i> استخدام التسجيل
-                        </button>
-                        <button type="button" id="cancelRecordingBtn" class="btn btn-sm btn-secondary">
-                          <i class="fas fa-times"></i> إلغاء
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
               <input type="hidden" id="uploadMediaType" name="mediaType" value="auto">
               <input type="hidden" id="uploadConversationId" name="conversationId" value="<%= conversation._id %>">
