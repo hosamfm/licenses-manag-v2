@@ -440,3 +440,195 @@ body {
 .reaction-emoji-btn:active {
   transform: scale(0.95);
 }
+
+/* تنسيقات عرض الوسائط */
+.media-container {
+  margin-bottom: 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 100%;
+  position: relative;
+}
+
+.media-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+  display: block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.media-image:hover {
+  transform: scale(1.02);
+}
+
+.media-video {
+  max-width: 100%;
+  border-radius: 10px;
+  display: block;
+  width: 300px;
+  max-height: 250px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.media-audio {
+  width: 100%;
+  min-width: 250px;
+  border-radius: 24px;
+  margin: 5px 0;
+  display: block;
+}
+
+.document-container {
+  background-color: rgba(0, 0, 0, 0.03);
+  padding: 15px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.document-link {
+  display: flex;
+  align-items: center;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.document-link i {
+  margin-left: 10px;
+  font-size: 1.5rem;
+  color: #4b5563;
+}
+
+.document-link:hover {
+  text-decoration: underline;
+}
+
+/* تنسيق الرسالة التي تحتوي على وسائط */
+.message-bubble:has(.media-container) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  width: 100%;
+}
+
+/* تنسيق نموذج تحميل الوسائط */
+.media-upload-form {
+  padding: 15px;
+  border: 2px dashed #d1d5db;
+  border-radius: 10px;
+  background-color: #f9fafb;
+  text-align: center;
+  margin-bottom: 15px;
+  transition: all 0.3s ease;
+}
+
+.media-upload-form:hover, .media-upload-form.dragover {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.media-upload-form i {
+  font-size: 2rem;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+/* تنسيق زر إرفاق الوسائط */
+.media-attachments .btn-group {
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.media-attachments .btn {
+  margin-left: 5px;
+  margin-bottom: 5px;
+  border-radius: 8px;
+  padding: 6px 12px;
+  transition: all 0.2s ease;
+}
+
+.media-attachments .btn:hover {
+  transform: translateY(-2px);
+}
+
+/* تنسيق عرض معاينة وسائط كبيرة */
+#mediaPreviewModal .modal-dialog {
+  max-width: 90%;
+  height: 90%;
+  display: flex;
+  align-items: center;
+}
+
+#mediaPreviewModal .modal-content {
+  background-color: rgba(0, 0, 0, 0.8);
+  height: auto;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+}
+
+#mediaPreviewModal img, #mediaPreviewModal video {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+}
+
+#mediaPreviewModal .modal-header {
+  border-bottom: none;
+  color: white;
+  width: 100%;
+}
+
+#mediaPreviewModal .btn-close {
+  color: white;
+  opacity: 0.8;
+  filter: invert(1);
+}
+
+.media-sticker {
+  max-width: 150px;
+  max-height: 150px;
+}
+
+/* تحسين موقع المرفق في الرسالة النصية */
+.message-bubble .media-container + p {
+  margin-top: 10px;
+}
+
+/* إصلاح مشكلة صفاء الرسائل */
+.clear-both {
+  clear: both;
+  width: 100%;
+  height: 5px;
+}
+
+/* إضافة تنسيق خاص للتأكد من تموضع عناصر الرسالة بشكل صحيح */
+.message {
+  position: relative;
+  padding-bottom: 5px;
+  margin-bottom: 15px;
+}
+
+/* تنسيق رسائل الواتساب الرسمية */
+.message.system {
+  max-width: 70%;
+  margin-right: auto;
+  margin-left: auto;
+  float: none;
+  text-align: center;
+}
+
+.message.system .message-bubble {
+  background-color: #f1f5f9;
+  color: #475569;
+  border-radius: 10px;
+  border: 1px dashed #cbd5e1;
+  text-align: center;
+  font-style: italic;
+}

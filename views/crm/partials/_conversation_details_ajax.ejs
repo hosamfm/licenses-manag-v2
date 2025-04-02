@@ -183,27 +183,15 @@
           <button type="button" class="btn btn-outline-secondary" id="attachVideoBtn" title="إرفاق فيديو" onclick="window.showMediaUpload('video')">
             <i class="fas fa-video"></i>
           </button>
-          <button type="button" class="btn btn-outline-secondary" id="attachAudioBtn" title="إرفاق ملف صوتي" onclick="window.showMediaUpload('audio')">
+          <button type="button" class="btn btn-outline-secondary" id="attachDocumentBtn" title="إرفاق مستند" onclick="window.showMediaUpload('document')">
+            <i class="fas fa-file-alt"></i>
+          </button>
+          <button type="button" class="btn btn-outline-secondary" id="attachAudioBtn" title="إرفاق صوت" onclick="window.showMediaUpload('audio')">
             <i class="fas fa-music"></i>
           </button>
-          <button type="button" class="btn btn-outline-secondary" id="attachDocumentBtn" title="إرفاق مستند" onclick="window.showMediaUpload('document')">
-            <i class="fas fa-file"></i>
+          <button type="button" class="btn btn-outline-secondary" id="recordAudioBtn" title="تسجيل صوت" onclick="window.showAudioRecorder()">
+            <i class="fas fa-microphone"></i>
           </button>
-        </div>
-        <div id="mediaPreview" class="media-preview mt-2" style="display: none;">
-          <div class="card">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <i class="fas fa-paperclip me-2"></i>
-                <span id="mediaFileName">اسم الملف</span>
-                <input type="hidden" id="mediaId" name="mediaId">
-                <input type="hidden" id="mediaType" name="mediaType">
-                <button type="button" class="btn btn-sm btn-danger ms-auto" onclick="window.clearMediaAttachment()">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
       <div class="d-flex justify-content-between align-items-center">
@@ -252,20 +240,58 @@
       </div>
     </div>
     
-    <!-- نافذة معاينة الوسائط -->
-    <div id="mediaPreviewModal" class="modal fade" tabindex="-1">
+    <!-- مودال معاينة الوسائط -->
+    <div class="modal fade" id="mediaPreviewModal" tabindex="-1" aria-labelledby="mediaPreviewModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">معاينة الوسائط</h5>
+            <h5 class="modal-title" id="mediaPreviewModalLabel">معاينة الوسائط</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
           </div>
           <div class="modal-body text-center" id="mediaPreviewContent">
-            <!-- سيتم إضافة محتوى الوسائط هنا ديناميكياً -->
+            <!-- سيتم وضع محتوى الوسائط هنا بواسطة JavaScript -->
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- مودال تسجيل الصوت -->
+    <div class="modal fade" id="audioRecorderModal" tabindex="-1" aria-labelledby="audioRecorderModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="audioRecorderModalLabel">تسجيل رسالة صوتية</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+          </div>
+          <div class="modal-body">
+            <div class="text-center mb-3">
+              <div id="audioRecorderControls">
+                <button type="button" class="btn btn-primary" id="startRecordingBtn">
+                  <i class="fas fa-microphone"></i> بدء التسجيل
+                </button>
+                <button type="button" class="btn btn-danger d-none" id="stopRecordingBtn">
+                  <i class="fas fa-stop"></i> إيقاف التسجيل
+                </button>
+              </div>
+              <div class="mt-3">
+                <span id="recordingStatus" class="d-none">جاري التسجيل... <span id="recordingTime">0:00</span></span>
+              </div>
+            </div>
+            
+            <div id="audioPreview" class="d-none mt-3">
+              <h6>معاينة التسجيل:</h6>
+              <audio id="recordedAudio" controls class="w-100"></audio>
+              <input type="hidden" id="recordedAudioData">
+            </div>
+            
+            <div class="alert alert-info mt-3">
+              <i class="fas fa-info-circle"></i>
+              ملاحظة: الحد الأقصى للتسجيل الصوتي هو 2 دقيقة.
+            </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-            <a href="#" class="btn btn-primary" id="downloadMediaBtn" download>تنزيل</a>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="button" class="btn btn-primary d-none" id="sendAudioBtn">إرسال التسجيل</button>
           </div>
         </div>
       </div>
@@ -276,3 +302,217 @@
       المحادثة مغلقة، لا يمكن الرد.
     </div>
   <% } %>
+
+<script>
+  // دالة لفتح معاينة الوسائط (الصور، الفيديو)
+  function openMediaPreview(mediaUrl, mediaType) {
+    const modal = new bootstrap.Modal(document.getElementById('mediaPreviewModal'));
+    const contentContainer = document.getElementById('mediaPreviewContent');
+    contentContainer.innerHTML = '';
+    
+    if (mediaType === 'image') {
+      const img = document.createElement('img');
+      img.src = mediaUrl;
+      img.className = 'img-fluid';
+      img.style.maxHeight = '80vh';
+      contentContainer.appendChild(img);
+    } else if (mediaType === 'video') {
+      const video = document.createElement('video');
+      video.controls = true;
+      video.autoplay = true;
+      video.className = 'w-100';
+      video.style.maxHeight = '80vh';
+      
+      const source = document.createElement('source');
+      source.src = mediaUrl;
+      source.type = 'video/mp4';
+      
+      video.appendChild(source);
+      contentContainer.appendChild(video);
+    }
+    
+    modal.show();
+  }
+  
+  // إعادة تعريف الدالة كمتغير عام للتوافق مع الكود القديم
+  window.openMediaPreview = openMediaPreview;
+  
+  // تسجيل الصوت من المتصفح
+  window.showAudioRecorder = function() {
+    // عرض مودال تسجيل الصوت
+    const modal = new bootstrap.Modal(document.getElementById('audioRecorderModal'));
+    modal.show();
+    
+    // الحصول على عناصر التحكم
+    const startBtn = document.getElementById('startRecordingBtn');
+    const stopBtn = document.getElementById('stopRecordingBtn');
+    const statusText = document.getElementById('recordingStatus');
+    const timeDisplay = document.getElementById('recordingTime');
+    const audioPreview = document.getElementById('audioPreview');
+    const audioPlayer = document.getElementById('recordedAudio');
+    const sendBtn = document.getElementById('sendAudioBtn');
+    const audioDataInput = document.getElementById('recordedAudioData');
+    
+    // متغيرات التسجيل
+    let mediaRecorder;
+    let audioChunks = [];
+    let startTime;
+    let timerInterval;
+    let audioBlob;
+    let audioUrl;
+    
+    // إعادة تعيين حالة التسجيل
+    const resetRecorderState = () => {
+      startBtn.classList.remove('d-none');
+      stopBtn.classList.add('d-none');
+      statusText.classList.add('d-none');
+      timeDisplay.textContent = '0:00';
+      audioPreview.classList.add('d-none');
+      sendBtn.classList.add('d-none');
+      audioChunks = [];
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+    
+    // إضافة التسجيل الصوتي
+    const addAudioAttachment = (audioData) => {
+      // إرسال البيانات إلى الخادم لتخزينها
+      const conversationId = document.getElementById('conversationId').value;
+      
+      fetch('/whatsapp/media/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          conversationId: conversationId,
+          mediaType: 'audio',
+          base64Data: audioData,
+          fileName: 'audio_recording.ogg'
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // إضافة الوسائط إلى الرسالة
+          document.getElementById('mediaId').value = data.media._id;
+          document.getElementById('mediaType').value = 'audio';
+          document.getElementById('mediaFileName').textContent = 'تسجيل صوتي';
+          document.getElementById('mediaPreview').style.display = 'block';
+          
+          // إغلاق المودال
+          const modalElement = document.getElementById('audioRecorderModal');
+          const modalInstance = bootstrap.Modal.getInstance(modalElement);
+          modalInstance.hide();
+        } else {
+          alert('حدث خطأ أثناء رفع التسجيل الصوتي');
+        }
+      })
+      .catch(error => {
+        console.error('خطأ في رفع التسجيل الصوتي:', error);
+        alert('حدث خطأ أثناء رفع التسجيل الصوتي');
+      });
+    };
+    
+    // تحديث عداد الوقت
+    const updateTimer = () => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      
+      // إيقاف التسجيل بعد دقيقتين (الحد الأقصى)
+      if (elapsed >= 120) {
+        stopRecording();
+      }
+    };
+    
+    // بدء التسجيل
+    const startRecording = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // إعداد مسجل الوسائط
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        
+        // استقبال بيانات التسجيل
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+        
+        // عند انتهاء التسجيل
+        mediaRecorder.onstop = () => {
+          // إيقاف عداد الوقت
+          clearInterval(timerInterval);
+          
+          // إيقاف تدفق الصوت
+          stream.getTracks().forEach(track => track.stop());
+          
+          // إنشاء ملف صوتي من البيانات المسجلة
+          audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          audioUrl = URL.createObjectURL(audioBlob);
+          
+          // عرض معاينة التسجيل
+          audioPlayer.src = audioUrl;
+          audioPreview.classList.remove('d-none');
+          
+          // تمكين زر الإرسال
+          sendBtn.classList.remove('d-none');
+          
+          // تحويل الملف إلى base64 لإرساله
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = function() {
+            const base64data = reader.result;
+            audioDataInput.value = base64data;
+          };
+        };
+        
+        // بدء التسجيل
+        mediaRecorder.start();
+        startTime = Date.now();
+        timerInterval = setInterval(updateTimer, 1000);
+        
+        // تحديث واجهة المستخدم
+        startBtn.classList.add('d-none');
+        stopBtn.classList.remove('d-none');
+        statusText.classList.remove('d-none');
+        audioPreview.classList.add('d-none');
+        
+      } catch (error) {
+        console.error('خطأ في بدء التسجيل الصوتي:', error);
+        alert('لا يمكن الوصول إلى الميكروفون. يرجى التحقق من إذن الميكروفون في المتصفح.');
+      }
+    };
+    
+    // إيقاف التسجيل
+    const stopRecording = () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        stopBtn.classList.add('d-none');
+        startBtn.classList.remove('d-none');
+        statusText.classList.add('d-none');
+      }
+    };
+    
+    // تعيين مستمعي الأحداث
+    startBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+    
+    // زر إرسال التسجيل
+    sendBtn.addEventListener('click', function() {
+      const audioData = audioDataInput.value;
+      if (audioData) {
+        addAudioAttachment(audioData);
+      } else {
+        alert('خطأ: لا توجد بيانات صوتية');
+      }
+    });
+    
+    // إعادة تعيين الحالة عند إغلاق المودال
+    document.getElementById('audioRecorderModal').addEventListener('hidden.bs.modal', resetRecorderState);
+  };
+</script>
