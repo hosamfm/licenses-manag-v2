@@ -60,13 +60,23 @@
                   let fileName = '';
                   let fileSize = 0;
                   let mimeType = '';
+                  let r2Key = '';
                   
-                  if (msg.fileDetails && msg.fileDetails.publicUrl) {
+                  if (msg.fileDetails && msg.fileDetails.r2Key) {
+                    // استخدام مسار التدفق المباشر إذا كان مفتاح R2 موجودًا
+                    r2Key = msg.fileDetails.r2Key;
+                    mediaUrl = '/api/whatsapp-media/stream/' + r2Key.replace('whatsapp/', '');
+                    fileName = msg.fileDetails.fileName || (msg.content || 'ملف');
+                    fileSize = msg.fileDetails.size || 0;
+                    mimeType = msg.fileDetails.mimeType || '';
+                  } else if (msg.fileDetails && msg.fileDetails.publicUrl) {
+                    // الاحتفاظ بالرابط المؤقت كحل بديل
                     mediaUrl = msg.fileDetails.publicUrl;
                     fileName = msg.fileDetails.fileName || (msg.content || 'ملف');
-                    fileSize = msg.fileDetails.fileSize || 0;
+                    fileSize = msg.fileDetails.size || 0;
                     mimeType = msg.fileDetails.mimeType || '';
                   } else if (msg.mediaUrl) {
+                    // للتوافق مع البيانات القديمة
                     mediaUrl = msg.mediaUrl;
                     fileName = msg.content || 'ملف';
                   }

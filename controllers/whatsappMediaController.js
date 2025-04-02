@@ -264,3 +264,60 @@ exports.sendMedia = async (req, res) => {
     });
   }
 };
+
+/**
+ * تدفق الوسائط مباشرة من R2 للعرض المباشر في المتصفح
+ * @param {Object} req - طلب HTTP
+ * @param {Object} res - استجابة HTTP
+ * @returns {Promise} - تدفق الملف مباشرة
+ */
+exports.streamMedia = async (req, res) => {
+  try {
+    const { r2Key } = req.params;
+    
+    if (!r2Key) {
+      logger.error('whatsappMediaController', 'لم يتم تحديد مفتاح R2 للملف');
+      return res.status(400).json({ success: false, error: 'لم يتم تحديد مفتاح R2 للملف' });
+    }
+
+    // سجل الطلب للتتبع
+    logger.info('whatsappMediaController', 'طلب تدفق وسائط', { r2Key });
+
+    // الحصول على الملف من Cloudflare R2
+    try {
+      // تحميل الملف كتدفق بيانات
+      const fileBuffer = await storageService.downloadFile('whatsapp/' + r2Key);
+      
+      // تحديد نوع MIME
+      const mimeType = storageService.getMimeTypeFromFileName(r2Key) || 'application/octet-stream';
+      
+      // ضبط رؤوس الاستجابة
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Length', fileBuffer.length);
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // تخزين مؤقت لمدة 24 ساعة
+      
+      // إرسال البيانات
+      return res.send(fileBuffer);
+    } catch (error) {
+      // إذا فشل تحميل الملف، حاول استخدام رابط موقع
+      logger.error('whatsappMediaController', 'خطأ في تدفق الملف، محاولة استخدام رابط قصير الأجل', { 
+        r2Key, 
+        error: error.message 
+      });
+      
+      const signedUrl = await storageService.getSignedUrl('whatsapp/' + r2Key);
+      return res.redirect(signedUrl);
+    }
+  } catch (error) {
+    logger.error('whatsappMediaController', 'خطأ في معالجة طلب تدفق الوسائط', {
+      error: error.message
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'حدث خطأ أثناء معالجة طلب الوسائط: ' + error.message
+    });
+  }
+};
+
+module.exports = exports;
