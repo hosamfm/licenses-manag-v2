@@ -2,14 +2,18 @@
  * وحدة مساعدة للمحادثات - Conversation Utilities Module
  * هذا الملف يحتوي على دوال عامة مشتركة للتعامل مع محادثات نظام خدمة العملاء
  * يستخدم في كل من واجهة المحادثات المفصلة وواجهة المحادثات المقسمة
+ * 
+ * ملاحظات نظام الإرسال:
+ * - الرسائل الجديدة: ترسل عبر HTTP إلى مسار /crm/conversations/:conversationId
+ * - الردود: ترسل عبر HTTP إلى مسار /crm/conversations/:conversationId/reply
+ * - التفاعلات: ترسل عبر HTTP إلى مسار /crm/conversations/:conversationId/reaction
+ * - Socket.io: يستخدم للإشعارات فقط وليس للإرسال الفعلي للرسائل
  */
 
 // نافذة عالمية للوظائف المشتركة
 (function(window) {
   // تعيين وضع التصحيح (false لإيقاف رسائل التصحيح)
   window.debugMode = false;
-  
-  // تعريف الدوال العالمية للتفاعل مع الرسائل
   
   /**
    * دالة لعرض منتقي التفاعلات
@@ -116,41 +120,54 @@
    * تجنب استخدام socket.emit('add_reaction') مباشرة لتجنب الازدواجية
    */
   window.sendReaction = function(messageId, emoji, externalId) {
-    if (!messageId || !emoji) return;
-    
-    // الحصول على معرف المحادثة
-    const conversationId = document.getElementById('conversationId')?.value;
-    if (!conversationId) {
+    if (!messageId || !emoji) {
+      console.error('خطأ: messageId وemoji مطلوبان لإرسال التفاعل');
       return;
     }
     
-    // إرسال التفاعل إلى الخادم
+    const conversationId = document.getElementById('conversationId')?.value;
+    if (!conversationId) {
+      console.error('خطأ: لم يتم العثور على معرف المحادثة');
+      return;
+    }
+    
+    const senderId = document.getElementById('currentUserId')?.value;
+    const senderName = document.getElementById('currentUserName')?.value || 'مستخدم';
+    
+    if (window.debugMode) console.log(`إرسال تفاعل [${emoji}] للرسالة [${messageId}]`);
+    
     fetch(`/crm/conversations/${conversationId}/reaction`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         messageId: messageId,
-        externalMessageId: externalId,
+        externalId: externalId,
         emoji: emoji,
-        senderId: window.currentUserId,
-        senderName: window.currentUsername
+        senderId: senderId,
+        senderName: senderName
       })
     })
     .then(response => {
-      if (!response.ok) throw new Error('فشل إرسال التفاعل');
+      if (!response.ok) {
+        throw new Error(`خطأ في إرسال التفاعل: ${response.status}`);
+      }
       return response.json();
     })
     .then(data => {
+      if (window.debugMode) console.log('تم إرسال التفاعل بنجاح:', data);
+      updateReactionInUI(messageId, externalId, emoji, senderId, senderName);
     })
     .catch(error => {
-      if (window.debugMode === true) {
-        console.error('خطأ في إرسال التفاعل:', error);
-      }
-      window.showToast && window.showToast('فشل في إرسال التفاعل، يرجى المحاولة مرة أخرى.', 'danger');
+      console.error('خطأ في إرسال التفاعل:', error);
     });
+    
+    // إغلاق منتقي التفاعلات
+    const reactionPicker = document.getElementById('reactionPicker');
+    if (reactionPicker) {
+      reactionPicker.remove();
+    }
   };
   
   /**

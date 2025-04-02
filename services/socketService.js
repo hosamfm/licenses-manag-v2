@@ -1,5 +1,13 @@
 /**
  * خدمة الإشعارات الفورية باستخدام Socket.io
+ * 
+ * ملاحظات هامة حول نظام الرسائل:
+ * 1. نظام الإرسال يعتمد على HTTP للإرسال الفعلي للرسائل الجديدة والردود والتفاعلات.
+ * 2. Socket.io يستخدم فقط للإشعارات والتحديثات المباشرة.
+ * 3. المسارات الرئيسية للإرسال:
+ *    - الرسائل الجديدة: POST /crm/conversations/:conversationId
+ *    - الردود: POST /crm/conversations/:conversationId/reply
+ *    - التفاعلات: POST /crm/conversations/:conversationId/reaction
  */
 const socketIO = require('socket.io');
 const logger = require('./loggerService');
@@ -112,114 +120,25 @@ function initialize(server) {
       logger.info('socketService', 'انقطع الاتصال', { socketId: socket.id });
     });
 
-    // معالجة إضافة رد فعل على رسالة
-    // ملاحظة: هذه الطريقة تمثل ازدواجية مع مسار HTTP (/reaction و /react)
-    // يفضل استخدام مسار HTTP من خلال دالة window.sendReaction في conversation-utils.js
-    // تم الاحتفاظ بهذه الطريقة للتوافق مع العملاء القديمين والحالات الخاصة فقط
-    socket.on('add_reaction', async (data) => {
-      try {
-        // التحقق من صحة البيانات
-        if (!data || !data.messageId || !data.reactionType) {
-          logger.warning('socketService', 'محاولة إضافة رد فعل بدون بيانات كافية', { socketId: socket.id });
-          return socket.emit('reaction_error', { error: 'بيانات غير كافية' });
-        }
-
-        // استخدام معلومات المستخدم المخزنة في كائن socket بدلاً من الاعتماد على البيانات المرسلة
-        const reactionData = {
-          messageId: data.messageId,
-          reactionType: data.reactionType,
-          userId: socket.userId,         // استخدام معرف المستخدم من الجلسة
-          username: socket.username,     // استخدام اسم المستخدم من الجلسة
-          conversationId: data.conversationId
-        };
-
-        logger.info('socketService', 'إضافة رد فعل على رسالة', { 
-          messageId: reactionData.messageId,
-          reactionType: reactionData.reactionType,
-          userId: reactionData.userId,
-          username: reactionData.username
-        });
-        
-        // إرسال التفاعل إلى واتساب ميتا من خلال استدعاء وظيفة في مدير التفاعلات
-        try {
-          const conversationController = require('../controllers/conversationController');
-          
-          // البحث عن الرسالة باستخدام المعرف الداخلي للحصول على معرف واتساب الخارجي
-          const WhatsappMessage = require('../models/WhatsappMessageModel');
-          const message = await WhatsappMessage.findById(data.messageId);
-          
-          if (!message || !message.externalMessageId) {
-            logger.error('socketService', 'لم يتم العثور على معرف خارجي للرسالة', { 
-              messageId: data.messageId
-            });
-            return socket.emit('reaction_error', { error: 'الرسالة غير موجودة أو لا تحتوي معرف خارجي' });
-          }
-          
-          // استدعاء وظيفة reactToMessage داخلياً
-          // إنشاء كائنات req و res مخصصة للاستخدام الداخلي
-          const req = {
-            params: { conversationId: data.conversationId },
-            body: { messageId: message.externalMessageId, emoji: data.reactionType },
-            user: { _id: socket.userId, username: socket.username }
-          };
-          
-          const res = {
-            json: (responseData) => {
-              if (responseData.success) {
-                logger.info('socketService', 'تم إرسال التفاعل إلى واتساب بنجاح', { 
-                  messageId: data.messageId,
-                  emoji: data.reactionType
-                });
-                
-                // إرسال تأكيد للمستخدم الذي أضاف رد الفعل
-                socket.emit('reaction_sent', { success: true, reactionData });
-              } else {
-                logger.error('socketService', 'فشل في إرسال التفاعل إلى واتساب', { 
-                  error: responseData.error,
-                  messageId: data.messageId
-                });
-                
-                // إعلام المستخدم بالخطأ
-                socket.emit('reaction_error', { error: responseData.error || 'فشل في إرسال التفاعل إلى واتساب' });
-              }
-            },
-            status: (code) => {
-              return {
-                json: (responseData) => {
-                  logger.error('socketService', `فشل في إرسال التفاعل إلى واتساب (${code})`, { 
-                    error: responseData.error,
-                    messageId: data.messageId
-                  });
-                  
-                  // إعلام المستخدم بالخطأ
-                  socket.emit('reaction_error', { error: responseData.error || 'فشل في إرسال التفاعل إلى واتساب' });
-                }
-              };
-            }
-          };
-          
-          // استدعاء وظيفة المتحكم بشكل غير متزامن
-          conversationController.reactToMessage(req, res);
-        } catch (controllerError) {
-          logger.error('socketService', 'خطأ في استدعاء متحكم التفاعلات', { 
-            error: controllerError.message, 
-            messageId: data.messageId
-          });
-          
-          // إعلام المستخدم بالخطأ
-          socket.emit('reaction_error', { error: 'حدث خطأ في معالجة رد الفعل' });
-        }
-
-        // بث حدث رد الفعل لجميع المستخدمين في نفس المحادثة
-        io.to(data.conversationId.toString()).emit('reaction_received', reactionData);
-      } catch (error) {
-        logger.error('socketService', 'خطأ أثناء إضافة رد فعل', { 
-          error: error.message, 
-          socketId: socket.id,
-          data
-        });
-        socket.emit('reaction_error', { error: 'حدث خطأ في معالجة رد الفعل' });
+    // استقبال إشعار برسالة جديدة من العميل وإعادة بثه لبقية المستخدمين
+    // ملاحظة هامة: هذا المعالج للإشعارات فقط وليس للإرسال الفعلي للرسائل الجديدة
+    // الإرسال الفعلي للرسائل يتم عبر طلب HTTP إلى /crm/conversations/:conversationId/reply
+    socket.on('new-message', (message) => {
+      if (!io) {
+        return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
       }
+      
+      // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
+      if (message && message.mediaType) {
+        logger.info('socketService', 'إعادة بث إشعار برسالة جديدة مع وسائط', { 
+          conversationId: message.conversationId, 
+          mediaType: message.mediaType,
+          messageId: message._id
+        });
+      }
+      
+      io.to(`conversation-${message.conversationId}`).emit('new-message', message);
+      logger.info('socketService', 'تم إعادة بث إشعار برسالة جديدة', { conversationId: message.conversationId });
     });
   });
 
@@ -229,6 +148,8 @@ function initialize(server) {
 
 /**
  * إرسال إشعار برسالة جديدة إلى غرفة المحادثة
+ * ملاحظة: هذه الدالة للإشعارات فقط وليس لإرسال الرسالة نفسها
+ * يتم استدعاء هذه الدالة من متحكم conversationController بعد حفظ الرسالة في قاعدة البيانات
  * @param {String} conversationId - معرف المحادثة
  * @param {Object} message - الرسالة الجديدة
  */
@@ -248,6 +169,62 @@ function notifyNewMessage(conversationId, message) {
   
   io.to(`conversation-${conversationId}`).emit('new-message', message);
   logger.info('socketService', 'تم إرسال إشعار برسالة جديدة', { conversationId });
+}
+
+/**
+ * إرسال إشعار برد على رسالة
+ * ملاحظة: هذه الدالة للإشعارات فقط وليس لإرسال الرد نفسه
+ * يتم استدعاء هذه الدالة من متحكم conversationController بعد حفظ الرد في قاعدة البيانات
+ * @param {String} conversationId - معرف المحادثة
+ * @param {Object} message - الرسالة الجديدة
+ * @param {String} replyToId - معرف الرسالة المرد عليها
+ */
+function notifyMessageReply(conversationId, message, replyToId) {
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+  
+  // إرسال إشعار إلى غرفة المحادثة بأن هناك رد جديد
+  message.replyToId = replyToId;
+  io.to(`conversation-${conversationId}`).emit('message-reply', message);
+  
+  logger.info('socketService', 'تم إرسال إشعار برد على رسالة', { 
+    conversationId, 
+    replyToId,
+    messageId: message._id 
+  });
+}
+
+/**
+ * إرسال إشعار بتفاعل على رسالة
+ * ملاحظة: هذه الدالة للإشعارات فقط، الإرسال الفعلي للتفاعلات يتم عبر HTTP
+ * @param {String} conversationId - معرف المحادثة
+ * @param {String} externalId - المعرف الخارجي للرسالة
+ * @param {Object} reaction - بيانات التفاعل (المرسل، الإيموجي)
+ */
+function notifyMessageReaction(conversationId, externalId, reaction) {
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+
+  if (!externalId) {
+    return logger.warn('socketService', 'محاولة إرسال تفاعل لرسالة بدون معرف خارجي', { 
+      conversationId, 
+      reaction 
+    });
+  }
+
+  io.to(`conversation-${conversationId}`).emit('message-reaction', { 
+    externalId, 
+    reaction, 
+    conversationId 
+  });
+  
+  logger.info('socketService', 'تم إرسال إشعار بتفاعل على رسالة', { 
+    conversationId, 
+    externalId,
+    senderName: reaction.senderName 
+  });
 }
 
 /**
@@ -298,44 +275,6 @@ function notifyMessageStatusUpdate(conversationId, externalId, status) {
 }
 
 /**
- * إرسال إشعار بتفاعل على رسالة
- * @param {String} conversationId - معرف المحادثة
- * @param {String} externalId - المعرف الخارجي للرسالة
- * @param {Object} reaction - بيانات التفاعل (المرسل، الإيموجي)
- */
-function notifyMessageReaction(conversationId, externalId, reaction) {
-  if (!io) {
-    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-  }
-  
-  if (!conversationId || !externalId || !reaction) {
-    return logger.warn('socketService', 'معلومات غير كاملة لإشعار التفاعل', { conversationId, externalId, reaction });
-  }
-  
-  io.to(`conversation-${conversationId}`).emit('message-reaction', { 
-    externalId, 
-    reaction, 
-    conversationId 
-  });
-  
-  logger.info('socketService', 'تم إرسال إشعار بتفاعل على رسالة', { conversationId, externalId, reaction });
-}
-
-/**
- * إرسال إشعار برد على رسالة
- * @param {String} conversationId - معرف المحادثة
- * @param {Object} message - الرسالة الجديدة
- * @param {String} replyToId - معرف الرسالة المرد عليها
- */
-function notifyMessageReply(conversationId, message, replyToId) {
-  if (!io) {
-    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-  }
-  io.to(`conversation-${conversationId}`).emit('message-reply', { message, replyToId });
-  logger.info('socketService', 'تم إرسال إشعار برد على رسالة', { conversationId, replyToId });
-}
-
-/**
  * إرسال إشعار شخصي لمستخدم معين
  * @param {String} userId - معرف المستخدم
  * @param {String} type - نوع الإشعار
@@ -372,7 +311,7 @@ function emitToRoom(roomName, eventName, data) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  io.to(roomName).emit(eventName, data);
+  io.to(`${roomName}`).emit(eventName, data);
   logger.info('socketService', 'تم إرسال إشعار إلى غرفة محددة', { roomName, eventName });
 }
 
