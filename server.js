@@ -22,9 +22,9 @@ const metaWhatsappWebhookRoutes = require('./routes/metaWhatsappWebhookRoutes');
 const metaWhatsappSettingsRoutes = require('./routes/metaWhatsappSettingsRoutes'); // استيراد مسارات إعدادات واتساب الرسمي
 const metaWhatsappMonitorRoutes = require('./routes/metaWhatsappMonitorRoutes'); // استيراد مسارات مراقبة webhook ميتا
 const whatsappChannelRoutes = require('./routes/whatsappChannelRoutes'); // استيراد مسارات إدارة قنوات واتساب
-const whatsappMediaRoutes = require('./routes/whatsappMediaRoutes'); // استيراد مسارات وسائط واتساب
 const crmRoutes = require('./routes/crmRoutes'); // استيراد مسارات نظام إدارة العملاء (CRM)
 const apiRoutes = require('./routes/apiRoutes'); // استيراد مسارات API
+const whatsappMediaRoutes = require('./routes/whatsappMediaRoutes'); // استيراد مسارات وسائط الواتساب
 const { startTelegramBot } = require('./services/telegramService'); // استيراد دالة startTelegramBot
 const telegramMessagesRoutes = require('./routes/telegramMessages'); // استيراد مسارات الرسائل التلغرامية
 
@@ -153,10 +153,10 @@ app.use(metaWhatsappWebhookRoutes);
 app.use(metaWhatsappSettingsRoutes);
 app.use(metaWhatsappMonitorRoutes);
 app.use(whatsappChannelRoutes);
-app.use('/whatsapp/media', whatsappMediaRoutes); // إضافة مسارات وسائط واتساب
 app.use('/telegram', telegramMessagesRoutes);
 app.use('/crm', crmRoutes);
 app.use('/api', apiRoutes);
+app.use('/whatsapp/media', whatsappMediaRoutes); // تسجيل مسارات وسائط الواتساب
 
 // توجيه المسار القديم للمحادثات إلى نظام CRM
 app.get('/conversations', (req, res) => {
