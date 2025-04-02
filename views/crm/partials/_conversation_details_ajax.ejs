@@ -9,6 +9,41 @@
 <!-- استدعاء ملف المساعدة للمحادثات -->
 <script src="/js/conversation-utils.js"></script>
 
+<!-- دوال مساعدة محلية -->
+<script>
+  // دالة لتنسيق الوقت بشكل مقروء
+  function formatTime(timestamp) {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    return date.toLocaleString('ar-LY', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }
+  
+  // دالة لعرض نص حالة الرسالة
+  function getStatusText(status) {
+    switch (status) {
+      case 'sending':
+        return 'جاري الإرسال...';
+      case 'sent':
+        return 'تم الإرسال';
+      case 'delivered':
+        return 'تم التسليم';
+      case 'read':
+        return 'تم القراءة';
+      case 'failed':
+        return 'فشل الإرسال';
+      default:
+        return status || 'غير معروف';
+    }
+  }
+</script>
+
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="mb-0">
@@ -78,7 +113,7 @@
                     </div>
                     <div class="document-info">
                       <div class="document-name"><%= msg.fileName || 'مستند' %></div>
-                      <div class="document-size"><%= msg.fileSize ? formatFileSize(msg.fileSize) : '' %></div>
+                      <div class="document-size"><%= msg.fileSize ? (Math.round(msg.fileSize / 1024) + ' كيلوبايت') : '' %></div>
                     </div>
                     <a href="/whatsapp/media/content/<%= msg._id %>" target="_blank" class="document-download">
                       <i class="fas fa-download"></i>
@@ -109,11 +144,11 @@
               
               <div class="message-meta">
                 <span class="message-time" title="<%= new Date(msg.timestamp).toLocaleString() %>">
-                  <%= formatTime(msg.timestamp) %>
+                  <%= new Date(msg.timestamp).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
                 </span>
                 
                 <% if (msg.direction === 'outgoing') { %>
-                  <span class="message-status" title="حالة الرسالة: <%= getStatusText(msg.status) %>">
+                  <span class="message-status" title="حالة الرسالة: <%= msg.status %>">
                     <% if (msg.status === 'sent') { %>
                       <i class="fas fa-check text-secondary"></i>
                     <% } else if (msg.status === 'delivered') { %>
