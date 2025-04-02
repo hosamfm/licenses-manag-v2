@@ -29,6 +29,16 @@ const whatsappMessageSchema = new mongoose.Schema({
     type: String,
     enum: ['image', 'audio', 'video', 'document', 'sticker', 'location', 'reaction', null]
   },
+  // حقول إضافية لمعلومات الملفات
+  fileDetails: {
+    type: Object,
+    default: null,
+    // يمكن أن يحتوي على:
+    // - fileName: اسم الملف الأصلي
+    // - fileSize: حجم الملف بالبايت
+    // - mimeType: نوع MIME للملف
+    // - r2Key: المفتاح المستخدم للتخزين في Cloudflare R2
+  },
   timestamp: { 
     type: Date, 
     default: Date.now 
@@ -83,8 +93,10 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
     const { from, id, type, timestamp } = messageData;
     let content = '';
     let mediaUrl = '';
+    let mediaType = null;
     let replyToMessageId = null;
     let context = null;
+    let fileDetails = null;
     
     // سجل للتشخيص - لمعرفة كيف تصل البيانات من واتساب 
     logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر context.message_id', { replyToMessageId });
@@ -100,13 +112,72 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       content = messageData.text.body;
     } else if (type === 'image' && messageData.image) {
       mediaUrl = messageData.image.link || messageData.image.id;
+      mediaType = 'image';
+      
+      // إذا توفرت معلومات إضافية عن الصورة
+      if (messageData.image) {
+        fileDetails = {
+          fileName: messageData.image.caption || `image_${id}.jpg`,
+          mimeType: messageData.image.mime_type || 'image/jpeg',
+          fileSize: messageData.image.size || 0,
+          caption: messageData.image.caption || ''
+        };
+      }
     } else if (type === 'video' && messageData.video) {
       mediaUrl = messageData.video.link || messageData.video.id;
+      mediaType = 'video';
+      
+      // إذا توفرت معلومات إضافية عن الفيديو
+      if (messageData.video) {
+        fileDetails = {
+          fileName: messageData.video.filename || `video_${id}.mp4`,
+          mimeType: messageData.video.mime_type || 'video/mp4',
+          fileSize: messageData.video.size || 0,
+          caption: messageData.video.caption || '',
+          duration: messageData.video.duration || 0
+        };
+      }
     } else if (type === 'audio' && messageData.audio) {
       mediaUrl = messageData.audio.link || messageData.audio.id;
+      mediaType = 'audio';
+      
+      // إذا توفرت معلومات إضافية عن الملف الصوتي
+      if (messageData.audio) {
+        fileDetails = {
+          fileName: messageData.audio.filename || `audio_${id}.mp3`,
+          mimeType: messageData.audio.mime_type || 'audio/mpeg',
+          fileSize: messageData.audio.size || 0,
+          duration: messageData.audio.duration || 0,
+          voice: messageData.audio.voice || false
+        };
+      }
     } else if (type === 'document' && messageData.document) {
       mediaUrl = messageData.document.link || messageData.document.id;
+      mediaType = 'document';
       content = messageData.document.filename || '';
+      
+      // إذا توفرت معلومات إضافية عن المستند
+      if (messageData.document) {
+        fileDetails = {
+          fileName: messageData.document.filename || `document_${id}`,
+          mimeType: messageData.document.mime_type || 'application/octet-stream',
+          fileSize: messageData.document.size || 0,
+          caption: messageData.document.caption || ''
+        };
+      }
+    } else if (type === 'sticker' && messageData.sticker) {
+      mediaUrl = messageData.sticker.link || messageData.sticker.id;
+      mediaType = 'sticker';
+      
+      // إذا توفرت معلومات إضافية عن الملصق
+      if (messageData.sticker) {
+        fileDetails = {
+          fileName: `sticker_${id}.webp`,
+          mimeType: messageData.sticker.mime_type || 'image/webp',
+          fileSize: messageData.sticker.size || 0,
+          animated: messageData.sticker.animated || false
+        };
+      }
     } else if (type === 'location' && messageData.location) {
       content = `${messageData.location.latitude}, ${messageData.location.longitude}`;
       if (messageData.location.name) {
@@ -179,7 +250,8 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       direction: 'incoming',
       content: content,
       mediaUrl: mediaUrl,
-      mediaType: type === 'text' ? null : type,
+      mediaType: mediaType,
+      fileDetails: fileDetails,
       timestamp: new Date(parseInt(timestamp) * 1000),
       status: 'received',
       externalMessageId: id,
@@ -208,35 +280,52 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
  * @param {string} content - محتوى الرسالة
  * @param {Object} userId - معرّف المستخدم المرسل
  * @param {string} replyToMessageId - معرّف الرسالة التي يتم الرد عليها (اختياري)
+ * @param {object} fileData - معلومات الملف (اختياري)
  */
-whatsappMessageSchema.statics.createOutgoingMessage = async function(conversationId, content, userId, replyToMessageId = null) {
+whatsappMessageSchema.statics.createOutgoingMessage = async function(conversationId, content, userId, replyToMessageId = null, fileData = null) {
   try {
-    // إذا كان هناك رد على رسالة، ابحث عن تفاصيلها
-    let context = null;
-    if (replyToMessageId) {
-      const originalMessage = await this.findOne({ externalMessageId: replyToMessageId });
-      if (originalMessage) {
-        context = {
-          message_id: replyToMessageId,
-          from: originalMessage.metadata ? originalMessage.metadata.from : null
-        };
-      }
-    }
-    
-    const message = await this.create({
-      conversationId: conversationId,
+    logger.info('WhatsappMessageModel', 'إنشاء رسالة صادرة', { 
+      conversationId, 
+      hasFileData: !!fileData 
+    });
+
+    const messageData = {
+      conversationId,
       direction: 'outgoing',
-      content: content,
+      content: content || '',
       timestamp: new Date(),
-      status: 'sent',
-      sentBy: userId,
-      replyToMessageId: replyToMessageId,
-      context: context
+      status: 'sent', // سيتم تحديثه لاحقًا مع تحديثات حالة واتساب
+      sentBy: userId
+    };
+
+    // إضافة معلومات الملف إذا وجدت
+    if (fileData) {
+      messageData.mediaUrl = fileData.publicUrl || fileData.url;
+      messageData.mediaType = fileData.mediaType;
+      messageData.fileDetails = {
+        fileName: fileData.fileName,
+        fileSize: fileData.size,
+        mimeType: fileData.mimeType,
+        r2Key: fileData.r2Key
+      };
+    }
+
+    // إضافة معلومات الرد إذا كانت متوفرة
+    if (replyToMessageId) {
+      messageData.replyToMessageId = replyToMessageId;
+    }
+
+    // إنشاء رسالة جديدة
+    const message = await this.create(messageData);
+    
+    logger.info('WhatsappMessageModel', 'تم إنشاء رسالة صادرة', { 
+      messageId: message._id, 
+      isReply: !!replyToMessageId 
     });
     
     return message;
   } catch (error) {
-    logger.error('خطأ في إنشاء رسالة صادرة:', error);
+    logger.error('WhatsappMessageModel', 'خطأ في إنشاء رسالة صادرة', error);
     throw error;
   }
 };

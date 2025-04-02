@@ -9,6 +9,7 @@ const Conversation = require('../models/Conversation');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
+const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -284,6 +285,61 @@ async function handleIncomingMessages(messages, meta) {
 
         // إضافة معرف الرسالة لمجموعة الرسائل المعالجة
         processedMessageIds.add(msg.id);
+        
+        // التحقق مما إذا كانت الرسالة تحتوي على وسائط تحتاج إلى تنزيل
+        let mediaInfo = null;
+        const mediaTypes = ['image', 'video', 'audio', 'document', 'sticker'];
+        
+        if (mediaTypes.includes(msg.type)) {
+          try {
+            // استخراج معرف الوسائط من الرسالة حسب نوعها
+            let mediaId = null;
+            if (msg.type === 'image' && msg.image) {
+              mediaId = msg.image.id;
+            } else if (msg.type === 'video' && msg.video) {
+              mediaId = msg.video.id;
+            } else if (msg.type === 'audio' && msg.audio) {
+              mediaId = msg.audio.id;
+            } else if (msg.type === 'document' && msg.document) {
+              mediaId = msg.document.id;
+            } else if (msg.type === 'sticker' && msg.sticker) {
+              mediaId = msg.sticker.id;
+            }
+            
+            if (mediaId) {
+              logger.info('metaWhatsappWebhookController', 'بدء تنزيل ملف وسائط', { 
+                messageId: msg.id, 
+                mediaId, 
+                mediaType: msg.type 
+              });
+              
+              // تنزيل الوسائط وتخزينها في R2
+              mediaInfo = await metaWhatsappService.downloadMedia(mediaId, phoneNumberId);
+              
+              // تحديث الرسالة برابط الملف الدائم
+              msg.mediaUrl = mediaInfo.publicUrl;
+              
+              // إضافة معلومات الملف المخزن إلى بيانات الرسالة
+              if (!msg.fileDetails) msg.fileDetails = {};
+              msg.fileDetails.r2Key = mediaInfo.r2Key;
+              msg.fileDetails.publicUrl = mediaInfo.publicUrl;
+              msg.fileDetails.fileSize = mediaInfo.fileSize;
+              msg.fileDetails.mimeType = mediaInfo.mimeType;
+              
+              logger.info('metaWhatsappWebhookController', 'تم تنزيل ملف وسائط بنجاح', { 
+                messageId: msg.id, 
+                mediaId,
+                r2Key: mediaInfo.r2Key
+              });
+            }
+          } catch (mediaError) {
+            logger.error('metaWhatsappWebhookController', 'خطأ في تنزيل ملف وسائط', { 
+              messageId: msg.id, 
+              error: mediaError.message 
+            });
+            // نتابع معالجة الرسالة حتى لو فشل تنزيل الوسائط
+          }
+        }
 
         // ابحث/أنشئ محادثة
         const conversation = await Conversation.findOrCreate(msg.from, channel._id);
@@ -302,6 +358,24 @@ async function handleIncomingMessages(messages, meta) {
           externalId: savedMsg.externalMessageId 
         });
 
+        // إضافة معلومات الملف إلى الإشعار إذا كانت الرسالة تحتوي على وسائط
+        let notificationData = {
+          _id: savedMsg._id,
+          content: savedMsg.content,
+          mediaUrl: savedMsg.mediaUrl,
+          mediaType: savedMsg.mediaType,
+          direction: savedMsg.direction,
+          timestamp: savedMsg.timestamp,
+          status: savedMsg.status,
+          externalMessageId: savedMsg.externalMessageId,
+          conversationId: conversation._id.toString()
+        };
+        
+        // إضافة معلومات الملف إلى الإشعار إذا كان متاحًا
+        if (savedMsg.fileDetails) {
+          notificationData.fileDetails = savedMsg.fileDetails;
+        }
+
         // التحقق ما إذا كانت تفاعل
         if (savedMsg && savedMsg.isReaction) {
           // إرسال إشعار بالتفاعل على الرسالة الأصلية
@@ -315,31 +389,15 @@ async function handleIncomingMessages(messages, meta) {
         else if (savedMsg && savedMsg.replyToMessageId) {
           socketService.notifyMessageReply(
             conversation._id.toString(),
-            {
-              _id: savedMsg._id,
-              content: savedMsg.content,
-              mediaUrl: savedMsg.mediaUrl,
-              mediaType: savedMsg.mediaType,
-              direction: savedMsg.direction,
-              timestamp: savedMsg.timestamp,
-              status: savedMsg.status,
-              externalMessageId: savedMsg.externalMessageId
-            },
+            notificationData,
             savedMsg.replyToMessageId
           );
         } else if (savedMsg) {
           // إشعار Socket.io بالرسالة الجديدة
-          socketService.notifyNewMessage(conversation._id.toString(), {
-            _id: savedMsg._id,
-            content: savedMsg.content,
-            mediaUrl: savedMsg.mediaUrl,
-            mediaType: savedMsg.mediaType,
-            direction: savedMsg.direction, // مفترض incoming
-            timestamp: savedMsg.timestamp,
-            status: savedMsg.status,
-            externalMessageId: savedMsg.externalMessageId,
-            conversationId: conversation._id.toString() // إضافة معرف المحادثة بشكل صريح
-          });
+          socketService.notifyNewMessage(
+            conversation._id.toString(), 
+            notificationData
+          );
         }
 
         // إشعار بتحديث المحادثة
