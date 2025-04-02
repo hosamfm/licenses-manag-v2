@@ -306,35 +306,84 @@ exports.getMediaContentByMessage = async (req, res) => {
       messageId
     });
     
-    // البحث عن الوسائط باستخدام معرف الرسالة
-    const media = await WhatsappMedia.findOne({ messageId });
+    // التحقق من وجود الرسالة أولاً (قد تكون المشكلة في علاقة البيانات)
+    const message = await require('../models/WhatsappMessageModel').findById(messageId);
     
-    if (!media) {
-      logger.error('whatsappMediaController', 'لم يتم العثور على وسائط للرسالة', {
+    if (!message) {
+      logger.error('whatsappMediaController', 'لم يتم العثور على الرسالة', {
         messageId
       });
       
-      return res.status(404).json({ success: false, error: 'لم يتم العثور على وسائط للرسالة المحددة' });
+      return res.status(404).json({ 
+        success: false, 
+        error: 'لم يتم العثور على الرسالة المحددة',
+        errorCode: 'MESSAGE_NOT_FOUND'
+      });
     }
+    
+    // البحث عن الوسائط باستخدام معرف الرسالة
+    // استخدام toString() للتأكد من المقارنة الصحيحة
+    const media = await WhatsappMedia.find({ 
+      messageId: messageId.toString() 
+    });
+    
+    logger.info('whatsappMediaController', 'نتائج البحث عن الوسائط', {
+      messageId,
+      mediaCount: media ? media.length : 0
+    });
+    
+    // البحث بطريقة أخرى إذا لم يتم العثور بالطريقة الأولى
+    if (!media || media.length === 0) {
+      // محاولة بديلة للبحث
+      const mediaByMessage = await WhatsappMedia.find({}).lean();
+      
+      const matchingMedia = mediaByMessage.filter(m => 
+        m.messageId && m.messageId.toString() === messageId.toString()
+      );
+      
+      logger.info('whatsappMediaController', 'محاولة بديلة للبحث', {
+        messageId,
+        totalMediaCount: mediaByMessage.length,
+        matchingCount: matchingMedia.length,
+        firstMatch: matchingMedia.length > 0 ? matchingMedia[0]._id : null
+      });
+      
+      if (matchingMedia.length > 0) {
+        // استخدام الوسائط المطابقة من المحاولة البديلة
+        return res.redirect(`/whatsapp/media/content/${matchingMedia[0]._id}`);
+      }
+      
+      // لم يتم العثور على وسائط
+      return res.status(404).json({ 
+        success: false, 
+        error: 'لم يتم العثور على وسائط للرسالة المحددة',
+        errorCode: 'MEDIA_NOT_FOUND'
+      });
+    }
+    
+    // استخدام أول وسائط تم العثور عليها
+    const mediaItem = media[0];
     
     logger.info('whatsappMediaController', 'تم العثور على وسائط للرسالة', {
       messageId,
-      mediaId: media._id,
-      mediaType: media.mediaType
+      mediaId: mediaItem._id,
+      mediaType: mediaItem.mediaType
     });
     
     // إعادة توجيه الطلب إلى مسار content مع معرف الوسائط
-    return res.redirect(`/whatsapp/media/content/${media._id}`);
+    return res.redirect(`/whatsapp/media/content/${mediaItem._id}`);
     
   } catch (error) {
     logger.error('whatsappMediaController', 'خطأ في استرجاع محتوى الوسائط بواسطة معرف الرسالة', {
       error: error.message,
+      stack: error.stack,
       messageId: req.params.messageId
     });
     
     return res.status(500).json({
       success: false,
-      error: 'خطأ في معالجة الطلب'
+      error: 'خطأ في معالجة الطلب',
+      message: error.message
     });
   }
 };
