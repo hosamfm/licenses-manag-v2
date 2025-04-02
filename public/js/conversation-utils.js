@@ -389,6 +389,87 @@
   };
   
   /**
+   * دالة لتنسيق حجم الملفات بشكل مقروء
+   * @param {number} bytes - حجم الملف بالبايت
+   * @returns {string} - الحجم المنسق (مثال: 1.5 MB)
+   */
+  window.formatFileSize = function(bytes) {
+    if (!bytes || isNaN(bytes)) return '';
+    
+    const units = ['بايت', 'كيلوبايت', 'ميجابايت', 'جيجابايت', 'تيرابايت'];
+    let size = parseInt(bytes, 10);
+    let unitIndex = 0;
+    
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+    
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
+  };
+  
+  /**
+   * دالة لعرض نص حالة الرسالة
+   * @param {string} status - حالة الرسالة
+   * @returns {string} - النص المقابل للحالة
+   */
+  window.getStatusText = function(status) {
+    switch (status) {
+      case 'sending':
+        return 'جاري الإرسال...';
+      case 'sent':
+        return 'تم الإرسال';
+      case 'delivered':
+        return 'تم التسليم';
+      case 'read':
+        return 'تم القراءة';
+      case 'failed':
+        return 'فشل الإرسال';
+      default:
+        return status || 'غير معروف';
+    }
+  };
+  
+  /**
+   * دالة لتنسيق الوقت بشكل مقروء
+   * @param {string|Date} timestamp - طابع زمني
+   * @returns {string} - الوقت المنسق
+   */
+  window.formatTime = function(timestamp) {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // إذا كان اليوم نفسه
+    if (diffDays === 0) {
+      return date.toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' });
+    }
+    
+    // إذا كان بالأمس
+    if (diffDays === 1) {
+      return `الأمس ${date.toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    
+    // إذا كان خلال الأسبوع الحالي (أقل من 7 أيام)
+    if (diffDays < 7) {
+      const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      return `${days[date.getDay()]} ${date.toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    
+    // غير ذلك، عرض التاريخ كاملاً
+    return date.toLocaleDateString('ar-LY', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+  
+  /**
    * دالة لتعليق مستمعات الأحداث للمحادثة
    */
   window.setupMessageActions = function(messageElem) {

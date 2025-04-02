@@ -50,7 +50,7 @@
               </div>
             <% } %>
             
-            <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %>">
+            <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %> <%= msg.mediaType ? 'message-with-media' : '' %>">
               <% if (msg.mediaType) { %>
                 <!-- عرض الوسائط حسب النوع -->
                 <% if (msg.mediaType === 'image') { %>
@@ -72,10 +72,16 @@
                     </audio>
                   </div>
                 <% } else if (msg.mediaType === 'document') { %>
-                  <div class="media-container document-container">
-                    <a href="/whatsapp/media/content/<%= msg._id %>" target="_blank" class="document-link">
+                  <div class="document-container">
+                    <div class="document-icon">
                       <i class="fas fa-file-alt"></i>
-                      <span><%= msg.content || 'مستند' %></span>
+                    </div>
+                    <div class="document-info">
+                      <div class="document-name"><%= msg.fileName || 'مستند' %></div>
+                      <div class="document-size"><%= msg.fileSize ? formatFileSize(msg.fileSize) : '' %></div>
+                    </div>
+                    <a href="/whatsapp/media/content/<%= msg._id %>" target="_blank" class="document-download">
+                      <i class="fas fa-download"></i>
                     </a>
                   </div>
                 <% } else if (msg.mediaType === 'sticker') { %>
@@ -83,33 +89,41 @@
                     <img src="/whatsapp/media/content/<%= msg._id %>" class="media-sticker" alt="ملصق">
                   </div>
                 <% } else if (msg.mediaType === 'location') { %>
-                  <div class="media-container location-container">
-                    <div class="location-info">
+                  <div class="location-container">
+                    <div class="location-icon">
                       <i class="fas fa-map-marker-alt"></i>
-                      <span><%= msg.content || 'موقع' %></span>
                     </div>
-                    <a href="https://www.google.com/maps/search/?api=1&query=<%= msg.content %>" target="_blank" class="btn btn-sm btn-outline-primary mt-2">
-                      <i class="fas fa-external-link-alt"></i> فتح في خرائط جوجل
-                    </a>
+                    <div class="location-info">
+                      <div class="location-name">موقع جغرافي</div>
+                      <div class="location-coordinates"><%= msg.content || 'إحداثيات غير متوفرة' %></div>
+                    </div>
                   </div>
                 <% } %>
               <% } %>
-              <%= msg.content %>
-              <div class="message-time">
-                <%= new Date(msg.timestamp).toLocaleString('ar-LY') %>
+              
+              <% if (msg.content && msg.content.trim() !== '') { %>
+                <div class="message-text <%= msg.mediaType ? 'with-media' : '' %>">
+                  <%= msg.content %>
+                </div>
+              <% } %>
+              
+              <div class="message-meta">
+                <span class="message-time" title="<%= new Date(msg.timestamp).toLocaleString() %>">
+                  <%= formatTime(msg.timestamp) %>
+                </span>
                 
                 <% if (msg.direction === 'outgoing') { %>
-                  <span class="message-status">
-                    <% if (msg.status === 'sending') { %>
-                      <i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>
-                    <% } else if (msg.status === 'sent') { %>
-                      <i class="fas fa-check text-silver" title="تم الإرسال"></i>
+                  <span class="message-status" title="حالة الرسالة: <%= getStatusText(msg.status) %>">
+                    <% if (msg.status === 'sent') { %>
+                      <i class="fas fa-check text-secondary"></i>
                     <% } else if (msg.status === 'delivered') { %>
-                      <i class="fas fa-check-double text-silver" title="تم التسليم"></i>
+                      <i class="fas fa-check-double text-secondary"></i>
                     <% } else if (msg.status === 'read') { %>
-                      <i class="fas fa-check-double text-primary" title="تم القراءة"></i>
+                      <i class="fas fa-check-double text-primary"></i>
                     <% } else if (msg.status === 'failed') { %>
-                      <i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>
+                      <i class="fas fa-exclamation-circle text-danger"></i>
+                    <% } else { %>
+                      <i class="fas fa-clock text-secondary"></i>
                     <% } %>
                   </span>
                 <% } %>

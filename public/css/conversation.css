@@ -366,6 +366,153 @@ body {
   overflow: hidden;
 }
 
+/* أنماط الوسائط في الرسائل */
+.media-container {
+  margin-bottom: 0.5rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+  max-width: 100%;
+  background-color: #f0f0f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.media-container img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 0.5rem;
+  transition: transform 0.3s ease;
+}
+
+.media-container img:hover {
+  transform: scale(1.02);
+}
+
+.media-container video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 0.5rem;
+}
+
+.media-container audio {
+  width: 100%;
+  display: block;
+  margin: 0.5rem 0;
+}
+
+.document-container {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  background-color: #f8f9fa;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #e2e8f0;
+}
+
+.document-icon {
+  font-size: 1.5rem;
+  margin-left: 0.75rem;
+  color: #4a5568;
+}
+
+.document-info {
+  flex: 1;
+}
+
+.document-name {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  word-break: break-word;
+  font-size: 0.9rem;
+}
+
+.document-size {
+  font-size: 0.75rem;
+  color: #718096;
+}
+
+.document-download {
+  margin-right: 0.5rem;
+  color: #3182ce;
+  cursor: pointer;
+}
+
+/* تحسين عرض الوسائط مع النص */
+.message-with-media .message-text {
+  margin-top: 0.5rem;
+}
+
+/* معاينة الوسائط قبل الإرسال */
+#mediaPreview {
+  background-color: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+#mediaPreview .preview-icon {
+  font-size: 1.5rem;
+  margin-left: 0.75rem;
+  color: #4a5568;
+}
+
+#mediaPreview .preview-info {
+  flex: 1;
+}
+
+#mediaPreview .preview-filename {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  word-break: break-word;
+}
+
+#mediaPreview .preview-remove {
+  color: #e53e3e;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+/* تحسين زر تحميل الوسائط */
+.upload-btn-wrapper {
+  position: relative;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.upload-btn-wrapper input[type=file] {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* تحسين شريط التقدم */
+.upload-progress {
+  margin-top: 0.5rem;
+  display: none;
+}
+
+.upload-progress .progress {
+  height: 0.5rem;
+  border-radius: 1rem;
+  background-color: #e2e8f0;
+}
+
+.upload-progress .progress-bar {
+  background-color: #3182ce;
+  border-radius: 1rem;
+  transition: width 0.3s ease;
+}
+
 /* أنماط تفاصيل المحادثة على الهواتف */
 @media (max-width: 991.98px) {
   .crm-content > .row > .col-lg-4 {

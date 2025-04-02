@@ -7,6 +7,7 @@ const Contact = require('../models/Contact');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const WhatsappChannel = require('../models/WhatsAppChannel');
 const User = require('../models/User');
+const WhatsappMedia = require('../models/WhatsappMedia');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 
@@ -191,7 +192,7 @@ exports.assignConversation = async (req, res) => {
     socketService.notifyConversationUpdate(conversationId, {
       type: 'assigned',
       assignedTo: assignedToId,
-      assignedBy: req.user ? req.user._id : null
+      assignedBy: req.user?._id || null
     });
 
     // إذا كان هناك مستخدم مسند سابق مختلف عن المسند الجديد، نرسل له إشعار
