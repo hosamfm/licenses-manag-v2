@@ -441,6 +441,11 @@ class MetaWhatsappService {
         logger.info('MetaWhatsappService', 'بدء تحميل وسائط إلى خوادم واتساب', {
             mimeType
         });
+        
+        // التحقق من دعم نوع الملف
+        if (!this.isSupportedMimeType(mimeType)) {
+            throw new Error(`نوع الملف ${mimeType} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`);
+        }
 
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
         let targetPhoneId = phoneNumberId;
@@ -539,6 +544,44 @@ class MetaWhatsappService {
         } else {
             return 'document';
         }
+    }
+    
+    /**
+     * التحقق من دعم نوع الملف في واتساب
+     * @param {string} mimeType - نوع MIME للملف
+     * @returns {boolean} هل النوع مدعوم أم لا
+     */
+    isSupportedMimeType(mimeType) {
+        // قائمة أنواع MIME المدعومة في واتساب
+        const supportedTypes = {
+            // الصور المدعومة
+            'image/jpeg': true,
+            'image/png': true,
+            'image/webp': true,
+            
+            // الفيديو المدعوم
+            'video/mp4': true,
+            'video/3gpp': true,
+            
+            // الصوت المدعوم
+            'audio/aac': true,
+            'audio/mp4': true,
+            'audio/mpeg': true,
+            'audio/amr': true,
+            'audio/ogg': true,
+            
+            // المستندات المدعومة
+            'application/pdf': true,
+            'application/vnd.ms-powerpoint': true,
+            'application/msword': true,
+            'application/vnd.ms-excel': true,
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': true,
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation': true,
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': true,
+            'text/plain': true
+        };
+        
+        return !!supportedTypes[mimeType];
     }
     
     /**
@@ -653,6 +696,11 @@ class MetaWhatsappService {
                     } else {
                         base64Data = imageUrl.split('base64,')[1] || imageUrl;
                     }
+                }
+                
+                // التحقق من دعم نوع الملف
+                if (!this.isSupportedMimeType(mimeType)) {
+                    throw new Error(`نوع الملف ${mimeType} غير مدعوم في واتساب. الأنواع المدعومة للصور هي: JPEG, PNG, WEBP فقط.`);
                 }
                 
                 // تحميل الصورة إلى خوادم واتساب

@@ -368,25 +368,24 @@ body {
 
 /* أنماط الوسائط في الرسائل */
 .media-container {
-  margin-bottom: 0.5rem;
+  margin: 0.5rem 0;
   border-radius: 0.5rem;
   overflow: hidden;
-  position: relative;
   max-width: 100%;
-  background-color: #f0f0f0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .media-container img {
-  max-width: 100%;
+  max-width: 50%; /* تصغير الصورة إلى نصف الحجم */
   height: auto;
   display: block;
   border-radius: 0.5rem;
   transition: transform 0.3s ease;
+  cursor: pointer; /* مؤشر يد للإشارة إلى أن الصورة قابلة للنقر */
 }
 
 .media-container img:hover {
   transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .media-container video {

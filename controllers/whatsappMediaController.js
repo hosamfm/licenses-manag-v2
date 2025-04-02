@@ -10,6 +10,44 @@ const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const logger = require('../services/loggerService');
 
 /**
+ * التحقق من دعم نوع الملف في واتساب
+ * @param {string} mimeType - نوع MIME للملف
+ * @returns {boolean} هل النوع مدعوم أم لا
+ */
+function isSupportedMimeType(mimeType) {
+  // قائمة أنواع MIME المدعومة في واتساب
+  const supportedTypes = {
+    // الصور المدعومة
+    'image/jpeg': true,
+    'image/png': true,
+    'image/webp': true,
+    
+    // الفيديو المدعوم
+    'video/mp4': true,
+    'video/3gpp': true,
+    
+    // الصوت المدعوم
+    'audio/aac': true,
+    'audio/mp4': true,
+    'audio/mpeg': true,
+    'audio/amr': true,
+    'audio/ogg': true,
+    
+    // المستندات المدعومة
+    'application/pdf': true,
+    'application/vnd.ms-powerpoint': true,
+    'application/msword': true,
+    'application/vnd.ms-excel': true,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': true,
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': true,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': true,
+    'text/plain': true
+  };
+  
+  return !!supportedTypes[mimeType];
+}
+
+/**
  * تنزيل وسائط من API ميتا واتساب وتخزينها
  * @param {Object} mediaInfo - معلومات الوسائط (النوع، المعرف، الرابط...)
  * @param {Object} messageData - بيانات الرسالة المرتبطة
@@ -381,6 +419,14 @@ exports.uploadMediaForSending = async (req, res) => {
     
     const { conversationId, mediaType } = req.body;
     const file = req.file;
+    
+    // التحقق من دعم نوع الملف
+    if (!isSupportedMimeType(file.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        error: `نوع الملف ${file.mimetype} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`
+      });
+    }
     
     // قراءة محتوى الملف وتحويله إلى base64
     const fileData = file.buffer.toString('base64');
