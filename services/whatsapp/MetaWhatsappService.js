@@ -384,6 +384,10 @@ class MetaWhatsappService {
             await this.initialize();
         }
 
+        logger.info('MetaWhatsappService', 'جاري الحصول على رابط الوسائط', {
+            mediaId
+        });
+
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
         let settingsToUse = this.settings;
         
@@ -395,7 +399,31 @@ class MetaWhatsappService {
             }
         }
 
-        return this.sendRequest(`/${mediaId}`, 'GET', null, settingsToUse);
+        try {
+            // إنشاء طلب للحصول على معلومات الوسائط
+            const url = `${this.baseUrl}/${mediaId}`;
+            const headers = {
+                'Authorization': `Bearer ${settingsToUse.config.accessToken}`
+            };
+            
+            // استخدام axios للحصول على معلومات الوسائط
+            const axios = require('axios');
+            const response = await axios.get(url, { headers });
+            
+            logger.info('MetaWhatsappService', 'تم الحصول على معلومات الوسائط بنجاح', {
+                mediaId,
+                responseData: response.data
+            });
+            
+            return response.data;
+        } catch (error) {
+            logger.error('MetaWhatsappService', 'خطأ في الحصول على معلومات الوسائط', {
+                error: error.message,
+                mediaId,
+                response: error.response?.data
+            });
+            throw error;
+        }
     }
 
     /**
