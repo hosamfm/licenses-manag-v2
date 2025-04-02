@@ -570,16 +570,5 @@
       setInterval(refreshConversationsList, 60000);
     });
   </script>
-  
-  <!-- استدعاء الوظائف عند تحميل المحادثة -->
-  <script>
-    $(document).ready(function() {
-      // تحديث روابط جميع الوسائط عند تحميل المحادثة
-      refreshAllMediaUrls();
-      
-      // إعادة تحديث روابط الوسائط كل 8 ساعات للملفات المعروضة
-      setInterval(refreshAllMediaUrls, 8 * 60 * 60 * 1000);
-    });
-  </script>
 </body>
 </html>
