@@ -135,6 +135,10 @@ class MetaWhatsappService {
             await this.initialize();
         }
 
+        logger.info('MetaWhatsappService', 'جاري الحصول على رابط الوسائط', {
+            phoneNumberId
+        });
+
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
         let targetPhoneId = phoneNumberId;
         let settingsToUse = this.settings;
@@ -430,21 +434,43 @@ class MetaWhatsappService {
      * تحميل وسائط إلى خوادم واتساب
      * @param {string|Buffer} fileData - محتوى الملف (base64 أو بيانات الملف)
      * @param {string} mimeType - نوع MIME للملف
+     * @param {object} options - خيارات إضافية (filename)
      * @param {string} phoneNumberId - معرف رقم الهاتف (اختياري)
      * @returns {Promise<object>} استجابة تحميل الوسائط تحتوي على معرف الوسائط
      */
-    async uploadMedia(fileData, mimeType, phoneNumberId = null) {
+    async uploadMedia(fileData, mimeType, options = {}, phoneNumberId = null) {
         if (!this.initialized) {
             await this.initialize();
         }
 
         logger.info('MetaWhatsappService', 'بدء تحميل وسائط إلى خوادم واتساب', {
-            mimeType
+            mimeType,
+            fileName: options?.filename
         });
         
+        // تصحيح نوع الملف إذا كان application/octet-stream
+        let finalMimeType = mimeType;
+        if (mimeType === 'application/octet-stream' && options?.filename) {
+            // محاولة تحديد النوع الحقيقي من امتداد الملف
+            const extension = options.filename.toLowerCase().split('.').pop();
+            if (extension === 'pdf') {
+                finalMimeType = 'application/pdf';
+                logger.info('MetaWhatsappService', 'تم تصحيح نوع الملف إلى PDF', {
+                    originalMimeType: mimeType,
+                    newMimeType: finalMimeType
+                });
+            } else if (['doc', 'docx'].includes(extension)) {
+                finalMimeType = 'application/msword';
+            } else if (['xls', 'xlsx'].includes(extension)) {
+                finalMimeType = 'application/vnd.ms-excel';
+            } else if (['ppt', 'pptx'].includes(extension)) {
+                finalMimeType = 'application/vnd.ms-powerpoint';
+            }
+        }
+        
         // التحقق من دعم نوع الملف
-        if (!this.isSupportedMimeType(mimeType)) {
-            throw new Error(`نوع الملف ${mimeType} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`);
+        if (!this.isSupportedMimeType(finalMimeType, options?.filename)) {
+            throw new Error(`نوع الملف ${finalMimeType} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`);
         }
 
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
@@ -487,17 +513,25 @@ class MetaWhatsappService {
             }
             
             // التحقق من نوع الوسائط وحجمها حسب قيود واتساب
-            const mediaType = this.getMediaTypeFromMimeType(mimeType);
+            const mediaType = this.getMediaTypeFromMimeType(finalMimeType);
             const maxSize = this.getMaxSizeForMediaType(mediaType);
             
             if (fileBuffer.length > maxSize) {
                 throw new Error(`حجم الملف (${fileBuffer.length} بايت) يتجاوز الحد الأقصى المسموح به (${maxSize} بايت) لنوع الوسائط ${mediaType}`);
             }
             
+            // تحضير اسم الملف مع التعامل مع الأسماء العربية
+            let filename = 'media_file';
+            if (options?.filename) {
+                // استخدام اسم الملف الأصلي إذا كان موجوداً مع إصلاح المشاكل المحتملة في الأسماء العربية
+                // نستخدم اسم بسيط بالإنجليزية للملف للتأكد من عدم وجود مشاكل مع API واتساب
+                filename = `file_${Date.now()}`;
+            }
+            
             // إضافة الملف إلى النموذج
             form.append('file', fileBuffer, {
-                filename: `media_file.${this.getFileExtensionFromMimeType(mimeType)}`,
-                contentType: mimeType
+                filename: `${filename}.${this.getFileExtensionFromMimeType(finalMimeType)}`,
+                contentType: finalMimeType
             });
             
             // إرسال طلب تحميل الوسائط
@@ -516,13 +550,15 @@ class MetaWhatsappService {
             });
             
             logger.info('MetaWhatsappService', 'تم تحميل الوسائط بنجاح', {
-                mediaId: response.data.id
+                mediaId: response.data.id,
+                mimeType: finalMimeType
             });
             
             return response.data;
         } catch (error) {
             logger.error('MetaWhatsappService', 'خطأ في تحميل الوسائط', {
                 error: error.message,
+                mimeType: finalMimeType,
                 response: error.response?.data
             });
             throw error;
@@ -549,9 +585,10 @@ class MetaWhatsappService {
     /**
      * التحقق من دعم نوع الملف في واتساب
      * @param {string} mimeType - نوع MIME للملف
+     * @param {string} fileName - اسم الملف (اختياري - يستخدم للتحقق من الامتداد إذا كان نوع MIME غير محدد)
      * @returns {boolean} هل النوع مدعوم أم لا
      */
-    isSupportedMimeType(mimeType) {
+    isSupportedMimeType(mimeType, fileName = '') {
         // قائمة أنواع MIME المدعومة في واتساب
         const supportedTypes = {
             // الصور المدعومة
@@ -581,7 +618,49 @@ class MetaWhatsappService {
             'text/plain': true
         };
         
-        return !!supportedTypes[mimeType];
+        // التحقق من نوع MIME مباشرة
+        if (supportedTypes[mimeType]) {
+            return true;
+        }
+        
+        // إذا كان النوع application/octet-stream، نحاول تحديد النوع من امتداد الملف
+        if (mimeType === 'application/octet-stream' && fileName) {
+            const extension = fileName.toLowerCase().split('.').pop();
+            
+            // تحديد نوع الملف بناءً على الامتداد
+            switch (extension) {
+                case 'pdf':
+                    return true; // مستند PDF
+                case 'doc':
+                case 'docx':
+                    return true; // مستند Word
+                case 'xls':
+                case 'xlsx':
+                    return true; // مستند Excel
+                case 'ppt':
+                case 'pptx':
+                    return true; // مستند PowerPoint
+                case 'txt':
+                    return true; // ملف نصي
+                case 'jpg':
+                case 'jpeg':
+                case 'png':
+                case 'webp':
+                    return true; // صورة
+                case 'mp4':
+                case '3gp':
+                    return true; // فيديو
+                case 'mp3':
+                case 'ogg':
+                case 'aac':
+                case 'amr':
+                    return true; // صوت
+                default:
+                    return false;
+            }
+        }
+        
+        return false;
     }
     
     /**
@@ -699,7 +778,7 @@ class MetaWhatsappService {
                 }
                 
                 // التحقق من دعم نوع الملف
-                if (!this.isSupportedMimeType(mimeType)) {
+                if (!this.isSupportedMimeType(mimeType, 'image.' + this.getFileExtensionFromMimeType(mimeType))) {
                     throw new Error(`نوع الملف ${mimeType} غير مدعوم في واتساب. الأنواع المدعومة للصور هي: JPEG, PNG, WEBP فقط.`);
                 }
                 

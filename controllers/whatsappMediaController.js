@@ -12,9 +12,10 @@ const logger = require('../services/loggerService');
 /**
  * التحقق من دعم نوع الملف في واتساب
  * @param {string} mimeType - نوع MIME للملف
+ * @param {string} fileName - اسم الملف (اختياري - يستخدم للتحقق من الامتداد إذا كان نوع MIME غير محدد)
  * @returns {boolean} هل النوع مدعوم أم لا
  */
-function isSupportedMimeType(mimeType) {
+function isSupportedMimeType(mimeType, fileName = '') {
   // قائمة أنواع MIME المدعومة في واتساب
   const supportedTypes = {
     // الصور المدعومة
@@ -44,7 +45,49 @@ function isSupportedMimeType(mimeType) {
     'text/plain': true
   };
   
-  return !!supportedTypes[mimeType];
+  // التحقق من نوع MIME مباشرة
+  if (supportedTypes[mimeType]) {
+    return true;
+  }
+  
+  // إذا كان النوع application/octet-stream، نحاول تحديد النوع من امتداد الملف
+  if (mimeType === 'application/octet-stream' && fileName) {
+    const extension = fileName.toLowerCase().split('.').pop();
+    
+    // تحديد نوع الملف بناءً على الامتداد
+    switch (extension) {
+      case 'pdf':
+        return true; // مستند PDF
+      case 'doc':
+      case 'docx':
+        return true; // مستند Word
+      case 'xls':
+      case 'xlsx':
+        return true; // مستند Excel
+      case 'ppt':
+      case 'pptx':
+        return true; // مستند PowerPoint
+      case 'txt':
+        return true; // ملف نصي
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+        return true; // صورة
+      case 'mp4':
+      case '3gp':
+        return true; // فيديو
+      case 'mp3':
+      case 'ogg':
+      case 'aac':
+      case 'amr':
+        return true; // صوت
+      default:
+        return false;
+    }
+  }
+  
+  return false;
 }
 
 /**
@@ -420,24 +463,49 @@ exports.uploadMediaForSending = async (req, res) => {
     const { conversationId, mediaType } = req.body;
     const file = req.file;
     
-    // التحقق من دعم نوع الملف
-    if (!isSupportedMimeType(file.mimetype)) {
-      return res.status(400).json({
-        success: false,
-        error: `نوع الملف ${file.mimetype} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`
-      });
-    }
+    // معالجة اسم الملف للتأكد من أن الأحرف العربية تظهر بشكل صحيح
+    let fileName = file.originalname;
     
     // قراءة محتوى الملف وتحويله إلى base64
     const fileData = file.buffer.toString('base64');
+    
+    // تصحيح نوع الملف إذا كان application/octet-stream
+    let mimeType = file.mimetype;
+    if (mimeType === 'application/octet-stream') {
+      // محاولة تحديد النوع الحقيقي من امتداد الملف
+      const extension = fileName.toLowerCase().split('.').pop();
+      if (extension === 'pdf') {
+        mimeType = 'application/pdf';
+      } else if (['doc', 'docx'].includes(extension)) {
+        mimeType = 'application/msword';
+      } else if (['xls', 'xlsx'].includes(extension)) {
+        mimeType = 'application/vnd.ms-excel';
+      } else if (['ppt', 'pptx'].includes(extension)) {
+        mimeType = 'application/vnd.ms-powerpoint';
+      }
+    }
+    
+    // التحقق من دعم نوع الملف
+    if (!isSupportedMimeType(mimeType, fileName)) {
+      return res.status(400).json({
+        success: false,
+        error: `نوع الملف ${mimeType} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`
+      });
+    }
+    
+    logger.info('whatsappMediaController', 'تحميل وسائط للإرسال', {
+      fileName,
+      mimeType,
+      fileSize: file.size
+    });
     
     // إنشاء سجل وسائط جديد (بدون messageId حتى يتم إنشاء الرسالة)
     const media = await WhatsappMedia.createMedia({
       conversationId,
       direction: 'outgoing',
       mediaType,
-      fileName: file.originalname,
-      mimeType: file.mimetype,
+      fileName,
+      mimeType,
       fileSize: file.size,
       fileData,
       metaData: { uploaded: true }
