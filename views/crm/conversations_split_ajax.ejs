@@ -423,25 +423,103 @@
           `;
         }
         
-        // إضافة فقاعة الرسالة
+        // إضافة فقاعة الرسالة مع دعم الوسائط
         messageHTML += `
-          <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
-            ${messageData.content || ''}
-            <div class="message-time">
-              ${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString('ar-LY')}
-              
-              ${messageData.direction === 'outgoing' ? `
-                <span class="message-status">
-                  ${messageData.status === 'sending' ? '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>' : ''}
-                  ${messageData.status === 'sent' ? '<i class="fas fa-check text-silver" title="تم الإرسال"></i>' : ''}
-                  ${messageData.status === 'delivered' ? '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>' : ''}
-                  ${messageData.status === 'read' ? '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>' : ''}
-                  ${messageData.status === 'failed' ? '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>' : ''}
-                </span>
-              ` : ''}
+          <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'} ${messageData.mediaType ? 'message-with-media' : ''}">
+        `;
+        
+        // إضافة الوسائط حسب النوع
+        if (messageData.mediaType) {
+          if (messageData.mediaType === 'image') {
+            messageHTML += `
+              <div class="media-container">
+                <img src="/whatsapp/media/content/${messageData._id}" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
+              </div>
+            `;
+          } else if (messageData.mediaType === 'video') {
+            messageHTML += `
+              <div class="media-container">
+                <video controls class="media-video">
+                  <source src="/whatsapp/media/content/${messageData._id}" type="video/mp4">
+                  المتصفح لا يدعم عرض الفيديو
+                </video>
+              </div>
+            `;
+          } else if (messageData.mediaType === 'audio') {
+            messageHTML += `
+              <div class="media-container">
+                <audio controls class="media-audio">
+                  <source src="/whatsapp/media/content/${messageData._id}" type="audio/ogg">
+                  المتصفح لا يدعم تشغيل الملفات الصوتية
+                </audio>
+              </div>
+            `;
+          } else if (messageData.mediaType === 'document') {
+            messageHTML += `
+              <div class="document-container">
+                <div class="document-icon">
+                  <i class="fas fa-file-alt"></i>
+                </div>
+                <div class="document-info">
+                  <div class="document-name">${messageData.fileName || 'مستند'}</div>
+                  <div class="document-size">${messageData.fileSize ? (Math.round(messageData.fileSize / 1024) + ' كيلوبايت') : ''}</div>
+                </div>
+                <a href="/whatsapp/media/content/${messageData._id}" target="_blank" class="document-download">
+                  <i class="fas fa-download"></i>
+                </a>
+              </div>
+            `;
+          } else if (messageData.mediaType === 'sticker') {
+            messageHTML += `
+              <div class="media-container">
+                <img src="/whatsapp/media/content/${messageData._id}" class="media-sticker" alt="ملصق">
+              </div>
+            `;
+          } else if (messageData.mediaType === 'location') {
+            messageHTML += `
+              <div class="location-container">
+                <div class="location-icon">
+                  <i class="fas fa-map-marker-alt"></i>
+                </div>
+                <div class="location-info">
+                  <div class="location-name">موقع جغرافي</div>
+                  <div class="location-coordinates">${messageData.content || 'إحداثيات غير متوفرة'}</div>
+                </div>
+              </div>
+            `;
+          }
+        }
+        
+        // إضافة نص الرسالة (إذا كان موجودًا)
+        if (messageData.content && messageData.content.trim() !== '') {
+          messageHTML += `
+            <div class="message-text ${messageData.mediaType ? 'with-media' : ''}">
+              ${messageData.content}
             </div>
+          `;
+        }
+        
+        // إضافة معلومات الوقت والحالة
+        messageHTML += `
+          <div class="message-meta">
+            <span class="message-time" title="${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString()}">
+              ${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+            
+            ${messageData.direction === 'outgoing' ? `
+              <span class="message-status" title="حالة الرسالة: ${messageData.status || 'sent'}">
+                ${messageData.status === 'sent' ? '<i class="fas fa-check text-secondary"></i>' : ''}
+                ${messageData.status === 'delivered' ? '<i class="fas fa-check-double text-secondary"></i>' : ''}
+                ${messageData.status === 'read' ? '<i class="fas fa-check-double text-primary"></i>' : ''}
+                ${messageData.status === 'failed' ? '<i class="fas fa-exclamation-circle text-danger"></i>' : ''}
+                ${(!messageData.status || messageData.status === 'sending') ? '<i class="fas fa-clock text-secondary"></i>' : ''}
+              </span>
+            ` : ''}
           </div>
         `;
+        
+        // إغلاق فقاعة الرسالة
+        messageHTML += `</div>`;
         
         // إضافة قسم التفاعلات (إذا وجدت)
         if (messageData.reactions && messageData.reactions.length > 0) {
@@ -480,15 +558,17 @@
         // تمرير المحادثة لأسفل
         messageContainer.scrollTop = messageContainer.scrollHeight;
         
-        // إضافة مستمعات الأحداث للرسالة الجديدة
-        const newMessageElem = messageContainer.lastElementChild;
-        window.setupMessageActions(newMessageElem);
-        
-        // تشغيل صوت الإشعار إذا كانت رسالة واردة
+        // تشغيل صوت الإشعار للرسائل الواردة
         if (messageData.direction === 'incoming') {
           window.playNotificationSound();
         }
-      }
+        
+        // تعليق مستمعات الأحداث للرسالة الجديدة
+        const newMessage = messageContainer.querySelector(`.message[data-message-id="${messageData._id}"]`);
+        if (newMessage) {
+          window.setupMessageActions(newMessage);
+        }
+      };
       
       // تهيئة الصفحة عند التحميل
       function initializePage() {

@@ -236,6 +236,16 @@ function notifyNewMessage(conversationId, message) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
+  
+  // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
+  if (message && message.mediaType) {
+    logger.info('socketService', 'إرسال إشعار برسالة جديدة مع وسائط', { 
+      conversationId, 
+      mediaType: message.mediaType,
+      messageId: message._id
+    });
+  }
+  
   io.to(`conversation-${conversationId}`).emit('new-message', message);
   logger.info('socketService', 'تم إرسال إشعار برسالة جديدة', { conversationId });
 }

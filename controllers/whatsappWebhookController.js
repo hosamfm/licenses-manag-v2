@@ -562,6 +562,49 @@ exports.handleIncomingMessage = async (req, res) => {
                 phone: phone 
             });
             
+            // إرسال إشعار بالرسالة الجديدة عبر Socket.io
+            const socketService = require('../services/socketService');
+            
+            // إذا كانت الرسالة تحتوي على وسائط، نضيف معلومات الوسائط
+            if (msg.mediaType) {
+                // جلب معلومات الوسائط المرتبطة بالرسالة
+                const WhatsappMedia = require('../models/WhatsappMedia');
+                const mediaInfo = await WhatsappMedia.findOne({ messageId: msg._id });
+                
+                // إضافة معلومات الوسائط إلى كائن الرسالة للإشعار
+                const messageWithMedia = {
+                    _id: msg._id,
+                    conversationId: msg.conversationId,
+                    content: msg.content,
+                    direction: 'incoming',
+                    timestamp: msg.timestamp,
+                    status: msg.status,
+                    externalMessageId: msg.externalMessageId,
+                    mediaType: msg.mediaType,
+                    fileName: mediaInfo ? mediaInfo.fileName : null,
+                    fileSize: mediaInfo ? mediaInfo.fileSize : null
+                };
+                
+                logger.info('whatsappWebhookController', 'إرسال إشعار برسالة واردة مع وسائط', {
+                    conversationId: msg.conversationId,
+                    mediaType: msg.mediaType,
+                    messageId: msg._id
+                });
+                
+                socketService.notifyNewMessage(msg.conversationId, messageWithMedia);
+            } else {
+                // إرسال إشعار برسالة نصية عادية
+                socketService.notifyNewMessage(msg.conversationId, {
+                    _id: msg._id,
+                    conversationId: msg.conversationId,
+                    content: msg.content,
+                    direction: 'incoming',
+                    timestamp: msg.timestamp,
+                    status: msg.status,
+                    externalMessageId: msg.externalMessageId
+                });
+            }
+            
             // إرجاع استجابة نجاح
             return res.status(200).json({
                 success: true,

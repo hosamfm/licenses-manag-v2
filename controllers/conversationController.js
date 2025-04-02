@@ -511,7 +511,10 @@ exports.replyToConversation = async (req, res) => {
         direction: 'outgoing',
         timestamp: msg.timestamp,
         status: msg.status,
-        externalMessageId: externalId || null
+        externalMessageId: externalId || null,
+        mediaType: mediaType || null,
+        fileName: mediaType === 'document' ? (await WhatsappMedia.findById(mediaId))?.fileName : null,
+        fileSize: mediaType ? (await WhatsappMedia.findById(mediaId))?.fileSize : null
       }, externalReplyId || replyToMessageId); // استخدام المعرف الخارجي في الإشعارات أيضاً
     } else {
       socketService.notifyNewMessage(conversationId, {
@@ -521,7 +524,10 @@ exports.replyToConversation = async (req, res) => {
         direction: 'outgoing',
         timestamp: msg.timestamp,
         status: msg.status,
-        externalMessageId: externalId || null
+        externalMessageId: externalId || null,
+        mediaType: mediaType || null,
+        fileName: mediaType === 'document' ? (await WhatsappMedia.findById(mediaId))?.fileName : null,
+        fileSize: mediaType ? (await WhatsappMedia.findById(mediaId))?.fileSize : null
       });
     }
 
