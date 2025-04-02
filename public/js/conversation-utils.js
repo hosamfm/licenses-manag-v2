@@ -620,6 +620,100 @@
         console.warn('نموذج الرد غير موجود! قد تكون المحادثة مغلقة.');
       }
     }
+    
+    // التأكد من وجود Socket.io
+    if (typeof socket !== 'undefined') {
+      // مستمع لحدث الرد على رسالة
+      socket.on('message-reply', function(data) {
+        if (window.debugMode === true) {
+          console.log('تم استلام حدث رد على رسالة:', data);
+        }
+        
+        try {
+          if (!data || !data.message) {
+            return console.warn('بيانات الرد غير مكتملة:', data);
+          }
+          
+          // تجهيز بيانات الرسالة
+          const message = data.message;
+          const replyToId = data.replyToId;
+          
+          if (!replyToId) {
+            return console.warn('معرف الرسالة المراد الرد عليها غير موجود!', data);
+          }
+          
+          // 1. إنشاء عنصر الرسالة الجديدة
+          const messageContainer = document.getElementById('messageContainer');
+          if (!messageContainer) {
+            return console.warn('حاوية الرسائل غير موجودة في الصفحة!');
+          }
+          
+          // 2. البحث عن الرسالة المرد عليها
+          const repliedMsg = document.querySelector(`.message[data-external-id="${replyToId}"], .message[data-message-id="${replyToId}"]`);
+          
+          // 3. إنشاء HTML للرسالة مع معلومات الرد
+          let messageHTML = `
+            <div class="message ${message.direction}" 
+                data-message-id="${message._id}" 
+                data-status="${message.status}"
+                ${message.externalMessageId ? `data-external-id="${message.externalMessageId}"` : ''}>
+              <div class="replied-message">
+                <div class="replied-content">
+                  <i class="fas fa-reply"></i>
+                  <span>${repliedMsg ? 
+                    (repliedMsg.querySelector('.message-bubble').textContent.trim().substring(0, 50) + (repliedMsg.querySelector('.message-bubble').textContent.trim().length > 50 ? '...' : '')) : 
+                    'رد على رسالة غير موجودة'}</span>
+                </div>
+              </div>
+              <div class="message-bubble ${message.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
+                ${message.content}
+                <div class="message-time">
+                  ${new Date(message.timestamp).toLocaleString('ar-LY')}
+                  ${message.direction === 'outgoing' ? `
+                    <span class="message-status">
+                      ${message.status === 'sending' ? '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>' : ''}
+                      ${message.status === 'sent' ? '<i class="fas fa-check text-silver" title="تم الإرسال"></i>' : ''}
+                      ${message.status === 'delivered' ? '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>' : ''}
+                      ${message.status === 'read' ? '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>' : ''}
+                      ${message.status === 'failed' ? '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>' : ''}
+                    </span>
+                  ` : ''}
+                </div>
+              </div>
+              <div class="message-actions">
+                <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('${message._id}', '${message.externalMessageId || ''}', this)">
+                  <i class="far fa-smile"></i>
+                </button>
+                <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" title="رد" onclick="window.showReplyForm('${message._id}', '${message.externalMessageId || ''}', this.closest('.message'))">
+                  <i class="fas fa-reply"></i>
+                </button>
+              </div>
+            </div>
+          `;
+          
+          // إضافة الرسالة إلى النهاية
+          messageContainer.insertAdjacentHTML('beforeend', messageHTML);
+          
+          // تطبيق مستمعات الأحداث على الرسالة الجديدة
+          const newMessageElem = messageContainer.lastElementChild;
+          window.setupMessageActions(newMessageElem);
+          
+          // التمرير إلى أسفل
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+          
+          // تشغيل صوت الإشعار إذا كانت رسالة واردة
+          if (message.direction === 'incoming') {
+            window.playNotificationSound();
+          }
+        } catch (error) {
+          console.error('خطأ في معالجة حدث رد على رسالة:', error);
+        }
+      });
+    } else {
+      if (window.debugMode === true) {
+        console.warn('Socket.io غير متاح! لن يتم استلام الإشعارات في الوقت الحقيقي.');
+      }
+    }
   };
 
   /**
