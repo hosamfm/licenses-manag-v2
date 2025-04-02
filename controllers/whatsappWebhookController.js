@@ -1,5 +1,9 @@
 /**
- * وحدة تحكم للتعامل مع Webhook الخاص بحالة رسائل الواتس أب
+ * وحدة تحكم للتعامل مع Webhook الخاص بحالة رسائل الواتس أب عبر SemySMS
+ * 
+ * ملاحظة: يستخدم النظام SemySMS كواجهة وسيطة للتعامل مع الواتس أب
+ * بالإضافة إلى استخدام واجهة ميتا الرسمية للواتس أب
+ * يجب الحفاظ على هذا الملف وعدم حذفه طالما أننا نستخدم SemySMS
  */
 const SemMessage = require('../models/SemMessage');
 const WhatsappIncomingMessage = require('../models/WhatsappIncomingMessage');
@@ -11,64 +15,112 @@ const URLSearchParams = require('url').URLSearchParams;
 const { v4: uuidv4 } = require('uuid');
 
 /**
- * معالجة التحديثات الواردة من SemySMS Webhook لرسائل الواتس أب
+ * دالة مساعدة لتحليل بيانات الطلب وتوحيدها بغض النظر عن نوع المحتوى
+ * 
+ * @param {Object} req - كائن الطلب
+ * @param {Object} options - خيارات التحليل
+ * @param {boolean} options.extractMessageFields - ما إذا كان يجب استخراج حقول الرسالة (الافتراضي: true)
+ * @param {boolean} options.normalizeStatusFields - ما إذا كان يجب توحيد حقول الحالة (الافتراضي: true)
+ * @returns {Object} كائن يحتوي على البيانات المستخرجة والمعلومات الإضافية
  */
-exports.handleStatusUpdate = async (req, res) => {
-    try {
-        // سجل الحد الأدنى من المعلومات عن الطلب الوارد - فقط في حالة الأخطاء
-        if (req.headers['content-type'] && !req.headers['content-type'].includes('multipart/form-data') && 
-            !req.headers['content-type'].includes('application/json') && 
-            !req.headers['content-type'].includes('application/x-www-form-urlencoded')) {
-            logger.warn('whatsappWebhookController', 'استلام تحديث حالة من webhook بتنسيق غير متوقع', {
-                method: req.method,
-                contentType: req.headers['content-type']
-            });
+const parseRequestData = (req, options = {}) => {
+    const defaultOptions = {
+        extractMessageFields: true,
+        normalizeStatusFields: true
+    };
+    
+    const opts = { ...defaultOptions, ...options };
+    const contentType = req.headers['content-type'] || 'Unknown';
+    let data = {};
+    
+    // 1. استخراج البيانات الأساسية من الطلب بناءً على نوع المحتوى
+    if (contentType.includes('multipart/form-data')) {
+        // معالجة البيانات بتنسيق multipart/form-data
+        data = { ...req.query, ...req.body };
+        
+        // في بعض حالات multipart/form-data، قد تكون البيانات في req.files
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                try {
+                    // محاولة تحليل البيانات كـ JSON إذا كانت نصية
+                    if (file.buffer) {
+                        const fieldValue = file.buffer.toString('utf8');
+                        try {
+                            const jsonData = JSON.parse(fieldValue);
+                            data = { ...data, ...jsonData };
+                        } catch (e) {
+                            // إذا لم تكن JSON، نخزن النص كما هو
+                            data[file.fieldname] = fieldValue;
+                        }
+                    }
+                } catch (error) {
+                    logger.error('whatsappWebhookController', 'خطأ أثناء معالجة ملف في طلب webhook', error);
+                }
+            }
         }
         
-        // التحقق من نوع المحتوى وتحليله بطريقة مناسبة
-        let data = {};
-        
-        if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
-            // معالجة البيانات بتنسيق multipart/form-data
-            data = { ...req.query, ...req.body };
-            
-            // في بعض حالات multipart/form-data، قد تكون البيانات في req.files
-            if (req.files && req.files.length > 0) {
-                for (const file of req.files) {
+        // البحث عن بيانات في معلمات الاستعلام
+        if (Object.keys(req.query).length > 0) {
+            for (const key in req.query) {
+                if (typeof req.query[key] === 'string' && req.query[key].includes('=')) {
                     try {
-                        // محاولة تحليل البيانات كـ JSON إذا كانت نصية
-                        if (file.buffer) {
-                            const fieldValue = file.buffer.toString('utf8');
-                            try {
-                                const jsonData = JSON.parse(fieldValue);
-                                data = { ...data, ...jsonData };
-                            } catch (e) {
-                                // إذا لم تكن JSON، نخزن النص كما هو
-                                data[file.fieldname] = fieldValue;
-                            }
+                        // محاولة تفسير المعلمة كسلسلة استعلام
+                        const params = new URLSearchParams(req.query[key]);
+                        for (const [paramKey, paramValue] of params.entries()) {
+                            data[paramKey] = paramValue;
                         }
-                    } catch (error) {
-                        logger.error('whatsappWebhookController', 'خطأ أثناء معالجة ملف في طلب webhook', error);
+                    } catch (e) {
+                        // تجاهل أخطاء التحليل
                     }
                 }
             }
-        } else if (req.headers['content-type'] && 
-                  (req.headers['content-type'].includes('application/json') || 
-                   req.headers['content-type'].includes('application/x-www-form-urlencoded'))) {
-            // معالجة البيانات بتنسيق JSON أو form-urlencoded
-            data = req.body || {};
-        } else {
-            // إذا كان نوع المحتوى غير معروف، نجمع البيانات من req.body و req.query
-            data = { ...req.query, ...req.body };
         }
         
-        // استخراج المعلومات المهمة من البيانات
-        const id = data.id || data.ID || data.message_id || data.messageId || data.messageid || data.MessageId || null;
-        const deviceId = data.device || data.id_device || data.device_id || data.deviceid || data.DeviceId || null;
-        const phone = data.phoneNumber || data.phone || data.recipient || data.to || data.phone_number || null;
-        const status = data.status || data.Status || data.messageStatus || null;
+        // فحص المسار للعثور على معلمات مضمنة
+        if (req.path.includes('?')) {
+            try {
+                const pathParts = req.path.split('?');
+                if (pathParts.length > 1) {
+                    const params = new URLSearchParams(pathParts[1]);
+                    for (const [key, value] of params.entries()) {
+                        data[key] = value;
+                    }
+                }
+            } catch (e) {
+                // تجاهل أخطاء التحليل
+            }
+        }
+    } else if (contentType.includes('application/json') || 
+              contentType.includes('application/x-www-form-urlencoded')) {
+        // معالجة البيانات بتنسيق JSON أو form-urlencoded
+        data = req.body || {};
+    } else {
+        // إذا كان نوع المحتوى غير معروف، نجمع البيانات من req.body و req.query
+        data = { ...req.query, ...req.body };
+    }
+    
+    // 2. استخراج حقول الرسالة الأساسية إذا طلب ذلك
+    let messageFields = {};
+    if (opts.extractMessageFields) {
+        messageFields = {
+            id: data.id || data.ID || data.message_id || data.messageId || data.messageid || data.MessageId || data.msg_id || null,
+            deviceId: data.device || data.id_device || data.device_id || data.deviceid || data.DeviceId || null,
+            phone: data.phoneNumber || data.phone || data.recipient || data.to || data.phone_number || data.from || data.sender || data.number || null,
+            status: data.status || data.Status || data.messageStatus || null,
+            date: data.date || data.timestamp || data.time || null,
+            msg: data.msg || data.message || data.text || data.content || null,
+            type: data.type !== undefined ? data.type : 1,
+            dir: data.dir || data.direction || null
+        };
         
-        // توحيد حقول الحالة لتسهيل معالجتها
+        // تنظيف رقم الهاتف إذا كان موجودًا
+        if (messageFields.phone) {
+            messageFields.phone = messageFields.phone.replace(/[^\d+]/g, '');
+        }
+    }
+    
+    // 3. توحيد حقول الحالة إذا طلب ذلك
+    if (opts.normalizeStatusFields) {
         // توحيد is_delivered
         if (data.IsDelivered === "1" || data.IsDelivered === 1 || 
             data.isDelivered === "1" || data.isDelivered === 1 || 
@@ -76,6 +128,7 @@ exports.handleStatusUpdate = async (req, res) => {
             data.is_delivered = "1";
         }
         
+        // توحيد is_send
         if (data.Sent === "1" || data.Sent === 1 || 
             data.sent === "1" || data.sent === 1 || 
             data.is_send === "1" || data.is_send === 1) {
@@ -123,6 +176,44 @@ exports.handleStatusUpdate = async (req, res) => {
                 data.is_send = "1";
             }
         }
+    }
+    
+    return {
+        data,
+        messageFields,
+        contentType,
+        hasStatusData: data.is_send !== undefined || 
+                       data.is_delivered !== undefined || 
+                       data.status || 
+                       data.send_date || 
+                       data.delivered_date ||
+                       messageFields.status !== null
+    };
+};
+
+/**
+ * معالجة التحديثات الواردة من SemySMS Webhook لرسائل الواتس أب
+ */
+exports.handleStatusUpdate = async (req, res) => {
+    try {
+        // سجل الحد الأدنى من المعلومات عن الطلب الوارد - فقط في حالة الأخطاء
+        if (req.headers['content-type'] && !req.headers['content-type'].includes('multipart/form-data') && 
+            !req.headers['content-type'].includes('application/json') && 
+            !req.headers['content-type'].includes('application/x-www-form-urlencoded')) {
+            logger.warn('whatsappWebhookController', 'استلام تحديث حالة من webhook بتنسيق غير متوقع', {
+                method: req.method,
+                contentType: req.headers['content-type']
+            });
+        }
+        
+        // استخراج البيانات من الطلب
+        const { data, messageFields, contentType, hasStatusData } = parseRequestData(req);
+        
+        // استخراج المعلومات المهمة من البيانات
+        const id = messageFields.id;
+        const deviceId = messageFields.deviceId;
+        const phone = messageFields.phone;
+        const status = messageFields.status;
         
         // تسجيل بيانات الرسالة المستخرجة لأغراض التشخيص - فقط في حالة الأخطاء
         if (!id && !deviceId && !phone) {
@@ -217,14 +308,6 @@ exports.handleStatusUpdate = async (req, res) => {
         let statusChanged = false;
         let newStatus = message.status;
         
-        // التحقق من وجود بيانات حالة في الطلب
-        const hasStatusData = data.is_send !== undefined || 
-                              data.is_delivered !== undefined || 
-                              data.status || 
-                              data.send_date || 
-                              data.delivered_date ||
-                              status !== null;
-
         // إذا كانت البيانات المستلمة لا تحتوي على معلومات الحالة، نرسل استجابة إيجابية بدون تغيير
         if (!hasStatusData) {
             logger.warn('whatsappWebhookController', `استلام طلب webhook بدون معلومات حالة، لن يتم تحديث الحالة`, {
@@ -361,8 +444,7 @@ exports.handleIncomingMessage = async (req, res) => {
         contentType
     });
     
-    // استخراج البيانات من الطلب الوارد
-    let data = {};
+    // استخراج البيانات من الطلب الوارد باستخدام الدالة المساعدة
     let rawData = null;
     
     // تسجيل بيانات الطلب الأولية
@@ -382,83 +464,17 @@ exports.handleIncomingMessage = async (req, res) => {
     
     // معالجة بيانات الطلب بناءً على نوع المحتوى
     try {
-        if (contentType.includes('multipart/form-data')) {
-            // تحسين معالجة بيانات multipart/form-data
-            
-            // طريقة 1: الوصول المباشر لبيانات req.body
-            data = { ...req.query, ...req.body };
-            
-            // تسجيل ما إذا كانت هناك بيانات في الـ body
-            logger.debug('whatsappWebhookController', 'بيانات الطلب من multipart/form-data', {
-                bodyFields: Object.keys(req.body),
-                bodyValues: req.body
-            });
-            
-            // استكشاف البيانات من الحقول الخام والملفات إذا كانت موجودة
-            if (req.files && Object.keys(req.files).length > 0) {
-                logger.debug('whatsappWebhookController', 'تم العثور على ملفات', { 
-                    filesCount: Object.keys(req.files).length,
-                    fileNames: Object.keys(req.files) 
-                });
-            }
-            
-            // طريقة 2: فحص بيانات الاستعلام للعثور على البيانات
-            if (Object.keys(req.query).length > 0) {
-                logger.debug('whatsappWebhookController', 'بيانات الاستعلام', { query: req.query });
-                
-                // البحث عن بيانات في المعلمات
-                for (const key in req.query) {
-                    if (typeof req.query[key] === 'string' && req.query[key].includes('=')) {
-                        try {
-                            // محاولة تفسير المعلمة كسلسلة استعلام
-                            const params = new URLSearchParams(req.query[key]);
-                            for (const [paramKey, paramValue] of params.entries()) {
-                                data[paramKey] = paramValue;
-                            }
-                        } catch (e) {
-                            // تجاهل أخطاء التحليل
-                        }
-                    }
-                }
-            }
-            
-            // طريقة 3: فحص المسار للعثور على معلمات مضمنة
-            if (req.path.includes('?')) {
-                try {
-                    const pathParts = req.path.split('?');
-                    if (pathParts.length > 1) {
-                        const params = new URLSearchParams(pathParts[1]);
-                        for (const [key, value] of params.entries()) {
-                            data[key] = value;
-                        }
-                    }
-                } catch (e) {
-                    // تجاهل أخطاء التحليل
-                }
-            }
-            
-            // طريقة 4: فحص عناوين HTTP للحصول على معلومات
-            if (req.headers['content-type'].includes('boundary=')) {
-                logger.debug('whatsappWebhookController', 'تم العثور على boundary', { 
-                    boundary: req.headers['content-type'].split('boundary=')[1] 
-                });
-            }
-        } else if (contentType.includes('application/json')) {
-            // استخراج البيانات من JSON
-            data = req.body;
-        } else {
-            // استخراج البيانات من الاستعلام
-            data = req.query;
-        }
+        // استخدام الدالة المساعدة لاستخراج وتوحيد بيانات الطلب
+        const { data, messageFields } = parseRequestData(req);
         
         // استخراج البيانات الأساسية للرسالة
-        let id = data.id || data.message_id || data.messageId || data.msg_id || null;
-        let date = data.date || data.timestamp || data.time || null;
-        let phone = data.phone || data.from || data.sender || data.number || null;
-        let msg = data.msg || data.message || data.text || data.content || null;
-        let type = data.type !== undefined ? data.type : 1;
-        let deviceId = data.id_device || data.device_id || data.device || null;
-        let dir = data.dir || data.direction || null;
+        const id = messageFields.id;
+        const date = messageFields.date;
+        const phone = messageFields.phone;
+        const msg = messageFields.msg;
+        const type = messageFields.type;
+        const deviceId = messageFields.deviceId;
+        const dir = messageFields.dir;
         
         // تجميع البيانات التشخيصية
         const diagnosticInfo = {
@@ -478,12 +494,6 @@ exports.handleIncomingMessage = async (req, res) => {
         // لأغراض التشخيص، إذا لم يكن هناك معرف رسالة، نقوم بإنشاء واحد
         if (!id && (phone || msg)) {
             id = 'temp_' + Date.now();
-        }
-        
-        // التنظيف والتحقق من الصحة
-        if (phone) {
-            phone = phone.replace(/[^\d+]/g, '');
-            logger.debug('whatsappWebhookController', 'تنظيف رقم الهاتف', { cleanedPhone: phone });
         }
         
         // التحقق من وجود المعلومات الأساسية للرسالة
