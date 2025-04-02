@@ -442,125 +442,108 @@ class MetaWhatsappService {
         if (!this.initialized) {
             await this.initialize();
         }
-
-        logger.info('MetaWhatsappService', 'بدء تحميل وسائط إلى خوادم واتساب', {
-            mimeType,
-            fileName: options?.filename
-        });
         
-        // تصحيح نوع الملف إذا كان application/octet-stream
-        let finalMimeType = mimeType;
-        if (mimeType === 'application/octet-stream' && options?.filename) {
-            // محاولة تحديد النوع الحقيقي من امتداد الملف
-            const extension = options.filename.toLowerCase().split('.').pop();
-            if (extension === 'pdf') {
-                finalMimeType = 'application/pdf';
-                logger.info('MetaWhatsappService', 'تم تصحيح نوع الملف إلى PDF', {
-                    originalMimeType: mimeType,
-                    newMimeType: finalMimeType
-                });
-            } else if (['doc', 'docx'].includes(extension)) {
-                finalMimeType = 'application/msword';
-            } else if (['xls', 'xlsx'].includes(extension)) {
-                finalMimeType = 'application/vnd.ms-excel';
-            } else if (['ppt', 'pptx'].includes(extension)) {
-                finalMimeType = 'application/vnd.ms-powerpoint';
-            }
-        }
-        
-        // التحقق من دعم نوع الملف
-        if (!this.isSupportedMimeType(finalMimeType, options?.filename)) {
-            throw new Error(`نوع الملف ${finalMimeType} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`);
-        }
-
-        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
-        let targetPhoneId = phoneNumberId;
-        let settingsToUse = this.settings;
-        
-        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
-        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
-            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
-            if (!settingsToUse) {
-                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
-            }
-            targetPhoneId = settingsToUse.config.phoneNumberId;
-        } else {
-            targetPhoneId = this.settings.config.phoneNumberId;
-        }
-
-        if (!targetPhoneId) {
-            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
-        }
-
         try {
-            // تحويل البيانات إلى FormData
-            const FormData = require('form-data');
-            const form = new FormData();
+            // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+            let targetPhoneId = phoneNumberId;
+            let settingsToUse = this.settings;
             
-            // إضافة المنتج المطلوب حسب وثائق واتساب
-            form.append('messaging_product', 'whatsapp');
+            // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+            if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+                settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+                if (!settingsToUse) {
+                    throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+                }
+                targetPhoneId = settingsToUse.config.phoneNumberId;
+            } else {
+                targetPhoneId = this.settings.config.phoneNumberId;
+            }
             
-            // إذا كانت البيانات بتنسيق base64، نحولها إلى buffer
+            if (!targetPhoneId) {
+                throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+            }
+
+            let filename = '';
+            if (options && typeof options === 'object') {
+                if (options.filename) {
+                    filename = options.filename;
+                }
+            }
+            
+            // معالجة اسم الملف للتأكد من صحة الترميز
+            if (filename && !/^[\x00-\x7F]*$/.test(filename)) {
+                // إذا كان الاسم يحتوي على أحرف غير ASCII (مثل العربية)، نحاول إصلاحه
+                try {
+                    const extension = filename.slice(filename.lastIndexOf('.') + 1);
+                    const timestamp = new Date().getTime();
+                    filename = `file_${timestamp}.${extension}`;
+                    
+                    logger.info('MetaWhatsappService', 'تم تعديل اسم الملف العربي للتوافق', {
+                        newName: filename
+                    });
+                } catch (e) {
+                    logger.warn('MetaWhatsappService', 'خطأ في معالجة اسم الملف', {
+                        error: e.message
+                    });
+                }
+            }
+            
+            logger.info('MetaWhatsappService', 'بدء تحميل وسائط إلى خوادم واتساب', {
+                mimeType
+            });
+            
+            // التحقق من دعم نوع الملف
+            if (!this.isSupportedMimeType(mimeType, filename)) {
+                throw new Error(`نوع الملف ${mimeType} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`);
+            }
+            
+            // استخراج بيانات الملف إذا كانت بتنسيق base64
             let fileBuffer;
             if (typeof fileData === 'string') {
-                // إزالة prefix إذا كان موجوداً
-                if (fileData.includes('base64,')) {
-                    fileData = fileData.split('base64,')[1];
-                }
                 fileBuffer = Buffer.from(fileData, 'base64');
-            } else {
+            } else if (Buffer.isBuffer(fileData)) {
                 fileBuffer = fileData;
+            } else {
+                throw new Error('نوع بيانات الملف غير مدعوم. يجب أن تكون سلسلة base64 أو Buffer.');
             }
             
-            // التحقق من نوع الوسائط وحجمها حسب قيود واتساب
-            const mediaType = this.getMediaTypeFromMimeType(finalMimeType);
-            const maxSize = this.getMaxSizeForMediaType(mediaType);
+            // تحديد نوع الوسائط من نوع MIME
+            const mediaType = this.getMediaTypeFromMimeType(mimeType);
             
-            if (fileBuffer.length > maxSize) {
-                throw new Error(`حجم الملف (${fileBuffer.length} بايت) يتجاوز الحد الأقصى المسموح به (${maxSize} بايت) لنوع الوسائط ${mediaType}`);
-            }
-            
-            // تحضير اسم الملف مع التعامل مع الأسماء العربية
-            let filename = 'media_file';
-            if (options?.filename) {
-                // استخدام اسم الملف الأصلي إذا كان موجوداً مع إصلاح المشاكل المحتملة في الأسماء العربية
-                // نستخدم اسم بسيط بالإنجليزية للملف للتأكد من عدم وجود مشاكل مع API واتساب
-                filename = `file_${Date.now()}`;
-            }
-            
-            // إضافة الملف إلى النموذج
-            form.append('file', fileBuffer, {
-                filename: `${filename}.${this.getFileExtensionFromMimeType(finalMimeType)}`,
-                contentType: finalMimeType
+            // بناء البيانات للطلب
+            const formData = new FormData();
+            formData.append('messaging_product', 'whatsapp');
+            formData.append('type', mediaType);
+            formData.append('file', fileBuffer, {
+                filename: filename || `file.${this.getFileExtensionFromMimeType(mimeType)}`,
+                contentType: mimeType
             });
-            
-            // إرسال طلب تحميل الوسائط
-            const url = `${this.baseUrl}/${targetPhoneId}/media`;
-            const headers = {
-                'Authorization': `Bearer ${settingsToUse.config.accessToken}`
-            };
             
             // استخدام axios مع FormData
-            const axios = require('axios');
-            const response = await axios.post(url, form, {
-                headers: {
-                    ...headers,
-                    ...form.getHeaders()
-                }
-            });
+            const headers = {
+                'Authorization': `Bearer ${settingsToUse.config.accessToken}`,
+                ...formData.getHeaders()
+            };
             
-            logger.info('MetaWhatsappService', 'تم تحميل الوسائط بنجاح', {
-                mediaId: response.data.id,
-                mimeType: finalMimeType
-            });
+            const response = await axios.post(
+                `${this.baseUrl}/${targetPhoneId}/media`,
+                formData,
+                { headers }
+            );
             
             return response.data;
         } catch (error) {
             logger.error('MetaWhatsappService', 'خطأ في تحميل الوسائط', {
-                error: error.message,
-                mimeType: finalMimeType,
-                response: error.response?.data
+                error: error.message || 'خطأ غير معروف',
+                stack: error.stack,
+                mimeType,
+                responseData: error.response?.data
             });
+            
+            if (error.response && error.response.data && error.response.data.error) {
+                throw new Error(`خطأ من واجهة برمجة تطبيقات واتساب: ${error.response.data.error.message || JSON.stringify(error.response.data.error)}`);
+            }
+            
             throw error;
         }
     }
@@ -618,18 +601,34 @@ class MetaWhatsappService {
             'text/plain': true
         };
         
+        // تسجيل معلومات النوع للتشخيص
+        logger.info('MetaWhatsappService', 'التحقق من دعم نوع MIME', {
+            mimeType,
+            fileName,
+            supportedDirectly: supportedTypes[mimeType] ? true : false
+        });
+        
         // التحقق من نوع MIME مباشرة
         if (supportedTypes[mimeType]) {
             return true;
         }
         
-        // إذا كان النوع application/octet-stream، نحاول تحديد النوع من امتداد الملف
-        if (mimeType === 'application/octet-stream' && fileName) {
-            const extension = fileName.toLowerCase().split('.').pop();
+        // إذا كان النوع application/octet-stream أو غير معروف، نحاول تحديد النوع من امتداد الملف
+        if ((mimeType === 'application/octet-stream' || !mimeType) && fileName) {
+            // استخدام اسم بديل مع الاحتفاظ بالامتداد
+            const extension = fileName.slice(fileName.lastIndexOf('.') + 1);
+            const timestamp = new Date().getTime();
+            const newFilename = `document_${timestamp}.${extension}`;
+            
+            logger.info('MetaWhatsappService', 'محاولة تحديد النوع من الامتداد', {
+                fileName,
+                newFilename
+            });
             
             // تحديد نوع الملف بناءً على الامتداد
             switch (extension) {
                 case 'pdf':
+                    logger.info('MetaWhatsappService', 'تم تحديد نوع PDF من الامتداد', { fileName });
                     return true; // مستند PDF
                 case 'doc':
                 case 'docx':
@@ -656,6 +655,7 @@ class MetaWhatsappService {
                 case 'amr':
                     return true; // صوت
                 default:
+                    logger.warn('MetaWhatsappService', 'امتداد غير مدعوم', { extension, fileName });
                     return false;
             }
         }
@@ -777,11 +777,6 @@ class MetaWhatsappService {
                     }
                 }
                 
-                // التحقق من دعم نوع الملف
-                if (!this.isSupportedMimeType(mimeType, 'image.' + this.getFileExtensionFromMimeType(mimeType))) {
-                    throw new Error(`نوع الملف ${mimeType} غير مدعوم في واتساب. الأنواع المدعومة للصور هي: JPEG, PNG, WEBP فقط.`);
-                }
-                
                 // تحميل الصورة إلى خوادم واتساب
                 logger.info('MetaWhatsappService', 'تحميل صورة إلى خوادم واتساب قبل الإرسال');
                 const uploadResult = await this.uploadMedia(base64Data, mimeType, phoneNumberId);
@@ -809,87 +804,100 @@ class MetaWhatsappService {
     /**
      * إرسال مستند عبر واتساب
      * @param {string} to - رقم الهاتف المستلم
-     * @param {string} documentUrl - رابط المستند أو بيانات base64
+     * @param {string} documentData - بيانات المستند (رابط أو base64)
      * @param {string} filename - اسم الملف
-     * @param {string} caption - نصوصفي للمستند (اختياري)
+     * @param {string} caption - وصف المستند (اختياري)
      * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
      * @returns {Promise<object>} نتيجة الإرسال
      */
-    async sendDocument(to, documentUrl, filename, caption = '', phoneNumberId = null) {
+    async sendDocument(to, documentData, filename, caption = '', phoneNumberId = null) {
         if (!this.initialized) {
             await this.initialize();
         }
 
-        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
-        let targetPhoneId = phoneNumberId;
-        let settingsToUse = this.settings;
-        
-        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
-        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
-            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
-            if (!settingsToUse) {
-                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
-            }
-            targetPhoneId = settingsToUse.config.phoneNumberId;
-        } else {
-            targetPhoneId = this.settings.config.phoneNumberId;
-        }
-
-        if (!targetPhoneId) {
-            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
-        }
-
-        // هيكل البيانات للمستند
-        let data = {
-            messaging_product: 'whatsapp',
-            recipient_type: 'individual',
-            to,
-            type: 'document',
-            document: {
-                filename: filename
-            }
-        };
-
         try {
-            // تحديد مصدر المستند (رابط أو base64)
-            if (documentUrl.startsWith('http')) {
-                // استخدام رابط خارجي
-                data.document.link = documentUrl;
-            } else {
-                // استخدام بيانات base64 - تحميل المستند أولاً إلى خوادم واتساب
-                let base64Data = documentUrl;
-                let mimeType = 'application/octet-stream'; // افتراضي
-                
-                // استخراج نوع MIME والبيانات إذا كان التنسيق كاملاً
-                if (documentUrl.startsWith('data:')) {
-                    const matches = documentUrl.match(/^data:([^;]+);base64,(.+)$/);
-                    if (matches && matches.length === 3) {
-                        mimeType = matches[1];
-                        base64Data = matches[2];
-                    } else {
-                        base64Data = documentUrl.split('base64,')[1] || documentUrl;
-                    }
+            // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+            let targetPhoneId = phoneNumberId;
+            let settingsToUse = this.settings;
+            
+            // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+            if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+                settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+                if (!settingsToUse) {
+                    throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
                 }
-                
-                // تحميل المستند إلى خوادم واتساب
-                logger.info('MetaWhatsappService', 'تحميل مستند إلى خوادم واتساب قبل الإرسال');
-                const uploadResult = await this.uploadMedia(base64Data, mimeType, phoneNumberId);
-                
-                // استخدام معرف الوسائط الناتج
-                data.document.id = uploadResult.id;
-                logger.info('MetaWhatsappService', 'تم تحميل المستند بنجاح', { mediaId: uploadResult.id });
+                targetPhoneId = settingsToUse.config.phoneNumberId;
+            } else {
+                targetPhoneId = this.settings.config.phoneNumberId;
             }
 
-            // إضافة وصف المستند إذا كان موجوداً
+            if (!targetPhoneId) {
+                throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+            }
+
+            logger.info('MetaWhatsappService', 'تحميل مستند إلى خوادم واتساب قبل الإرسال', {});
+            
+            // حل مشكلة أسماء الملفات العربية
+            let sanitizedFilename = filename;
+            try {
+                // إذا كان الاسم يحتوي على أحرف غير ASCII (مثل العربية)، نحاول إصلاحه
+                if (!/^[\x00-\x7F]*$/.test(filename)) {
+                    // استخدام اسم بديل مع الاحتفاظ بالامتداد
+                    const extension = filename.slice(filename.lastIndexOf('.') + 1);
+                    const timestamp = new Date().getTime();
+                    sanitizedFilename = `document_${timestamp}.${extension}`;
+                    
+                    logger.info('MetaWhatsappService', 'تم تعديل اسم الملف العربي للتوافق', {
+                        originalName: filename,
+                        newName: sanitizedFilename
+                    });
+                }
+            } catch (e) {
+                logger.warn('MetaWhatsappService', 'خطأ في معالجة اسم الملف، سيتم استخدام الاسم الأصلي', {
+                    error: e.message,
+                    filename
+                });
+            }
+
+            let data = {
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to,
+                type: 'document',
+                document: {}
+            };
+
+            // تحديد ما إذا كان البيانات هي رابط أم base64
+            let uploadResult = null;
+            if (!documentData || documentData === 'undefined') {
+                throw new Error('لا توجد بيانات مستند');
+            } else if (documentData.startsWith('http')) {
+                data.document.link = documentData;
+            } else if (documentData.startsWith(`data:${sanitizedFilename}`)) {
+                const base64Data = documentData.split(',')[1];
+                uploadResult = await this.uploadMedia(base64Data, 'application/pdf', { filename: sanitizedFilename }, phoneNumberId);
+                data.document.id = uploadResult.id;
+            } else {
+                // افتراضي
+                uploadResult = await this.uploadMedia(documentData, 'application/pdf', { filename: sanitizedFilename }, phoneNumberId);
+                data.document.id = uploadResult.id;
+            }
+
+            // إضافة وصف إذا وجد
             if (caption && caption.trim()) {
-                data.document.caption = caption;
+                data.document.caption = caption.trim();
+            }
+
+            // إضافة اسم الملف
+            if (sanitizedFilename) {
+                data.document.filename = sanitizedFilename;
             }
 
             return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
         } catch (error) {
             logger.error('MetaWhatsappService', 'خطأ في إرسال مستند', {
-                error: error.message,
-                response: error.response?.data
+                error: error.message || 'خطأ غير معروف',
+                stack: error.stack
             });
             throw error;
         }

@@ -816,8 +816,10 @@
     
     // إعادة تعيين حالة النموذج
     document.getElementById('mediaFile').value = '';
-    document.getElementById('mediaCaption').value = '';
     document.getElementById('filePreview').style.display = 'none';
+    
+    // إعادة ضبط مسجل الصوت
+    resetAudioRecorder();
     
     // إظهار النموذج
     const modal = new bootstrap.Modal(document.getElementById('mediaUploadModal'));
@@ -825,6 +827,9 @@
     
     // تهيئة منطقة السحب والإفلات
     setupDragAndDrop();
+    
+    // تهيئة مسجل الصوت
+    initAudioRecorder();
   };
 
   /**
@@ -962,13 +967,109 @@
     const mediaType = document.getElementById('uploadMediaType').value;
     const conversationId = document.getElementById('uploadConversationId').value;
     
-    // التحقق من اختيار ملف
-    if (!fileInput.files || fileInput.files.length === 0) {
-      window.showToast && window.showToast('يرجى اختيار ملف للتحميل', 'warning');
+    // التحقق من اختيار ملف أو وجود تسجيل صوتي
+    if ((!fileInput.files || fileInput.files.length === 0) && !window.recordedAudioData) {
+      window.showToast && window.showToast('يرجى اختيار ملف للتحميل أو تسجيل صوت', 'warning');
       return;
     }
     
-    // التحقق من نوع الملف
+    // إظهار شريط التقدم
+    const progressBar = document.querySelector('.upload-progress .progress-bar');
+    document.querySelector('.upload-progress').style.display = 'block';
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+    
+    // تعطيل زر التحميل
+    const uploadBtn = document.getElementById('uploadMediaBtn');
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+    
+    // تحميل تسجيل صوتي
+    if (window.recordedAudioData) {
+      // إنشاء FormData
+      const formData = new FormData();
+      
+      // تحويل بيانات Base64 إلى ملف
+      const byteString = atob(window.recordedAudioData.base64.split(',')[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      
+      const blob = new Blob([ab], { type: window.recordedAudioData.type });
+      const file = new File([blob], window.recordedAudioData.name, { type: window.recordedAudioData.type });
+      
+      formData.append('mediaFile', file);
+      formData.append('mediaType', 'audio');
+      formData.append('conversationId', conversationId);
+      
+      // إرسال طلب تحميل الملف
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/whatsapp/media/upload', true);
+      
+      // مراقبة تقدم التحميل
+      xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+          const percentComplete = Math.round((e.loaded / e.total) * 100);
+          progressBar.style.width = percentComplete + '%';
+          progressBar.textContent = percentComplete + '%';
+          progressBar.setAttribute('aria-valuenow', percentComplete);
+        }
+      };
+      
+      // معالجة الاستجابة
+      xhr.onload = function() {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          
+          if (response.success) {
+            // إخفاء النموذج
+            const modal = bootstrap.Modal.getInstance(document.getElementById('mediaUploadModal'));
+            modal.hide();
+            
+            // عرض معاينة الملف المرفق
+            document.getElementById('mediaPreview').style.display = 'block';
+            document.getElementById('mediaFileName').textContent = response.media.fileName || 'تسجيل صوتي';
+            document.getElementById('mediaId').value = response.media._id;
+            document.getElementById('mediaType').value = response.media.mediaType;
+            
+            // تنظيف نموذج التحميل
+            resetAudioRecorder();
+            
+            window.showToast && window.showToast('تم تحميل التسجيل الصوتي بنجاح', 'success');
+          } else {
+            window.showToast && window.showToast(response.error || 'حدث خطأ أثناء تحميل التسجيل الصوتي', 'danger');
+          }
+        } catch (error) {
+          window.showToast && window.showToast('حدث خطأ أثناء معالجة الاستجابة', 'danger');
+        }
+        
+        // إعادة تمكين زر التحميل
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = 'تحميل';
+        
+        // إخفاء شريط التقدم
+        document.querySelector('.upload-progress').style.display = 'none';
+      };
+      
+      xhr.onerror = function() {
+        window.showToast && window.showToast('حدث خطأ في الاتصال بالخادم', 'danger');
+        
+        // إعادة تمكين زر التحميل
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = 'تحميل';
+        
+        // إخفاء شريط التقدم
+        document.querySelector('.upload-progress').style.display = 'none';
+      };
+      
+      xhr.send(formData);
+      return;
+    }
+    
+    // الكود الحالي لتحميل الملفات العادية
     const file = fileInput.files[0];
     const supportedTypes = {
       'image': ['image/jpeg', 'image/png', 'image/webp'],
@@ -982,7 +1083,8 @@
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
         'application/vnd.openxmlformats-officedocument.presentationml.presentation', 
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-        'text/plain'
+        'text/plain',
+        'application/octet-stream'
       ]
     };
     
@@ -1008,8 +1110,24 @@
       }
     }
     
+    // التحقق من الامتداد إذا كان نوع الملف application/octet-stream
+    if (!isSupported && file.type === 'application/octet-stream') {
+      const extension = file.name.toLowerCase().split('.').pop();
+      if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'].includes(extension)) {
+        isSupported = true;
+      }
+    }
+    
     if (!isSupported) {
       window.showToast && window.showToast(`نوع الملف ${file.type} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`, 'warning');
+      
+      // إعادة تمكين زر التحميل
+      uploadBtn.disabled = false;
+      uploadBtn.innerHTML = 'تحميل';
+      
+      // إخفاء شريط التقدم
+      document.querySelector('.upload-progress').style.display = 'none';
+      
       return;
     }
     
@@ -1018,17 +1136,6 @@
     formData.append('mediaFile', fileInput.files[0]);
     formData.append('mediaType', document.getElementById('uploadMediaType').value);
     formData.append('conversationId', conversationId);
-    
-    // إظهار شريط التقدم
-    const progressBar = document.querySelector('.upload-progress .progress-bar');
-    document.querySelector('.upload-progress').style.display = 'block';
-    progressBar.style.width = '0%';
-    progressBar.textContent = '0%';
-    
-    // تعطيل زر التحميل
-    const uploadBtn = document.getElementById('uploadMediaBtn');
-    uploadBtn.disabled = true;
-    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
     
     // إرسال طلب تحميل الملف باستخدام XMLHttpRequest لتتبع التقدم
     const xhr = new XMLHttpRequest();
@@ -1070,24 +1177,9 @@
         }
       } catch (error) {
         window.showToast && window.showToast('حدث خطأ أثناء معالجة الاستجابة', 'danger');
-        if (window.debugMode === true) {
-          console.error('خطأ في معالجة استجابة تحميل الملف:', error);
-        }
-      } finally {
-        // إعادة تفعيل زر التحميل
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = 'تحميل';
-        
-        // إخفاء شريط التقدم
-        document.querySelector('.upload-progress').style.display = 'none';
       }
-    };
-    
-    // معالجة الأخطاء
-    xhr.onerror = function() {
-      window.showToast && window.showToast('حدث خطأ أثناء الاتصال بالخادم', 'danger');
       
-      // إعادة تفعيل زر التحميل
+      // إعادة تمكين زر التحميل
       uploadBtn.disabled = false;
       uploadBtn.innerHTML = 'تحميل';
       
@@ -1095,7 +1187,17 @@
       document.querySelector('.upload-progress').style.display = 'none';
     };
     
-    // إرسال البيانات
+    xhr.onerror = function() {
+      window.showToast && window.showToast('حدث خطأ في الاتصال بالخادم', 'danger');
+      
+      // إعادة تمكين زر التحميل
+      uploadBtn.disabled = false;
+      uploadBtn.innerHTML = 'تحميل';
+      
+      // إخفاء شريط التقدم
+      document.querySelector('.upload-progress').style.display = 'none';
+    };
+    
     xhr.send(formData);
   };
 
@@ -1222,3 +1324,286 @@
     });
   });
 })(window);
+
+/**
+ * دالة لتسجيل الصوت مباشرة من المتصفح
+ */
+// متغيرات عامة لتسجيل الصوت
+let mediaRecorder;           // مسجل الوسائط
+let audioChunks = [];        // مقاطع الصوت المسجلة
+let recordingTimerInterval;  // مؤقت التسجيل
+let recordingStartTime;      // وقت بدء التسجيل
+let audioBlob;               // كائن blob للصوت المسجل
+let audioMimeType = 'audio/ogg; codecs=opus'; // نوع الصوت المسجل (مدعوم في واتساب)
+
+/**
+ * تهيئة مسجل الصوت
+ */
+window.initAudioRecorder = function() {
+  // التأكد من وجود العناصر اللازمة
+  const startRecordBtn = document.getElementById('startRecordBtn');
+  const stopRecordBtn = document.getElementById('stopRecordBtn');
+  const useRecordingBtn = document.getElementById('useRecordingBtn');
+  const cancelRecordingBtn = document.getElementById('cancelRecordingBtn');
+  const recordingStatus = document.getElementById('recordingStatus');
+  const recordingTimer = document.getElementById('recordingTimer');
+  const audioPreview = document.getElementById('audioPreview');
+  const recordedAudio = document.getElementById('recordedAudio');
+  
+  if (!startRecordBtn || !stopRecordBtn) return;
+  
+  // إضافة مستمعي الأحداث
+  startRecordBtn.addEventListener('click', startRecording);
+  stopRecordBtn.addEventListener('click', stopRecording);
+  
+  if (useRecordingBtn) {
+    useRecordingBtn.addEventListener('click', useRecording);
+  }
+  
+  if (cancelRecordingBtn) {
+    cancelRecordingBtn.addEventListener('click', cancelRecording);
+  }
+  
+  // تحديث نمط CSS للمؤشر
+  if (!document.getElementById('recorderStyles')) {
+    const style = document.createElement('style');
+    style.id = 'recorderStyles';
+    style.textContent = `
+      .recording-indicator {
+        animation: pulse 1s infinite;
+      }
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+};
+
+/**
+ * بدء تسجيل الصوت
+ */
+async function startRecording() {
+  try {
+    // التحقق من دعم تسجيل الصوت
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      window.showToast && window.showToast('متصفحك لا يدعم تسجيل الصوت', 'warning');
+      return;
+    }
+    
+    // الحصول على إذن الميكروفون
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    // إعداد مسجل الوسائط بمنطق لاختيار التنسيق المدعوم
+    const mimeTypes = [
+      'audio/ogg; codecs=opus', // تنسيق OGG (مدعوم في واتساب)
+      'audio/webm; codecs=opus', // تنسيق WebM (سنحوله لاحقاً)
+      'audio/mp3', // MP3 (مدعوم في واتساب)
+      'audio/wav' // WAV (سنحوله لاحقاً)
+    ];
+    
+    // البحث عن تنسيق مدعوم
+    for (const type of mimeTypes) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        audioMimeType = type;
+        break;
+      }
+    }
+    
+    // تهيئة المسجل
+    mediaRecorder = new MediaRecorder(stream, { mimeType: audioMimeType });
+    audioChunks = [];
+    
+    // إعداد معالجات الأحداث
+    mediaRecorder.ondataavailable = event => {
+      if (event.data.size > 0) {
+        audioChunks.push(event.data);
+      }
+    };
+    
+    // معالج انتهاء التسجيل
+    mediaRecorder.onstop = () => {
+      // إنشاء blob من المقاطع المسجلة
+      audioBlob = new Blob(audioChunks, { type: audioMimeType });
+      
+      // إنشاء URL للتشغيل
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const recordedAudio = document.getElementById('recordedAudio');
+      recordedAudio.src = audioUrl;
+      
+      // عرض المعاينة
+      document.getElementById('audioPreview').style.display = 'block';
+      document.getElementById('recordingStatus').style.display = 'none';
+      
+      // إيقاف المؤقت
+      clearInterval(recordingTimerInterval);
+      
+      // إغلاق المسارات
+      stream.getTracks().forEach(track => track.stop());
+    };
+    
+    // بدء التسجيل
+    mediaRecorder.start(100); // تقسيم البيانات كل 100 مللي ثانية
+    
+    // إظهار حالة التسجيل
+    document.getElementById('startRecordBtn').style.display = 'none';
+    document.getElementById('stopRecordBtn').style.display = 'inline-block';
+    document.getElementById('recordingStatus').style.display = 'block';
+    
+    // بدء مؤقت التسجيل
+    recordingStartTime = Date.now();
+    recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
+    
+  } catch (error) {
+    console.error('خطأ في بدء تسجيل الصوت:', error);
+    window.showToast && window.showToast('حدث خطأ أثناء محاولة بدء التسجيل: ' + error.message, 'danger');
+  }
+}
+
+/**
+ * إيقاف تسجيل الصوت
+ */
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    document.getElementById('startRecordBtn').style.display = 'inline-block';
+    document.getElementById('stopRecordBtn').style.display = 'none';
+  }
+}
+
+/**
+ * تحديث مؤقت التسجيل
+ */
+function updateRecordingTimer() {
+  const recordingTimer = document.getElementById('recordingTimer');
+  const elapsedTime = Math.floor((Date.now() - recordingStartTime) / 1000);
+  const minutes = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
+  const seconds = (elapsedTime % 60).toString().padStart(2, '0');
+  recordingTimer.textContent = `${minutes}:${seconds}`;
+  
+  // إيقاف التسجيل تلقائياً بعد 5 دقائق (قيود واتساب)
+  if (elapsedTime >= 300) {
+    stopRecording();
+    window.showToast && window.showToast('تم إيقاف التسجيل تلقائياً بعد 5 دقائق (الحد الأقصى لرسائل الصوت في واتساب)', 'info');
+  }
+}
+
+/**
+ * استخدام التسجيل الصوتي
+ */
+async function useRecording() {
+  try {
+    if (!audioBlob) {
+      window.showToast && window.showToast('لا يوجد تسجيل صوتي لاستخدامه', 'warning');
+      return;
+    }
+    
+    // التأكد من أن التنسيق مدعوم في واتساب
+    let finalAudioBlob = audioBlob;
+    let finalMimeType = audioMimeType;
+    
+    // إذا كان التنسيق غير مدعوم، نحوله إلى OGG أو MP3
+    const supportedMimeTypes = ['audio/ogg', 'audio/mp3', 'audio/mpeg', 'audio/aac', 'audio/amr'];
+    const isMimeTypeSupported = supportedMimeTypes.some(type => finalMimeType.startsWith(type));
+    
+    if (!isMimeTypeSupported) {
+      // سنستخدم التنسيق كما هو وسيقوم الخادم بالتحقق وإجراء التحويل إذا لزم الأمر
+      console.log('تنسيق الصوت غير مدعوم مباشرة في واتساب، سيتم التعامل معه في الخادم');
+    }
+    
+    // تحويل الملف إلى Base64
+    const reader = new FileReader();
+    reader.readAsDataURL(finalAudioBlob);
+    
+    reader.onloadend = function() {
+      // الحصول على بيانات Base64
+      const base64data = reader.result;
+      
+      // ضبط نوع الوسائط على "audio"
+      document.getElementById('uploadMediaType').value = 'audio';
+      
+      // معلومات الملف الصوتي المسجل
+      const recordingInfo = {
+        name: `تسجيل_صوتي_${new Date().toISOString().replace(/[:.]/g, '-')}.ogg`,
+        type: finalMimeType,
+        size: finalAudioBlob.size
+      };
+      
+      // عرض معاينة الملف
+      document.getElementById('filePreview').style.display = 'block';
+      document.getElementById('fileTypeIcon').className = 'fas fa-music me-2';
+      document.getElementById('selectedFileName').textContent = recordingInfo.name;
+      
+      // إخفاء قسم تسجيل الصوت
+      document.getElementById('audioPreview').style.display = 'none';
+      document.getElementById('recordingStatus').style.display = 'none';
+      
+      // تخزين بيانات الصوت
+      window.recordedAudioData = {
+        base64: base64data,
+        name: recordingInfo.name,
+        type: recordingInfo.type,
+        size: recordingInfo.size
+      };
+      
+      window.showToast && window.showToast('تم اختيار التسجيل الصوتي بنجاح', 'success');
+    };
+  } catch (error) {
+    console.error('خطأ في استخدام التسجيل الصوتي:', error);
+    window.showToast && window.showToast('حدث خطأ أثناء محاولة استخدام التسجيل: ' + error.message, 'danger');
+  }
+}
+
+/**
+ * إلغاء التسجيل الصوتي
+ */
+function cancelRecording() {
+  // إعادة ضبط متغيرات التسجيل
+  audioBlob = null;
+  audioChunks = [];
+  
+  // إخفاء عناصر التسجيل
+  document.getElementById('audioPreview').style.display = 'none';
+  document.getElementById('recordingStatus').style.display = 'none';
+  document.getElementById('startRecordBtn').style.display = 'inline-block';
+  document.getElementById('stopRecordBtn').style.display = 'none';
+  
+  // إعادة ضبط المشغل الصوتي
+  const recordedAudio = document.getElementById('recordedAudio');
+  recordedAudio.src = '';
+  
+  window.showToast && window.showToast('تم إلغاء التسجيل الصوتي', 'info');
+}
+
+/**
+ * إعادة ضبط مسجل الصوت
+ */
+function resetAudioRecorder() {
+  // إعادة ضبط متغيرات التسجيل
+  audioBlob = null;
+  audioChunks = [];
+  window.recordedAudioData = null;
+  
+  // إخفاء عناصر التسجيل
+  const audioPreview = document.getElementById('audioPreview');
+  const recordingStatus = document.getElementById('recordingStatus');
+  const startRecordBtn = document.getElementById('startRecordBtn');
+  const stopRecordBtn = document.getElementById('stopRecordBtn');
+  const filePreview = document.getElementById('filePreview');
+  
+  if (audioPreview) audioPreview.style.display = 'none';
+  if (recordingStatus) recordingStatus.style.display = 'none';
+  if (startRecordBtn) startRecordBtn.style.display = 'inline-block';
+  if (stopRecordBtn) stopRecordBtn.style.display = 'none';
+  if (filePreview) filePreview.style.display = 'none';
+  
+  // إعادة ضبط المشغل الصوتي
+  const recordedAudio = document.getElementById('recordedAudio');
+  if (recordedAudio) recordedAudio.src = '';
+  
+  // إعادة ضبط حقل الملف
+  const fileInput = document.getElementById('mediaFile');
+  if (fileInput) fileInput.value = '';
+}

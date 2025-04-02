@@ -416,8 +416,10 @@ exports.replyToConversation = async (req, res) => {
           conversationId
         });
         
-        // تحديث معرف الرسالة في سجل الوسائط
-        await whatsappMediaController.updateMessageIdForMedia(mediaId, msg._id);
+        // تحديث معرف الرسالة في سجل الوسائط - مرة واحدة فقط
+        if (!media.messageId) {
+          await whatsappMediaController.updateMessageIdForMedia(mediaId, msg._id);
+        }
         
         // إرسال الوسائط حسب النوع
         switch (mediaType) {

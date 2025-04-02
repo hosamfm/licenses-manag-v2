@@ -464,7 +464,7 @@ exports.uploadMediaForSending = async (req, res) => {
     const file = req.file;
     
     // معالجة اسم الملف للتأكد من أن الأحرف العربية تظهر بشكل صحيح
-    let fileName = file.originalname;
+    let fileName = Buffer.from(file.originalname, 'binary').toString('utf8');
     
     // قراءة محتوى الملف وتحويله إلى base64
     const fileData = file.buffer.toString('base64');
@@ -482,6 +482,16 @@ exports.uploadMediaForSending = async (req, res) => {
         mimeType = 'application/vnd.ms-excel';
       } else if (['ppt', 'pptx'].includes(extension)) {
         mimeType = 'application/vnd.ms-powerpoint';
+      } else if (['mp3'].includes(extension)) {
+        mimeType = 'audio/mpeg';
+      } else if (['ogg'].includes(extension)) {
+        mimeType = 'audio/ogg';
+      } else if (['jpg', 'jpeg'].includes(extension)) {
+        mimeType = 'image/jpeg';
+      } else if (['png'].includes(extension)) {
+        mimeType = 'image/png';
+      } else if (['mp4'].includes(extension)) {
+        mimeType = 'video/mp4';
       }
     }
     
