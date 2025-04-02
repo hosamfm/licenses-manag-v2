@@ -110,18 +110,16 @@
       
       // الاستماع لأحداث الاتصال
       socket.on('connect', function() {
-        console.log('تم الاتصال بالخادم');
+        // تم الاتصال بالخادم
       });
       
       // الاستماع لأحداث قطع الاتصال
       socket.on('disconnect', function() {
-        console.log('انقطع الاتصال بالخادم');
+        // انقطع الاتصال بالخادم
       });
       
       // الاستماع لأحداث الرسائل الجديدة
       socket.on('new-message', function(data) {
-        console.log('رسالة جديدة وصلت:', data);
-        
         // تشغيل صوت الإشعار للرسائل الواردة
         if (data.direction === 'incoming') {
           window.playNotificationSound();
@@ -138,11 +136,8 @@
       
       // الاستماع لأحداث تحديث حالة الرسائل
       socket.on('message-status-update', function(data) {
-        console.log('تحديث حالة الرسالة:', data);
-        
         // تحقق من وجود معرف المحادثة والتأكد من أنه يطابق المحادثة الحالية
         if (!data.conversationId || data.conversationId !== currentConversationId) {
-          console.log('تجاهل تحديث الحالة لأنه لا يخص المحادثة الحالية');
           return;
         }
         
@@ -157,11 +152,8 @@
       
       // الاستماع لأحداث الردود الجديدة
       socket.on('message-reply', function(data) {
-        console.log('رد جديد على رسالة:', data);
-        
         // التحقق من وجود البيانات المطلوبة
         if (!data || !data.message) {
-          console.warn('بيانات رد غير مكتملة:', data);
           return;
         }
         
@@ -196,11 +188,8 @@
       
       // الاستماع لأحداث التفاعلات الجديدة
       socket.on('message-reaction', function(data) {
-        console.log('تفاعل جديد على رسالة:', data);
-        
         // التحقق من أن البيانات تخص المحادثة الحالية
         if (!data.conversationId || data.conversationId !== currentConversationId) {
-          console.log('تجاهل تحديث التفاعل لأنه لا يخص المحادثة الحالية');
           return;
         }
         
@@ -210,11 +199,8 @@
       
       // الاستماع لأحداث تحديث المعرف الخارجي للرسالة
       socket.on('message-external-id-update', function(data) {
-        console.log('تحديث المعرف الخارجي للرسالة:', data);
-        
         // التحقق من أن البيانات تخص المحادثة الحالية
         if (!data.conversationId || data.conversationId !== currentConversationId) {
-          console.log('تجاهل تحديث المعرف الخارجي لأنه لا يخص المحادثة الحالية');
           return;
         }
         
@@ -222,16 +208,11 @@
         const messageElem = document.querySelector(`.message[data-message-id="${data.messageId}"]`);
         
         if (!messageElem) {
-          console.warn('لم يتم العثور على الرسالة لتحديث المعرف الخارجي. المعرف الداخلي:', data.messageId);
           return;
         }
         
         // إضافة المعرف الخارجي للرسالة
         messageElem.setAttribute('data-external-id', data.externalId);
-        console.log('تم تحديث المعرف الخارجي للرسالة بنجاح:', {
-          messageId: data.messageId,
-          externalId: data.externalId
-        });
       });
       
       // تحديث قائمة المحادثات بدون إعادة تحميل الصفحة
@@ -370,7 +351,6 @@
           
           // الانضمام إلى غرفة المحادثة عبر الويب سوكت
           socket.emit('join-conversation', conversationId);
-          console.log('تم الانضمام إلى غرفة المحادثة:', conversationId);
           
           // التمرير لأسفل آخر الرسائل
           setTimeout(() => {
@@ -414,7 +394,6 @@
         // التحقق من وجود الرسالة مسبقاً (لمنع إضافتها مرتين)
         const messageExists = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
         if (messageExists) {
-          console.log('الرسالة موجودة بالفعل، تخطي إضافتها مرة أخرى:', messageData._id);
           return;
         }
         

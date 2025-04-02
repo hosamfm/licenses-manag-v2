@@ -6,7 +6,7 @@
 
 // نافذة عالمية للوظائف المشتركة
 (function(window) {
-  // تعيين وضع التصحيح (اجعله false لإيقاف رسائل التصحيح)
+  // تعيين وضع التصحيح (false لإيقاف رسائل التصحيح)
   window.debugMode = false;
   
   // تعريف الدوال العالمية للتفاعل مع الرسائل
@@ -20,10 +20,6 @@
   window.showReactionPicker = function(messageId, externalId, buttonElement) {
     if (!messageId) return;
     
-    if (window.debugMode === true) {
-      console.log('تنفيذ دالة showReactionPicker مع المعرف:', messageId);
-    }
-    
     // إزالة أي منتقي سابق موجود
     const existingPicker = document.getElementById('reactionPicker');
     if (existingPicker) {
@@ -33,9 +29,6 @@
     // العثور على الرسالة التي سيتم إضافة التفاعل لها
     const messageElem = buttonElement.closest('.message');
     if (!messageElem) {
-      if (window.debugMode === true) {
-        console.error('لم يتم العثور على عنصر الرسالة!');
-      }
       return;
     }
     
@@ -109,10 +102,6 @@
       // وضع المنتقي تحت الزر (الوضع الافتراضي)
       reactionPicker.style.top = `${rect.bottom + window.scrollY + 5}px`;
     }
-    
-    if (window.debugMode === true) {
-      console.log('تم إنشاء منتقي التفاعلات بنجاح:', reactionPicker);
-    }
   };
   
   /**
@@ -129,16 +118,9 @@
   window.sendReaction = function(messageId, emoji, externalId) {
     if (!messageId || !emoji) return;
     
-    if (window.debugMode === true) {
-      console.log('إرسال تفاعل:', messageId, emoji);
-    }
-    
     // الحصول على معرف المحادثة
     const conversationId = document.getElementById('conversationId')?.value;
     if (!conversationId) {
-      if (window.debugMode === true) {
-        console.error('معرف المحادثة غير موجود!');
-      }
       return;
     }
     
@@ -162,9 +144,6 @@
       return response.json();
     })
     .then(data => {
-      if (window.debugMode === true) {
-        console.log('تم إرسال التفاعل بنجاح:', data);
-      }
     })
     .catch(error => {
       if (window.debugMode === true) {
@@ -186,10 +165,6 @@
         console.error('بيانات غير كافية لعرض نموذج الرد:', { messageId, messageElem });
       }
       return;
-    }
-    
-    if (window.debugMode === true) {
-      console.log('تنفيذ دالة showReplyForm مع المعرف:', messageId);
     }
     
     // تخزين معرف الرسالة للرد عليها
@@ -284,9 +259,39 @@
       return;
     }
     
-    // تعطيل الزر وإظهار مؤشر التحميل
-    sendButton.disabled = true;
+    // حفظ نص الرسالة قبل مسحه
+    const messageContent = replyMessage.value.trim();
+    // حفظ معرف الرسالة المراد الرد عليها
+    const replyToId = window.currentReplyToId;
+    
+    // مسح النص من النموذج فوراً لتمكين المستخدم من كتابة رسالة جديدة
+    replyMessage.value = '';
+    
+    // إظهار مؤشر التحميل فقط دون تعطيل زر الإرسال
     sendingIndicator.style.display = 'inline-block';
+    
+    // إزالة مؤشر الرد إن وجد
+    window.clearReplyIndicator();
+    
+    // إضافة معرف فريد للرسالة المرسلة لتتبعها
+    const temporaryId = 'msg_' + Date.now();
+    
+    // إضافة رسالة مؤقتة بحالة إرسال
+    const tempMessage = {
+      _id: temporaryId,
+      content: messageContent,
+      direction: 'outgoing',
+      status: 'sending',
+      timestamp: new Date(),
+      replyToMessageId: replyToId
+    };
+    
+    // عرض الرسالة المؤقتة فوراً في واجهة المستخدم
+    if (typeof window.addNewMessageToConversation === 'function') {
+      window.addNewMessageToConversation(tempMessage);
+    } else if (typeof window.addMessageToConversation === 'function') {
+      window.addMessageToConversation(tempMessage);
+    }
     
     // إرسال الرسالة للخادم
     fetch(`/crm/conversations/${conversationId}/reply`, {
@@ -296,8 +301,9 @@
         'X-Requested-With': 'XMLHttpRequest'
       },
       body: JSON.stringify({
-        content: replyMessage.value.trim(),
-        replyToMessageId: window.currentReplyToId || null
+        content: messageContent,
+        replyToMessageId: replyToId || null,
+        temporaryId: temporaryId // إرسال المعرف المؤقت للتمكن من تحديث حالة الرسالة
       })
     })
     .then(response => {
@@ -305,27 +311,33 @@
       return response.json();
     })
     .then(data => {
-      if (window.debugMode === true) {
-        console.log('تم إرسال الرسالة بنجاح:', data);
-      }
-      
-      // مسح النص من النموذج
-      replyMessage.value = '';
-      
-      // إعادة تمكين زر الإرسال وإخفاء المؤشر
-      sendButton.disabled = false;
+      // إخفاء مؤشر الإرسال
       sendingIndicator.style.display = 'none';
       
-      // إزالة مؤشر الرد إن وجد
-      window.clearReplyIndicator();
-      
-      // إضافة الرسالة المرسلة للمحادثة
+      // تحديث الرسالة المؤقتة بالبيانات الحقيقية
       if (data.message) {
-        // استخدام الدالة المناسبة حسب الواجهة
-        if (typeof window.addNewMessageToConversation === 'function') {
-          window.addNewMessageToConversation(data.message);
-        } else if (typeof window.addMessageToConversation === 'function') {
-          window.addMessageToConversation(data.message);
+        // البحث عن الرسالة المؤقتة وتحديثها
+        const tempMessageElement = document.querySelector(`.message[data-message-id="${temporaryId}"]`);
+        if (tempMessageElement) {
+          tempMessageElement.setAttribute('data-message-id', data.message._id);
+          tempMessageElement.setAttribute('data-status', data.message.status);
+          if (data.message.externalMessageId) {
+            tempMessageElement.setAttribute('data-external-id', data.message.externalMessageId);
+          }
+          
+          // تحديث أيقونة الحالة
+          const statusIcon = tempMessageElement.querySelector('.message-status i');
+          if (statusIcon) {
+            statusIcon.className = 'fas fa-check text-silver';
+            statusIcon.title = 'تم الإرسال';
+          }
+        } else {
+          // إذا لم يتم العثور على الرسالة المؤقتة (حالة نادرة)، إضافة الرسالة الجديدة
+          if (typeof window.addNewMessageToConversation === 'function') {
+            window.addNewMessageToConversation(data.message);
+          } else if (typeof window.addMessageToConversation === 'function') {
+            window.addMessageToConversation(data.message);
+          }
         }
       }
       
@@ -339,9 +351,21 @@
         console.error('خطأ في إرسال الرسالة:', error);
       }
       
-      // إعادة تمكين زر الإرسال وإخفاء المؤشر
-      sendButton.disabled = false;
+      // إخفاء مؤشر الإرسال
       sendingIndicator.style.display = 'none';
+      
+      // تحديث حالة الرسالة المؤقتة إلى فشل
+      const tempMessageElement = document.querySelector(`.message[data-message-id="${temporaryId}"]`);
+      if (tempMessageElement) {
+        tempMessageElement.setAttribute('data-status', 'failed');
+        
+        // تحديث أيقونة الحالة
+        const statusIcon = tempMessageElement.querySelector('.message-status i');
+        if (statusIcon) {
+          statusIcon.className = 'fas fa-exclamation-triangle text-danger';
+          statusIcon.title = 'فشل الإرسال';
+        }
+      }
       
       // عرض رسالة خطأ
       window.showToast && window.showToast('فشل في إرسال الرسالة، يرجى المحاولة مرة أخرى.', 'danger');
@@ -355,9 +379,6 @@
    */
   window.updateMessageStatus = function(messageId, newStatus) {
     if (!messageId || !newStatus) {
-      if (window.debugMode === true) {
-        console.warn('معلومات غير كافية لتحديث حالة الرسالة:', { messageId, newStatus });
-      }
       return;
     }
     
@@ -368,33 +389,11 @@
     if (!messageElem) {
       messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
       
-      if (window.debugMode === true && !messageElem) {
-        // تسجيل معلومات التصحيح عن كل الرسائل الموجودة في الصفحة
-        const allMessages = document.querySelectorAll('.message');
-        console.log('جميع رسائل الصفحة:', Array.from(allMessages).map(el => ({
-          id: el.getAttribute('data-message-id'),
-          externalId: el.getAttribute('data-external-id'),
-          status: el.getAttribute('data-status')
-        })));
-      }
     }
     
     // إذا لم يتم العثور على الرسالة بأي من المعرفين
     if (!messageElem) {
-      if (window.debugMode === true) {
-        console.warn('لم يتم العثور على الرسالة لتحديث حالتها. المعرف:', messageId);
-      }
       return;
-    }
-    
-    if (window.debugMode === true) {
-      console.log('تم العثور على الرسالة وسيتم تحديث حالتها:', { 
-        messageId, 
-        elementId: messageElem.getAttribute('data-message-id'),
-        externalId: messageElem.getAttribute('data-external-id'),
-        oldStatus: messageElem.getAttribute('data-status'),
-        newStatus 
-      });
     }
     
     // تحديث السمة
@@ -427,75 +426,14 @@
   };
   
   /**
-   * دالة لإظهار إشعار منبثق (توست)
-   * @param {string} message - نص الإشعار
-   * @param {string} type - نوع الإشعار (info, success, warning, danger)
-   */
-  window.showToast = function(message, type = 'info') {
-    // التأكد من وجود حاوية الإشعارات
-    let toastContainer = document.getElementById('toast-container');
-    if (!toastContainer) {
-      toastContainer = document.createElement('div');
-      toastContainer.id = 'toast-container';
-      toastContainer.className = 'position-fixed bottom-0 end-0 p-3';
-      toastContainer.style.zIndex = '1050';
-      document.body.appendChild(toastContainer);
-    }
-    
-    // إنشاء الإشعار
-    const toastId = 'toast-' + Date.now();
-    const toastElem = document.createElement('div');
-    toastElem.id = toastId;
-    toastElem.className = `toast show bg-${type} text-white`;
-    toastElem.setAttribute('role', 'alert');
-    toastElem.setAttribute('aria-live', 'assertive');
-    toastElem.setAttribute('aria-atomic', 'true');
-    
-    toastElem.innerHTML = `
-      <div class="toast-header bg-${type} text-white">
-        <strong class="me-auto">إشعار</strong>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="إغلاق"></button>
-      </div>
-      <div class="toast-body">
-        ${message}
-      </div>
-    `;
-    
-    // إضافة الإشعار للحاوية
-    toastContainer.appendChild(toastElem);
-    
-    // إضافة حدث للزر إغلاق
-    const closeBtn = toastElem.querySelector('.btn-close');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', function() {
-        toastElem.remove();
-      });
-    }
-    
-    // إزالة الإشعار بعد فترة
-    setTimeout(() => {
-      if (toastElem && toastElem.parentNode) {
-        toastElem.remove();
-      }
-    }, 5000);
-  };
-  
-  /**
    * دالة لتعليق مستمعات الأحداث للمحادثة
    */
   window.setupMessageActions = function(messageElem) {
     if (!messageElem) return;
     
-    if (window.debugMode === true) {
-      console.log('إعداد أحداث الرسالة للعنصر:', messageElem);
-    }
-    
     // زر الرد
     const replyButton = messageElem.querySelector('.reply-btn');
     if (replyButton) {
-      if (window.debugMode === true) {
-        console.log('تم العثور على زر الرد:', replyButton);
-      }
       
       // إزالة أي مستمعات سابقة لتجنب التكرار
       const oldReplyHandler = replyButton.onclick;
@@ -505,9 +443,6 @@
       
       // إضافة مستمع جديد
       replyButton.addEventListener('click', function() {
-        if (window.debugMode === true) {
-          console.log('تم النقر على زر الرد');
-        }
         const messageId = messageElem.getAttribute('data-message-id');
         const externalId = messageElem.getAttribute('data-external-id');
         window.showReplyForm(messageId, externalId, messageElem);
@@ -517,9 +452,6 @@
     // زر التفاعل
     const reactionButton = messageElem.querySelector('.reaction-btn');
     if (reactionButton) {
-      if (window.debugMode === true) {
-        console.log('تم العثور على زر التفاعل:', reactionButton);
-      }
       
       // إزالة أي مستمعات سابقة لتجنب التكرار
       const oldReactionHandler = reactionButton.onclick;
@@ -529,9 +461,6 @@
       
       // إضافة مستمع جديد
       reactionButton.addEventListener('click', function(event) {
-        if (window.debugMode === true) {
-          console.log('تم النقر على زر التفاعل');
-        }
         const messageId = messageElem.getAttribute('data-message-id');
         const externalId = messageElem.getAttribute('data-external-id');
         window.showReactionPicker(messageId, externalId, event.target);
@@ -548,15 +477,9 @@
       if (sound) {
         sound.currentTime = 0;
         sound.play().catch(err => {
-          if (window.debugMode === true) {
-            console.error('خطأ تشغيل الصوت:', err);
-          }
         });
       }
     } catch (error) {
-      if (window.debugMode === true) {
-        console.error('خطأ في تشغيل صوت الإشعار:', error);
-      }
     }
   };
 
@@ -564,9 +487,6 @@
    * دالة لتعليق مستمعات الأحداث للمحادثة في الواجهة المفصلة
    */
   window.attachConversationEventListeners = function() {
-    if (window.debugMode === true) {
-      console.log('بدء تطبيق مستمعات الأحداث للمحادثة...');
-    }
     
     // الحصول على الإشارات إلى عناصر DOM
     const replyForm = document.getElementById('replyForm');
@@ -576,20 +496,10 @@
     const conversationId = document.getElementById('conversationId')?.value;
     
     if (!conversationId) {
-      if (window.debugMode === true) {
-        console.error('معرف المحادثة غير موجود! replyForm:', replyForm, 'conversationId element:', document.getElementById('conversationId'));
-      }
       return;
     }
     
-    if (window.debugMode === true) {
-      console.log('تهيئة النموذج للمحادثة:', conversationId);
-    }
-    
     // إضافة مستمعات الأحداث للرسائل الموجودة حالياً
-    if (window.debugMode === true) {
-      console.log('إضافة مستمعات الأحداث للرسائل...');
-    }
     const allMessages = document.querySelectorAll('.message');
     allMessages.forEach(message => {
       window.setupMessageActions(message);
@@ -597,6 +507,7 @@
     
     // حدث إرسال نموذج الرد
     if (replyForm) {
+      
       // حذف مستمعات الأحداث السابقة إن وجدت
       const oldSubmitHandler = replyForm.onsubmit;
       if (oldSubmitHandler) {
@@ -616,22 +527,17 @@
         });
       }
     } else {
-      if (window.debugMode === true) {
-        console.warn('نموذج الرد غير موجود! قد تكون المحادثة مغلقة.');
-      }
     }
     
     // التأكد من وجود Socket.io
     if (typeof socket !== 'undefined') {
+      
       // مستمع لحدث الرد على رسالة
       socket.on('message-reply', function(data) {
-        if (window.debugMode === true) {
-          console.log('تم استلام حدث رد على رسالة:', data);
-        }
         
         try {
           if (!data || !data.message) {
-            return console.warn('بيانات الرد غير مكتملة:', data);
+            return;
           }
           
           // تجهيز بيانات الرسالة
@@ -639,7 +545,7 @@
           const replyToId = data.replyToId;
           
           if (!replyToId) {
-            return console.warn('معرف الرسالة المراد الرد عليها غير موجود!', data);
+            return;
           }
           
           // ضبط خاصية replyToMessageId في كائن الرسالة لضمان معالجتها كرد
@@ -649,6 +555,7 @@
           
           // استخدام طريقة addMessageToConversation إذا كانت متاحة
           if (typeof window.addMessageToConversation === 'function') {
+            
             // استخدام نفس الواجهة للرسائل الجديدة
             window.addMessageToConversation(message);
             return;
@@ -658,7 +565,7 @@
           // 1. إنشاء عنصر الرسالة الجديدة
           const messageContainer = document.getElementById('messageContainer');
           if (!messageContainer) {
-            return console.warn('حاوية الرسائل غير موجودة في الصفحة!');
+            return;
           }
           
           // 2. البحث عن الرسالة المرد عليها
@@ -723,13 +630,9 @@
             window.playNotificationSound();
           }
         } catch (error) {
-          console.error('خطأ في معالجة حدث رد على رسالة:', error);
         }
       });
     } else {
-      if (window.debugMode === true) {
-        console.warn('Socket.io غير متاح! لن يتم استلام الإشعارات في الوقت الحقيقي.');
-      }
     }
   };
 
@@ -740,9 +643,6 @@
    */
   window.updateMessageReaction = function(messageId, reaction) {
     if (!messageId || !reaction) {
-      if (window.debugMode === true) {
-        console.warn('بيانات غير كاملة لتحديث التفاعل', { messageId, reaction });
-      }
       return;
     }
     
@@ -756,14 +656,7 @@
     
     // إذا لم يتم العثور على الرسالة بأي من المعرفين
     if (!messageElem) {
-      if (window.debugMode === true) {
-        console.warn('لم يتم العثور على الرسالة لإضافة التفاعل. المعرف:', messageId);
-      }
       return;
-    }
-    
-    if (window.debugMode === true) {
-      console.log('تم العثور على الرسالة وسيتم إضافة التفاعل:', messageId, reaction);
     }
     
     // البحث عن وجود حاوية التفاعلات في الرسالة
@@ -794,10 +687,6 @@
     
     // تحديث سمات الرسالة لتسجيل التفاعل
     messageElem.setAttribute('data-has-reaction', 'true');
-    
-    if (window.debugMode === true) {
-      console.log('تم تحديث تفاعل الرسالة بنجاح');
-    }
   };
   
 })(window);

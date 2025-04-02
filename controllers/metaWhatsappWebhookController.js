@@ -14,7 +14,6 @@ const socketService = require('../services/socketService');
  * مصادقة webhook واتساب من ميتا
  */
 exports.verifyWebhook = async (req, res) => {
-  logger.debug('metaWhatsappWebhookController', 'التحقق من webhook واتساب الرسمي', { query: req.query });
   try {
     const settings = await MetaWhatsappSettings.getActiveSettings();
 
@@ -42,13 +41,6 @@ exports.handleWebhook = async (req, res) => {
   try {
     const requestId = Date.now().toString();
     const body = req.body;
-
-    logger.debug('metaWhatsappWebhookController', 'استلام webhook جديد', {
-      requestId,
-      body: JSON.stringify(body, null, 2),
-      headers: req.headers,
-      timestamp: new Date()
-    });
 
     let requestType = 'unknown';
 
@@ -136,7 +128,7 @@ const processedMessageIds = new Set();
  */
 async function updateMessageStatus(externalId, newStatus, timestamp) {
   try {
-    logger.debug('metaWhatsappWebhookController', 'تحديث حالة الرسالة', { externalId, newStatus });
+    logger.info('metaWhatsappWebhookController', 'تحديث حالة الرسالة', { externalId, newStatus });
     
     let systemStatus = newStatus; 
     if (newStatus === 'sent') systemStatus = 'sent';
@@ -158,7 +150,7 @@ async function updateMessageStatus(externalId, newStatus, timestamp) {
       // إذا كانت الحالة "sent" وهي أول تحديث، فهذا يعني أننا استلمنا المعرف الخارجي للرسالة
       // سنرسل إشعارًا إضافيًا لربط المعرف الداخلي بالمعرف الخارجي
       if (systemStatus === 'sent') {
-        logger.debug('metaWhatsappWebhookController', 'إرسال تحديث بربط المعرف الخارجي بالداخلي', { 
+        logger.info('metaWhatsappWebhookController', 'إرسال تحديث بربط المعرف الخارجي بالداخلي', { 
           messageId: wMsg._id, 
           externalId: externalId 
         });
@@ -180,7 +172,7 @@ async function updateMessageStatus(externalId, newStatus, timestamp) {
       semMsg.providerData.status = systemStatus;
       await semMsg.save();
 
-      logger.debug('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage أيضاً', { externalId });
+      logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage أيضاً', { externalId });
     }
 
   } catch (err) {
@@ -194,7 +186,7 @@ async function updateMessageStatus(externalId, newStatus, timestamp) {
 async function handleReactions(reactions, meta) {
   try {
     const phoneNumberId = meta.phone_number_id;
-    logger.debug('metaWhatsappWebhookController', 'تفاعلات واردة', {
+    logger.info('metaWhatsappWebhookController', 'تفاعلات واردة', {
       phoneNumberId, count: reactions.length
     });
 
@@ -262,7 +254,7 @@ async function handleReactions(reactions, meta) {
 async function handleIncomingMessages(messages, meta) {
   try {
     const phoneNumberId = meta.phone_number_id;
-    logger.debug('metaWhatsappWebhookController', 'رسائل واردة', {
+    logger.info('metaWhatsappWebhookController', 'رسائل واردة', {
       phoneNumberId, count: messages.length
     });
 
@@ -305,7 +297,7 @@ async function handleIncomingMessages(messages, meta) {
         // أنشئ رسالة واردة في DB
         const savedMsg = await WhatsappMessage.createIncomingMessage(conversation._id, msg);
 
-        logger.debug('metaWhatsappWebhookController', 'تم حفظ رسالة واردة وسيتم إرسال إشعار', { 
+        logger.info('metaWhatsappWebhookController', 'تم حفظ رسالة واردة وسيتم إرسال إشعار', { 
           messageId: savedMsg._id,
           externalId: savedMsg.externalMessageId 
         });
