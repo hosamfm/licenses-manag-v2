@@ -1,19 +1,30 @@
 /**
- * مسارات وسائط واتساب
- * تتعامل مع تحميل وإرسال الملفات عبر واتساب
+ * مسارات وسائط واتساب - WhatsApp Media Routes
  */
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const whatsappMediaController = require('../controllers/whatsappMediaController');
 const { isAuthenticated } = require('../middleware/authMiddleware');
 
-// مسار تحميل ملف إلى التخزين السحابي
-router.post('/upload', isAuthenticated, whatsappMediaController.uploadMedia);
+// إعداد multer لتحميل الملفات (تخزين مؤقت في الذاكرة)
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 16 * 1024 * 1024 } // الحد الأقصى 16 ميجابايت
+});
 
-// مسار إرسال ملف إلى محادثة واتساب
-router.post('/conversations/:conversationId/send', isAuthenticated, whatsappMediaController.sendMedia);
+// الحصول على وسائط رسالة محددة
+router.get('/message/:messageId', isAuthenticated, whatsappMediaController.getMediaByMessage);
 
-// طلب تحديث رابط ملف وسائط
-router.post('/refresh-url', isAuthenticated, whatsappMediaController.refreshMediaUrl);
+// استرجاع محتوى الوسائط برابط مباشر
+router.get('/content/:mediaId', whatsappMediaController.getMediaContent);
+
+// تحميل وسائط جديدة للإرسال
+router.post('/upload', 
+  isAuthenticated, 
+  upload.single('mediaFile'), 
+  whatsappMediaController.uploadMediaForSending
+);
 
 module.exports = router;

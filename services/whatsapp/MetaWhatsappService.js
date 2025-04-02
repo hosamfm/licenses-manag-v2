@@ -4,8 +4,6 @@
 const axios = require('axios');
 const MetaWhatsappSettings = require('../../models/MetaWhatsappSettings');
 const logger = require('../loggerService');
-const storageService = require('../storageService');
-const path = require('path');
 
 class MetaWhatsappService {
     /**
@@ -376,12 +374,12 @@ class MetaWhatsappService {
     }
 
     /**
-     * الحصول على وسائط رسالة بواسطة معرفها
-     * @param {string} mediaId معرف الوسائط
-     * @param {string} phoneNumberId معرف رقم الهاتف (اختياري)
-     * @returns {Promise<object>} بيانات الوسائط وعنوان URL للملف المخزن
+     * الحصول على رابط تنزيل وسائط
+     * @param {string} mediaId - معرف الوسائط
+     * @param {string} phoneNumberId - معرف رقم الهاتف (اختياري)
+     * @returns {Promise<object>} رابط ومعلومات الوسائط
      */
-    async downloadMedia(mediaId, phoneNumberId = null) {
+    async getMediaUrl(mediaId, phoneNumberId = null) {
         if (!this.initialized) {
             await this.initialize();
         }
@@ -397,125 +395,20 @@ class MetaWhatsappService {
             }
         }
 
-        if (!settingsToUse || !settingsToUse.isConfigured()) {
-            throw new Error('إعدادات واتساب الرسمي غير مكتملة');
-        }
-
-        try {
-            logger.info('MetaWhatsappService', 'بدء تنزيل وسائط من واتساب', { mediaId });
-
-            // 1. الحصول على رابط الوسائط من API واتساب
-            const url = `${this.baseUrl}/${mediaId}`;
-            const headers = {
-                'Authorization': `Bearer ${settingsToUse.config.accessToken}`
-            };
-
-            const mediaResponse = await axios({
-                method: 'GET',
-                url,
-                headers
-            });
-
-            if (!mediaResponse.data || !mediaResponse.data.url) {
-                throw new Error('لم يتم العثور على رابط الوسائط في استجابة واتساب');
-            }
-
-            // 2. تنزيل الوسائط من الرابط المؤقت الذي قدمته واتساب
-            const mediaUrl = mediaResponse.data.url;
-            const mediaHeaders = {
-                'Authorization': `Bearer ${settingsToUse.config.accessToken}`
-            };
-
-            // 3. توليد اسم فريد للملف بناءً على معرف الوسائط
-            // مع الاحتفاظ بامتداد الملف إذا كان موجودًا في البيانات الوصفية
-            let fileName = `${mediaId}`;
-            let mimeType = mediaResponse.data.mime_type || 'application/octet-stream';
-            
-            // تحديد امتداد الملف من نوع MIME
-            const mimeToExt = {
-                'image/jpeg': '.jpg',
-                'image/png': '.png',
-                'image/webp': '.webp',
-                'video/mp4': '.mp4',
-                'audio/mpeg': '.mp3',
-                'audio/ogg': '.ogg',
-                'audio/amr': '.amr',
-                'application/pdf': '.pdf',
-                'application/vnd.ms-excel': '.xls',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
-                'application/msword': '.doc',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-                'text/plain': '.txt'
-            };
-            
-            const fileExt = mimeToExt[mimeType] || '.bin';
-            fileName = `${fileName}${fileExt}`;
-            
-            logger.info('MetaWhatsappService', 'تنزيل وسائط من واتساب', { 
-                mediaId, 
-                fileName, 
-                mimeType 
-            });
-
-            // 4. تنزيل الملف من URL واتساب وتحميله إلى R2
-            const mediaFileResponse = await axios({
-                method: 'GET',
-                url: mediaUrl,
-                headers: mediaHeaders,
-                responseType: 'arraybuffer'
-            });
-
-            // 5. تحميل الملف إلى خدمة R2
-            const uploadResult = await storageService.uploadFileFromBuffer(
-                Buffer.from(mediaFileResponse.data),
-                fileName,
-                mimeType,
-                'whatsapp'
-            );
-
-            logger.info('MetaWhatsappService', 'تم تنزيل وتخزين وسائط من واتساب بنجاح', { 
-                mediaId, 
-                r2Key: uploadResult.r2Key 
-            });
-
-            // 6. إرجاع معلومات الملف المخزن
-            return {
-                success: true,
-                mediaId,
-                fileName,
-                mimeType,
-                fileSize: uploadResult.size,
-                r2Key: uploadResult.r2Key,
-                publicUrl: uploadResult.publicUrl
-            };
-        } catch (error) {
-            logger.error('MetaWhatsappService', 'خطأ في تنزيل وسائط من واتساب', { 
-                mediaId, 
-                error: error.message,
-                stack: error.stack 
-            });
-            throw new Error(`فشل في تنزيل وسائط واتساب: ${error.message}`);
-        }
+        return this.sendRequest(`/${mediaId}`, 'GET', null, settingsToUse);
     }
 
     /**
-     * إرسال ملف وسائط عبر واتساب
-     * @param {string} to رقم الهاتف المستلم
-     * @param {string} mediaType نوع الوسائط (image, video, audio, document, sticker)
-     * @param {string} mediaUrl رابط الوسائط (يجب أن يكون متاحًا عبر الإنترنت)
-     * @param {object} options خيارات إضافية (caption, filename، إلخ)
-     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
+     * إرسال صورة عبر واتساب
+     * @param {string} to - رقم الهاتف المستلم
+     * @param {string} imageUrl - رابط الصورة أو بيانات base64
+     * @param {string} caption - نص وصفي للصورة (اختياري)
+     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
      * @returns {Promise<object>} نتيجة الإرسال
      */
-    async sendMediaMessage(to, mediaType, mediaUrl, options = {}, phoneNumberId = null) {
+    async sendImage(to, imageUrl, caption = '', phoneNumberId = null) {
         if (!this.initialized) {
             await this.initialize();
-        }
-
-        // التحقق من صحة نوع الوسائط
-        const validMediaTypes = ['image', 'video', 'audio', 'document', 'sticker'];
-        if (!validMediaTypes.includes(mediaType)) {
-            throw new Error(`نوع الوسائط غير صالح. الأنواع المدعومة: ${validMediaTypes.join(', ')}`);
         }
 
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
@@ -537,60 +430,404 @@ class MetaWhatsappService {
             throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
         }
 
-        // بناء محتوى الرسالة حسب نوع الوسائط
+        // هيكل البيانات للصورة
+        let data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'image',
+            image: {}
+        };
+
+        // تحديد مصدر الصورة (رابط أو base64)
+        if (imageUrl.startsWith('http')) {
+            // استخدام رابط خارجي
+            data.image = {
+                link: imageUrl
+            };
+        } else if (imageUrl.startsWith('data:image')) {
+            // استخدام بيانات base64
+            const base64Data = imageUrl.split(',')[1];
+            data.image = {
+                id: base64Data
+            };
+        } else {
+            // افتراض أنها بيانات base64 بدون prefix
+            data.image = {
+                id: imageUrl
+            };
+        }
+
+        // إضافة وصف الصورة إذا كان موجوداً
+        if (caption && caption.trim()) {
+            data.image.caption = caption;
+        }
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال مستند عبر واتساب
+     * @param {string} to - رقم الهاتف المستلم
+     * @param {string} documentUrl - رابط المستند أو بيانات base64
+     * @param {string} filename - اسم الملف
+     * @param {string} caption - نصوصفي للمستند (اختياري)
+     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendDocument(to, documentUrl, filename, caption = '', phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // هيكل البيانات للمستند
+        let data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'document',
+            document: {
+                filename: filename
+            }
+        };
+
+        // تحديد مصدر المستند (رابط أو base64)
+        if (documentUrl.startsWith('http')) {
+            // استخدام رابط خارجي
+            data.document.link = documentUrl;
+        } else if (documentUrl.startsWith('data:')) {
+            // استخدام بيانات base64
+            const base64Data = documentUrl.split(',')[1];
+            data.document.id = base64Data;
+        } else {
+            // افتراض أنها بيانات base64 بدون prefix
+            data.document.id = documentUrl;
+        }
+
+        // إضافة وصف المستند إذا كان موجوداً
+        if (caption && caption.trim()) {
+            data.document.caption = caption;
+        }
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال فيديو عبر واتساب
+     * @param {string} to - رقم الهاتف المستلم
+     * @param {string} videoUrl - رابط الفيديو أو بيانات base64
+     * @param {string} caption - نصوصفي للفيديو (اختياري)
+     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendVideo(to, videoUrl, caption = '', phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // هيكل البيانات للفيديو
+        let data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'video',
+            video: {}
+        };
+
+        // تحديد مصدر الفيديو (رابط أو base64)
+        if (videoUrl.startsWith('http')) {
+            // استخدام رابط خارجي
+            data.video.link = videoUrl;
+        } else if (videoUrl.startsWith('data:video')) {
+            // استخدام بيانات base64
+            const base64Data = videoUrl.split(',')[1];
+            data.video.id = base64Data;
+        } else {
+            // افتراض أنها بيانات base64 بدون prefix
+            data.video.id = videoUrl;
+        }
+
+        // إضافة وصف الفيديو إذا كان موجوداً
+        if (caption && caption.trim()) {
+            data.video.caption = caption;
+        }
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال ملف صوتي عبر واتساب
+     * @param {string} to - رقم الهاتف المستلم
+     * @param {string} audioUrl - رابط الملف الصوتي أو بيانات base64
+     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendAudio(to, audioUrl, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // هيكل البيانات للملف الصوتي
+        let data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'audio',
+            audio: {}
+        };
+
+        // تحديد مصدر الملف الصوتي (رابط أو base64)
+        if (audioUrl.startsWith('http')) {
+            // استخدام رابط خارجي
+            data.audio.link = audioUrl;
+        } else if (audioUrl.startsWith('data:audio')) {
+            // استخدام بيانات base64
+            const base64Data = audioUrl.split(',')[1];
+            data.audio.id = base64Data;
+        } else {
+            // افتراض أنها بيانات base64 بدون prefix
+            data.audio.id = audioUrl;
+        }
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال موقع عبر واتساب
+     * @param {string} to - رقم الهاتف المستلم
+     * @param {number} latitude - خط العرض
+     * @param {number} longitude - خط الطول
+     * @param {string} name - اسم الموقع (اختياري)
+     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendLocation(to, latitude, longitude, name = '', phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // هيكل البيانات للموقع
         const data = {
             messaging_product: 'whatsapp',
             recipient_type: 'individual',
             to,
-            type: mediaType
+            type: 'location',
+            location: {
+                latitude,
+                longitude
+            }
         };
 
-        // تخصيص حقول الرسالة حسب نوع الوسائط
-        switch (mediaType) {
-            case 'image':
-                data.image = {
-                    link: mediaUrl
-                };
-                if (options.caption) data.image.caption = options.caption;
-                break;
-            case 'video':
-                data.video = {
-                    link: mediaUrl
-                };
-                if (options.caption) data.video.caption = options.caption;
-                break;
-            case 'audio':
-                data.audio = {
-                    link: mediaUrl
-                };
-                break;
-            case 'document':
-                data.document = {
-                    link: mediaUrl
-                };
-                if (options.caption) data.document.caption = options.caption;
-                if (options.filename) data.document.filename = options.filename;
-                break;
-            case 'sticker':
-                data.sticker = {
-                    link: mediaUrl
-                };
-                break;
+        // إضافة اسم الموقع إذا كان موجوداً
+        if (name && name.trim()) {
+            data.location.name = name;
         }
 
-        // إضافة معلومات الرد على رسالة إذا تم توفيرها
-        if (options.replyToMessageId) {
-            data.context = {
-                message_id: options.replyToMessageId
-            };
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال ملصق عبر واتساب
+     * @param {string} to - رقم الهاتف المستلم
+     * @param {string} stickerUrl - رابط الملصق أو معرف الملصق
+     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendSticker(to, stickerUrl, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
         }
 
-        logger.info('MetaWhatsappService', 'إرسال رسالة وسائط', {
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // هيكل البيانات للملصق
+        let data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
             to,
-            mediaType,
-            hasCaption: !!options.caption,
-            isReply: !!options.replyToMessageId
-        });
+            type: 'sticker',
+            sticker: {}
+        };
+
+        // تحديد مصدر الملصق (رابط أو معرف)
+        if (stickerUrl.startsWith('http')) {
+            // استخدام رابط خارجي
+            data.sticker.link = stickerUrl;
+        } else {
+            // افتراض أنها معرف ملصق
+            data.sticker.id = stickerUrl;
+        }
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال رد على رسالة مع وسائط
+     * @param {string} to - رقم الهاتف المستلم
+     * @param {string} mediaType - نوع الوسائط (image, document, video, audio, sticker)
+     * @param {string} mediaUrl - رابط الوسائط أو بيانات base64
+     * @param {string} replyMessageId - معرف الرسالة التي يتم الرد عليها
+     * @param {object} options - خيارات إضافية (caption, filename)
+     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendReplyWithMedia(to, mediaType, mediaUrl, replyMessageId, options = {}, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // التحقق من صحة نوع الوسائط
+        if (!['image', 'document', 'video', 'audio', 'sticker'].includes(mediaType)) {
+            throw new Error(`نوع الوسائط غير مدعوم: ${mediaType}`);
+        }
+
+        // هيكل البيانات العام
+        const data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: mediaType,
+            context: {
+                message_id: replyMessageId
+            }
+        };
+
+        // إضافة بيانات الوسائط حسب النوع
+        let mediaData = {};
+
+        // تحديد مصدر الوسائط (رابط أو base64)
+        if (mediaUrl.startsWith('http')) {
+            mediaData.link = mediaUrl;
+        } else if (mediaUrl.startsWith(`data:${mediaType}`)) {
+            const base64Data = mediaUrl.split(',')[1];
+            mediaData.id = base64Data;
+        } else {
+            mediaData.id = mediaUrl;
+        }
+
+        // إضافة الخيارات الإضافية
+        if (options.caption && ['image', 'video', 'document'].includes(mediaType)) {
+            mediaData.caption = options.caption;
+        }
+
+        if (options.filename && mediaType === 'document') {
+            mediaData.filename = options.filename;
+        }
+
+        // تعيين بيانات الوسائط في الطلب
+        data[mediaType] = mediaData;
 
         return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
     }
