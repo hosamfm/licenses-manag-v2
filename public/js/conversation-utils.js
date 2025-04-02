@@ -350,11 +350,16 @@
 
   /**
    * دالة لتحديث حالة الرسالة في الواجهة
-   * @param {string} messageId - معرف الرسالة
+   * @param {string} messageId - معرف الرسالة (يكون عادة المعرف الخارجي wamid)
    * @param {string} newStatus - الحالة الجديدة
    */
   window.updateMessageStatus = function(messageId, newStatus) {
-    if (!messageId || !newStatus) return;
+    if (!messageId || !newStatus) {
+      if (window.debugMode === true) {
+        console.warn('معلومات غير كافية لتحديث حالة الرسالة:', { messageId, newStatus });
+      }
+      return;
+    }
     
     // البحث أولاً عن الرسالة حسب المعرف الخارجي (الذي يأتي من واتساب)
     let messageElem = document.querySelector(`.message[data-external-id="${messageId}"]`);
@@ -362,6 +367,16 @@
     // إذا لم يتم العثور على الرسالة بالمعرف الخارجي، حاول البحث بمعرف الرسالة في قاعدة البيانات
     if (!messageElem) {
       messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+      
+      if (window.debugMode === true && !messageElem) {
+        // تسجيل معلومات التصحيح عن كل الرسائل الموجودة في الصفحة
+        const allMessages = document.querySelectorAll('.message');
+        console.log('جميع رسائل الصفحة:', Array.from(allMessages).map(el => ({
+          id: el.getAttribute('data-message-id'),
+          externalId: el.getAttribute('data-external-id'),
+          status: el.getAttribute('data-status')
+        })));
+      }
     }
     
     // إذا لم يتم العثور على الرسالة بأي من المعرفين
@@ -373,7 +388,13 @@
     }
     
     if (window.debugMode === true) {
-      console.log('تم العثور على الرسالة وسيتم تحديث حالتها:', messageId, newStatus);
+      console.log('تم العثور على الرسالة وسيتم تحديث حالتها:', { 
+        messageId, 
+        elementId: messageElem.getAttribute('data-message-id'),
+        externalId: messageElem.getAttribute('data-external-id'),
+        oldStatus: messageElem.getAttribute('data-status'),
+        newStatus 
+      });
     }
     
     // تحديث السمة

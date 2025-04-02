@@ -263,12 +263,28 @@ function notifyMessageStatusUpdate(conversationId, externalId, status) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  io.to(`conversation-${conversationId}`).emit('message-status-update', { 
+
+  if (!externalId) {
+    return logger.warn('socketService', 'محاولة تحديث حالة رسالة بدون معرف خارجي', { 
+      conversationId, 
+      status 
+    });
+  }
+
+  const data = { 
     externalId, 
     status, 
     conversationId 
+  };
+
+  io.to(`conversation-${conversationId}`).emit('message-status-update', data);
+  
+  logger.info('socketService', 'تم إرسال إشعار بتحديث حالة الرسالة', { 
+    conversationId, 
+    externalId, 
+    status,
+    dataObject: JSON.stringify(data)
   });
-  logger.info('socketService', 'تم إرسال إشعار بتحديث حالة الرسالة', { conversationId, externalId, status });
 }
 
 /**

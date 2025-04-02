@@ -312,14 +312,21 @@ whatsappMessageSchema.statics.createReplyMessage = async function(conversationId
     
     // تحضير سياق الرد
     let context = null;
+    let finalReplyId = replyToMessageId; // استخدام المعرف الأصلي كاحتياطي
+
     if (originalMessage) {
+      // إذا وجدنا الرسالة الأصلية، نستخدم المعرف الخارجي لها إن وجد
+      if (originalMessage.externalMessageId) {
+        finalReplyId = originalMessage.externalMessageId;
+      }
+      
       context = {
         message_id: originalMessage.externalMessageId || replyToMessageId,
         from: originalMessage.metadata ? originalMessage.metadata.from : null
       };
     }
     
-    // إنشاء رسالة الرد
+    // إنشاء رسالة الرد - استخدام المعرف الخارجي للرسالة الأصلية في replyToMessageId
     const message = await this.create({
       conversationId: conversationId,
       direction: 'outgoing',
@@ -327,7 +334,7 @@ whatsappMessageSchema.statics.createReplyMessage = async function(conversationId
       timestamp: new Date(),
       status: 'sent',
       sentBy: userId,
-      replyToMessageId: replyToMessageId,
+      replyToMessageId: finalReplyId, // استخدام المعرف الخارجي إذا كان متاحاً
       context: context
     });
     

@@ -325,9 +325,12 @@ exports.replyToConversation = async (req, res) => {
 
     // التحقق من وجود سياق رد على رسالة
     let replyContext = null;
+    let originalMessage = null;
+    let externalReplyId = null;
+
     if (replyToMessageId) {
       // البحث عن الرسالة الأصلية التي يتم الرد عليها - بمعرفها الخارجي أو الداخلي
-      const originalMessage = await WhatsappMessage.findOne({
+      originalMessage = await WhatsappMessage.findOne({
         $or: [
           { externalMessageId: replyToMessageId },
           { _id: replyToMessageId }
@@ -335,6 +338,9 @@ exports.replyToConversation = async (req, res) => {
       });
       
       if (originalMessage) {
+        // استخدام المعرف الخارجي للرسالة الأصلية للرد
+        externalReplyId = originalMessage.externalMessageId;
+        
         replyContext = {
           message_id: originalMessage.externalMessageId || replyToMessageId,
           from: originalMessage.metadata ? originalMessage.metadata.from : null
@@ -388,12 +394,31 @@ exports.replyToConversation = async (req, res) => {
       
       // إذا كان رد على رسالة سابقة
       if (replyToMessageId) {
-        apiResponse = await metaWhatsappService.sendReplyTextMessage(
-          conversation.phoneNumber,
-          content,
-          replyToMessageId,
-          phoneNumberId
-        );
+        // استخدام المعرف الخارجي للرسالة الأصلية عند إرسال الرد
+        if (externalReplyId) {
+          apiResponse = await metaWhatsappService.sendReplyTextMessage(
+            conversation.phoneNumber,
+            content,
+            externalReplyId, // استخدام المعرف الخارجي بدلاً من replyToMessageId
+            phoneNumberId
+          );
+          
+          logger.info('conversationController', 'إرسال رد على رسالة', { 
+            originalMessageId: replyToMessageId,
+            externalReplyId,
+            phoneNumber: conversation.phoneNumber
+          });
+        } else {
+          // في حالة عدم وجود معرف خارجي، نرسل رسالة عادية
+          apiResponse = await metaWhatsappService.sendTextMessage(
+            conversation.phoneNumber,
+            content,
+            phoneNumberId
+          );
+          logger.warn('conversationController', 'تم تحويل الرد إلى رسالة عادية (المعرف الخارجي غير موجود)', {
+            originalMessageId: replyToMessageId
+          });
+        }
       } else {
         // رسالة عادية
         apiResponse = await metaWhatsappService.sendTextMessage(
@@ -426,7 +451,7 @@ exports.replyToConversation = async (req, res) => {
         timestamp: msg.timestamp,
         status: msg.status,
         externalMessageId: externalId || null
-      }, replyToMessageId);
+      }, externalReplyId || replyToMessageId); // استخدام المعرف الخارجي في الإشعارات أيضاً
     } else {
       socketService.notifyNewMessage(conversationId, {
         _id: msg._id,
