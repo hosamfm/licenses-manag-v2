@@ -280,6 +280,80 @@ body {
   margin-right: 0.5rem;
 }
 
+/* أنماط الوسائط في الرسائل */
+.media-container {
+  max-width: 100%;
+  margin-bottom: 5px;
+}
+
+.message-image {
+  max-width: 100%;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.message-image:hover {
+  opacity: 0.95;
+}
+
+.message-video {
+  max-width: 100%;
+  border-radius: 8px;
+  max-height: 300px;
+}
+
+.message-audio {
+  width: 100%;
+  min-width: 200px;
+  direction: ltr;
+}
+
+.media-caption {
+  font-size: 0.9em;
+  margin-top: 5px;
+  color: inherit;
+  opacity: 0.8;
+}
+
+.document-container {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 5px 0;
+}
+
+.document-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.document-icon {
+  font-size: 1.5rem;
+  margin-left: 10px;
+  color: #4682B4;
+}
+
+.document-name {
+  font-weight: 500;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.document-size {
+  margin-right: 10px;
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.outgoing .document-container {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
 /* أنماط تفاصيل المحادثة */
 .conversation-info-card {
   border-radius: 0.5rem;

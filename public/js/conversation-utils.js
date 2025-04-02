@@ -689,4 +689,235 @@
     messageElem.setAttribute('data-has-reaction', 'true');
   };
   
+  /**
+   * دالة لإضافة رسالة إلى المحادثة
+   * @param {object} messageData - كائن يحتوي على بيانات الرسالة
+   */
+  window.addMessageToConversation = function(messageData) {
+    if (!messageData || !currentConversationId) return;
+    
+    // التأكد من أن الرسالة تخص المحادثة الحالية
+    if (messageData.conversationId !== currentConversationId) return;
+    
+    const messageContainer = document.getElementById('messageContainer');
+    if (!messageContainer) return;
+    
+    // البحث عن الرسالة في وعاء الرسائل - إذا كانت موجودة، لا تضيفها
+    const existingMessage = document.querySelector(`.message[data-external-id="${messageData.externalMessageId}"]`);
+    if (existingMessage) {
+      // تحديث حالة الرسالة فقط إذا كانت موجودة
+      if (messageData.status) {
+        window.updateMessageStatus(messageData.externalMessageId, messageData.status);
+      }
+      return;
+    }
+
+    // إنشاء عنصر الرسالة
+    let messageHTML = `
+      <div class="message ${messageData.direction}" 
+           data-message-id="${messageData._id || ''}" 
+           data-status="${messageData.status || 'sent'}"
+           ${messageData.externalMessageId ? `data-external-id="${messageData.externalMessageId}"` : ''}>
+    `;
+    
+    // إضافة الرد إذا كان موجودًا
+    if (messageData.replyToMessageId) {
+      messageHTML += `
+        <div class="replied-message">
+          <i class="fas fa-reply"></i>
+          <span>${messageData.replyToContext || 'رد على رسالة'}</span>
+        </div>
+      `;
+    }
+    
+    // فتح فقاعة الرسالة
+    messageHTML += `<div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">`;
+            
+    // إضافة محتوى الوسائط إذا كان متاحًا
+    if (messageData.mediaType) {
+      if (messageData.mediaType === 'image') {
+        messageHTML += `
+          <div class="media-container">
+            <img src="${messageData.fileDetails && messageData.fileDetails.publicUrl ? messageData.fileDetails.publicUrl : ''}" 
+                 alt="صورة" class="message-image" />
+            ${messageData.fileDetails && messageData.fileDetails.caption ? 
+              `<div class="media-caption">${messageData.fileDetails.caption}</div>` : ''}
+          </div>
+        `;
+      } else if (messageData.mediaType === 'video') {
+        messageHTML += `
+          <div class="media-container">
+            <video controls class="message-video">
+              <source src="${messageData.fileDetails && messageData.fileDetails.publicUrl ? messageData.fileDetails.publicUrl : ''}" 
+                      type="${messageData.fileDetails && messageData.fileDetails.mimeType ? messageData.fileDetails.mimeType : 'video/mp4'}">
+              فيديو غير مدعوم في متصفحك
+            </video>
+            ${messageData.fileDetails && messageData.fileDetails.caption ? 
+              `<div class="media-caption">${messageData.fileDetails.caption}</div>` : ''}
+          </div>
+        `;
+      } else if (messageData.mediaType === 'audio') {
+        messageHTML += `
+          <div class="media-container">
+            <audio controls class="message-audio">
+              <source src="${messageData.fileDetails && messageData.fileDetails.publicUrl ? messageData.fileDetails.publicUrl : ''}" 
+                      type="${messageData.fileDetails && messageData.fileDetails.mimeType ? messageData.fileDetails.mimeType : 'audio/ogg'}">
+              مقطع صوتي غير مدعوم في متصفحك
+            </audio>
+            ${messageData.fileDetails && messageData.fileDetails.caption ? 
+              `<div class="media-caption">${messageData.fileDetails.caption}</div>` : ''}
+          </div>
+        `;
+      } else if (messageData.mediaType === 'document') {
+        messageHTML += `
+          <div class="media-container document-container">
+            <a href="${messageData.fileDetails && messageData.fileDetails.publicUrl ? messageData.fileDetails.publicUrl : ''}" 
+               target="_blank" class="document-link">
+              <i class="fas fa-file-alt document-icon"></i>
+              <span class="document-name">${messageData.fileDetails && messageData.fileDetails.fileName ? messageData.fileDetails.fileName : 'مستند'}</span>
+              ${messageData.fileDetails && messageData.fileDetails.fileSize ? 
+                `<span class="document-size">(${Math.round(messageData.fileDetails.fileSize / 1024)} كيلوبايت)</span>` : ''}
+            </a>
+          </div>
+        `;
+      }
+      
+      // إضافة النص إذا كان موجودًا مع الوسائط
+      if (messageData.content && messageData.content.trim() !== '') {
+        messageHTML += `<div class="message-text">${messageData.content}</div>`;
+      }
+    } else {
+      // إضافة محتوى النص إذا لم يكن محتوى وسائط
+      messageHTML += messageData.content;
+    }
+    
+    // إضافة معلومات الوقت والحالة
+    messageHTML += `
+      <div class="message-time">
+        ${new Date(messageData.timestamp).toLocaleString('ar-LY')}
+        ${messageData.direction === 'outgoing' ? `
+          <span class="message-status">
+            ${getStatusIcon(messageData.status)}
+          </span>
+        ` : ''}
+      </div>
+    `;
+    
+    // إغلاق فقاعة الرسالة
+    messageHTML += '</div>';
+    
+    // إضافة أزرار الإجراءات
+    messageHTML += `
+      <div class="message-actions">
+        <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" 
+                title="تفاعل" onclick="window.showReactionPicker('${messageData._id || ''}', '${messageData.externalMessageId || ''}', this)">
+          <i class="far fa-smile"></i>
+        </button>
+        <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
+              data-message-id="${messageData._id || ''}" 
+              data-external-id="${messageData.externalMessageId || ''}" 
+              title="رد" onclick="window.showReplyForm('${messageData._id || ''}', '${messageData.externalMessageId || ''}', this.closest('.message'))">
+          <i class="fas fa-reply"></i>
+        </button>
+      </div>
+    `;
+    
+    // إغلاق عنصر الرسالة
+    messageHTML += `</div><div class="clear-both"></div>`;
+    
+    // إضافة الرسالة إلى النهاية
+    messageContainer.insertAdjacentHTML('beforeend', messageHTML);
+    
+    // تطبيق مستمعات الأحداث على الرسالة الجديدة
+    const newMessageElem = messageContainer.lastElementChild;
+    window.setupMessageActions(newMessageElem);
+    
+    // التمرير إلى أسفل
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+  };
+
+  // دالة مساعدة للحصول على أيقونة الحالة
+  function getStatusIcon(status) {
+    if (!status) return '';
+    
+    switch(status) {
+      case 'sending':
+        return '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
+      case 'sent':
+        return '<i class="fas fa-check text-silver" title="تم الإرسال"></i>';
+      case 'delivered':
+        return '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>';
+      case 'read':
+        return '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>';
+      case 'failed':
+        return '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>';
+      default:
+        return '';
+    }
+  }
+
+  /**
+   * تحديث رابط الوسائط إذا كان منتهي الصلاحية
+   * @param {string} mediaId - معرف الوسائط
+   * @param {string} r2Key - مفتاح R2 للملف
+   * @returns {Promise<string>} - رابط جديد للوسائط أو رابط الحالي إذا كان صالحًا
+   */
+  window.refreshMediaUrl = async function(mediaId, r2Key) {
+    try {
+      if (!mediaId || !r2Key) return null;
+      
+      const refreshEndpoint = `/api/whatsapp/media/refresh-url`;
+      const response = await fetch(refreshEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+          mediaId,
+          r2Key
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('فشل تحديث رابط الوسائط');
+      }
+      
+      const data = await response.json();
+      return data.publicUrl;
+    } catch (error) {
+      if (window.debugMode === true) {
+        console.error('خطأ في تحديث رابط الوسائط:', error);
+      }
+      return null;
+    }
+  };
+
+  /**
+   * تحميل الوسائط بشكل صحيح مع التعامل مع انتهاء صلاحية الروابط
+   * @param {HTMLElement} mediaElement - عنصر الوسائط (img, video, audio)
+   * @param {string} mediaId - معرف الوسائط
+   * @param {string} r2Key - مفتاح R2 للملف
+   */
+  window.loadMedia = async function(mediaElement, mediaId, r2Key) {
+    if (!mediaElement || !r2Key) return;
+    
+    // في حالة فشل تحميل الوسائط، نحاول تحديث الرابط
+    mediaElement.addEventListener('error', async function() {
+      const newUrl = await window.refreshMediaUrl(mediaId, r2Key);
+      if (newUrl) {
+        if (mediaElement.tagName.toLowerCase() === 'img') {
+          mediaElement.src = newUrl;
+        } else if (mediaElement.tagName.toLowerCase() === 'source') {
+          mediaElement.src = newUrl;
+          if (mediaElement.parentElement) {
+            mediaElement.parentElement.load();
+          }
+        } else if (mediaElement.tagName.toLowerCase() === 'a') {
+          mediaElement.href = newUrl;
+        }
+      }
+    });
+  };
+
 })(window);

@@ -51,7 +51,59 @@
             <% } %>
             
             <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %>">
-              <%= msg.content %>
+              <% if (msg.mediaType) { %>
+                <% if (msg.mediaType === 'image') { %>
+                  <div class="media-container">
+                    <img src="<%= msg.fileDetails && msg.fileDetails.publicUrl ? msg.fileDetails.publicUrl : '' %>" 
+                         alt="صورة" 
+                         class="message-image" 
+                         onerror="window.loadMedia(this, '<%= msg._id %>', '<%= msg.fileDetails && msg.fileDetails.r2Key ? msg.fileDetails.r2Key : '' %>')">
+                    <% if (msg.fileDetails && msg.fileDetails.caption) { %>
+                      <div class="media-caption"><%= msg.fileDetails.caption %></div>
+                    <% } %>
+                  </div>
+                <% } else if (msg.mediaType === 'video') { %>
+                  <div class="media-container">
+                    <video controls class="message-video" onerror="window.loadMedia(this, '<%= msg._id %>', '<%= msg.fileDetails && msg.fileDetails.r2Key ? msg.fileDetails.r2Key : '' %>')">
+                      <source src="<%= msg.fileDetails && msg.fileDetails.publicUrl ? msg.fileDetails.publicUrl : '' %>" 
+                              type="<%= msg.fileDetails && msg.fileDetails.mimeType ? msg.fileDetails.mimeType : 'video/mp4' %>">
+                      فيديو غير مدعوم في متصفحك
+                    </video>
+                    <% if (msg.fileDetails && msg.fileDetails.caption) { %>
+                      <div class="media-caption"><%= msg.fileDetails.caption %></div>
+                    <% } %>
+                  </div>
+                <% } else if (msg.mediaType === 'audio') { %>
+                  <div class="media-container">
+                    <audio controls class="message-audio" onerror="window.loadMedia(this, '<%= msg._id %>', '<%= msg.fileDetails && msg.fileDetails.r2Key ? msg.fileDetails.r2Key : '' %>')">
+                      <source src="<%= msg.fileDetails && msg.fileDetails.publicUrl ? msg.fileDetails.publicUrl : '' %>" 
+                              type="<%= msg.fileDetails && msg.fileDetails.mimeType ? msg.fileDetails.mimeType : 'audio/ogg' %>">
+                      مقطع صوتي غير مدعوم في متصفحك
+                    </audio>
+                    <% if (msg.fileDetails && msg.fileDetails.caption) { %>
+                      <div class="media-caption"><%= msg.fileDetails.caption %></div>
+                    <% } %>
+                  </div>
+                <% } else if (msg.mediaType === 'document') { %>
+                  <div class="media-container document-container">
+                    <a href="<%= msg.fileDetails && msg.fileDetails.publicUrl ? msg.fileDetails.publicUrl : '' %>" 
+                       target="_blank" 
+                       class="document-link"
+                       onclick="window.refreshMediaUrl('<%= msg._id %>', '<%= msg.fileDetails && msg.fileDetails.r2Key ? msg.fileDetails.r2Key : '' %>').then(function(url) { if(url) this.href = url; }.bind(this)); return true;">
+                      <i class="fas fa-file-alt document-icon"></i>
+                      <span class="document-name"><%= msg.fileDetails && msg.fileDetails.fileName ? msg.fileDetails.fileName : 'مستند' %></span>
+                      <% if (msg.fileDetails && msg.fileDetails.fileSize) { %>
+                        <span class="document-size">(<%= Math.round(msg.fileDetails.fileSize / 1024) %> كيلوبايت)</span>
+                      <% } %>
+                    </a>
+                  </div>
+                <% } %>
+                <% if (msg.content && msg.content.trim() !== '') { %>
+                  <div class="message-text"><%= msg.content %></div>
+                <% } %>
+              <% } else { %>
+                <%= msg.content %>
+              <% } %>
               <div class="message-time">
                 <%= new Date(msg.timestamp).toLocaleString('ar-LY') %>
                 

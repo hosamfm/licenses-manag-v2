@@ -13,4 +13,7 @@ router.post('/upload', isAuthenticated, whatsappMediaController.uploadMedia);
 // مسار إرسال ملف إلى محادثة واتساب
 router.post('/conversations/:conversationId/send', isAuthenticated, whatsappMediaController.sendMedia);
 
+// طلب تحديث رابط ملف وسائط
+router.post('/refresh-url', isAuthenticated, whatsappMediaController.refreshMediaUrl);
+
 module.exports = router;

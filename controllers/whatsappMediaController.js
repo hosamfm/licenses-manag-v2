@@ -264,3 +264,63 @@ exports.sendMedia = async (req, res) => {
     });
   }
 };
+
+/**
+ * تحديث رابط الوصول العام لملف وسائط
+ * هذه الوظيفة تستخدم عندما تنتهي صلاحية الرابط المؤقت (بعد 24 ساعة)
+ * @param {Object} req - طلب HTTP
+ * @param {Object} res - استجابة HTTP
+ * @returns {Promise} - استجابة JSON تحتوي على الرابط الجديد
+ */
+exports.refreshMediaUrl = async (req, res) => {
+  try {
+    const { mediaId, r2Key } = req.body;
+
+    // التحقق من توفر البيانات المطلوبة
+    if (!r2Key) {
+      logger.error('whatsappMediaController', 'لم يتم تحديد مفتاح R2 للملف');
+      return res.status(400).json({ success: false, error: 'يجب تحديد مفتاح R2 للملف' });
+    }
+
+    logger.info('whatsappMediaController', 'طلب تحديث رابط ملف', {
+      mediaId,
+      r2Key
+    });
+
+    // التحقق من أن الملف موجود في R2 (اختياري)
+    // استدعاء خدمة التخزين لإنشاء رابط جديد
+    const publicUrl = await storageService.getSignedUrl(r2Key);
+
+    // في حالة توفر معرف الوسائط، تحديث الرابط في قاعدة البيانات أيضًا
+    if (mediaId) {
+      try {
+        const message = await WhatsappMessage.findById(mediaId);
+        if (message && message.fileDetails) {
+          message.fileDetails.publicUrl = publicUrl;
+          await message.save();
+          logger.info('whatsappMediaController', 'تم تحديث رابط الملف في قاعدة البيانات', { mediaId });
+        }
+      } catch (dbError) {
+        logger.error('whatsappMediaController', 'خطأ في تحديث الرابط في قاعدة البيانات', {
+          mediaId,
+          error: dbError.message
+        });
+        // استمر رغم الخطأ - نعيد الرابط الجديد على أي حال
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      publicUrl
+    });
+  } catch (error) {
+    logger.error('whatsappMediaController', 'خطأ في تحديث رابط الملف', {
+      error: error.message
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: 'حدث خطأ أثناء تحديث رابط الملف: ' + error.message
+    });
+  }
+};
