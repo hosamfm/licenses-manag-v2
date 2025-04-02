@@ -142,6 +142,13 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر context.message_id', { replyToMessageId });
     }
     
+    // التحقق من وجود context.id (صيغة بديلة في webhook جديد)
+    if (!replyToMessageId && messageData.context && messageData.context.id) {
+      replyToMessageId = messageData.context.id;
+      context = messageData.context;
+      logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر context.id', { replyToMessageId });
+    }
+    
     // التحقق من وجود سياق في metadata (للتوافق مع تنسيق API واتساب)
     if (!replyToMessageId && messageData.metadata && messageData.metadata.context && messageData.metadata.context.id) {
       replyToMessageId = messageData.metadata.context.id;
