@@ -5,6 +5,7 @@
 
 // استيراد النموذج مباشرة بدون الاعتماد على ملف آخر
 const mongoose = require('mongoose');
+const logger = require('../services/loggerService'); // استيراد logger
 
 const whatsappMessageSchema = new mongoose.Schema({
   conversationId: { 
@@ -85,6 +86,17 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
     let replyToMessageId = null;
     let context = null;
     
+    // سجل للتشخيص - لمعرفة كيف تصل البيانات من واتساب 
+    logger.debug('WhatsappMessageModel', 'بيانات الرسالة الواردة الخام', {
+      messageId: id,
+      type,
+      hasContext: !!messageData.context,
+      hasReferredProduct: !!messageData.referred_product,
+      hasReferral: !!messageData.referral,
+      hasMetadataContext: !!(messageData.metadata && messageData.metadata.context),
+      completeData: JSON.stringify(messageData)
+    });
+    
     // استخراج محتوى الرسالة حسب نوعها
     if (type === 'text' && messageData.text) {
       content = messageData.text.body;
@@ -123,16 +135,44 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       }
     }
     
-    // التحقق من وجود سياق رد على رسالة
+    // التحقق من وجود سياق رد على رسالة - الحالة القياسية
     if (messageData.context && messageData.context.message_id) {
       replyToMessageId = messageData.context.message_id;
       context = messageData.context;
+      logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر context.message_id', { replyToMessageId });
     }
     
     // التحقق من وجود سياق في metadata (للتوافق مع تنسيق API واتساب)
     if (!replyToMessageId && messageData.metadata && messageData.metadata.context && messageData.metadata.context.id) {
       replyToMessageId = messageData.metadata.context.id;
       context = messageData.metadata.context;
+      logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر metadata.context.id', { replyToMessageId });
+    }
+    
+    // فحص وجود حقل referral أو referred_product (يستخدم أحيانًا في ردود الواتساب)
+    if (!replyToMessageId && messageData.referral && messageData.referral.source_id) {
+      replyToMessageId = messageData.referral.source_id;
+      context = { message_id: replyToMessageId, from: null };
+      logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر referral.source_id', { replyToMessageId });
+    }
+    
+    if (!replyToMessageId && messageData.referred_product && messageData.referred_product.catalog_id) {
+      replyToMessageId = messageData.referred_product.catalog_id;
+      context = { message_id: replyToMessageId, from: null };
+      logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر referred_product.catalog_id', { replyToMessageId });
+    }
+    
+    // التحقق باستخدام وسوم أخرى قد تكون موجودة (صيغ محتملة أخرى)
+    if (!replyToMessageId && messageData.context_from_id) {
+      replyToMessageId = messageData.context_from_id;
+      context = { message_id: replyToMessageId, from: null };
+      logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر context_from_id', { replyToMessageId });
+    }
+    
+    if (!replyToMessageId && messageData.quoted_message_id) {
+      replyToMessageId = messageData.quoted_message_id;
+      context = { message_id: replyToMessageId, from: null };
+      logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر quoted_message_id', { replyToMessageId });
     }
     
     // إنشاء رسالة جديدة
@@ -150,9 +190,16 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       context: context
     });
     
+    logger.debug('WhatsappMessageModel', 'تم إنشاء رسالة واردة', {
+      messageId: message._id,
+      externalId: id,
+      isReply: !!replyToMessageId,
+      replyToMessageId
+    });
+    
     return message;
   } catch (error) {
-    console.error('خطأ في إنشاء رسالة واردة:', error);
+    logger.error('WhatsappMessageModel', 'خطأ في إنشاء رسالة واردة:', error);
     throw error;
   }
 };
