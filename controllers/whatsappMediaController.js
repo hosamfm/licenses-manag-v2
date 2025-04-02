@@ -302,12 +302,26 @@ exports.getMediaContentByMessage = async (req, res) => {
       return res.status(400).json({ success: false, error: 'معرف الرسالة مطلوب' });
     }
     
+    logger.info('whatsappMediaController', 'البحث عن وسائط برقم الرسالة', {
+      messageId
+    });
+    
     // البحث عن الوسائط باستخدام معرف الرسالة
-    const media = await WhatsappMedia.getMediaByMessageId(messageId);
+    const media = await WhatsappMedia.findOne({ messageId });
     
     if (!media) {
+      logger.error('whatsappMediaController', 'لم يتم العثور على وسائط للرسالة', {
+        messageId
+      });
+      
       return res.status(404).json({ success: false, error: 'لم يتم العثور على وسائط للرسالة المحددة' });
     }
+    
+    logger.info('whatsappMediaController', 'تم العثور على وسائط للرسالة', {
+      messageId,
+      mediaId: media._id,
+      mediaType: media.mediaType
+    });
     
     // إعادة توجيه الطلب إلى مسار content مع معرف الوسائط
     return res.redirect(`/whatsapp/media/content/${media._id}`);
