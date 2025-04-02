@@ -13,7 +13,4 @@ router.post('/upload', isAuthenticated, whatsappMediaController.uploadMedia);
 // مسار إرسال ملف إلى محادثة واتساب
 router.post('/conversations/:conversationId/send', isAuthenticated, whatsappMediaController.sendMedia);
 
-// مسار لتدفق الوسائط مباشرة من التخزين - بدون مصادقة لتمكين التضمين المباشر
-router.get('/stream/:r2Key', whatsappMediaController.streamMedia);
-
 module.exports = router;

@@ -387,101 +387,79 @@
         // التأكد من أن الرسالة تخص المحادثة الحالية
         if (messageData.conversationId !== currentConversationId) return;
         
-        // إضافة الرسالة لواجهة المستخدم
+        // الحصول على حاوية الرسائل
         const messageContainer = document.getElementById('messageContainer');
         if (!messageContainer) return;
         
-        // تحضير HTML الرسالة
+        // التحقق من وجود الرسالة مسبقاً (لمنع إضافتها مرتين)
+        const messageExists = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
+        if (messageExists) {
+          return;
+        }
+        
+        // إنشاء HTML للرسالة مطابق تمامًا لبنية القالب في _conversation_details_ajax.ejs
         let messageHTML = `
-          <div class="message ${messageData.direction}"
-                data-message-id="${messageData._id}"
-                data-status="${messageData.status}"
-                ${messageData.externalMessageId ? `data-external-id="${messageData.externalMessageId}"` : ''}>
+          <div class="message ${messageData.direction}" 
+              data-message-id="${messageData._id}" 
+              data-status="${messageData.status || 'sent'}"
+              ${messageData.externalMessageId ? `data-external-id="${messageData.externalMessageId}"` : ''}>
         `;
         
-        // إضافة محتوى الاقتباس إذا كان موجودًا
+        // إضافة قسم الرد على رسالة (إذا كان موجودًا)
         if (messageData.replyToMessageId) {
-          // البحث عن الرسالة المقتبسة في الواجهة
-          const repliedMsgElem = document.querySelector(`.message[data-message-id="${messageData.replyToMessageId}"], .message[data-external-id="${messageData.replyToMessageId}"]`);
+          // البحث عن الرسالة المرد عليها
+          const repliedMsg = document.querySelector(`.message[data-external-id="${messageData.replyToMessageId}"], .message[data-message-id="${messageData.replyToMessageId}"]`);
           
-          messageHTML += `<div class="replied-message">`;
-          
-          if (repliedMsgElem) {
-            // الحصول على محتوى الرسالة المقتبسة
-            const repliedContent = repliedMsgElem.querySelector('.message-bubble').innerText || '';
-            const displayContent = repliedContent.length > 50 ? repliedContent.substring(0, 50) + '...' : repliedContent;
-            
-            messageHTML += `
+          messageHTML += `
+            <div class="replied-message">
               <div class="replied-content">
                 <i class="fas fa-reply"></i>
-                <span>${displayContent}</span>
+                <span>${repliedMsg ? 
+                  (repliedMsg.querySelector('.message-bubble').textContent.trim().substring(0, 50) + 
+                   (repliedMsg.querySelector('.message-bubble').textContent.trim().length > 50 ? '...' : '')) : 
+                  `رد على رسالة غير موجودة<small class="text-muted d-block">(المعرف: ${messageData.replyToMessageId.substring(0, 10)}...)</small>`}</span>
               </div>
-            `;
-          } else {
-            messageHTML += `
-              <div class="replied-content text-muted">
-                <i class="fas fa-reply"></i>
-                <span>رد على رسالة غير موجودة</span>
-                <small class="text-muted d-block">(المعرف: ${messageData.replyToMessageId.substring(0, 10)}...)</small>
-              </div>
-            `;
-          }
-          
-          messageHTML += `</div>`;
+            </div>
+          `;
         }
         
-        // إضافة محتوى الرسالة
-        messageHTML += `<div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">`;
-        
-        // معالجة المحتوى بناءً على نوع الرسالة (نص أو وسائط)
-        if (messageData.mediaType) {
-          // استخدام الدالة الجديدة لإنشاء محتوى الوسائط
-          messageHTML += window.createMediaMessageContent(messageData);
-        } else {
-          // رسالة نصية عادية
-          messageHTML += messageData.content;
-        }
-        
-        // إضافة وقت الإرسال وحالة الرسالة
+        // إضافة فقاعة الرسالة
         messageHTML += `
-          <div class="message-time">
-            ${new Date(messageData.timestamp).toLocaleString('ar-LY')}
-            
-            ${messageData.direction === 'outgoing' ? `
-              <span class="message-status">
-                ${messageData.status === 'sending' ? `<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>` : ''}
-                ${messageData.status === 'sent' ? `<i class="fas fa-check text-silver" title="تم الإرسال"></i>` : ''}
-                ${messageData.status === 'delivered' ? `<i class="fas fa-check-double text-silver" title="تم التسليم"></i>` : ''}
-                ${messageData.status === 'read' ? `<i class="fas fa-check-double text-primary" title="تم القراءة"></i>` : ''}
-                ${messageData.status === 'failed' ? `<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>` : ''}
-              </span>
-            ` : ''}
+          <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
+            ${messageData.content || ''}
+            <div class="message-time">
+              ${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString('ar-LY')}
+              
+              ${messageData.direction === 'outgoing' ? `
+                <span class="message-status">
+                  ${messageData.status === 'sending' ? '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>' : ''}
+                  ${messageData.status === 'sent' ? '<i class="fas fa-check text-silver" title="تم الإرسال"></i>' : ''}
+                  ${messageData.status === 'delivered' ? '<i class="fas fa-check-double text-silver" title="تم التسليم"></i>' : ''}
+                  ${messageData.status === 'read' ? '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>' : ''}
+                  ${messageData.status === 'failed' ? '<i class="fas fa-exclamation-triangle text-danger" title="فشل الإرسال"></i>' : ''}
+                </span>
+              ` : ''}
+            </div>
           </div>
         `;
         
-        // إغلاق حاوية محتوى الرسالة
-        messageHTML += `</div>`;
-        
-        // إضافة التفاعلات إذا كانت موجودة
+        // إضافة قسم التفاعلات (إذا وجدت)
         if (messageData.reactions && messageData.reactions.length > 0) {
-          messageHTML += `<div class="message-reactions">`;
-          
-          messageData.reactions.forEach(function(reaction) {
-            messageHTML += `
-              <span class="reaction-emoji" title="تفاعل من ${reaction.sender}">
-                ${reaction.emoji}
-              </span>
-            `;
-          });
-          
-          messageHTML += `</div>`;
+          messageHTML += `
+            <div class="message-reactions">
+              ${messageData.reactions.map(reaction => `
+                <span class="reaction-emoji" title="تفاعل من ${reaction.sender}">
+                  ${reaction.emoji}
+                </span>
+              `).join('')}
+            </div>
+          `;
         }
         
-        // إضافة أزرار التفاعل
+        // إضافة قسم أزرار التفاعل مع الرسالة
         messageHTML += `
           <div class="message-actions">
-            <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" 
-                    title="تفاعل" onclick="window.showReactionPicker('${messageData._id}', '${messageData.externalMessageId || ''}', this)">
+            <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('${messageData._id}', '${messageData.externalMessageId || ''}', this)">
               <i class="far fa-smile"></i>
             </button>
             <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
@@ -499,16 +477,17 @@
         // إضافة الرسالة لحاوية الرسائل
         messageContainer.insertAdjacentHTML('beforeend', messageHTML);
         
-        // تمرير المحادثة للأسفل
+        // تمرير المحادثة لأسفل
         messageContainer.scrollTop = messageContainer.scrollHeight;
         
-        // تشغيل صوت الإشعار للرسائل الواردة
+        // إضافة مستمعات الأحداث للرسالة الجديدة
+        const newMessageElem = messageContainer.lastElementChild;
+        window.setupMessageActions(newMessageElem);
+        
+        // تشغيل صوت الإشعار إذا كانت رسالة واردة
         if (messageData.direction === 'incoming') {
           window.playNotificationSound();
         }
-        
-        // تفعيل عناصر الصوت بعد إضافتها
-        window.setupAudioPlayers();
       }
       
       // تهيئة الصفحة عند التحميل
