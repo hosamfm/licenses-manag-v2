@@ -233,13 +233,23 @@ whatsappMessageSchema.statics.updateMessageStatus = async function(externalMessa
  */
 whatsappMessageSchema.statics.updateReaction = async function(messageId, reactionData) {
   try {
-    // البحث عن الرسالة باستخدام المعرف الخارجي أو المعرف الداخلي
-    const message = await this.findOne({ 
-      $or: [
-        { externalMessageId: messageId },
-        { _id: messageId }
-      ]
-    });
+    // تحديد نوع المعرف (ObjectId أو معرف خارجي)
+    let query;
+    if (messageId.length === 24 && /^[0-9a-fA-F]{24}$/.test(messageId)) {
+      // المعرف يبدو كأنه ObjectId صالح
+      query = { 
+        $or: [
+          { externalMessageId: messageId },
+          { _id: messageId }
+        ]
+      };
+    } else {
+      // المعرف ليس ObjectId - ابحث فقط باستخدام المعرف الخارجي
+      query = { externalMessageId: messageId };
+    }
+    
+    // البحث عن الرسالة 
+    const message = await this.findOne(query);
     
     if (!message) {
       return null;
