@@ -957,146 +957,42 @@
    * دالة لتحميل الوسائط إلى الخادم
    */
   window.uploadMedia = function() {
-    const form = document.getElementById('mediaUploadForm');
-    const fileInput = document.getElementById('mediaFile');
-    const mediaType = document.getElementById('uploadMediaType').value;
-    const conversationId = document.getElementById('uploadConversationId').value;
-    
-    // التحقق من اختيار ملف
-    if (!fileInput.files || fileInput.files.length === 0) {
-      window.showToast && window.showToast('يرجى اختيار ملف للتحميل', 'warning');
-      return;
-    }
-    
-    // التحقق من نوع الملف
-    const file = fileInput.files[0];
-    const supportedTypes = {
-      'image': ['image/jpeg', 'image/png', 'image/webp'],
-      'video': ['video/mp4', 'video/3gpp'],
-      'audio': ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'],
-      'document': [
-        'application/pdf', 
-        'application/vnd.ms-powerpoint', 
-        'application/msword', 
-        'application/vnd.ms-excel', 
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation', 
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-        'text/plain'
-      ]
-    };
-    
-    // إذا كان النوع تلقائيًا، نحدده بناءً على نوع الملف
-    if (mediaType === 'auto') {
-      if (file.type.startsWith('image/')) {
-        document.getElementById('uploadMediaType').value = 'image';
-      } else if (file.type.startsWith('video/')) {
-        document.getElementById('uploadMediaType').value = 'video';
-      } else if (file.type.startsWith('audio/')) {
-        document.getElementById('uploadMediaType').value = 'audio';
-      } else {
-        document.getElementById('uploadMediaType').value = 'document';
+    return new Promise((resolve, reject) => {
+      const fileInput = document.getElementById('mediaFile');
+      const file = fileInput.files[0];
+      if (!file) {
+        reject('لم يتم اختيار ملف');
+        return;
       }
-    }
-    
-    // التحقق من دعم نوع الملف
-    let isSupported = false;
-    for (const type in supportedTypes) {
-      if (supportedTypes[type].includes(file.type)) {
-        isSupported = true;
-        break;
-      }
-    }
-    
-    if (!isSupported) {
-      window.showToast && window.showToast(`نوع الملف ${file.type} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`, 'warning');
-      return;
-    }
-    
-    // إنشاء FormData
-    const formData = new FormData();
-    formData.append('mediaFile', fileInput.files[0]);
-    formData.append('mediaType', document.getElementById('uploadMediaType').value);
-    formData.append('conversationId', conversationId);
-    
-    // إظهار شريط التقدم
-    const progressBar = document.querySelector('.upload-progress .progress-bar');
-    document.querySelector('.upload-progress').style.display = 'block';
-    progressBar.style.width = '0%';
-    progressBar.textContent = '0%';
-    
-    // تعطيل زر التحميل
-    const uploadBtn = document.getElementById('uploadMediaBtn');
-    uploadBtn.disabled = true;
-    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
-    
-    // إرسال طلب تحميل الملف باستخدام XMLHttpRequest لتتبع التقدم
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/whatsapp/media/upload', true);
-    
-    // مراقبة تقدم التحميل
-    xhr.upload.onprogress = function(e) {
-      if (e.lengthComputable) {
-        const percentComplete = Math.round((e.loaded / e.total) * 100);
-        progressBar.style.width = percentComplete + '%';
-        progressBar.textContent = percentComplete + '%';
-        progressBar.setAttribute('aria-valuenow', percentComplete);
-      }
-    };
-    
-    // معالجة الاستجابة
-    xhr.onload = function() {
-      try {
-        const response = JSON.parse(xhr.responseText);
-        
-        if (response.success) {
-          // إخفاء النموذج
-          const modal = bootstrap.Modal.getInstance(document.getElementById('mediaUploadModal'));
-          modal.hide();
-          
-          // عرض معاينة الملف المرفق
-          document.getElementById('mediaPreview').style.display = 'block';
-          document.getElementById('mediaFileName').textContent = response.media.fileName || 'ملف مرفق';
-          document.getElementById('mediaId').value = response.media._id;
-          document.getElementById('mediaType').value = response.media.mediaType;
-          
-          // تنظيف نموذج التحميل
-          fileInput.value = '';
-          document.getElementById('filePreview').style.display = 'none';
-          
-          window.showToast && window.showToast('تم تحميل الملف بنجاح', 'success');
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/whatsapp/media/upload', true);
+      
+      // مراقبة تقدم التحميل
+      xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+          const percentComplete = Math.round((e.loaded / e.total) * 100);
+          document.getElementById('uploadProgress').value = percentComplete;
+        }
+      };
+      
+      // معالجة الاستجابة
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          resolve(JSON.parse(xhr.responseText));
         } else {
-          window.showToast && window.showToast(response.error || 'حدث خطأ أثناء تحميل الملف', 'danger');
+          reject(xhr.statusText);
         }
-      } catch (error) {
-        window.showToast && window.showToast('حدث خطأ أثناء معالجة الاستجابة', 'danger');
-        if (window.debugMode === true) {
-          console.error('خطأ في معالجة استجابة تحميل الملف:', error);
-        }
-      } finally {
-        // إعادة تفعيل زر التحميل
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = 'تحميل';
-        
-        // إخفاء شريط التقدم
-        document.querySelector('.upload-progress').style.display = 'none';
-      }
-    };
-    
-    // معالجة الأخطاء
-    xhr.onerror = function() {
-      window.showToast && window.showToast('حدث خطأ أثناء الاتصال بالخادم', 'danger');
+      };
       
-      // إعادة تفعيل زر التحميل
-      uploadBtn.disabled = false;
-      uploadBtn.innerHTML = 'تحميل';
+      // معالجة الأخطاء
+      xhr.onerror = function() {
+        reject('حدث خطأ أثناء الاتصال بالخادم');
+      };
       
-      // إخفاء شريط التقدم
-      document.querySelector('.upload-progress').style.display = 'none';
-    };
-    
-    // إرسال البيانات
-    xhr.send(formData);
+      // إرسال البيانات
+      xhr.send(new FormData(fileInput));
+    });
   };
 
   /**
@@ -1171,38 +1067,23 @@
    * تقوم بمعالجة أحداث تشغيل الملفات الصوتية وضمان عرضها بشكل صحيح
    */
   window.setupAudioPlayers = function() {
-    // الحصول على جميع عناصر الصوت في الصفحة
     const audioElements = document.querySelectorAll('.media-audio');
-    
-    // إضافة مستمعي الأحداث لكل عنصر صوت
     audioElements.forEach(audio => {
-      // إضافة حدث تحميل البيانات
       audio.addEventListener('loadedmetadata', function() {
-        // تحسين عرض المدة عند تحميل الملف
         if (this.duration) {
           const durationMinutes = Math.floor(this.duration / 60);
           const durationSeconds = Math.floor(this.duration % 60);
           const formattedDuration = `${durationMinutes}:${durationSeconds < 10 ? '0' : ''}${durationSeconds}`;
-          
-          // إضافة سمة بيانات للمدة
           this.setAttribute('data-duration', formattedDuration);
-          
-          // تحسين قابلية وصول العنصر
           this.setAttribute('aria-label', `ملف صوتي، المدة ${formattedDuration}`);
         }
       });
-      
-      // إضافة حدث عند النقر
       audio.addEventListener('click', function(e) {
-        // منع انتشار الحدث إذا كان النقر على عناصر التحكم
         if (e.target !== this) {
           e.stopPropagation();
         }
       });
-      
-      // إضافة حدث عند بدء التشغيل
       audio.addEventListener('play', function() {
-        // إيقاف تشغيل أي ملفات صوتية أخرى عند تشغيل ملف
         audioElements.forEach(otherAudio => {
           if (otherAudio !== this && !otherAudio.paused) {
             otherAudio.pause();
@@ -1212,13 +1093,7 @@
     });
   };
 
-  // استدعاء دالة إعداد مشغلات الصوت عند تحميل الصفحة
-  window.addEventListener('DOMContentLoaded', function() {
-    window.setupAudioPlayers();
-    
-    // إضافة حدث لتحديث التنسيق بعد تحديث محتوى الرسائل بالـ AJAX
-    document.addEventListener('messages-loaded', function() {
-      window.setupAudioPlayers();
-    });
-  });
+  const setupAudio = () => window.setupAudioPlayers();
+  window.addEventListener('DOMContentLoaded', setupAudio);
+  document.addEventListener('messages-loaded', setupAudio);
 })(window);
