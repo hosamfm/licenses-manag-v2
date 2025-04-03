@@ -45,14 +45,40 @@ async function findMediaForMessage(message) {
 
     // إذا لم يتم العثور على وسائط بمعرف الرسالة، نحاول البحث بطرق أخرى
     
-    // للرسائل الصادرة، نبحث عن وسائط غير مرتبطة في نفس المحادثة
+    // للرسائل الصادرة، نستخدم معايير بحث متعددة
     if (message.direction === 'outgoing' && message.conversationId && message.mediaType) {
+      
+      // 1. البحث عن وسائط صادرة بنفس توقيت الرسالة تقريباً
+      const timeThreshold = 60000; // 60 ثانية
+      const messageTime = new Date(message.createdAt || message.timestamp);
+      
+      const mediaByTime = await WhatsappMedia.findOne({
+        conversationId: message.conversationId,
+        direction: 'outgoing',
+        mediaType: message.mediaType,
+        createdAt: { 
+          $gte: new Date(messageTime.getTime() - timeThreshold),
+          $lte: new Date(messageTime.getTime() + timeThreshold)
+        }
+      }).lean();
+
+      if (mediaByTime) {
+        logger.debug(`تم العثور على وسائط صادرة بالتوقيت المتطابق للرسالة: ${message._id}`);
+        
+        // ربط الوسائط بالرسالة إذا لم تكن مرتبطة بالفعل
+        if (!mediaByTime.messageId) {
+          await linkMediaToMessage(mediaByTime._id, message._id);
+        }
+        
+        return { ...mediaByTime, messageId: message._id };
+      }
+      
+      // 2. البحث عن وسائط غير مرتبطة (الطريقة السابقة)
       const unlinkedMedia = await WhatsappMedia.findOne({
         conversationId: message.conversationId,
         direction: 'outgoing',
         mediaType: message.mediaType,
-        messageId: { $exists: false },
-        createdAt: { $lte: new Date(message.createdAt || message.timestamp) }
+        messageId: { $exists: false }
       }).sort({ createdAt: -1 }).lean();
 
       if (unlinkedMedia) {
@@ -61,6 +87,35 @@ async function findMediaForMessage(message) {
         // ربط الوسائط بالرسالة
         await linkMediaToMessage(unlinkedMedia._id, message._id);
         return { ...unlinkedMedia, messageId: message._id };
+      }
+      
+      // 3. البحث بناءً على معرف الرسالة الخارجي (إذا كان موجوداً)
+      if (message.externalMessageId) {
+        // يمكن أن يكون قد تم ربط الوسائط بمعرف خارجي مختلف للرسالة
+        const mediaByMessageData = await WhatsappMedia.find({
+          conversationId: message.conversationId,
+          direction: 'outgoing',
+          mediaType: message.mediaType
+        }).lean();
+        
+        // البحث عن تطابق في البيانات الوصفية
+        if (mediaByMessageData && mediaByMessageData.length > 0) {
+          for (const mediaItem of mediaByMessageData) {
+            if (mediaItem.metaData && 
+               (mediaItem.metaData.externalMessageId === message.externalMessageId || 
+                mediaItem.metaData.messageId === message._id.toString())) {
+              
+              logger.debug(`تم العثور على وسائط بناءً على البيانات الوصفية للرسالة: ${message._id}`);
+              
+              // ربط الوسائط بالرسالة إذا لم تكن مرتبطة بالفعل
+              if (!mediaItem.messageId) {
+                await linkMediaToMessage(mediaItem._id, message._id);
+              }
+              
+              return { ...mediaItem, messageId: message._id };
+            }
+          }
+        }
       }
     }
 
