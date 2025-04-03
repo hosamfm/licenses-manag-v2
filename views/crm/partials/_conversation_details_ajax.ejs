@@ -112,8 +112,8 @@
                       <i class="fas fa-file-alt"></i>
                     </div>
                     <div class="document-info">
-                      <div class="document-name"><%= msg.fileName || 'مستند' %></div>
-                      <div class="document-size"><%= msg.fileSize ? (Math.round(msg.fileSize / 1024) + ' كيلوبايت') : '' %></div>
+                      <div class="document-name"><%= msg.mediaInfo && msg.mediaInfo.fileName ? msg.mediaInfo.fileName : (msg.fileName || 'مستند') %></div>
+                      <div class="document-size"><%= msg.mediaInfo && msg.mediaInfo.fileSize ? (Math.round(msg.mediaInfo.fileSize / 1024) + ' كيلوبايت') : (msg.fileSize ? (Math.round(msg.fileSize / 1024) + ' كيلوبايت') : '') %></div>
                     </div>
                     <a href="/whatsapp/media/content/<%= msg._id %>" target="_blank" class="document-download">
                       <i class="fas fa-download"></i>
