@@ -18,10 +18,9 @@ const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 
 /**
- * عرض المحادثات
- * @param {boolean} isMyConversations - إذا كانت true، تعرض المحادثات المسندة للمستخدم الحالي فقط
+ * عرض جميع المحادثات
  */
-exports.listConversations = async (req, res, isMyConversations = false) => {
+exports.listConversations = async (req, res) => {
   try {
     const status = req.query.status || 'all';
     const page = parseInt(req.query.page) || 1;
@@ -32,11 +31,9 @@ exports.listConversations = async (req, res, isMyConversations = false) => {
     if (status !== 'all') {
       filter.status = status;
     }
-    if (isMyConversations && req.user?._id) {
-      filter.assignedTo = req.user._id;
-    }
 
     const total = await Conversation.countDocuments(filter);
+
     const conversations = await Conversation.find(filter)
       .sort({ lastMessageAt: -1 })
       .skip(skip)
@@ -45,6 +42,7 @@ exports.listConversations = async (req, res, isMyConversations = false) => {
       .populate('assignedTo', 'username full_name')
       .lean();
 
+    // إحضار آخر رسالة لكل محادثة
     const convWithLast = await Promise.all(conversations.map(async (c) => {
       try {
         const lastMsg = await WhatsappMessage.findOne({ conversationId: c._id })
@@ -91,56 +89,75 @@ exports.listConversations = async (req, res, isMyConversations = false) => {
 };
 
 /**
- * عرض المحادثات باستخدام AJAX
- * @param {string} returnType - نوع الإرجاع ('page' لعرض صفحة كاملة، 'json' لعرض قائمة JSON)
+ * عرض المحادثات المسندة للمستخدم الحالي
  */
-exports.listConversationsAjax = async (req, res, returnType = 'page') => {
+exports.listMyConversations = async (req, res) => {
   try {
-    let query = {};
+    if (!req.user || !req.user._id) {
+      req.flash('error', 'يرجى تسجيل الدخول أولاً');
+      return res.redirect('/crm/conversations');
+    }
     const status = req.query.status || 'all';
-    if (status !== 'all') {
-      query.status = status;
-    }
-    if (req.user && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
-      query.assignedTo = req.user._id;
-    }
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
 
-    const conversations = await Conversation.find(query)
-      .sort({ updatedAt: -1 })
-      .limit(50)
+    const filter = { assignedTo: req.user._id };
+    if (status !== 'all') filter.status = status;
+
+    const total = await Conversation.countDocuments(filter);
+
+    const conversations = await Conversation.find(filter)
+      .sort({ lastMessageAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('channelId', 'name')
+      .populate('assignedTo', 'username full_name')
       .lean();
 
-    const convWithUnread = await Promise.all(
-      conversations.map(async (conv) => {
-        const unreadCount = await WhatsappMessage.countDocuments({
-          conversationId: conv._id,
-          direction: 'incoming',
-          status: { $ne: 'read' }
-        });
-        const lastMsg = await WhatsappMessage.findOne({ conversationId: conv._id })
+    const convWithLast = await Promise.all(conversations.map(async (c) => {
+      try {
+        const lastMsg = await WhatsappMessage.findOne({ conversationId: c._id })
           .sort({ timestamp: -1 })
           .lean();
-        return { ...conv, unreadCount, lastMessage: lastMsg || null };
-      })
-    );
+        return { ...c, lastMessage: lastMsg || null };
+      } catch (err) {
+        logger.error('conversationController', 'خطأ في آخر رسالة', { err, convId: c._id });
+        return { ...c, lastMessage: null };
+      }
+    }));
 
-    if (returnType === 'json') {
-      return res.json({ success: true, conversations: convWithUnread });
-    }
+    const totalPages = Math.ceil(total / limit);
+    const pagination = {
+      current: page,
+      prev: page > 1 ? page - 1 : null,
+      next: page < totalPages ? page + 1 : null,
+      total: totalPages
+    };
 
-    res.render('crm/conversations_split_ajax', {
-      title: 'المحادثات AJAX',
-      conversations: convWithUnread,
+    res.render('crm/conversations', {
+      title: 'محادثاتي',
+      conversations: convWithLast,
+      pagination,
+      filters: {
+        status,
+        availableStatuses: ['all', 'open', 'assigned', 'closed']
+      },
+      counts: {
+        total,
+        open: await Conversation.countDocuments({ status: 'open', assignedTo: req.user._id }),
+        assigned: await Conversation.countDocuments({ status: 'assigned', assignedTo: req.user._id }),
+        closed: await Conversation.countDocuments({ status: 'closed', assignedTo: req.user._id })
+      },
       user: req.user,
+      layout: 'crm/layout',
+      isMyConversations: true,
       flashMessages: req.flash()
     });
-  } catch (err) {
-    logger.error('conversationController', 'خطأ في listConversationsAjax', err);
-    if (returnType === 'json') {
-      return res.status(500).json({ success: false, error: 'حدث خطأ أثناء تحميل المحادثات' });
-    }
-    req.flash('error', 'حدث خطأ أثناء تحميل المحادثات (AJAX)');
-    res.redirect('/');
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في عرض محادثات المستخدم', error);
+    req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
+    res.redirect('/crm/conversations');
   }
 };
 
