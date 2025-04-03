@@ -140,8 +140,34 @@
                       <i class="fas fa-map-marker-alt"></i>
                     </div>
                     <div class="location-info">
-                      <div class="location-name">موقع جغرافي</div>
-                      <div class="location-coordinates"><%= msg.content || 'إحداثيات غير متوفرة' %></div>
+                      <div class="location-name">
+                        <% 
+                          // الحصول على اسم الموقع من بيانات الوسائط إذا كانت متوفرة
+                          const locationName = (msg.media && msg.media.locationName) || 
+                                             (msg.metaData && msg.metaData.name) || 
+                                             'موقع جغرافي';
+                          
+                          // الحصول على الإحداثيات
+                          const latitude = (msg.media && msg.media.latitude) || 
+                                         (msg.metaData && msg.metaData.latitude) || '';
+                          const longitude = (msg.media && msg.media.longitude) || 
+                                          (msg.metaData && msg.metaData.longitude) || '';
+                          
+                          const coordinatesText = (latitude && longitude) ? 
+                                                `${latitude}, ${longitude}` : 
+                                                'إحداثيات غير متوفرة';
+                        %>
+                        <%= locationName %>
+                      </div>
+                      <div class="location-coordinates">
+                        <%= coordinatesText %>
+                      </div>
+                      <% if (latitude && longitude) { %>
+                        <a href="https://maps.google.com/maps?q=<%= latitude %>,<%= longitude %>" 
+                           target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                          <i class="fas fa-external-link-alt"></i> عرض على الخريطة
+                        </a>
+                      <% } %>
                     </div>
                   </div>
                 <% } %>

@@ -11,7 +11,7 @@ const logger = require('../services/loggerService');
 const mediaService = require('../services/mediaService');
 const fs = require('fs');
 const path = require('path');
-const config = require('../config/config');
+require('dotenv').config();
 
 /**
  * تنزيل وسائط من API ميتا واتساب وتخزينها
@@ -157,7 +157,7 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
     fileData = Buffer.from(response.data).toString('base64');
 
     // حفظ البيانات في المجلد المخصص
-    const mediaDir = config.mediaStoragePath || path.join(__dirname, '../public/uploads/whatsapp');
+    const mediaDir = process.env.MEDIA_STORAGE_PATH || path.join(__dirname, '../public/uploads/whatsapp');
     
     // التأكد من وجود المجلد
     if (!fs.existsSync(mediaDir)) {

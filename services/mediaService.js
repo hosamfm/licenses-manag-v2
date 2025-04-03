@@ -6,12 +6,12 @@
 
 const WhatsappMedia = require('../models/WhatsappMedia');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
-const logger = require('../config/logger');
+const logger = require('../services/loggerService');
 const fs = require('fs');
 const path = require('path');
 const mime = require('mime-types');
 const axios = require('axios');
-const config = require('../config/config');
+require('dotenv').config();
 
 // أنواع الوسائط المعتمدة
 const MEDIA_TYPES = {
@@ -204,7 +204,7 @@ async function getMediaContent(mediaId) {
     }
 
     // تحديد المسار المحلي للملف
-    const mediaStoragePath = config.mediaStoragePath || path.join(__dirname, '../public/uploads/whatsapp');
+    const mediaStoragePath = process.env.MEDIA_STORAGE_PATH || path.join(__dirname, '../public/uploads/whatsapp');
     const mediaPath = path.join(mediaStoragePath, media.fileName);
     
     // فحص وجود الملف محليًا
@@ -251,7 +251,7 @@ async function downloadMediaFile(media) {
       return false;
     }
 
-    const mediaPath = path.join(config.mediaStoragePath, media.fileName);
+    const mediaPath = path.join(process.env.MEDIA_STORAGE_PATH, media.fileName);
     const mediaDir = path.dirname(mediaPath);
 
     // التأكد من وجود المجلد
@@ -265,7 +265,7 @@ async function downloadMediaFile(media) {
       url: media.mediaUrl,
       responseType: 'stream',
       headers: {
-        'Authorization': `Bearer ${config.whatsappToken}`
+        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
       }
     });
 
