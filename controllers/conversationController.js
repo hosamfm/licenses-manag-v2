@@ -750,7 +750,8 @@ exports.getConversationDetailsAjax = async (req, res) => {
     // جلب بيانات المحادثة
     const conversation = await Conversation.findById(conversationId)
       .populate('channelId', 'name')
-      .populate('contactId', 'name phone')
+      // إزالة تعبئة contactId لأنه غير موجود في مخطط المحادثة
+      // .populate('contactId', 'name phone')
       .populate('assignedTo', 'username full_name')
       .lean();
       
