@@ -499,15 +499,15 @@ class MetaWhatsappService {
             // تحديد اسم الملف المناسب - استخدام الاسم الأصلي إذا كان متوفرًا
             let filename;
             if (originalFilename) {
-                // الاحتفاظ بالاسم الأصلي للملف مع الامتداد المناسب
+                // استخدام اسم ملف بسيط للأسماء العربية لتجنب مشاكل الترميز
                 const fileExt = this.getFileExtensionFromMimeType(mimeType);
-                if (originalFilename.includes('.')) {
-                    // الملف له امتداد بالفعل، نستخدمه كما هو
-                    filename = originalFilename;
-                } else {
-                    // إضافة الامتداد إذا لم يكن موجودًا
-                    filename = `${originalFilename}.${fileExt}`;
-                }
+                const timestamp = new Date().getTime();
+                filename = `file_${timestamp}.${fileExt}`;
+                
+                logger.info('MetaWhatsappService', 'تم استخدام اسم ملف بسيط لتجنب مشاكل الترميز', {
+                    originalName: originalFilename,
+                    simplifiedName: filename
+                });
             } else {
                 // استخدام اسم ملف افتراضي مع الامتداد المناسب
                 filename = `media_file.${this.getFileExtensionFromMimeType(mimeType)}`;
