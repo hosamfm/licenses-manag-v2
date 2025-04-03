@@ -167,11 +167,26 @@ async function linkMediaToMessage(mediaId, messageId) {
  */
 function prepareMessageWithMedia(message, media) {
   if (!message) return null;
-  if (!media) return message;
-
-  return {
+  
+  // في حالة عدم وجود وسائط، نتحقق من وجود حقل mediaType في الرسالة نفسها
+  if (!media) {
+    // تسجيل تشخيصي
+    if (message.mediaType && !message._id) {
+      logger.debug(`رسالة بدون وسائط ولكن تحتوي على حقل mediaType: ${message._id}`);
+    }
+    return message;
+  }
+  
+  // تسجيل تشخيصي
+  logger.debug(`ربط وسائط بالرسالة: ${message._id}، اتجاه: ${message.direction}، نوع: ${media.mediaType || message.mediaType}`);
+  
+  // أهم تغيير: التأكد من تعيين حقل mediaType في كائن الرسالة
+  // هذا ضروري للرسائل الصادرة التي قد لا تحتوي على هذا الحقل مباشرة
+  const enhancedMessage = {
     ...message,
     mediaId: media._id,
+    // تأكد من تعيين mediaType في الرسالة نفسها، وليس فقط في كائن media الفرعي
+    mediaType: media.mediaType || message.mediaType, 
     media: {
       _id: media._id,
       mediaType: media.mediaType || message.mediaType,
@@ -184,6 +199,8 @@ function prepareMessageWithMedia(message, media) {
     fileSize: media.fileSize || message.fileSize || 0,
     mimeType: media.mimeType || message.mimeType || ''
   };
+  
+  return enhancedMessage;
 }
 
 /**
