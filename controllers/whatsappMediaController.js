@@ -125,6 +125,7 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
     }
 
     const accessToken = settings.config.accessToken;
+    let response; // تعريف المتغير قبل كتلة try-catch
 
     // الخطوة 1: استرجاع عنوان URL للوسائط من واتساب API
     logger.info(`استرجاع عنوان URL للوسائط: ${mediaType}`, {
@@ -155,7 +156,7 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
       });
 
       // الخطوة 2: تنزيل الوسائط باستخدام العنوان المُسترجع
-      const response = await axios({
+      response = await axios({
         method: 'GET',
         url: mediaDownloadUrl,
         headers: {
@@ -190,7 +191,7 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
       });
 
       // تنزيل الوسائط مباشرة (الطريقة القديمة)
-      const response = await axios({
+      response = await axios({
         method: 'GET',
         url: `https://graph.facebook.com/v22.0/${mediaUrl}`,
         headers: {
