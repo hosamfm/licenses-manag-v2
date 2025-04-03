@@ -754,42 +754,6 @@ exports.getConversationDetailsAjax = async (req, res) => {
       .lean();
     const sorted = msgs.reverse();
 
-    // جلب معلومات الوسائط المرتبطة بالرسائل
-    const messageIds = sorted.filter(msg => msg.mediaType).map(msg => msg._id.toString());
-    
-    if (messageIds.length > 0) {
-      // جلب معلومات الوسائط للرسائل
-      const mediaItems = await WhatsappMedia.find({ messageId: { $in: messageIds } }).lean();
-      
-      // ربط معلومات الوسائط بالرسائل
-      sorted.forEach(msg => {
-        if (msg.mediaType) {
-          const mediaItem = mediaItems.find(media => media.messageId && media.messageId.toString() === msg._id.toString());
-          if (mediaItem) {
-            msg.mediaInfo = {
-              mediaId: mediaItem._id,
-              fileName: mediaItem.fileName,
-              mimeType: mediaItem.mimeType,
-              fileSize: mediaItem.fileSize,
-              hasFileData: !!mediaItem.fileData
-            };
-            
-            // تسجيل معلومات الوسائط المرتبطة بالرسالة
-            logger.info('conversationController', 'تم ربط معلومات الوسائط بالرسالة', {
-              messageId: msg._id,
-              mediaId: mediaItem._id,
-              mediaType: msg.mediaType
-            });
-          } else {
-            logger.warn('conversationController', 'لم يتم العثور على وسائط للرسالة', {
-              messageId: msg._id,
-              mediaType: msg.mediaType
-            });
-          }
-        }
-      });
-    }
-
     // نعيد الـ Partial فقط (layout: false)
     return res.render('crm/partials/_conversation_details_ajax', {
       layout: false,
