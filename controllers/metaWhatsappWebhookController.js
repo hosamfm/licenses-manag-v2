@@ -288,7 +288,7 @@ exports.handleIncomingMessages = async (messages, meta) => {
         
         // البحث عن القناة باستخدام phone_number_id
         const phoneNumberId = meta.phone_number_id;
-        const channel = await WhatsAppChannel.findOne({ wabaPhoneNumberId: phoneNumberId }).lean();
+        const channel = await WhatsAppChannel.getChannelByPhoneNumberId(phoneNumberId);
         
         if (!channel) {
           logger.error('metaWhatsappWebhookController', 'لم يتم العثور على قناة مطابقة', { 
