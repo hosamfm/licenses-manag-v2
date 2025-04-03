@@ -32,7 +32,14 @@ const whatsappMediaSchema = new mongoose.Schema({
   },
   
   // معلومات الملف
-  fileName: String, // اسم الملف الأصلي (للمستندات)
+  fileName: {
+    type: String,
+    required: true,
+    trim: true,
+    set: function(value) {
+      return Buffer.from(value, 'binary').toString('utf-8');
+    }
+  },
   mimeType: String, // نوع MIME للملف
   fileSize: Number, // حجم الملف بالبايت
   fileData: { // محتوى الملف مشفر بصيغة base64
