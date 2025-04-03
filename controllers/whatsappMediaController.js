@@ -120,16 +120,16 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
 
     // الحصول على توكن الوصول لواتساب
     const settings = await MetaWhatsappSettings.getActiveSettings();
-    if (!settings || !settings.accessToken) {
+    if (!settings || !settings.config || !settings.config.accessToken) {
       throw new Error('لم يتم العثور على إعدادات واتساب أو توكن الوصول');
     }
 
     // تنزيل البيانات من API واتساب مباشرة إلى الذاكرة
     const response = await axios({
       method: 'GET',
-      url: mediaUrl,
+      url: `https://graph.facebook.com/v17.0/${mediaUrl}`,
       headers: {
-        'Authorization': `Bearer ${settings.accessToken}`
+        'Authorization': `Bearer ${settings.config.accessToken}`
       },
       responseType: 'arraybuffer'
     });
@@ -236,18 +236,27 @@ exports.getMediaContent = async (req, res) => {
     
     // في حالة وجود بيانات مشفرة مخزنة، نستخدمها مباشرة
     if (mediaContent.fileData) {
-      // قراءة بيانات الملف المشفرة
-      const fileData = mediaContent.fileData;
-      
-      // فك تشفير البيانات وإرسالها
-      const buffer = Buffer.from(fileData, 'base64');
-      
-      // ضبط نوع المحتوى
-      res.set('Content-Type', mediaContent.mimeType || 'application/octet-stream');
-      res.set('Content-Disposition', `inline; filename="${mediaContent.fileName}"`);
-      
-      // إرسال البيانات
-      return res.send(buffer);
+      try {
+        // قراءة بيانات الملف المشفرة
+        const fileData = mediaContent.fileData;
+        
+        // فك تشفير البيانات وإرسالها
+        const buffer = Buffer.from(fileData, 'base64');
+        
+        // ضبط نوع المحتوى
+        res.set('Content-Type', mediaContent.mimeType || 'application/octet-stream');
+        res.set('Content-Disposition', `inline; filename="${mediaContent.fileName}"`);
+        
+        // إرسال البيانات
+        return res.send(buffer);
+      } catch (bufferError) {
+        logger.error(`خطأ في معالجة بيانات الوسائط: ${bufferError.message}`);
+        return res.status(500).json({ 
+          success: false, 
+          error: 'خطأ في معالجة بيانات الوسائط', 
+          details: bufferError.message 
+        });
+      }
     }
     
     // في حالة عدم وجود بيانات للملف، نرسل رسالة خطأ
