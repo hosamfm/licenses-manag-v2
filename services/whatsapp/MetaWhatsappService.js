@@ -457,7 +457,7 @@ class MetaWhatsappService {
                 const cleanFileData = fileData.includes('base64,') ? fileData.split('base64,')[1] : fileData;
                 mediaFingerprint = crypto.createHash('md5').update(cleanFileData).digest('hex');
             } else if (Buffer.isBuffer(fileData)) {
-                mediaFingerprint = crypto.createHash('md5').update(fileData).digest('hex');
+                mediaFingerprint = crypto.createHash('md5').update(fileBuffer).digest('hex');
             } else {
                 throw new Error('بيانات الوسائط يجب أن تكون نص base64 أو Buffer');
             }
@@ -533,24 +533,21 @@ class MetaWhatsappService {
             });
 
             // تحميل الوسائط
-            const response = await this.uploadMediaToWhatsapp(fileBuffer, mimeType, settingsToUse);
+            const mediaId = await this.uploadMediaToWhatsapp(fileBuffer, mimeType, settingsToUse);
+            
+            // تخزين معرف الوسائط في التخزين المؤقت للاستخدام المستقبلي
+            cacheService.setMediaIdCache(mediaFingerprint, mediaType, mediaId, {
+                mimeType,
+                timestamp: new Date()
+            });
             
             logger.info('MetaWhatsappService', 'تم تحميل الوسائط بنجاح', {
-                mediaId: response.id,
+                mediaType,
+                mediaId,
                 hash: mediaFingerprint
             });
             
-            // إضافة معرف الوسائط إلى التخزين المؤقت
-            cacheService.setMediaIdCache(mediaFingerprint, mediaType, response.id, {
-                mimeType,
-                uploadedAt: new Date()
-            });
-            
-            // حذف محتوى الوسائط من التخزين المؤقت بعد نجاح التحميل
-            // هذا يوفر مساحة في الذاكرة حيث أصبح المعرف هو المطلوب فقط
-            cacheService.deleteMediaContentCache(mediaFingerprint, mediaType);
-            
-            return response.id;
+            return mediaId;
         } catch (error) {
             logger.error('MetaWhatsappService', 'خطأ في تحميل الوسائط', {
                 error: error.message,
@@ -571,9 +568,10 @@ class MetaWhatsappService {
      * @param {Buffer} fileBuffer - بيانات الملف
      * @param {string} mimeType - نوع MIME للملف
      * @param {object} settingsToUse - إعدادات الحساب المستخدمة
+     * @param {string} filename - اسم الملف (اختياري)
      * @returns {Promise<object>} استجابة تحميل الوسائط
      */
-    async uploadMediaToWhatsapp(fileBuffer, mimeType, settingsToUse, filename) {
+    async uploadMediaToWhatsapp(fileBuffer, mimeType, settingsToUse, filename = 'file') {
         try {
             // تحويل البيانات إلى FormData
             const FormData = require('form-data');
@@ -603,7 +601,13 @@ class MetaWhatsappService {
                 }
             });
             
-            return response.data;
+            // تسجيل استجابة تحميل الوسائط للتشخيص
+            logger.debug('MetaWhatsappService', 'استجابة تحميل الوسائط إلى خوادم واتساب', {
+                responseData: response.data
+            });
+            
+            // إرجاع معرف الوسائط فقط
+            return response.data.id;
         } catch (error) {
             logger.error('MetaWhatsappService', 'خطأ في تحميل الوسائط إلى خوادم واتساب', {
                 error: error.message,
@@ -745,7 +749,7 @@ class MetaWhatsappService {
             to,
             type: 'document',
             document: {
-                filename: encodeURIComponent(filename)
+                filename: filename // استخدام اسم الملف مباشرة بدون ترميز
             }
         };
 
@@ -757,7 +761,7 @@ class MetaWhatsappService {
             } else {
                 // استخدام بيانات base64 - تحميل المستند أولاً إلى خوادم واتساب
                 let base64Data = documentUrl;
-                let mimeType = 'application/octet-stream'; // افتراضي
+                let mimeType = 'application/pdf'; // تغيير النوع الافتراضي من application/octet-stream إلى application/pdf
                 
                 // استخراج نوع MIME والبيانات إذا كان التنسيق كاملاً
                 if (documentUrl.startsWith('data:')) {
@@ -770,24 +774,99 @@ class MetaWhatsappService {
                     }
                 }
                 
-                // تحسين استخراج MIME type لملفات PDF
-                if (filename.endsWith('.pdf')) {
-                    mimeType = 'application/pdf';
-                    if (documentUrl.startsWith('data:')) {
-                        const matches = documentUrl.match(/^data:([^\/]+\/[^;]+);base64,/);
-                        if (matches && matches[1]) {
-                            mimeType = matches[1];
-                        }
+                // تحديد نوع MIME بناءً على امتداد الملف إذا لم يتم تحديده
+                if (mimeType === 'application/octet-stream' || !this.isSupportedMimeType(mimeType)) {
+                    // تحديد نوع MIME المناسب بناءً على امتداد الملف
+                    const extension = filename.split('.').pop().toLowerCase();
+                    const mimeMap = {
+                        'pdf': 'application/pdf',
+                        'doc': 'application/msword',
+                        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'ppt': 'application/vnd.ms-powerpoint',
+                        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        'xls': 'application/vnd.ms-excel',
+                        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'txt': 'text/plain',
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg',
+                        'png': 'image/png',
+                        'webp': 'image/webp',
+                        'mp4': 'video/mp4',
+                        'mp3': 'audio/mpeg'
+                    };
+                    
+                    if (mimeMap[extension]) {
+                        mimeType = mimeMap[extension];
+                        logger.info('MetaWhatsappService', 'تم تحديد نوع MIME بناءً على امتداد الملف', { extension, mimeType });
+                    } else {
+                        // إذا لم نتمكن من تحديد النوع، نستخدم PDF كنوع افتراضي لأنه مدعوم
+                        mimeType = 'application/pdf';
+                        logger.warn('MetaWhatsappService', 'لم يتم التعرف على امتداد الملف، استخدام نوع PDF كافتراضي', { filename, extension });
                     }
                 }
                 
+                // تحقق من أن نوع الملف مدعوم من قبل واتساب
+                if (!this.isSupportedMimeType(mimeType)) {
+                    logger.warn('MetaWhatsappService', 'نوع الملف غير مدعوم من واتساب، استخدام PDF كنوع بديل', { originalMimeType: mimeType });
+                    mimeType = 'application/pdf';
+                }
+                
+                // تحويل البيانات من base64 إلى Buffer
+                let fileBuffer;
+                try {
+                    fileBuffer = Buffer.from(base64Data, 'base64');
+                    
+                    // التحقق من أن البيانات تم ترميزها بشكل صحيح
+                    if (fileBuffer.length === 0) {
+                        throw new Error('فشل تحويل بيانات Base64 إلى buffer');
+                    }
+                    
+                    logger.info('MetaWhatsappService', 'تم تحويل بيانات المستند إلى buffer', { 
+                        mimeType, 
+                        fileSize: fileBuffer.length, 
+                        filenameLength: filename.length 
+                    });
+                } catch (encodeError) {
+                    logger.error('MetaWhatsappService', 'خطأ في تحويل بيانات المستند', {
+                        error: encodeError.message
+                    });
+                    throw new Error(`فشل تحويل بيانات المستند: ${encodeError.message}`);
+                }
+                
                 // تحميل المستند إلى خوادم واتساب
-                logger.info('MetaWhatsappService', 'تحميل مستند إلى خوادم واتساب قبل الإرسال');
-                const uploadResult = await this.uploadMediaToWhatsapp(base64Data, mimeType, settingsToUse, filename);
+                logger.info('MetaWhatsappService', 'تحميل مستند إلى خوادم واتساب قبل الإرسال', {
+                    mimeType,
+                    fileSize: fileBuffer.length
+                });
+                
+                // حاول تحميل الملف مع تكرار المحاولة في حالة الفشل
+                let uploadResult;
+                try {
+                    uploadResult = await this.uploadMediaToWhatsapp(fileBuffer, mimeType, settingsToUse, filename);
+                    logger.info('MetaWhatsappService', 'تم تحميل المستند بنجاح', { 
+                        mediaId: uploadResult
+                    });
+                } catch (uploadError) {
+                    // محاولة ثانية في حالة الفشل
+                    logger.warn('MetaWhatsappService', 'محاولة ثانية لتحميل المستند بعد فشل المحاولة الأولى', {
+                        error: uploadError.message
+                    });
+                    
+                    // لضمان استخدام نوع MIME صحيح، استخدم أنواع واتساب الافتراضية
+                    if (filename.toLowerCase().endsWith('.pdf')) {
+                        mimeType = 'application/pdf';
+                    } else {
+                        mimeType = 'application/pdf'; // استخدام PDF كحل بديل للملفات غير المعروفة
+                    }
+                    
+                    uploadResult = await this.uploadMediaToWhatsapp(fileBuffer, mimeType, settingsToUse, 'document');
+                    logger.info('MetaWhatsappService', 'تم تحميل المستند بنجاح في المحاولة الثانية', { 
+                        mediaId: uploadResult
+                    });
+                }
                 
                 // استخدام معرف الوسائط الناتج
                 data.document.id = uploadResult;
-                logger.info('MetaWhatsappService', 'تم تحميل المستند بنجاح', { mediaId: uploadResult });
             }
 
             // إضافة وصف المستند إذا كان موجوداً
