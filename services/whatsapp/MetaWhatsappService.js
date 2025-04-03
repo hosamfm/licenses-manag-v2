@@ -580,10 +580,22 @@ class MetaWhatsappService {
             // إضافة المنتج المطلوب حسب وثائق واتساب
             form.append('messaging_product', 'whatsapp');
             
-            // إضافة الملف إلى النموذج
+            // تحسين معالجة اسم الملف: استخدام اسم ملف آمن ASCII
+            // تجنب استخدام الأحرف الخاصة في اسم الملف لتفادي مشاكل Content-Disposition
+            const safeFilename = `file_${Date.now()}.${this.getFileExtensionFromMimeType(mimeType)}`;
+            
+            // إضافة الملف إلى النموذج دون تحديد اسم ملف معقد
             form.append('file', fileBuffer, {
-                filename: `${filename}.${this.getFileExtensionFromMimeType(mimeType)}`,
+                filename: safeFilename,
                 contentType: mimeType
+            });
+            
+            // تسجيل معلومات التحميل
+            logger.debug('MetaWhatsappService', 'جاري تحميل ملف إلى خوادم واتساب', {
+                originalFilename: filename,
+                safeFilename: safeFilename,
+                mimeType: mimeType,
+                fileSize: fileBuffer.length
             });
             
             // إرسال طلب تحميل الوسائط
@@ -695,8 +707,8 @@ class MetaWhatsappService {
 
             // إضافة وصف الصورة إذا كان موجوداً
             if (caption && caption.trim()) {
-                data.image.caption = encodeURIComponent(caption);
-                logger.debug('تم ترميز التسمية التوضيحية', { encodedCaption: data.image.caption });
+                data.image.caption = caption; // إزالة encodeURIComponent
+                logger.debug('تم إضافة وصف الصورة', { caption: caption });
             }
 
             return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
@@ -871,8 +883,8 @@ class MetaWhatsappService {
 
             // إضافة وصف المستند إذا كان موجوداً
             if (caption && caption.trim()) {
-                data.document.caption = encodeURIComponent(caption);
-                logger.debug('تم ترميز التسمية التوضيحية', { encodedCaption: data.document.caption });
+                data.document.caption = caption; // إزالة encodeURIComponent
+                logger.debug('تم إضافة وصف المستند', { caption: caption });
             }
 
             return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
@@ -958,8 +970,8 @@ class MetaWhatsappService {
 
             // إضافة وصف الفيديو إذا كان موجوداً
             if (caption && caption.trim()) {
-                data.video.caption = encodeURIComponent(caption);
-                logger.debug('تم ترميز التسمية التوضيحية', { encodedCaption: data.video.caption });
+                data.video.caption = caption; // إزالة encodeURIComponent
+                logger.debug('تم إضافة وصف الفيديو', { caption: caption });
             }
 
             return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
@@ -1099,8 +1111,8 @@ class MetaWhatsappService {
 
         // إضافة اسم الموقع إذا كان موجوداً
         if (name && name.trim()) {
-            data.location.name = encodeURIComponent(name);
-            logger.debug('تم ترميز اسم الموقع', { encodedName: data.location.name });
+            data.location.name = name; // إزالة encodeURIComponent
+            logger.debug('تم إضافة اسم الموقع', { name: name });
         }
 
         return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
@@ -1219,20 +1231,20 @@ class MetaWhatsappService {
             case 'image':
                 data.image = {
                     id: mediaId,
-                    caption: options.caption ? encodeURIComponent(options.caption) : ''
+                    caption: options.caption ? options.caption : ''
                 };
                 break;
             case 'video':
                 data.video = {
                     id: mediaId,
-                    caption: options.caption ? encodeURIComponent(options.caption) : ''
+                    caption: options.caption ? options.caption : ''
                 };
                 break;
             case 'document':
                 data.document = {
                     id: mediaId,
-                    caption: options.caption ? encodeURIComponent(options.caption) : '',
-                    filename: options.filename ? encodeURIComponent(options.filename) : 'document'
+                    caption: options.caption ? options.caption : '',
+                    filename: options.filename ? options.filename : 'document'
                 };
                 break;
             case 'audio':
@@ -1306,20 +1318,20 @@ class MetaWhatsappService {
             case 'image':
                 data.image = {
                     id: mediaId,
-                    caption: options.caption ? encodeURIComponent(options.caption) : ''
+                    caption: options.caption ? options.caption : ''
                 };
                 break;
             case 'video':
                 data.video = {
                     id: mediaId,
-                    caption: options.caption ? encodeURIComponent(options.caption) : ''
+                    caption: options.caption ? options.caption : ''
                 };
                 break;
             case 'document':
                 data.document = {
                     id: mediaId,
-                    caption: options.caption ? encodeURIComponent(options.caption) : '',
-                    filename: options.filename ? encodeURIComponent(options.filename) : 'document'
+                    caption: options.caption ? options.caption : '',
+                    filename: options.filename ? options.filename : 'document'
                 };
                 break;
             case 'audio':
