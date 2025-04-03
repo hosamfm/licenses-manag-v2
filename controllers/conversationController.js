@@ -351,10 +351,20 @@ exports.replyToConversation = async (req, res) => {
         // استخدام المعرف الخارجي للرسالة الأصلية للرد
         externalReplyId = originalMessage.externalMessageId;
         
+        // تسجيل معلومات تشخيصية مفصلة
+        logger.info('conversationController', 'معلومات الرسالة الأصلية للرد', { 
+          originalMessageId: originalMessage._id.toString(),
+          externalMessageId: originalMessage.externalMessageId,
+          from: originalMessage.metadata?.from,
+          direction: originalMessage.direction
+        });
+        
         replyContext = {
           message_id: originalMessage.externalMessageId || replyToMessageId,
           from: originalMessage.metadata ? originalMessage.metadata.from : null
         };
+      } else {
+        logger.warn('conversationController', 'لم يتم العثور على الرسالة الأصلية للرد', { replyToMessageId });
       }
     }
 
@@ -422,41 +432,86 @@ exports.replyToConversation = async (req, res) => {
         await whatsappMediaController.updateMessageIdForMedia(mediaId, msg._id);
         
         // إرسال الوسائط حسب النوع
-        switch (mediaType) {
-          case 'image':
-            apiResponse = await metaWhatsappService.sendImage(
-              conversation.phoneNumber,
-              media.fileData,
-              content || '',  // استخدام المحتوى كوصف للصورة
-              phoneNumberId
-            );
-            break;
-          case 'document':
-            apiResponse = await metaWhatsappService.sendDocument(
-              conversation.phoneNumber,
-              media.fileData,
-              media.fileName || 'document',
-              content || '',
-              phoneNumberId
-            );
-            break;
-          case 'video':
-            apiResponse = await metaWhatsappService.sendVideo(
-              conversation.phoneNumber,
-              media.fileData,
-              content || '',
-              phoneNumberId
-            );
-            break;
-          case 'audio':
-            apiResponse = await metaWhatsappService.sendAudio(
-              conversation.phoneNumber,
-              media.fileData,
-              phoneNumberId
-            );
-            break;
-          default:
-            throw new Error(`نوع وسائط غير مدعوم: ${mediaType}`);
+        if (replyToMessageId && externalReplyId) {
+          // إرسال رد وسائط على رسالة
+          switch (mediaType) {
+            case 'image':
+              apiResponse = await metaWhatsappService.sendReplyImage(
+                conversation.phoneNumber,
+                media.fileData,
+                media.caption || '',
+                externalReplyId,
+                phoneNumberId
+              );
+              break;
+            case 'video':
+              apiResponse = await metaWhatsappService.sendReplyVideo(
+                conversation.phoneNumber,
+                media.fileData,
+                media.caption || '',
+                externalReplyId,
+                phoneNumberId
+              );
+              break;
+            case 'document':
+              apiResponse = await metaWhatsappService.sendReplyDocument(
+                conversation.phoneNumber,
+                media.fileData,
+                media.filename || 'document',
+                media.caption || '',
+                externalReplyId,
+                phoneNumberId
+              );
+              break;
+            case 'audio':
+              apiResponse = await metaWhatsappService.sendReplyAudio(
+                conversation.phoneNumber,
+                media.fileData,
+                externalReplyId,
+                phoneNumberId
+              );
+              break;
+            default:
+              throw new Error(`نوع وسائط غير مدعوم: ${mediaType}`);
+          }
+        } else {
+          // إرسال وسائط عادية (ليست رداً)
+          switch (mediaType) {
+            case 'image':
+              apiResponse = await metaWhatsappService.sendImage(
+                conversation.phoneNumber,
+                media.fileData,
+                media.caption || '',
+                phoneNumberId
+              );
+              break;
+            case 'video':
+              apiResponse = await metaWhatsappService.sendVideo(
+                conversation.phoneNumber,
+                media.fileData,
+                media.caption || '',
+                phoneNumberId
+              );
+              break;
+            case 'document':
+              apiResponse = await metaWhatsappService.sendDocument(
+                conversation.phoneNumber,
+                media.fileData,
+                media.filename || 'document',
+                media.caption || '',
+                phoneNumberId
+              );
+              break;
+            case 'audio':
+              apiResponse = await metaWhatsappService.sendAudio(
+                conversation.phoneNumber,
+                media.fileData,
+                phoneNumberId
+              );
+              break;
+            default:
+              throw new Error(`نوع وسائط غير مدعوم: ${mediaType}`);
+          }
         }
       } else {
         // إرسال رسالة نصية عادية

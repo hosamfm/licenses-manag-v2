@@ -126,11 +126,62 @@ const handleCachedMessages = (userId) => {
   }
 };
 
+/**
+ * تخزين حالة رسالة غير موجودة للتطبيق لاحقاً
+ * @param {String} externalMessageId المعرف الخارجي للرسالة
+ * @param {String} status الحالة الجديدة للرسالة
+ * @param {Date} timestamp توقيت تحديث الحالة
+ * @param {Number} ttl مدة التخزين المؤقت بالثواني (اختياري)
+ * @returns {Boolean} نجاح أو فشل عملية التخزين
+ */
+const setMessageStatusCache = (externalMessageId, status, timestamp, ttl = 3600) => {
+  try {
+    const cacheKey = `pending_status_${externalMessageId}`;
+    return cache.set(cacheKey, { status, timestamp }, ttl);
+  } catch (error) {
+    logger.error('خطأ في تخزين حالة الرسالة غير الموجودة', error);
+    return false;
+  }
+};
+
+/**
+ * الحصول على حالة رسالة مخزنة مؤقتاً
+ * @param {String} externalMessageId المعرف الخارجي للرسالة
+ * @returns {Object} بيانات الحالة {status, timestamp} أو null إذا لم تكن موجودة
+ */
+const getMessageStatusCache = (externalMessageId) => {
+  try {
+    const cacheKey = `pending_status_${externalMessageId}`;
+    return cache.get(cacheKey);
+  } catch (error) {
+    logger.error('خطأ في استرجاع حالة الرسالة من التخزين المؤقت', error);
+    return null;
+  }
+};
+
+/**
+ * حذف حالة رسالة مخزنة مؤقتاً بعد تطبيقها
+ * @param {String} externalMessageId المعرف الخارجي للرسالة
+ * @returns {Boolean} نجاح أو فشل عملية الحذف
+ */
+const deleteMessageStatusCache = (externalMessageId) => {
+  try {
+    const cacheKey = `pending_status_${externalMessageId}`;
+    return cache.del(cacheKey);
+  } catch (error) {
+    logger.error('خطأ في حذف حالة الرسالة من التخزين المؤقت', error);
+    return false;
+  }
+};
+
 module.exports = {
   getCachedConversation,
   setCachedConversation,
   getCachedMessages,
   setCachedMessages,
   clearConversationCache,
-  handleCachedMessages
+  handleCachedMessages,
+  setMessageStatusCache,
+  getMessageStatusCache,
+  deleteMessageStatusCache
 };

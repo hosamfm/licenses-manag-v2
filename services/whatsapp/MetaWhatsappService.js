@@ -311,6 +311,9 @@ class MetaWhatsappService {
             throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
         }
 
+        // التحقق من صحة معرف الرسالة وتنسيقه
+        const validatedWamid = this.validateWamid(replyMessageId);
+
         const data = {
             messaging_product: 'whatsapp',
             recipient_type: 'individual',
@@ -320,7 +323,7 @@ class MetaWhatsappService {
                 body: text
             },
             context: {
-                message_id: replyMessageId
+                message_id: validatedWamid
             }
         };
 
@@ -359,13 +362,16 @@ class MetaWhatsappService {
             throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
         }
 
+        // التحقق من صحة معرف الرسالة وتنسيقه
+        const validatedWamid = this.validateWamid(messageId);
+
         const data = {
             messaging_product: 'whatsapp',
             recipient_type: 'individual',
             to,
             type: 'reaction',
             reaction: {
-                message_id: messageId,
+                message_id: validatedWamid,
                 emoji: emoji
             }
         };
@@ -1174,6 +1180,252 @@ class MetaWhatsappService {
         data[mediaType] = mediaData;
 
         return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال رد يحتوي على صورة عبر واتساب
+     * @param {string} to رقم الهاتف المستلم
+     * @param {string} imageData بيانات الصورة بتنسيق base64 أو رابط URL
+     * @param {string} caption نص التسمية التوضيحية (اختياري)
+     * @param {string} replyMessageId معرف الرسالة التي يتم الرد عليها
+     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendReplyImage(to, imageData, caption = '', replyMessageId, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // التحقق من صحة معرف الرسالة وتنسيقه
+        const validatedWamid = this.validateWamid(replyMessageId);
+
+        // تحميل الوسائط أولاً للحصول على معرف الوسائط
+        const mediaId = await this.uploadMedia(imageData, 'image', settingsToUse);
+
+        const data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'image',
+            image: {
+                id: mediaId,
+                caption: caption || ''
+            },
+            context: {
+                message_id: validatedWamid
+            }
+        };
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال رد يحتوي على فيديو عبر واتساب
+     * @param {string} to رقم الهاتف المستلم
+     * @param {string} videoData بيانات الفيديو بتنسيق base64 أو رابط URL
+     * @param {string} caption نص التسمية التوضيحية (اختياري)
+     * @param {string} replyMessageId معرف الرسالة التي يتم الرد عليها
+     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendReplyVideo(to, videoData, caption = '', replyMessageId, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // التحقق من صحة معرف الرسالة وتنسيقه
+        const validatedWamid = this.validateWamid(replyMessageId);
+
+        // تحميل الوسائط أولاً للحصول على معرف الوسائط
+        const mediaId = await this.uploadMedia(videoData, 'video', settingsToUse);
+
+        const data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'video',
+            video: {
+                id: mediaId,
+                caption: caption || ''
+            },
+            context: {
+                message_id: validatedWamid
+            }
+        };
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال رد يحتوي على مستند عبر واتساب
+     * @param {string} to رقم الهاتف المستلم
+     * @param {string} documentData بيانات المستند بتنسيق base64 أو رابط URL
+     * @param {string} filename اسم الملف
+     * @param {string} caption نص التسمية التوضيحية (اختياري)
+     * @param {string} replyMessageId معرف الرسالة التي يتم الرد عليها
+     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendReplyDocument(to, documentData, filename, caption = '', replyMessageId, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // التحقق من صحة معرف الرسالة وتنسيقه
+        const validatedWamid = this.validateWamid(replyMessageId);
+
+        // تحميل الوسائط أولاً للحصول على معرف الوسائط
+        const mediaId = await this.uploadMedia(documentData, 'document', settingsToUse);
+
+        const data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'document',
+            document: {
+                id: mediaId,
+                caption: caption || '',
+                filename: filename
+            },
+            context: {
+                message_id: validatedWamid
+            }
+        };
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * إرسال رد يحتوي على ملف صوتي عبر واتساب
+     * @param {string} to رقم الهاتف المستلم
+     * @param {string} audioData بيانات الملف الصوتي بتنسيق base64 أو رابط URL
+     * @param {string} replyMessageId معرف الرسالة التي يتم الرد عليها
+     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
+     * @returns {Promise<object>} نتيجة الإرسال
+     */
+    async sendReplyAudio(to, audioData, replyMessageId, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        // التحقق من صحة معرف الرسالة وتنسيقه
+        const validatedWamid = this.validateWamid(replyMessageId);
+
+        // تحميل الوسائط أولاً للحصول على معرف الوسائط
+        const mediaId = await this.uploadMedia(audioData, 'audio', settingsToUse);
+
+        const data = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'audio',
+            audio: {
+                id: mediaId
+            },
+            context: {
+                message_id: validatedWamid
+            }
+        };
+
+        return this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
+    }
+
+    /**
+     * التحقق من صحة تنسيق معرف رسالة واتساب (WAMID)
+     * @param {string} messageId معرف الرسالة للتحقق منه
+     * @returns {string} معرف الرسالة المُعدل أو الأصلي
+     */
+    validateWamid(messageId) {
+        if (!messageId) return '';
+        
+        // التحقق إذا كان المعرف يبدأ بتنسيق wamid الصحيح
+        if (messageId.startsWith('wamid.')) {
+            return messageId;
+        }
+        
+        // إذا كان يبدو كمعرف واتساب لكن بدون البادئة wamid.
+        if (/^[A-Za-z0-9+/=_-]+$/.test(messageId) && messageId.length > 20) {
+            return `wamid.${messageId}`;
+        }
+        
+        // إرجاع المعرف الأصلي إذا لم نتمكن من تحديد تنسيقه
+        return messageId;
     }
 }
 

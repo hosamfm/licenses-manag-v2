@@ -11,6 +11,7 @@ const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const whatsappMediaController = require('./whatsappMediaController');
 const mediaService = require('../services/mediaService');
+const cacheService = require('../services/cacheService');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -84,7 +85,7 @@ exports.handleWebhook = async (req, res) => {
                     messageId: st.id,
                     newStatus: st.status
                   });
-                  await updateMessageStatus(st.id, st.status, new Date(st.timestamp * 1000));
+                  await exports.updateMessageStatus(st.id, st.status, new Date(st.timestamp * 1000));
                 }
               }
 
@@ -128,59 +129,60 @@ const processedMessageIds = new Set();
 /**
  * تحديث حالة الرسالة
  */
-async function updateMessageStatus(externalId, newStatus, timestamp) {
+exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
   try {
     logger.info('metaWhatsappWebhookController', 'تحديث حالة الرسالة', { externalId, newStatus });
     
-    let systemStatus = newStatus; 
-    if (newStatus === 'sent') systemStatus = 'sent';
-    if (newStatus === 'delivered') systemStatus = 'delivered';
-    if (newStatus === 'read') systemStatus = 'read';
-    if (newStatus === 'failed') systemStatus = 'failed';
-
-    // البحث عن الرسالة في WhatsappMessage
-    const wMsg = await WhatsappMessage.findOne({ externalMessageId: externalId });
-    if (wMsg) {
-      wMsg.status = systemStatus;
-      if (systemStatus === 'delivered' && !wMsg.deliveredAt) wMsg.deliveredAt = timestamp;
-      if (systemStatus === 'read' && !wMsg.readAt) wMsg.readAt = timestamp;
-      await wMsg.save();
-
-      // إشعار socket - استخدام الطريقة الصحيحة في socketService
-      socketService.notifyMessageStatusUpdate(wMsg.conversationId, externalId, systemStatus);
+    // تحويل الحالات الواردة من واتساب إلى الحالات المستخدمة في النظام
+    if (newStatus === 'delivered') {
+      newStatus = 'delivered';
+    } else if (newStatus === 'read') {
+      newStatus = 'read';
+    } else if (newStatus === 'failed') {
+      newStatus = 'failed';
+    }
+    
+    // البحث عن الرسالة في النظام
+    let message = await WhatsappMessage.findOne({ externalMessageId: externalId });
+    
+    if (message) {
+      // تحديث حالة الرسالة
+      message.status = newStatus;
       
-      // إذا كانت الحالة "sent" وهي أول تحديث، فهذا يعني أننا استلمنا المعرف الخارجي للرسالة
-      // سنرسل إشعارًا إضافيًا لربط المعرف الداخلي بالمعرف الخارجي
-      if (systemStatus === 'sent') {
-        logger.info('metaWhatsappWebhookController', 'إرسال تحديث بربط المعرف الخارجي بالداخلي', { 
-          messageId: wMsg._id, 
-          externalId: externalId 
-        });
-        socketService.notifyMessageExternalIdUpdate(wMsg.conversationId, wMsg._id.toString(), externalId);
+      // تحديث أوقات القراءة والتسليم
+      if (newStatus === 'delivered') {
+        message.deliveredAt = timestamp;
+      } else if (newStatus === 'read') {
+        message.readAt = timestamp;
+      }
+      
+      await message.save();
+      
+      // تحديث SemMessage إذا وجدت
+      if (message.metadata && message.metadata.semMessageId) {
+        try {
+          await SemMessage.findByIdAndUpdate(
+            message.metadata.semMessageId,
+            { 
+              status: newStatus, 
+              ...(newStatus === 'delivered' ? { deliveredAt: timestamp } : {}),
+              ...(newStatus === 'read' ? { readAt: timestamp } : {})
+            }
+          );
+          logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage أيضاً', { externalId });
+        } catch (semUpdateErr) {
+          logger.error('metaWhatsappWebhookController', 'خطأ في تحديث SemMessage', semUpdateErr);
+        }
       }
     } else {
-      logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage', { externalId });
+      // تخزين حالة الرسالة غير الموجودة في التخزين المؤقت للتطبيق لاحقاً
+      cacheService.setMessageStatusCache(externalId, newStatus, timestamp);
+      logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage، تم تخزين الحالة مؤقتاً', { externalId, newStatus });
     }
-
-    // البحث في SemMessage (لو كنت تستخدمها للإرسال)
-    const semMsg = await SemMessage.findOne({ externalMessageId: externalId });
-    if (semMsg) {
-      semMsg.status = systemStatus;
-      if (systemStatus === 'delivered') semMsg.deliveredAt = timestamp;
-      if (systemStatus === 'read') semMsg.readAt = timestamp;
-
-      if (!semMsg.providerData) semMsg.providerData = {};
-      semMsg.providerData.lastUpdate = timestamp;
-      semMsg.providerData.status = systemStatus;
-      await semMsg.save();
-
-      logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage أيضاً', { externalId });
-    }
-
   } catch (err) {
     logger.error('metaWhatsappWebhookController', 'خطأ في updateMessageStatus', err);
   }
-}
+};
 
 /**
  * معالجة التفاعلات على الرسائل
@@ -343,11 +345,21 @@ exports.handleIncomingMessages = async (messages, meta) => {
         if (msg.context && msg.context.id) {
           const originalMsg = await WhatsappMessage.findOne({ 
             externalMessageId: msg.context.id 
-          }).lean();
+          });
           
           if (originalMsg) {
-            messageData.replyToMessageId = originalMsg._id;
+            messageData.replyToMessageId = originalMsg._id.toString();
             messageData.replyToExternalId = msg.context.id;
+            logger.info('metaWhatsappWebhookController', 'رسالة رد واردة على رسالة سابقة', {
+              messageId: msg.id,
+              originalMessageId: originalMsg._id.toString(),
+              originalExternalId: msg.context.id
+            });
+          } else {
+            logger.warn('metaWhatsappWebhookController', 'الرسالة الأصلية المردود عليها غير موجودة', {
+              messageId: msg.id,
+              originalExternalId: msg.context.id
+            });
           }
         }
         
@@ -355,16 +367,36 @@ exports.handleIncomingMessages = async (messages, meta) => {
         if (msg.type === 'reaction') {
           const originalMsg = await WhatsappMessage.findOne({ 
             externalMessageId: msg.reaction.message_id 
-          }).lean();
+          });
           
           if (originalMsg) {
-            messageData.isReaction = true;
-            messageData.reaction = msg.reaction.emoji;
-            messageData.originalMessageId = originalMsg._id;
-            messageData.originalExternalId = msg.reaction.message_id;
+            // تحديث الرسالة الأصلية بالتفاعل بدلاً من إنشاء رسالة جديدة
+            const reactionData = {
+              sender: msg.from,
+              emoji: msg.reaction.emoji || '',
+              timestamp: new Date(parseInt(msg.timestamp) * 1000 || Date.now())
+            };
+            
+            // تحديث التفاعل في الرسالة الأصلية
+            await WhatsappMessage.updateReaction(msg.reaction.message_id, reactionData);
+            
+            // إشعار بالتفاعل
+            socketService.notifyMessageReaction(
+              conversation._id.toString(),
+              originalMsg._id.toString(), // معرف الرسالة الأصلية في قاعدة البيانات
+              reactionData
+            );
+            
+            // تجاوز إنشاء رسالة جديدة للتفاعل
+            continue;
+          } else {
+            logger.warn('metaWhatsappWebhookController', 'الرسالة المتفاعل معها غير موجودة', { 
+              messageId: msg.reaction.message_id 
+            });
+            continue;
           }
         }
-        
+
         // إذا كانت الرسالة تحتوي على وسائط
         if (['image', 'video', 'audio', 'document', 'sticker', 'location'].includes(msg.type)) {
           messageData.mediaType = msg.type;

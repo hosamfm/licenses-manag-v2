@@ -112,96 +112,98 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
       mediaUrl = messageData.document.link || messageData.document.id;
       content = messageData.document.filename || '';
     } else if (type === 'location' && messageData.location) {
-      content = `${messageData.location.latitude}, ${messageData.location.longitude}`;
+      content = `Latitude: ${messageData.location.latitude}, Longitude: ${messageData.location.longitude}`;
       if (messageData.location.name) {
-        content += ` (${messageData.location.name})`;
+        content += `, Name: ${messageData.location.name}`;
+      }
+      if (messageData.location.address) {
+        content += `, Address: ${messageData.location.address}`;
       }
     } else if (type === 'reaction' && messageData.reaction) {
-      // معالجة التفاعلات على الرسائل
-      content = messageData.reaction.emoji;
-      replyToMessageId = messageData.reaction.message_id;
-      
-      // تحديث التفاعل على الرسالة الأصلية
-      const updatedMessage = await this.updateReaction(replyToMessageId, from, content);
-      
-      // إرجاع الرسالة المحدثة مع علامة خاصة لتمييزها كتفاعل وليس كرسالة جديدة
-      if (updatedMessage) {
-        return { 
-          isReaction: true, 
-          originalMessageId: replyToMessageId,
-          reaction: { 
-            sender: from, 
-            emoji: content 
-          }
+      // معالجة التفاعلات
+      const reactedMessage = await this.findOne({ externalMessageId: messageData.reaction.message_id });
+      if (reactedMessage) {
+        await this.updateReaction(reactedMessage._id, {
+          sender: from,
+          emoji: messageData.reaction.emoji,
+          timestamp: timestamp ? new Date(timestamp * 1000) : new Date()
+        });
+        
+        return {
+          isReaction: true,
+          originalMessageId: reactedMessage._id,
+          reaction: messageData.reaction.emoji
         };
       }
+      
+      // تفاعل على رسالة غير موجودة
+      return null;
     }
     
-    // التحقق من وجود سياق رد على رسالة - الحالة القياسية
-    if (messageData.context && messageData.context.message_id) {
-      replyToMessageId = messageData.context.message_id;
-      context = messageData.context;
+    // استخراج معلومات الرد إذا وجدت
+    try {
+      if (messageData.context && messageData.context.message_id) {
+        replyToMessageId = messageData.context.message_id;
+        context = messageData.context;
+      } else if (messageData.context && messageData.context.id) {
+        replyToMessageId = messageData.context.id;
+        context = messageData.context;
+      } else if (messageData.metadata && messageData.metadata.context && messageData.metadata.context.id) {
+        replyToMessageId = messageData.metadata.context.id;
+        context = messageData.metadata.context;
+      }
+    } catch (contextError) {
+      logger.error('WhatsappMessageModel', 'خطأ في استخراج معلومات الرد', contextError);
     }
     
-    // التحقق من وجود context.id (صيغة بديلة في webhook جديد)
-    if (!replyToMessageId && messageData.context && messageData.context.id) {
-      replyToMessageId = messageData.context.id;
-      context = messageData.context;
-    }
-    
-    // التحقق من وجود سياق في metadata (للتوافق مع تنسيق API واتساب)
-    if (!replyToMessageId && messageData.metadata && messageData.metadata.context && messageData.metadata.context.id) {
-      replyToMessageId = messageData.metadata.context.id;
-      context = messageData.metadata.context;
-    }
-    
-    // فحص وجود حقل referral أو referred_product (يستخدم أحيانًا في ردود الواتساب)
-    if (!replyToMessageId && messageData.referral && messageData.referral.source_id) {
-      replyToMessageId = messageData.referral.source_id;
-      context = { message_id: replyToMessageId, from: null };
-    }
-    
-    if (!replyToMessageId && messageData.referred_product && messageData.referred_product.catalog_id) {
-      replyToMessageId = messageData.referred_product.catalog_id;
-      context = { message_id: replyToMessageId, from: null };
-    }
-    
-    // التحقق باستخدام وسوم أخرى قد تكون موجودة (صيغ محتملة أخرى)
-    if (!replyToMessageId && messageData.context_from_id) {
-      replyToMessageId = messageData.context_from_id;
-      context = { message_id: replyToMessageId, from: null };
-    }
-    
-    if (!replyToMessageId && messageData.quoted_message_id) {
-      replyToMessageId = messageData.quoted_message_id;
-      context = { message_id: replyToMessageId, from: null };
-    }
-    
-    // إنشاء رسالة جديدة
+    // إنشاء سجل الرسالة الجديدة
     const message = await this.create({
-      conversationId: conversationId,
+      conversationId,
       direction: 'incoming',
-      content: content,
-      mediaUrl: mediaUrl,
+      content,
+      mediaUrl,
       mediaType: type === 'text' ? null : type,
-      timestamp: new Date(parseInt(timestamp) * 1000),
+      timestamp: timestamp ? new Date(timestamp * 1000) : new Date(),
       status: 'received',
       externalMessageId: id,
-      metadata: messageData,
-      replyToMessageId: replyToMessageId,
-      context: context
+      replyToMessageId,
+      context,
+      metadata: {
+        from,
+        ...messageData.metadata
+      }
     });
     
-    logger.info('WhatsappMessageModel', 'تم إنشاء رسالة واردة', {
-      messageId: message._id,
-      externalId: id,
-      isReply: !!replyToMessageId,
-      replyToMessageId
-    });
+    // البحث عن تحديثات حالة مخزنة مؤقتاً لهذه الرسالة
+    // استيراد خدمة التخزين المؤقت (نضع هذا داخل الدالة لتجنب مشكلة الاعتماد الدائري)
+    const cacheService = require('../services/cacheService');
+    const cachedStatus = cacheService.getMessageStatusCache(id);
+    
+    if (cachedStatus) {
+      logger.info('WhatsappMessageModel', 'تم العثور على حالة مخزنة مؤقتاً للرسالة', { 
+        messageId: message._id, 
+        externalId: id, 
+        status: cachedStatus.status 
+      });
+      
+      // تطبيق الحالة والتوقيت على الرسالة
+      message.status = cachedStatus.status;
+      
+      if (cachedStatus.status === 'delivered') {
+        message.deliveredAt = cachedStatus.timestamp;
+      } else if (cachedStatus.status === 'read') {
+        message.readAt = cachedStatus.timestamp;
+      }
+      
+      await message.save();
+      
+      // حذف الحالة المخزنة مؤقتاً بعد تطبيقها
+      cacheService.deleteMessageStatusCache(id);
+    }
     
     return message;
   } catch (error) {
-    logger.error('WhatsappMessageModel', 'خطأ في إنشاء رسالة واردة:', error);
+    logger.error('WhatsappMessageModel', 'خطأ في إنشاء رسالة واردة', error);
     throw error;
   }
 };
