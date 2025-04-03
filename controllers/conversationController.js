@@ -17,6 +17,7 @@ const WhatsappMedia = require('../models/WhatsappMedia');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const mediaService = require('../services/mediaService');
+const cacheService = require('../services/cacheService');
 
 /**
  * عرض جميع المحادثات
@@ -742,46 +743,106 @@ exports.listConversationsAjax = async (req, res) => {
 exports.getConversationDetailsAjax = async (req, res) => {
   try {
     const { conversationId } = req.params;
+    // إضافة دعم للصفحات
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20; // عدد الرسائل في الصفحة الواحدة
+    const skip = (page - 1) * limit;
+    const skipCache = req.query.skipCache === 'true'; // معامل لتخطي التخزين المؤقت عند الحاجة
     
     if (!conversationId) {
       return res.status(400).send('<div class="alert alert-danger">معرف المحادثة مطلوب</div>');
     }
     
-    // جلب بيانات المحادثة
-    const conversation = await Conversation.findById(conversationId)
-      .populate('channelId', 'name')
-      // إزالة تعبئة contactId لأنه غير موجود في مخطط المحادثة
-      // .populate('contactId', 'name phone')
-      .populate('assignedTo', 'username full_name')
-      .lean();
-      
+    let conversation;
+    let totalMessages;
+    let messages = [];
+    
+    // 1. جلب بيانات المحادثة من التخزين المؤقت أولاً إذا كان متاحاً
+    if (!skipCache) {
+      conversation = cacheService.getCachedConversation(conversationId);
+    }
+    
+    // إذا لم توجد بيانات المحادثة في التخزين المؤقت، نجلبها من قاعدة البيانات
+    if (!conversation) {
+      conversation = await Conversation.findById(conversationId)
+        .populate('channelId', 'name')
+        .populate('assignedTo', 'username full_name')
+        .lean();
+        
+      // تخزين البيانات في التخزين المؤقت للاستخدام المستقبلي
+      if (conversation) {
+        cacheService.setCachedConversation(conversationId, conversation);
+      }
+    }
+    
     if (!conversation) {
       return res.status(404).send('<div class="alert alert-danger">المحادثة غير موجودة</div>');
     }
     
-    // جلب الرسائل المرتبطة بالمحادثة
-    let messages = await WhatsappMessage.find({ conversationId })
-      .sort({ timestamp: 1 })
-      .lean();
+    // 2. جلب الرسائل من التخزين المؤقت أولاً إذا كانت متاحة
+    let messagesWithMedia = [];
+    
+    if (!skipCache) {
+      messagesWithMedia = cacheService.getCachedMessages(conversationId, page, limit);
+      totalMessages = conversation.totalMessages || 0; // استخدام إجمالي الرسائل المخزن في كائن المحادثة
+    }
+    
+    // إذا لم توجد الرسائل في التخزين المؤقت، نجلبها من قاعدة البيانات
+    if (!messagesWithMedia || messagesWithMedia.length === 0) {
+      // جلب إجمالي عدد الرسائل للمحادثة (للصفحات)
+      totalMessages = await WhatsappMessage.countDocuments({ conversationId });
       
-    if (!messages || messages.length === 0) {
+      // حفظ إجمالي عدد الرسائل في بيانات المحادثة المخزنة مؤقتاً
+      if (conversation && !conversation.totalMessages) {
+        conversation.totalMessages = totalMessages;
+        cacheService.setCachedConversation(conversationId, conversation);
+      }
+      
+      // جلب الرسائل المرتبطة بالمحادثة مع تطبيق الصفحات
+      messages = await WhatsappMessage.find({ conversationId })
+        .sort({ timestamp: -1 }) // ترتيب من الأحدث للأقدم
+        .skip(skip)
+        .limit(limit)
+        .lean();
+      
+      // قلب الترتيب مرة أخرى ليعود إلى الأقدم للأحدث للعرض
+      messages = messages.reverse();
+      
+      if (messages && messages.length > 0) {
+        // تحديث حالة الرسائل الواردة إلى "مقروءة"
+        if (page === 1) { // فقط نعلم بأن الرسائل مقروءة عند تحميل الصفحة الأولى
+          await WhatsappMessage.updateMany(
+            { conversationId, direction: 'incoming', status: { $ne: 'read' } },
+            { $set: { status: 'read' } }
+          );
+        }
+        
+        // استخدام خدمة الوسائط لإضافة معلومات الوسائط لجميع الرسائل
+        messagesWithMedia = await mediaService.processMessagesWithMedia(messages);
+        
+        // تخزين الرسائل مع معلومات الوسائط في التخزين المؤقت
+        cacheService.setCachedMessages(conversationId, messagesWithMedia, page, limit);
+      }
+    }
+    
+    // في حالة عدم وجود رسائل
+    if (!messagesWithMedia || messagesWithMedia.length === 0) {
       return res.render('crm/partials/_conversation_details_ajax', {
         layout: false,
         conversation,
         messages: [],
         user: req.user,
-        triggerMessagesLoaded: true
+        triggerMessagesLoaded: true,
+        pagination: {
+          currentPage: page,
+          totalPages: 0,
+          totalMessages: 0,
+        }
       });
     }
     
-    // تحديث حالة الرسائل الواردة إلى "مقروءة"
-    await WhatsappMessage.updateMany(
-      { conversationId, direction: 'incoming', status: { $ne: 'read' } },
-      { $set: { status: 'read' } }
-    );
-    
-    // استخدام خدمة الوسائط لإضافة معلومات الوسائط لجميع الرسائل
-    const messagesWithMedia = await mediaService.processMessagesWithMedia(messages);
+    // حساب إجمالي عدد الصفحات
+    const totalPages = Math.ceil(totalMessages / limit);
 
     // نعيد الـ Partial فقط (layout: false)
     return res.render('crm/partials/_conversation_details_ajax', {
@@ -789,7 +850,12 @@ exports.getConversationDetailsAjax = async (req, res) => {
       conversation,
       messages: messagesWithMedia,
       user: req.user,
-      triggerMessagesLoaded: true
+      triggerMessagesLoaded: true,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalMessages,
+      }
     });
   } catch (err) {
     logger.error('conversationController', 'خطأ في getConversationDetailsAjax', err);

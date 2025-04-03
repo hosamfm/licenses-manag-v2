@@ -32,14 +32,12 @@ async function findMediaForMessage(message) {
   try {
     // التحقق من وجود الرسالة
     if (!message || !message._id) {
-      logger.warn('محاولة البحث عن وسائط بدون معرف رسالة صالح');
       return null;
     }
 
     // البحث عن الوسائط بمعرف الرسالة (الطريقة المباشرة)
     let media = await WhatsappMedia.findOne({ messageId: message._id }).lean();
     if (media) {
-      logger.debug(`تم العثور على وسائط بمعرف الرسالة: ${message._id}`);
       return media;
     }
 
@@ -63,8 +61,6 @@ async function findMediaForMessage(message) {
       }).lean();
 
       if (mediaByTime) {
-        logger.debug(`تم العثور على وسائط صادرة بالتوقيت المتطابق للرسالة: ${message._id}`);
-        
         // ربط الوسائط بالرسالة إذا لم تكن مرتبطة بالفعل
         if (!mediaByTime.messageId) {
           await linkMediaToMessage(mediaByTime._id, message._id);
@@ -82,8 +78,6 @@ async function findMediaForMessage(message) {
       }).sort({ createdAt: -1 }).lean();
 
       if (unlinkedMedia) {
-        logger.debug(`تم العثور على وسائط غير مرتبطة للرسالة: ${message._id}`);
-        
         // ربط الوسائط بالرسالة
         await linkMediaToMessage(unlinkedMedia._id, message._id);
         return { ...unlinkedMedia, messageId: message._id };
@@ -105,8 +99,6 @@ async function findMediaForMessage(message) {
                (mediaItem.metaData.externalMessageId === message.externalMessageId || 
                 mediaItem.metaData.messageId === message._id.toString())) {
               
-              logger.debug(`تم العثور على وسائط بناءً على البيانات الوصفية للرسالة: ${message._id}`);
-              
               // ربط الوسائط بالرسالة إذا لم تكن مرتبطة بالفعل
               if (!mediaItem.messageId) {
                 await linkMediaToMessage(mediaItem._id, message._id);
@@ -119,7 +111,6 @@ async function findMediaForMessage(message) {
       }
     }
 
-    logger.debug(`لم يتم العثور على وسائط للرسالة: ${message._id}`);
     return null;
   } catch (error) {
     logger.error(`خطأ في البحث عن وسائط للرسالة: ${error.message}`);
@@ -168,17 +159,10 @@ async function linkMediaToMessage(mediaId, messageId) {
 function prepareMessageWithMedia(message, media) {
   if (!message) return null;
   
-  // في حالة عدم وجود وسائط، نتحقق من وجود حقل mediaType في الرسالة نفسها
+  // في حالة عدم وجود وسائط، نعيد الرسالة كما هي
   if (!media) {
-    // تسجيل تشخيصي
-    if (message.mediaType && !message._id) {
-      logger.debug(`رسالة بدون وسائط ولكن تحتوي على حقل mediaType: ${message._id}`);
-    }
     return message;
   }
-  
-  // تسجيل تشخيصي
-  logger.debug(`ربط وسائط بالرسالة: ${message._id}، اتجاه: ${message.direction}، نوع: ${media.mediaType || message.mediaType}`);
   
   // أهم تغيير: التأكد من تعيين حقل mediaType في كائن الرسالة
   // هذا ضروري للرسائل الصادرة التي قد لا تحتوي على هذا الحقل مباشرة
@@ -215,15 +199,11 @@ async function processMessagesWithMedia(messages) {
 
   try {
     const messagesWithMedia = await Promise.all(messages.map(async (message) => {
-      // التغيير الرئيسي: معالجة جميع الرسائل وليس فقط الرسائل ذات حقل mediaType
-      // هذا سيضمن أن الرسائل الصادرة ستعالج أيضًا حتى لو لم يكن لديها حقل mediaType
-      
       // جلب الوسائط للرسالة بغض النظر عن وجود حقل mediaType
       const media = await findMediaForMessage(message);
       
       // إذا وجدنا وسائط مرتبطة بالرسالة، نقوم بتحضير الرسالة مع الوسائط
       if (media) {
-        logger.debug(`تم العثور على وسائط للرسالة: ${message._id}، اتجاه: ${message.direction}`);
         return prepareMessageWithMedia(message, media);
       }
       

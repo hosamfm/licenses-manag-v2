@@ -236,6 +236,7 @@
     "negotiator": "^0.6.3",
     "nise": "^6.0.0",
     "node-addon-api": "^5.1.0",
+    "node-cache": "^5.1.2",
     "node-domexception": "^1.0.0",
     "node-fetch": "^2.6.7",
     "node-telegram-bot-api": "^0.65.1",

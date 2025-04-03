@@ -11,12 +11,14 @@ const whatsappMessageSchema = new mongoose.Schema({
   conversationId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Conversation', 
-    required: true 
+    required: true,
+    index: true // إضافة فهرس لتسريع البحث عن الرسائل حسب المحادثة
   },
   direction: { 
     type: String, 
     enum: ['incoming', 'outgoing', 'internal'], 
-    required: true 
+    required: true,
+    index: true // إضافة فهرس لتسريع البحث حسب اتجاه الرسالة
   },
   content: { 
     type: String,
@@ -27,11 +29,13 @@ const whatsappMessageSchema = new mongoose.Schema({
   },
   mediaType: { 
     type: String,
-    enum: ['image', 'audio', 'video', 'document', 'sticker', 'location', 'reaction', null]
+    enum: ['image', 'audio', 'video', 'document', 'sticker', 'location', 'reaction', null],
+    index: true // إضافة فهرس لتسريع البحث حسب نوع الوسائط
   },
   timestamp: { 
     type: Date, 
-    default: Date.now 
+    default: Date.now,
+    index: true // إضافة فهرس لتسريع الترتيب حسب التاريخ
   },
   status: { 
     type: String, 
