@@ -385,7 +385,7 @@ class MetaWhatsappService {
         }
 
         logger.info('MetaWhatsappService', 'جاري الحصول على رابط الوسائط', {
-            mediaId
+            mediaId: phoneNumberId
         });
 
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
@@ -401,7 +401,7 @@ class MetaWhatsappService {
 
         try {
             // إنشاء طلب للحصول على معلومات الوسائط
-            const url = `${this.baseUrl}/${mediaId}`;
+            const url = `${this.baseUrl}/${phoneNumberId}`;
             const headers = {
                 'Authorization': `Bearer ${settingsToUse.config.accessToken}`
             };
@@ -411,7 +411,7 @@ class MetaWhatsappService {
             const response = await axios.get(url, { headers });
             
             logger.info('MetaWhatsappService', 'تم الحصول على معلومات الوسائط بنجاح', {
-                mediaId,
+                mediaId: phoneNumberId,
                 responseData: response.data
             });
             
@@ -419,7 +419,7 @@ class MetaWhatsappService {
         } catch (error) {
             logger.error('MetaWhatsappService', 'خطأ في الحصول على معلومات الوسائط', {
                 error: error.message,
-                mediaId,
+                mediaId: phoneNumberId,
                 response: error.response?.data
             });
             throw error;
@@ -499,15 +499,15 @@ class MetaWhatsappService {
             // تحديد اسم الملف المناسب - استخدام الاسم الأصلي إذا كان متوفرًا
             let filename;
             if (originalFilename) {
-                // استخدام اسم ملف بسيط للأسماء العربية لتجنب مشاكل الترميز
+                // معالجة خاصة للأسماء العربية - تحويل الاسم لـ URL-encoded لضمان توافقه
                 const fileExt = this.getFileExtensionFromMimeType(mimeType);
-                const timestamp = new Date().getTime();
-                filename = `file_${timestamp}.${fileExt}`;
-                
-                logger.info('MetaWhatsappService', 'تم استخدام اسم ملف بسيط لتجنب مشاكل الترميز', {
-                    originalName: originalFilename,
-                    simplifiedName: filename
-                });
+                if (originalFilename.includes('.')) {
+                    // استخدام الاسم كما هو ولكن بترميز URL لتجنب مشاكل الأحرف العربية
+                    filename = encodeURIComponent(originalFilename);
+                } else {
+                    // إضافة الامتداد إذا لم يكن موجودًا
+                    filename = encodeURIComponent(originalFilename) + '.' + fileExt;
+                }
             } else {
                 // استخدام اسم ملف افتراضي مع الامتداد المناسب
                 filename = `media_file.${this.getFileExtensionFromMimeType(mimeType)}`;

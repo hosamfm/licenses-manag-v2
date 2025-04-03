@@ -754,36 +754,47 @@ exports.getConversationDetailsAjax = async (req, res) => {
       .lean();
     const sorted = msgs.reverse();
 
-    // تحسين: استرجاع معلومات الوسائط المرتبطة بالرسائل
-    const messagesWithMedia = await Promise.all(sorted.map(async (msg) => {
-      if (msg.mediaType) {
-        // البحث عن الوسائط المرتبطة بالرسالة
-        const media = await WhatsappMedia.getMediaByMessageId(msg._id);
-        if (media) {
-          // إضافة معلومات الوسائط إلى الرسالة (بدون البيانات الثنائية الكبيرة)
-          msg.mediaInfo = {
-            _id: media._id,
-            mediaType: media.mediaType,
-            fileName: media.fileName,
-            mimeType: media.mimeType,
-            fileSize: media.fileSize,
-            hasFileData: !!media.fileData
-          };
-        } else {
-          logger.warn('conversationController', 'لم يتم العثور على وسائط للرسالة', {
-            messageId: msg._id,
-            mediaType: msg.mediaType
-          });
+    // جلب معلومات الوسائط المرتبطة بالرسائل
+    const messageIds = sorted.filter(msg => msg.mediaType).map(msg => msg._id.toString());
+    
+    if (messageIds.length > 0) {
+      // جلب معلومات الوسائط للرسائل
+      const mediaItems = await WhatsappMedia.find({ messageId: { $in: messageIds } }).lean();
+      
+      // ربط معلومات الوسائط بالرسائل
+      sorted.forEach(msg => {
+        if (msg.mediaType) {
+          const mediaItem = mediaItems.find(media => media.messageId && media.messageId.toString() === msg._id.toString());
+          if (mediaItem) {
+            msg.mediaInfo = {
+              mediaId: mediaItem._id,
+              fileName: mediaItem.fileName,
+              mimeType: mediaItem.mimeType,
+              fileSize: mediaItem.fileSize,
+              hasFileData: !!mediaItem.fileData
+            };
+            
+            // تسجيل معلومات الوسائط المرتبطة بالرسالة
+            logger.info('conversationController', 'تم ربط معلومات الوسائط بالرسالة', {
+              messageId: msg._id,
+              mediaId: mediaItem._id,
+              mediaType: msg.mediaType
+            });
+          } else {
+            logger.warn('conversationController', 'لم يتم العثور على وسائط للرسالة', {
+              messageId: msg._id,
+              mediaType: msg.mediaType
+            });
+          }
         }
-      }
-      return msg;
-    }));
+      });
+    }
 
     // نعيد الـ Partial فقط (layout: false)
     return res.render('crm/partials/_conversation_details_ajax', {
       layout: false,
       conversation,
-      messages: messagesWithMedia,
+      messages: sorted,
       user: req.user, // إضافة معلومات المستخدم المطلوبة في القالب
       triggerMessagesLoaded: true // إضافة متغير لتفعيل حدث تحميل الرسائل في JavaScript
     });
