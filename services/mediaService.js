@@ -215,12 +215,20 @@ async function processMessagesWithMedia(messages) {
 
   try {
     const messagesWithMedia = await Promise.all(messages.map(async (message) => {
-      if (!message.mediaType) {
-        return message;
-      }
-
+      // التغيير الرئيسي: معالجة جميع الرسائل وليس فقط الرسائل ذات حقل mediaType
+      // هذا سيضمن أن الرسائل الصادرة ستعالج أيضًا حتى لو لم يكن لديها حقل mediaType
+      
+      // جلب الوسائط للرسالة بغض النظر عن وجود حقل mediaType
       const media = await findMediaForMessage(message);
-      return prepareMessageWithMedia(message, media);
+      
+      // إذا وجدنا وسائط مرتبطة بالرسالة، نقوم بتحضير الرسالة مع الوسائط
+      if (media) {
+        logger.debug(`تم العثور على وسائط للرسالة: ${message._id}، اتجاه: ${message.direction}`);
+        return prepareMessageWithMedia(message, media);
+      }
+      
+      // إذا لم نجد وسائط مرتبطة، نعيد الرسالة كما هي
+      return message;
     }));
 
     return messagesWithMedia;
