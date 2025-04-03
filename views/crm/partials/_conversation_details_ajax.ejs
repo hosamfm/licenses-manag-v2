@@ -90,11 +90,12 @@
                 <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
                 <% 
                   // الحصول على معلومات الوسائط من الكائن المناسب (سواء من الرسالة مباشرة أو من كائن الوسائط المضاف)
-                  const mediaId = msg._id;
+                  // بترتيب الأولوية: mediaId (إذا وجد) ثم معرف الوسائط من التعديل الجديد، ثم معرف الرسالة
+                  const mediaId = msg.mediaId || (msg.media && msg.media._id) || msg._id;
                   const mediaType = msg.mediaType;
-                  const fileName = msg.media ? msg.media.fileName : (msg.fileName || 'ملف');
-                  const fileSize = msg.media ? msg.media.fileSize : (msg.fileSize || 0);
-                  const mimeType = msg.media ? msg.media.mimeType : (msg.mimeType || '');
+                  const fileName = msg.fileName || (msg.media && msg.media.fileName) || 'ملف';
+                  const fileSize = msg.fileSize || (msg.media && msg.media.fileSize) || 0;
+                  const mimeType = msg.mimeType || (msg.media && msg.media.mimeType) || '';
                 %>
 
                 <!-- عرض الوسائط حسب النوع -->

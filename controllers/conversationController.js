@@ -16,6 +16,7 @@ const User = require('../models/User');
 const WhatsappMedia = require('../models/WhatsappMedia');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
+const mediaService = require('../services/mediaService');
 
 /**
  * عرض جميع المحادثات
@@ -742,50 +743,52 @@ exports.getConversationDetailsAjax = async (req, res) => {
   try {
     const { conversationId } = req.params;
     
-    const conversation = await Conversation.findById(conversationId).lean();
+    if (!conversationId) {
+      return res.status(400).send('<div class="alert alert-danger">معرف المحادثة مطلوب</div>');
+    }
+    
+    // جلب بيانات المحادثة
+    const conversation = await Conversation.findById(conversationId)
+      .populate('channelId', 'name')
+      .populate('contactId', 'name phone')
+      .populate('assignedTo', 'username full_name')
+      .lean();
+      
     if (!conversation) {
       return res.status(404).send('<div class="alert alert-danger">المحادثة غير موجودة</div>');
     }
-
-    // جلب 50 رسالة مثلاً
-    const msgs = await WhatsappMessage.find({ conversationId })
-      .sort({ timestamp: -1 })
-      .limit(50)
+    
+    // جلب الرسائل المرتبطة بالمحادثة
+    let messages = await WhatsappMessage.find({ conversationId })
+      .sort({ timestamp: 1 })
       .lean();
-    const sorted = msgs.reverse();
-
-    // جلب معلومات الوسائط لكل رسالة
-    const messagesWithMedia = await Promise.all(sorted.map(async (msg) => {
-      if (msg.mediaType) {
-        // البحث عن الوسائط المرتبطة بهذه الرسالة
-        const media = await WhatsappMedia.findOne({ messageId: msg._id }).lean();
-        
-        // إضافة معلومات الوسائط إلى الرسالة إذا وجدت
-        if (media) {
-          return {
-            ...msg,
-            media: {
-              _id: media._id,
-              mediaType: media.mediaType,
-              fileName: media.fileName,
-              mimeType: media.mimeType,
-              fileSize: media.fileSize
-            }
-          };
-        }
-      }
       
-      // إرجاع الرسالة كما هي إذا لم يكن لها وسائط أو لم يتم العثور على الوسائط
-      return msg;
-    }));
+    if (!messages || messages.length === 0) {
+      return res.render('crm/partials/_conversation_details_ajax', {
+        layout: false,
+        conversation,
+        messages: [],
+        user: req.user,
+        triggerMessagesLoaded: true
+      });
+    }
+    
+    // تحديث حالة الرسائل الواردة إلى "مقروءة"
+    await WhatsappMessage.updateMany(
+      { conversationId, direction: 'incoming', status: { $ne: 'read' } },
+      { $set: { status: 'read' } }
+    );
+    
+    // استخدام خدمة الوسائط لإضافة معلومات الوسائط لجميع الرسائل
+    const messagesWithMedia = await mediaService.processMessagesWithMedia(messages);
 
     // نعيد الـ Partial فقط (layout: false)
     return res.render('crm/partials/_conversation_details_ajax', {
       layout: false,
       conversation,
       messages: messagesWithMedia,
-      user: req.user, // إضافة معلومات المستخدم المطلوبة في القالب
-      triggerMessagesLoaded: true // إضافة متغير لتفعيل حدث تحميل الرسائل في JavaScript
+      user: req.user,
+      triggerMessagesLoaded: true
     });
   } catch (err) {
     logger.error('conversationController', 'خطأ في getConversationDetailsAjax', err);

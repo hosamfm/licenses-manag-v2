@@ -10,6 +10,7 @@ const WhatsappMessage = require('../models/WhatsappMessageModel');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const whatsappMediaController = require('./whatsappMediaController');
+const mediaService = require('../services/mediaService');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -252,58 +253,154 @@ async function handleReactions(reactions, meta) {
 /**
  * معالجة الرسائل الواردة
  */
-async function handleIncomingMessages(messages, meta) {
+exports.handleIncomingMessages = async (messages, meta) => {
   try {
-    const phoneNumberId = meta.phone_number_id;
-    logger.info('metaWhatsappWebhookController', 'رسائل واردة', {
-      phoneNumberId, count: messages.length
-    });
-
-    // حاول الحصول على القناة
-    let channel = await WhatsAppChannel.getChannelByPhoneNumberId(phoneNumberId);
-    if (!channel) {
-      channel = await WhatsAppChannel.getDefaultChannel();
-      logger.info('metaWhatsappWebhookController','القناة غير موجودة، تم استخدام الافتراضية',{ phoneNumberId });
-    }
-
     for (const msg of messages) {
       try {
-        // التحقق من تكرار الرسالة بناءً على المعرف الخارجي
+        // تجاهل الرسائل التي تمت معالجتها
         if (processedMessageIds.has(msg.id)) {
-          logger.warn('metaWhatsappWebhookController', 'تم تجاهل رسالة مكررة', { 
-            messageId: msg.id, 
-            from: msg.from 
+          logger.info('metaWhatsappWebhookController', 'تجاهل رسالة تمت معالجتها مسبقًا', { id: msg.id });
+          continue;
+        }
+        
+        // إضافة إلى قائمة المعالجة
+        processedMessageIds.add(msg.id);
+        
+        // للمراقبة فقط، حذف بعد تأكيد صحة النظام
+        if (processedMessageIds.size > 1000) {
+          // تنظيف القائمة لمنع استهلاك الذاكرة
+          const oldestItems = Array.from(processedMessageIds).slice(0, 500);
+          oldestItems.forEach(id => processedMessageIds.delete(id));
+        }
+        
+        logger.info('metaWhatsappWebhookController', 'معالجة رسالة واردة', { 
+          id: msg.id, 
+          type: msg.type, 
+          from: msg.from 
+        });
+        
+        if (!msg.from) {
+          logger.warn('metaWhatsappWebhookController', 'رسالة بدون مصدر', { id: msg.id });
+          continue;
+        }
+        
+        // البحث عن القناة باستخدام phone_number_id
+        const phoneNumberId = meta.phone_number_id;
+        const channel = await WhatsAppChannel.findOne({ wabaPhoneNumberId: phoneNumberId }).lean();
+        
+        if (!channel) {
+          logger.error('metaWhatsappWebhookController', 'لم يتم العثور على قناة مطابقة', { 
+            phoneNumberId, 
+            msgId: msg.id 
           });
           continue;
         }
         
-        logger.info('metaWhatsappWebhookController','رسالة واردة', {
-          from: msg.from,
-          id: msg.id,
-          type: msg.type
-        });
-
-        // إضافة معرف الرسالة لمجموعة الرسائل المعالجة
-        processedMessageIds.add(msg.id);
-
-        // ابحث/أنشئ محادثة
-        const conversation = await Conversation.findOrCreate(msg.from, channel._id);
-        // إذا كانت مغلقة، افتحها
-        if (conversation.status === 'closed') {
-          await conversation.reopen();
+        // البحث عن المحادثة أو إنشاء واحدة جديدة
+        const phone = msg.from;
+        let conversation = await Conversation.findOne({ 
+          phoneNumber: phone, 
+          channelId: channel._id 
+        }).lean();
+        
+        if (!conversation) {
+          logger.info('metaWhatsappWebhookController', 'إنشاء محادثة جديدة', { phone, channelId: channel._id });
+          
+          // إنشاء محادثة جديدة
+          conversation = await Conversation.create({
+            channelId: channel._id,
+            phoneNumber: phone,
+            platform: 'whatsapp',
+            status: 'open',
+            lastMessageAt: new Date()
+          });
+        } else {
+          // تحديث وقت آخر رسالة
+          await Conversation.findByIdAndUpdate(conversation._id, { 
+            lastMessageAt: new Date(),
+            // إرجاع المحادثة المغلقة إلى حالة مفتوحة
+            status: conversation.status === 'closed' ? 'open' : conversation.status
+          });
+          
+          // تحديث المحادثة المستخدمة
+          conversation = await Conversation.findById(conversation._id).lean();
         }
-        conversation.lastMessageAt = new Date();
-        await conversation.save();
-
-        // أنشئ رسالة واردة في DB
-        const savedMsg = await WhatsappMessage.createIncomingMessage(conversation._id, msg);
-
-        // حفظ الوسائط إذا كانت الرسالة تحتوي على وسائط
-        if (savedMsg && ['image', 'video', 'audio', 'document', 'sticker', 'location'].includes(msg.type)) {
+        
+        // إنشاء كائن رسالة جديد
+        const messageData = {
+          conversationId: conversation._id,
+          externalMessageId: msg.id,
+          direction: 'incoming',
+          content: msg.text?.body || '',
+          timestamp: new Date(parseInt(msg.timestamp) * 1000),
+          status: 'delivered',
+          from: msg.from
+        };
+        
+        // إذا كانت الرسالة رداً على رسالة أخرى
+        if (msg.context && msg.context.id) {
+          const originalMsg = await WhatsappMessage.findOne({ 
+            externalMessageId: msg.context.id 
+          }).lean();
+          
+          if (originalMsg) {
+            messageData.replyToMessageId = originalMsg._id;
+            messageData.replyToExternalId = msg.context.id;
+          }
+        }
+        
+        // إذا كانت الرسالة تفاعل
+        if (msg.type === 'reaction') {
+          const originalMsg = await WhatsappMessage.findOne({ 
+            externalMessageId: msg.reaction.message_id 
+          }).lean();
+          
+          if (originalMsg) {
+            messageData.isReaction = true;
+            messageData.reaction = msg.reaction.emoji;
+            messageData.originalMessageId = originalMsg._id;
+            messageData.originalExternalId = msg.reaction.message_id;
+          }
+        }
+        
+        // إذا كانت الرسالة تحتوي على وسائط
+        if (['image', 'video', 'audio', 'document', 'sticker', 'location'].includes(msg.type)) {
+          messageData.mediaType = msg.type;
+          messageData.content = msg.text?.body || '';
+          
+          switch (msg.type) {
+            case 'image':
+              messageData.mediaUrl = msg.image?.link || msg.image?.id;
+              break;
+            case 'video':
+              messageData.mediaUrl = msg.video?.link || msg.video?.id;
+              break;
+            case 'audio':
+              messageData.mediaUrl = msg.audio?.link || msg.audio?.id;
+              break;
+            case 'document':
+              messageData.mediaUrl = msg.document?.link || msg.document?.id;
+              messageData.fileName = msg.document?.filename || 'document';
+              break;
+            case 'sticker':
+              messageData.mediaUrl = msg.sticker?.link || msg.sticker?.id;
+              break;
+            case 'location':
+              // حفظ معلومات الموقع في الرسالة
+              messageData.content = `الموقع: ${msg.location?.name || ''} - عرض: ${msg.location?.latitude}, طول: ${msg.location?.longitude}`;
+              break;
+          }
+        }
+        
+        // حفظ الرسالة
+        const savedMsg = await WhatsappMessage.create(messageData);
+        
+        // معالجة الوسائط إذا وجدت
+        if (savedMsg.mediaType) {
           try {
+            // تحضير معلومات الوسائط
             let mediaInfo = null;
             
-            // تحديد بيانات الوسائط بناءً على النوع
             switch (msg.type) {
               case 'image':
                 mediaInfo = msg.image;
@@ -332,12 +429,17 @@ async function handleIncomingMessages(messages, meta) {
             }
             
             if (mediaInfo) {
-              // استدعاء دالة تنزيل وحفظ الوسائط
-              await whatsappMediaController.downloadAndSaveMedia(mediaInfo, savedMsg);
-              logger.info('metaWhatsappWebhookController', 'تم جدولة تنزيل الوسائط', { 
-                messageId: savedMsg._id, 
-                mediaType: msg.type 
-              });
+              // استخدام خدمة الوسائط بدلاً من متحكم الوسائط مباشرة
+              const result = await whatsappMediaController.downloadAndSaveMedia(mediaInfo, savedMsg);
+              
+              // التأكد من وجود وسائط وربطها مع الرسالة
+              if (result && result.success && result.media) {
+                logger.info('metaWhatsappWebhookController', 'تم تنزيل الوسائط بنجاح', { 
+                  messageId: savedMsg._id, 
+                  mediaId: result.media._id,
+                  mediaType: mediaInfo.type 
+                });
+              }
             }
           } catch (mediaError) {
             logger.error('metaWhatsappWebhookController', 'خطأ في معالجة الوسائط', {
@@ -379,18 +481,33 @@ async function handleIncomingMessages(messages, meta) {
             savedMsg.replyToMessageId
           );
         } else if (savedMsg) {
+          // جلب معلومات الوسائط إذا كانت الرسالة تحتوي على وسائط
+          let messageWithMedia = savedMsg.toObject();
+          
+          if (savedMsg.mediaType) {
+            const media = await mediaService.findMediaForMessage(savedMsg);
+            if (media) {
+              messageWithMedia = mediaService.prepareMessageWithMedia(messageWithMedia, media);
+              // تسجيل نجاح ربط الوسائط
+              logger.info('metaWhatsappWebhookController', 'تم ربط الوسائط بالإشعار', { 
+                messageId: savedMsg._id,
+                mediaId: media._id,
+                mediaType: savedMsg.mediaType
+              });
+            } else {
+              // تسجيل عدم وجود وسائط بالرغم من وجود نوع وسائط
+              logger.warn('metaWhatsappWebhookController', 'الرسالة تحتوي على نوع وسائط ولكن لم يتم العثور على سجل الوسائط', { 
+                messageId: savedMsg._id,
+                mediaType: savedMsg.mediaType
+              });
+            }
+          }
+          
           // إشعار Socket.io بالرسالة الجديدة
-          socketService.notifyNewMessage(conversation._id.toString(), {
-            _id: savedMsg._id,
-            content: savedMsg.content,
-            mediaUrl: savedMsg.mediaUrl,
-            mediaType: savedMsg.mediaType,
-            direction: savedMsg.direction, // مفترض incoming
-            timestamp: savedMsg.timestamp,
-            status: savedMsg.status,
-            externalMessageId: savedMsg.externalMessageId,
-            conversationId: conversation._id.toString() // إضافة معرف المحادثة بشكل صريح
-          });
+          socketService.notifyNewMessage(
+            conversation._id.toString(), 
+            messageWithMedia
+          );
         }
 
         // إشعار بتحديث المحادثة
@@ -406,4 +523,4 @@ async function handleIncomingMessages(messages, meta) {
   } catch (err) {
     logger.error('metaWhatsappWebhookController','خطأ في handleIncomingMessages', err);
   }
-}
+};
