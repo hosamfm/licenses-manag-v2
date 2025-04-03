@@ -162,7 +162,7 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
       if (message.metadata && message.metadata.semMessageId) {
         try {
           await SemMessage.findByIdAndUpdate(
-            message.metadata.semMessageId,
+            message.metadata.semMessageId.toString(),
             { 
               status: newStatus, 
               ...(newStatus === 'delivered' ? { deliveredAt: timestamp } : {}),
@@ -332,7 +332,7 @@ exports.handleIncomingMessages = async (messages, meta) => {
         
         // إنشاء كائن رسالة جديد
         const messageData = {
-          conversationId: conversation._id,
+          conversationId: conversation._id.toString(),
           externalMessageId: msg.id,
           direction: 'incoming',
           content: msg.text?.body || '',
@@ -348,11 +348,13 @@ exports.handleIncomingMessages = async (messages, meta) => {
           });
           
           if (originalMsg) {
-            messageData.replyToMessageId = originalMsg._id.toString();
+            // التأكد من تحويل المعرف إلى نص دائماً
+            const originalMsgId = originalMsg._id ? originalMsg._id.toString() : null;
+            messageData.replyToMessageId = originalMsgId;
             messageData.replyToExternalId = msg.context.id;
             logger.info('metaWhatsappWebhookController', 'رسالة رد واردة على رسالة سابقة', {
               messageId: msg.id,
-              originalMessageId: originalMsg._id.toString(),
+              originalMessageId: originalMsgId,
               originalExternalId: msg.context.id
             });
           } else {
@@ -370,6 +372,8 @@ exports.handleIncomingMessages = async (messages, meta) => {
           });
           
           if (originalMsg) {
+            // التأكد من تحويل المعرف إلى نص دائماً
+            const originalMsgId = originalMsg._id ? originalMsg._id.toString() : null;
             // تحديث الرسالة الأصلية بالتفاعل بدلاً من إنشاء رسالة جديدة
             const reactionData = {
               sender: msg.from,
@@ -383,7 +387,7 @@ exports.handleIncomingMessages = async (messages, meta) => {
             // إشعار بالتفاعل
             socketService.notifyMessageReaction(
               conversation._id.toString(),
-              originalMsg._id.toString(), // معرف الرسالة الأصلية في قاعدة البيانات
+              originalMsgId,
               reactionData
             );
             
@@ -489,61 +493,51 @@ exports.handleIncomingMessages = async (messages, meta) => {
           externalId: savedMsg.externalMessageId 
         });
 
-        // التحقق ما إذا كانت تفاعل
-        if (savedMsg && savedMsg.isReaction) {
-          // إرسال إشعار بالتفاعل على الرسالة الأصلية
-          socketService.notifyMessageReaction(
-            conversation._id.toString(),
-            savedMsg.originalMessageId,
-            savedMsg.reaction
-          );
-        }
-        // التحقق إذا كانت رد على رسالة وإرسال إشعار خاص بالرد
-        else if (savedMsg && savedMsg.replyToMessageId) {
-          socketService.notifyMessageReply(
-            conversation._id.toString(),
-            {
-              _id: savedMsg._id,
-              content: savedMsg.content,
-              mediaUrl: savedMsg.mediaUrl,
-              mediaType: savedMsg.mediaType,
-              direction: savedMsg.direction,
-              timestamp: savedMsg.timestamp,
-              status: savedMsg.status,
-              externalMessageId: savedMsg.externalMessageId
-            },
-            savedMsg.replyToMessageId
-          );
-        } else if (savedMsg) {
-          // جلب معلومات الوسائط إذا كانت الرسالة تحتوي على وسائط
-          let messageWithMedia = savedMsg.toObject();
-          
-          if (savedMsg.mediaType) {
-            const media = await mediaService.findMediaForMessage(savedMsg);
-            if (media) {
-              messageWithMedia = mediaService.prepareMessageWithMedia(messageWithMedia, media);
-              // تسجيل نجاح ربط الوسائط
-              logger.info('metaWhatsappWebhookController', 'تم ربط الوسائط بالإشعار', { 
-                messageId: savedMsg._id,
-                mediaId: media._id,
-                mediaType: savedMsg.mediaType
-              });
-            } else {
-              // تسجيل عدم وجود وسائط بالرغم من وجود نوع وسائط
-              logger.warn('metaWhatsappWebhookController', 'الرسالة تحتوي على نوع وسائط ولكن لم يتم العثور على سجل الوسائط', { 
-                messageId: savedMsg._id,
-                mediaType: savedMsg.mediaType
-              });
-            }
-          }
-          
-          // إشعار Socket.io بالرسالة الجديدة
-          socketService.notifyNewMessage(
-            conversation._id.toString(), 
-            messageWithMedia
-          );
+        // تحديث التخزين المؤقت للمحادثة بإضافة الرسالة الجديدة بدلاً من مسحه
+        const isCacheUpdated = cacheService.updateCachedMessages(conversation._id.toString(), savedMsg.toObject());
+        
+        if (isCacheUpdated) {
+          logger.info('metaWhatsappWebhookController', 'تم تحديث التخزين المؤقت للمحادثة بعد استلام رسالة جديدة', { 
+            conversationId: conversation._id.toString()
+          });
+        } else {
+          // إذا فشل التحديث (ربما لأن التخزين المؤقت غير موجود)، نقوم بمسح التخزين المؤقت
+          const cacheCleared = await cacheService.clearConversationCache(conversation._id.toString());
+          logger.info('metaWhatsappWebhookController', 'تم مسح التخزين المؤقت للمحادثة بعد فشل التحديث', { 
+            conversationId: conversation._id.toString(),
+            clearedKeys: cacheCleared
+          });
         }
 
+        // التحقق ما إذا كانت تفاعل
+        // جلب معلومات الوسائط إذا كانت الرسالة تحتوي على وسائط
+        let messageWithMedia = savedMsg.toObject();
+        
+        if (savedMsg.mediaType) {
+          const media = await mediaService.findMediaForMessage(savedMsg);
+          if (media) {
+            messageWithMedia = mediaService.prepareMessageWithMedia(messageWithMedia, media);
+            // تسجيل نجاح ربط الوسائط
+            logger.info('metaWhatsappWebhookController', 'تم ربط الوسائط بالإشعار', { 
+              messageId: savedMsg._id,
+              mediaId: media._id,
+              mediaType: savedMsg.mediaType
+            });
+          } else {
+            // تسجيل عدم وجود وسائط بالرغم من وجود نوع وسائط
+            logger.warn('metaWhatsappWebhookController', 'الرسالة تحتوي على نوع وسائط ولكن لم يتم العثور على سجل الوسائط', { 
+              messageId: savedMsg._id,
+              mediaType: savedMsg.mediaType
+            });
+          }
+        }
+        
+        // إشعار Socket.io بالرسالة الجديدة
+        socketService.notifyNewMessage(
+          conversation._id.toString(), 
+          messageWithMedia
+        );
+        
         // إشعار بتحديث المحادثة
         socketService.notifyConversationUpdate(conversation._id.toString(), {
           _id: conversation._id,

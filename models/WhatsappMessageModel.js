@@ -90,14 +90,13 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(conversatio
     let replyToMessageId = null;
     let context = null;
     
-    // سجل للتشخيص - لمعرفة كيف تصل البيانات من واتساب 
-    logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر context.message_id', { replyToMessageId });
-    logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر context.id', { replyToMessageId });
-    logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر metadata.context.id', { replyToMessageId });
-    logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر referral.source_id', { replyToMessageId });
-    logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر referred_product.catalog_id', { replyToMessageId });
-    logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر context_from_id', { replyToMessageId });
-    logger.info('WhatsappMessageModel', 'تم اكتشاف رد عبر quoted_message_id', { replyToMessageId });
+    // تحسين سجلات التشخيص - سجل واحد موحد بدلاً من سجلات متعددة
+    logger.debug('WhatsappMessageModel', 'بيانات رسالة واتساب الواردة', { 
+      messageId: id, 
+      type, 
+      from, 
+      hasContext: !!messageData.context || !!messageData.metadata?.context 
+    });
     
     // استخراج محتوى الرسالة حسب نوعها
     if (type === 'text' && messageData.text) {
