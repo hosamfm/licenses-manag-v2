@@ -124,25 +124,91 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
       throw new Error('لم يتم العثور على إعدادات واتساب أو توكن الوصول');
     }
 
-    // تنزيل البيانات من API واتساب مباشرة إلى الذاكرة
-    const response = await axios({
-      method: 'GET',
-      url: `https://graph.facebook.com/v17.0/${mediaUrl}`,
-      headers: {
-        'Authorization': `Bearer ${settings.config.accessToken}`
-      },
-      responseType: 'arraybuffer'
+    const accessToken = settings.config.accessToken;
+
+    // الخطوة 1: استرجاع عنوان URL للوسائط من واتساب API
+    logger.info(`استرجاع عنوان URL للوسائط: ${mediaType}`, {
+      mediaType,
+      mediaUrl
     });
 
-    // استخراج معلومات من الاستجابة
-    if (response.headers['content-type']) {
-      mimeType = response.headers['content-type'];
-    }
+    try {
+      // طلب GET لاسترجاع معلومات الوسائط والحصول على رابط التنزيل
+      const mediaInfoResponse = await axios({
+        method: 'GET',
+        url: `https://graph.facebook.com/v22.0/${mediaUrl}`,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
 
-    if (response.headers['content-length']) {
-      fileSize = parseInt(response.headers['content-length']);
-    } else {
-      fileSize = response.data.length;
+      // التحقق من وجود عنوان URL للوسائط في الاستجابة
+      if (!mediaInfoResponse.data || !mediaInfoResponse.data.url) {
+        throw new Error('لم يتم العثور على عنوان URL للوسائط في استجابة واتساب');
+      }
+
+      const mediaDownloadUrl = mediaInfoResponse.data.url;
+      
+      logger.info(`تم استرجاع عنوان URL للوسائط بنجاح: ${mediaType}`, {
+        mediaType,
+        mimeType: mediaInfoResponse.data.mime_type || ''
+      });
+
+      // الخطوة 2: تنزيل الوسائط باستخدام العنوان المُسترجع
+      const response = await axios({
+        method: 'GET',
+        url: mediaDownloadUrl,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        },
+        responseType: 'arraybuffer'
+      });
+
+      // استخراج معلومات من الاستجابة
+      if (response.headers['content-type']) {
+        mimeType = response.headers['content-type'];
+      } else if (mediaInfoResponse.data.mime_type) {
+        // استخدام نوع MIME من استجابة معلومات الوسائط إذا كان متاحًا
+        mimeType = mediaInfoResponse.data.mime_type;
+      }
+
+      if (response.headers['content-length']) {
+        fileSize = parseInt(response.headers['content-length']);
+      } else {
+        fileSize = response.data.length;
+      }
+
+      // تحسين اسم الملف إذا كان متاحًا في استجابة معلومات الوسائط
+      if (mediaInfoResponse.data.file_name) {
+        fileName = mediaInfoResponse.data.file_name;
+      }
+    } catch (apiError) {
+      // في حالة فشل طريقة الخطوتين، نحاول تجربة الطريقة المباشرة كخطة بديلة
+      logger.warn(`فشل في استرجاع عنوان URL للوسائط، محاولة التنزيل المباشر: ${apiError.message}`, {
+        mediaType,
+        mediaUrl
+      });
+
+      // تنزيل الوسائط مباشرة (الطريقة القديمة)
+      const response = await axios({
+        method: 'GET',
+        url: `https://graph.facebook.com/v22.0/${mediaUrl}`,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        },
+        responseType: 'arraybuffer'
+      });
+
+      // استخراج معلومات من الاستجابة
+      if (response.headers['content-type']) {
+        mimeType = response.headers['content-type'];
+      }
+
+      if (response.headers['content-length']) {
+        fileSize = parseInt(response.headers['content-length']);
+      } else {
+        fileSize = response.data.length;
+      }
     }
 
     // تنظيف اسم الملف
