@@ -1403,4 +1403,44 @@ MetaWhatsappService.prototype.getFileExtensionFromMimeType = function(mimeType) 
     return supportedMimeTypes[mimeType]?.extension || 'bin';
 }
 
+/**
+ * الحصول على نوع MIME من نوع الوسائط
+ * @param {string} mediaType - نوع الوسائط (image, video, audio, document)
+ * @param {string|Buffer} fileData - بيانات الملف الاختيارية للفحص العميق
+ * @returns {string} نوع MIME المناسب للوسائط
+ */
+MetaWhatsappService.prototype.getMimeTypeFromMediaType = function(mediaType, fileData = null) {
+    const supportedMimeTypes = this._getSupportedMimeTypes();
+    // تحديد نوع MIME الافتراضي لكل نوع وسائط
+    const defaultMimeTypes = {
+        'image': 'image/jpeg',
+        'video': 'video/mp4',
+        'audio': 'audio/mp3',
+        'document': 'application/pdf'
+    };
+
+    // في حالة توفر بيانات الملف، يمكن محاولة تحديد نوع MIME بشكل أدق
+    // هذه خاصية متقدمة يمكن تطويرها لاحقاً
+
+    // إعادة نوع MIME الافتراضي حسب نوع الوسائط
+    return defaultMimeTypes[mediaType] || 'application/octet-stream';
+};
+
+/**
+ * الحصول على الحد الأقصى لحجم الملف حسب نوع الوسائط
+ * @param {string} mediaType - نوع الوسائط
+ * @returns {number} الحد الأقصى لحجم الملف بالبايت
+ */
+MetaWhatsappService.prototype.getMaxSizeForMediaType = function(mediaType) {
+    // الحدود القصوى لحجم الملفات في واتساب للأعمال
+    const maxSizes = {
+        'image': 5 * 1024 * 1024,     // 5 ميجابايت للصور
+        'video': 16 * 1024 * 1024,    // 16 ميجابايت للفيديو
+        'audio': 16 * 1024 * 1024,    // 16 ميجابايت للصوت
+        'document': 100 * 1024 * 1024 // 100 ميجابايت للمستندات
+    };
+
+    return maxSizes[mediaType] || 5 * 1024 * 1024; // القيمة الافتراضية 5 ميجابايت
+};
+
 module.exports = new MetaWhatsappService();
