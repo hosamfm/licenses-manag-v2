@@ -682,7 +682,7 @@ class MetaWhatsappService {
                 
                 // تحميل الصورة إلى خوادم واتساب
                 logger.info('MetaWhatsappService', 'تحميل صورة إلى خوادم واتساب قبل الإرسال');
-                const uploadResult = await this.uploadMedia(base64Data, 'image', phoneNumberId);
+                const uploadResult = await this.uploadMedia(base64Data, 'image', settingsToUse);
                 
                 // استخدام معرف الوسائط الناتج
                 data.image.id = uploadResult;
@@ -782,7 +782,7 @@ class MetaWhatsappService {
                 
                 // تحميل المستند إلى خوادم واتساب
                 logger.info('MetaWhatsappService', 'تحميل مستند إلى خوادم واتساب قبل الإرسال');
-                const uploadResult = await this.uploadMedia(base64Data, 'document', phoneNumberId);
+                const uploadResult = await this.uploadMedia(base64Data, 'document', settingsToUse);
                 
                 // استخدام معرف الوسائط الناتج
                 data.document.id = uploadResult;
@@ -868,7 +868,7 @@ class MetaWhatsappService {
                 
                 // تحميل الفيديو إلى خوادم واتساب
                 logger.info('MetaWhatsappService', 'تحميل فيديو إلى خوادم واتساب قبل الإرسال');
-                const uploadResult = await this.uploadMedia(base64Data, 'video', phoneNumberId);
+                const uploadResult = await this.uploadMedia(base64Data, 'video', settingsToUse);
                 
                 // استخدام معرف الوسائط الناتج
                 data.video.id = uploadResult;
@@ -953,7 +953,7 @@ class MetaWhatsappService {
                 
                 // تحميل الملف الصوتي إلى خوادم واتساب
                 logger.info('MetaWhatsappService', 'تحميل ملف صوتي إلى خوادم واتساب قبل الإرسال');
-                const uploadResult = await this.uploadMedia(base64Data, 'audio', phoneNumberId);
+                const uploadResult = await this.uploadMedia(base64Data, 'audio', settingsToUse);
                 
                 // استخدام معرف الوسائط الناتج
                 data.audio.id = uploadResult;
