@@ -439,7 +439,7 @@ exports.replyToConversation = async (req, res) => {
               apiResponse = await metaWhatsappService.sendReplyImage(
                 conversation.phoneNumber,
                 media.fileData,
-                media.caption || '',
+                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
                 externalReplyId,
                 phoneNumberId
               );
@@ -448,7 +448,7 @@ exports.replyToConversation = async (req, res) => {
               apiResponse = await metaWhatsappService.sendReplyVideo(
                 conversation.phoneNumber,
                 media.fileData,
-                media.caption || '',
+                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
                 externalReplyId,
                 phoneNumberId
               );
@@ -457,8 +457,8 @@ exports.replyToConversation = async (req, res) => {
               apiResponse = await metaWhatsappService.sendReplyDocument(
                 conversation.phoneNumber,
                 media.fileData,
-                media.filename || 'document',
-                media.caption || '',
+                media.fileName || 'document',
+                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
                 externalReplyId,
                 phoneNumberId
               );
@@ -481,7 +481,7 @@ exports.replyToConversation = async (req, res) => {
               apiResponse = await metaWhatsappService.sendImage(
                 conversation.phoneNumber,
                 media.fileData,
-                media.caption || '',
+                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
                 phoneNumberId
               );
               break;
@@ -489,7 +489,7 @@ exports.replyToConversation = async (req, res) => {
               apiResponse = await metaWhatsappService.sendVideo(
                 conversation.phoneNumber,
                 media.fileData,
-                media.caption || '',
+                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
                 phoneNumberId
               );
               break;
@@ -497,8 +497,8 @@ exports.replyToConversation = async (req, res) => {
               apiResponse = await metaWhatsappService.sendDocument(
                 conversation.phoneNumber,
                 media.fileData,
-                media.filename || 'document',
-                media.caption || '',
+                media.fileName || 'document',
+                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
                 phoneNumberId
               );
               break;

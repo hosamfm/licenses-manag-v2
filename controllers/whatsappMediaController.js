@@ -412,7 +412,7 @@ exports.uploadMediaForSending = async (req, res) => {
       });
     }
     
-    const { conversationId, mediaType } = req.body;
+    const { conversationId, mediaType, caption } = req.body;
     const file = req.file;
     
     // التحقق من دعم نوع الملف
@@ -424,50 +424,14 @@ exports.uploadMediaForSending = async (req, res) => {
     }
     
     // تسجيل معلومات الملف للتشخيص
-    logger.info('whatsappMediaController', 'بدء تحميل وسائط للإرسال', {
+    logger.info('whatsappMediaController', 'تحميل وسائط للإرسال', {
       filename: file.originalname,
       mimetype: file.mimetype,
-      size: file.size,
-      mediaType
+      size: file.size
     });
     
-    // التحقق من دعم نوع الملف في واتس أب
-    const supportedTypes = {
-      'image': ['image/jpeg', 'image/png', 'image/webp'],
-      'video': ['video/mp4'],
-      'audio': ['audio/mpeg', 'audio/ogg', 'audio/aac'],
-      'document': ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/plain']
-    };
-    
-    if (supportedTypes[mediaType] && !supportedTypes[mediaType].includes(file.mimetype)) {
-      logger.warn('whatsappMediaController', 'نوع ملف غير مدعوم في واتس أب', {
-        mediaType,
-        providedMimetype: file.mimetype,
-        supportedMimetypes: supportedTypes[mediaType]
-      });
-      
-      return res.status(400).json({
-        success: false,
-        error: `نوع الملف ${file.mimetype} غير مدعوم في واتس أب لنوع الوسائط ${mediaType}`
-      });
-    }
-    
-    // تحسين معالجة اسم الملف - إزالة أي أحرف قد تسبب مشاكل
-    const originalNameParts = file.originalname.split('.');
-    const fileExtension = originalNameParts.length > 1 ? originalNameParts.pop() : '';
-    
-    // إنشاء اسم ملف آمن: استخدام الاسم الأصلي مع إزالة الأحرف الخاصة
-    // ثم إضافة طابع زمني لضمان عدم تكرار الأسماء
-    const safeFileName = originalNameParts.join('_')
-      .replace(/[^\w\s.-]/g, '') // إزالة الأحرف الخاصة
-      .replace(/\s+/g, '_') // استبدال المسافات بشرطة سفلية
-      + '_' + Date.now() + (fileExtension ? '.' + fileExtension : '');
-    
-    logger.info('whatsappMediaController', 'تم معالجة اسم الملف', {
-      originalName: file.originalname,
-      safeFileName
-    });
+    // إنشاء اسم ملف بسيط للتخزين
+    const simpleFileName = `file_${Date.now()}.${file.originalname.split('.').pop() || 'bin'}`;
     
     // قراءة محتوى الملف وتحويله إلى base64
     const fileData = file.buffer.toString('base64');
@@ -477,13 +441,13 @@ exports.uploadMediaForSending = async (req, res) => {
       conversationId,
       direction: 'outgoing',
       mediaType,
-      fileName: safeFileName, // استخدام اسم الملف الآمن
+      fileName: simpleFileName,
       mimeType: file.mimetype,
       fileSize: file.size,
       fileData,
+      caption: caption || '', // إضافة النص المصاحب
       metaData: { 
-        uploaded: true,
-        originalFileName: file.originalname // تخزين اسم الملف الأصلي في البيانات الوصفية
+        originalFileName: file.originalname
       }
     });
     
@@ -491,8 +455,7 @@ exports.uploadMediaForSending = async (req, res) => {
       success: true,
       media: {
         _id: media._id,
-        fileName: media.fileName,
-        originalFileName: file.originalname, // إضافة اسم الملف الأصلي للواجهة
+        fileName: file.originalname, // استخدام الاسم الأصلي للعرض في الواجهة
         mediaType: media.mediaType,
         mimeType: media.mimeType,
         fileSize: media.fileSize
@@ -501,8 +464,7 @@ exports.uploadMediaForSending = async (req, res) => {
     
   } catch (error) {
     logger.error('whatsappMediaController', 'خطأ في تحميل وسائط للإرسال', {
-      error: error.message,
-      stack: error.stack
+      error: error.message
     });
     
     return res.status(500).json({

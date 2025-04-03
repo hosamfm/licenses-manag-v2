@@ -580,22 +580,13 @@ class MetaWhatsappService {
             // إضافة المنتج المطلوب حسب وثائق واتساب
             form.append('messaging_product', 'whatsapp');
             
-            // تحسين معالجة اسم الملف: استخدام اسم ملف آمن ASCII
-            // تجنب استخدام الأحرف الخاصة في اسم الملف لتفادي مشاكل Content-Disposition
+            // استخدام اسم ملف بسيط فقط عند الرفع إلى واتساب API
             const safeFilename = `file_${Date.now()}.${this.getFileExtensionFromMimeType(mimeType)}`;
             
-            // إضافة الملف إلى النموذج دون تحديد اسم ملف معقد
+            // إضافة الملف إلى النموذج
             form.append('file', fileBuffer, {
                 filename: safeFilename,
                 contentType: mimeType
-            });
-            
-            // تسجيل معلومات التحميل
-            logger.debug('MetaWhatsappService', 'جاري تحميل ملف إلى خوادم واتساب', {
-                originalFilename: filename,
-                safeFilename: safeFilename,
-                mimeType: mimeType,
-                fileSize: fileBuffer.length
             });
             
             // إرسال طلب تحميل الوسائط
@@ -707,7 +698,7 @@ class MetaWhatsappService {
 
             // إضافة وصف الصورة إذا كان موجوداً
             if (caption && caption.trim()) {
-                data.image.caption = caption; // إزالة encodeURIComponent
+                data.image.caption = caption;
                 logger.debug('تم إضافة وصف الصورة', { caption: caption });
             }
 
@@ -761,7 +752,7 @@ class MetaWhatsappService {
             to,
             type: 'document',
             document: {
-                filename: filename // استخدام اسم الملف مباشرة بدون ترميز
+                filename: filename
             }
         };
 
@@ -883,7 +874,7 @@ class MetaWhatsappService {
 
             // إضافة وصف المستند إذا كان موجوداً
             if (caption && caption.trim()) {
-                data.document.caption = caption; // إزالة encodeURIComponent
+                data.document.caption = caption;
                 logger.debug('تم إضافة وصف المستند', { caption: caption });
             }
 
@@ -970,7 +961,7 @@ class MetaWhatsappService {
 
             // إضافة وصف الفيديو إذا كان موجوداً
             if (caption && caption.trim()) {
-                data.video.caption = caption; // إزالة encodeURIComponent
+                data.video.caption = caption;
                 logger.debug('تم إضافة وصف الفيديو', { caption: caption });
             }
 
@@ -1111,7 +1102,7 @@ class MetaWhatsappService {
 
         // إضافة اسم الموقع إذا كان موجوداً
         if (name && name.trim()) {
-            data.location.name = name; // إزالة encodeURIComponent
+            data.location.name = name;
             logger.debug('تم إضافة اسم الموقع', { name: name });
         }
 
