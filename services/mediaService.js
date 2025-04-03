@@ -203,35 +203,30 @@ async function getMediaContent(mediaId) {
       };
     }
 
-    // تحديد المسار المحلي للملف
-    const mediaStoragePath = process.env.MEDIA_STORAGE_PATH || path.join(__dirname, '../public/uploads/whatsapp');
-    const mediaPath = path.join(mediaStoragePath, media.fileName);
-    
-    // فحص وجود الملف محليًا
-    const fileExists = fs.existsSync(mediaPath);
-    
-    // محاولة إعادة تنزيل الملف إذا لم يكن موجودًا
-    if (!fileExists) {
-      logger.warn(`الملف غير موجود محليًا: ${mediaPath}`);
-      
-      // إعادة تحميل الملف إذا كان لدينا رابط
-      if (media.mediaUrl) {
-        const downloadSuccess = await downloadMediaFile(media);
-        if (!downloadSuccess) {
-          logger.error(`فشل إعادة تنزيل الملف: ${media.fileName}`);
-        }
-      }
-    }
-
     // استخدام بيانات الملف من fileData إذا كان المسار المحلي غير موجود
     const finalMimeType = media.mimeType || mime.lookup(media.fileName) || 'application/octet-stream';
     
+    // التركيز على استخدام البيانات المخزنة مباشرة في قاعدة البيانات
+    const hasDataInDb = !!media.fileData || (media.metaData && media.metaData.base64Data);
+    
+    // استخدام البيانات المشفرة من metaData إن وجدت
+    if (!media.fileData && media.metaData && media.metaData.base64Data) {
+      media.fileData = media.metaData.base64Data;
+      logger.info(`تم استرداد بيانات الوسائط من metaData: ${mediaId}`);
+    }
+    
+    // إضافة سجل للتشخيص
+    if (!hasDataInDb) {
+      logger.debug(`وسائط بدون بيانات مشفرة في قاعدة البيانات (messageId: ${media.messageId}, conversationId: ${media.conversationId})`);
+    }
+    
     return {
       ...media.toObject(),
-      localPath: fileExists ? mediaPath : null,
+      // تعطيل استخدام المسار المحلي
+      localPath: null,
       mimeType: finalMimeType,
-      // إعادة التحقق من وجود الملف بعد محاولة التنزيل
-      fileExists: fs.existsSync(mediaPath)
+      fileExists: false, // دائماً false لأننا لا نعتمد على الملفات المحلية
+      hasContent: hasDataInDb
     };
   } catch (error) {
     logger.error(`خطأ في الحصول على محتوى الوسائط: ${error.message}`);
@@ -240,53 +235,16 @@ async function getMediaContent(mediaId) {
 }
 
 /**
- * تحميل ملف الوسائط من الرابط
+ * تم تعطيل تحميل ملف الوسائط من الرابط - نعتمد فقط على البيانات الموجودة في قاعدة البيانات
  * @param {Object} media كائن الوسائط
- * @returns {Promise<Boolean>} نجاح أو فشل عملية التحميل
+ * @returns {Promise<Boolean>} دائماً يعيد false لأن التنزيل معطل
  */
 async function downloadMediaFile(media) {
-  try {
-    if (!media || !media.mediaUrl) {
-      logger.warn('محاولة تحميل ملف وسائط بدون رابط صالح');
-      return false;
-    }
-
-    const mediaPath = path.join(process.env.MEDIA_STORAGE_PATH, media.fileName);
-    const mediaDir = path.dirname(mediaPath);
-
-    // التأكد من وجود المجلد
-    if (!fs.existsSync(mediaDir)) {
-      fs.mkdirSync(mediaDir, { recursive: true });
-    }
-
-    // تحميل الملف
-    const response = await axios({
-      method: 'GET',
-      url: media.mediaUrl,
-      responseType: 'stream',
-      headers: {
-        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
-      }
-    });
-
-    // حفظ الملف
-    const writer = fs.createWriteStream(mediaPath);
-    response.data.pipe(writer);
-
-    return new Promise((resolve, reject) => {
-      writer.on('finish', () => {
-        logger.info(`تم تحميل ملف الوسائط بنجاح: ${media.fileName}`);
-        resolve(true);
-      });
-      writer.on('error', (error) => {
-        logger.error(`خطأ في تحميل ملف الوسائط: ${error.message}`);
-        reject(false);
-      });
-    });
-  } catch (error) {
-    logger.error(`خطأ في تحميل ملف الوسائط: ${error.message}`);
-    return false;
-  }
+  // تسجيل رسالة تحذير بأن التنزيل معطل
+  logger.info(`تم تعطيل تنزيل الوسائط - نعتمد فقط على البيانات المخزنة في قاعدة البيانات. mediaId: ${media?._id}`);
+  
+  // دائماً يعيد false لأن التنزيل معطل
+  return false;
 }
 
 /**

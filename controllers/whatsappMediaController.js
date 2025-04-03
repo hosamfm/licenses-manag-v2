@@ -14,7 +14,7 @@ const path = require('path');
 require('dotenv').config();
 
 /**
- * تنزيل وسائط من API ميتا واتساب وتخزينها
+ * تنزيل وتخزين بيانات الوسائط في قاعدة البيانات فقط (بدون ملفات محلية)
  * @param {Object} mediaInfo - معلومات الوسائط (النوع، المعرف، الرابط...)
  * @param {Object} messageData - بيانات الرسالة المرتبطة
  * @returns {Promise<Object>} - نتيجة العملية
@@ -30,11 +30,10 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
     const messageId = messageData._id;
     const mediaType = mediaInfo.type;
     let mediaUrl = '';
-    let mediaData = null;
     let fileName = '';
     let mimeType = '';
     let fileSize = 0;
-    let fileData = '';
+    let fileData = ''; // لتخزين البيانات المشفرة
     let metaData = {};
     
     // تحديد الموقع في حالة رسالة الموقع
@@ -45,32 +44,31 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
     switch (mediaType) {
       case 'image':
         mediaUrl = mediaInfo.link || mediaInfo.id;
-        mediaData = mediaInfo;
-        mimeType = 'image/jpeg'; // القيمة الافتراضية، سيتم تحديثها بعد التنزيل
+        fileName = `image_${Date.now()}.jpg`;
+        mimeType = 'image/jpeg'; 
         break;
       case 'video':
         mediaUrl = mediaInfo.link || mediaInfo.id;
-        mediaData = mediaInfo;
-        mimeType = 'video/mp4'; // القيمة الافتراضية
+        fileName = `video_${Date.now()}.mp4`;
+        mimeType = 'video/mp4';
         break;
       case 'audio':
         mediaUrl = mediaInfo.link || mediaInfo.id;
-        mediaData = mediaInfo;
-        mimeType = 'audio/ogg'; // القيمة الافتراضية
+        fileName = `audio_${Date.now()}.ogg`;
+        mimeType = 'audio/ogg';
         break;
       case 'document':
         mediaUrl = mediaInfo.link || mediaInfo.id;
-        mediaData = mediaInfo;
-        fileName = mediaInfo.filename || 'document.pdf';
+        fileName = mediaInfo.filename || `document_${Date.now()}.pdf`;
         mimeType = mediaInfo.mime_type || 'application/pdf';
         break;
       case 'sticker':
         mediaUrl = mediaInfo.link || mediaInfo.id;
-        mediaData = mediaInfo;
+        fileName = `sticker_${Date.now()}.webp`;
         mimeType = 'image/webp';
         break;
       case 'location':
-        // في حالة الموقع، لا يوجد ملف فعلي للتنزيل
+        // في حالة الموقع، لا يوجد ملف فعلي
         latitude = mediaInfo.latitude;
         longitude = mediaInfo.longitude;
         locationName = mediaInfo.name || '';
@@ -98,7 +96,7 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
 
       const locationMedia = await mediaService.createMedia(locationData);
       
-      logger.info('whatsappMediaController', 'تم حفظ بيانات الموقع', {
+      logger.info('تم حفظ بيانات الموقع', {
         messageId,
         latitude,
         longitude
@@ -110,12 +108,12 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
       };
     }
 
-    // للأنواع الأخرى، نحتاج لتنزيل الملف من الرابط
+    // للأنواع الأخرى، نحتاج لتنزيل البيانات من الرابط وتحويلها لـ base64
     if (!mediaUrl) {
       throw new Error('رابط الوسائط غير متوفر');
     }
 
-    logger.info('whatsappMediaController', 'بدء تنزيل الوسائط', {
+    logger.info(`بدء تنزيل بيانات الوسائط: ${mediaType}`, {
       mediaType,
       mediaUrl
     });
@@ -126,7 +124,7 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
       throw new Error('لم يتم العثور على إعدادات واتساب أو توكن الوصول');
     }
 
-    // تنزيل الملف من API واتساب
+    // تنزيل البيانات من API واتساب مباشرة إلى الذاكرة
     const response = await axios({
       method: 'GET',
       url: mediaUrl,
@@ -136,7 +134,7 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
       responseType: 'arraybuffer'
     });
 
-    // استخراج معلومات إضافية من الاستجابة
+    // استخراج معلومات من الاستجابة
     if (response.headers['content-type']) {
       mimeType = response.headers['content-type'];
     }
@@ -147,61 +145,59 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
       fileSize = response.data.length;
     }
 
-    // توليد اسم الملف إذا لم يكن متوفرًا
-    if (!fileName) {
-      const extension = mimeType.split('/')[1] || 'bin';
-      fileName = `${mediaType}_${Date.now()}.${extension}`;
-    }
+    // تنظيف اسم الملف
+    fileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
 
-    // تحويل البيانات المستلمة إلى قاعدة64
+    // تحويل البيانات إلى base64 لتخزينها في قاعدة البيانات
     fileData = Buffer.from(response.data).toString('base64');
 
-    // حفظ البيانات في المجلد المخصص
-    const mediaDir = process.env.MEDIA_STORAGE_PATH || path.join(__dirname, '../public/uploads/whatsapp');
-    
-    // التأكد من وجود المجلد
-    if (!fs.existsSync(mediaDir)) {
-      fs.mkdirSync(mediaDir, { recursive: true });
-    }
-    
-    const filePath = path.join(mediaDir, fileName);
-    
-    // كتابة الملف
-    fs.writeFileSync(filePath, response.data);
-    
-    logger.info('whatsappMediaController', 'تم تنزيل الوسائط بنجاح', {
+    logger.info(`تم تنزيل بيانات الوسائط وتحويلها إلى base64 بنجاح: ${mediaType}`, {
       mediaType,
       fileName,
       fileSize,
       mimeType
     });
 
-    // إنشاء سجل وسائط في قاعدة البيانات
+    // بناء كائن البيانات الوصفية
+    metaData = {
+      mediaId: mediaInfo.id,
+      mediaUrl: mediaUrl,
+      originalInfo: mediaInfo,
+      downloadedAt: new Date()
+    };
+
+    // إنشاء سجل في قاعدة البيانات مع تخزين البيانات المشفرة
     const mediaRecord = await mediaService.createMedia({
       messageId,
       conversationId: messageData.conversationId,
       mediaType,
-      direction: 'incoming',
       fileName,
       mimeType,
       fileSize,
-      mediaUrl,
-      fileData,
-      metaData: mediaData || {}
+      direction: 'incoming',
+      fileData, // تخزين البيانات المشفرة مباشرة
+      metaData
+    });
+
+    if (!mediaRecord) {
+      throw new Error('فشل في إنشاء سجل الوسائط');
+    }
+
+    logger.info(`تم حفظ بيانات الوسائط في قاعدة البيانات بنجاح: ${mediaType}`, {
+      messageId,
+      mediaId: mediaRecord._id
     });
 
     return {
       success: true,
       media: mediaRecord
     };
-
   } catch (error) {
-    logger.error('whatsappMediaController', 'خطأ في تنزيل وحفظ الوسائط', {
-      error: error.message,
-      mediaInfo: mediaInfo ? JSON.stringify(mediaInfo) : 'غير متوفر',
-      messageId: messageData ? messageData._id : 'غير متوفر'
+    logger.error(`خطأ في عملية تنزيل وحفظ بيانات الوسائط: ${error.message}`, {
+      messageId: messageData?._id,
+      mediaType: mediaInfo?.type
     });
-
+    
     return {
       success: false,
       error: error.message
@@ -210,54 +206,59 @@ exports.downloadAndSaveMedia = async (mediaInfo, messageData) => {
 };
 
 /**
- * استرجاع محتوى ملف الوسائط
+ * استرجاع محتوى ملف الوسائط من قاعدة البيانات
  * @param {Object} req - كائن الطلب
  * @param {Object} res - كائن الاستجابة
  */
 exports.getMediaContent = async (req, res) => {
   try {
-    const mediaId = req.params.mediaId;
+    const { mediaId } = req.params;
     
     if (!mediaId) {
       return res.status(400).json({ success: false, error: 'معرف الوسائط مطلوب' });
     }
-
-    // استخدام خدمة الوسائط للحصول على المحتوى
-    const media = await mediaService.getMediaContent(mediaId);
     
-    if (!media) {
-      return res.status(404).json({ success: false, error: 'لم يتم العثور على الوسائط' });
+    // استرجاع بيانات الوسائط باستخدام خدمة الوسائط
+    const mediaContent = await mediaService.getMediaContent(mediaId);
+    
+    if (!mediaContent) {
+      logger.warn(`لم يتم العثور على وسائط بالمعرف: ${mediaId}`);
+      return res.status(404).json({ success: false, error: 'لم يتم العثور على الوسائط المطلوبة' });
     }
-
-    // معالجة خاصة للمواقع
-    if (media.isLocation && media.locationData) {
+    
+    // في حالة الموقع، نعيد كائن JSON
+    if (mediaContent.mediaType === 'location' || mediaContent.isLocation) {
       return res.json({
         success: true,
-        mediaType: 'location',
-        location: media.locationData
+        locationData: mediaContent.locationData || mediaContent.metaData
       });
     }
-
-    // إرسال الملف كاستجابة
-    res.setHeader('Content-Type', media.mimeType);
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(media.fileName)}"`);
     
-    if (media.fileExists && media.localPath) {
-      // إرسال الملف من المسار المحلي
-      return res.sendFile(media.localPath);
-    } else if (media.fileData) {
-      // إرسال البيانات من قاعدة البيانات
-      const buffer = Buffer.from(media.fileData, 'base64');
+    // في حالة وجود بيانات مشفرة مخزنة، نستخدمها مباشرة
+    if (mediaContent.fileData) {
+      // قراءة بيانات الملف المشفرة
+      const fileData = mediaContent.fileData;
+      
+      // فك تشفير البيانات وإرسالها
+      const buffer = Buffer.from(fileData, 'base64');
+      
+      // ضبط نوع المحتوى
+      res.set('Content-Type', mediaContent.mimeType || 'application/octet-stream');
+      res.set('Content-Disposition', `inline; filename="${mediaContent.fileName}"`);
+      
+      // إرسال البيانات
       return res.send(buffer);
-    } else {
-      return res.status(404).json({ success: false, error: 'محتوى الوسائط غير متوفر' });
     }
     
-  } catch (error) {
-    logger.error('whatsappMediaController', 'خطأ في استرجاع محتوى الوسائط', {
-      error: error.message,
-      mediaId: req.params.mediaId
+    // في حالة عدم وجود بيانات للملف، نرسل رسالة خطأ
+    logger.warn(`لا توجد بيانات مشفرة للوسائط: ${mediaId}`);
+    return res.status(404).json({ 
+      success: false, 
+      error: 'بيانات الوسائط غير متوفرة', 
+      mediaType: mediaContent.mediaType
     });
+  } catch (error) {
+    logger.error(`خطأ في استرجاع محتوى الوسائط: ${error.message}`);
     
     return res.status(500).json({
       success: false,
