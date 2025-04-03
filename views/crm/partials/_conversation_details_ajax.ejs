@@ -87,43 +87,53 @@
             
             <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %> <%= msg.mediaType ? 'message-with-media' : '' %>">
               <% if (msg.mediaType) { %>
+                <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
+                <% 
+                  // الحصول على معلومات الوسائط من الكائن المناسب (سواء من الرسالة مباشرة أو من كائن الوسائط المضاف)
+                  const mediaId = msg._id;
+                  const mediaType = msg.mediaType;
+                  const fileName = msg.media ? msg.media.fileName : (msg.fileName || 'ملف');
+                  const fileSize = msg.media ? msg.media.fileSize : (msg.fileSize || 0);
+                  const mimeType = msg.media ? msg.media.mimeType : (msg.mimeType || '');
+                %>
+
                 <!-- عرض الوسائط حسب النوع -->
-                <% if (msg.mediaType === 'image') { %>
+                <% if (mediaType === 'image') { %>
                   <div class="media-container">
-                    <img src="/whatsapp/media/content/<%= msg._id %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
+                    <img src="/whatsapp/media/content/<%= mediaId %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
                   </div>
-                <% } else if (msg.mediaType === 'video') { %>
+                <% } else if (mediaType === 'video') { %>
                   <div class="media-container">
                     <video controls class="media-video">
-                      <source src="/whatsapp/media/content/<%= msg._id %>" type="video/mp4">
+                      <source src="/whatsapp/media/content/<%= mediaId %>" type="video/mp4">
                       المتصفح لا يدعم عرض الفيديو
                     </video>
                   </div>
-                <% } else if (msg.mediaType === 'audio') { %>
+                <% } else if (mediaType === 'audio') { %>
                   <div class="media-container">
                     <audio controls class="media-audio" preload="metadata" controlsList="nodownload">
-                      <source src="/whatsapp/media/content/<%= msg._id %>" type="audio/ogg">
+                      <source src="/whatsapp/media/content/<%= mediaId %>" type="audio/ogg">
                       المتصفح لا يدعم تشغيل الملفات الصوتية
                     </audio>
                   </div>
-                <% } else if (msg.mediaType === 'document') { %>
+                <% } else if (mediaType === 'document') { %>
                   <div class="document-container">
                     <div class="document-icon">
                       <i class="fas fa-file-alt"></i>
                     </div>
                     <div class="document-info">
-                      <div class="document-name"><%= msg.fileName || 'مستند' %></div>
-                      <div class="document-size"><%= msg.fileSize ? (Math.round(msg.fileSize / 1024) + ' كيلوبايت') : '' %></div>
+                      <div class="document-name"><%= fileName %></div>
+                      <div class="document-size"><%= fileSize ? (Math.round(fileSize / 1024) + ' كيلوبايت') : '' %></div>
                     </div>
-                    <a href="/whatsapp/media/content/<%= msg._id %>" target="_blank" class="document-download">
+                    <a href="/whatsapp/media/content/<%= mediaId %>" target="_blank" class="document-download">
                       <i class="fas fa-download"></i>
                     </a>
                   </div>
-                <% } else if (msg.mediaType === 'sticker') { %>
+                <% } else if (mediaType === 'sticker') { %>
                   <div class="media-container">
-                    <img src="/whatsapp/media/content/<%= msg._id %>" class="media-sticker" alt="ملصق">
+                    <img src="/whatsapp/media/content/<%= mediaId %>" class="media-sticker" alt="ملصق">
                   </div>
-                <% } else if (msg.mediaType === 'location') { %>
+                <% } else if (mediaType === 'location') { %>
                   <div class="location-container">
                     <div class="location-icon">
                       <i class="fas fa-map-marker-alt"></i>

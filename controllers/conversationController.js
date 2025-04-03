@@ -754,11 +754,36 @@ exports.getConversationDetailsAjax = async (req, res) => {
       .lean();
     const sorted = msgs.reverse();
 
+    // جلب معلومات الوسائط لكل رسالة
+    const messagesWithMedia = await Promise.all(sorted.map(async (msg) => {
+      if (msg.mediaType) {
+        // البحث عن الوسائط المرتبطة بهذه الرسالة
+        const media = await WhatsappMedia.findOne({ messageId: msg._id }).lean();
+        
+        // إضافة معلومات الوسائط إلى الرسالة إذا وجدت
+        if (media) {
+          return {
+            ...msg,
+            media: {
+              _id: media._id,
+              mediaType: media.mediaType,
+              fileName: media.fileName,
+              mimeType: media.mimeType,
+              fileSize: media.fileSize
+            }
+          };
+        }
+      }
+      
+      // إرجاع الرسالة كما هي إذا لم يكن لها وسائط أو لم يتم العثور على الوسائط
+      return msg;
+    }));
+
     // نعيد الـ Partial فقط (layout: false)
     return res.render('crm/partials/_conversation_details_ajax', {
       layout: false,
       conversation,
-      messages: sorted,
+      messages: messagesWithMedia,
       user: req.user, // إضافة معلومات المستخدم المطلوبة في القالب
       triggerMessagesLoaded: true // إضافة متغير لتفعيل حدث تحميل الرسائل في JavaScript
     });
