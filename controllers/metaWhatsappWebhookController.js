@@ -98,7 +98,7 @@ exports.handleWebhook = async (req, res) => {
 
               // رسائل واردة
               if (change.field === 'messages' && change.value.messages?.length > 0) {
-                await handleIncomingMessages(change.value.messages, {
+                await exports.handleIncomingMessages(change.value.messages, {
                   phone_number_id: change.value.metadata?.phone_number_id,
                   // أو ربما entry.messaging_product, تأكد من المصدر
                   metadata: change.value.metadata || {}
@@ -212,7 +212,9 @@ async function handleReactions(reactions, meta) {
         });
 
         // ابحث عن المحادثة المرتبطة بالهاتف المرسل
-        const conversation = await Conversation.findOne({ phoneNumber: sender });
+        const conversation = await Conversation.findOne({ 
+          phoneNumber: sender 
+        });
         if (!conversation) {
           logger.warn('metaWhatsappWebhookController', 'محادثة غير موجودة للتفاعل', { sender });
           continue;
