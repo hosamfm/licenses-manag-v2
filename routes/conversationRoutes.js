@@ -11,20 +11,20 @@ const logger = require('../services/loggerService');
 const ensureCanAccessConversations = [isAuthenticated, checkCanAccessConversations];
 
 // مسار عرض جميع المحادثات
-router.get('/', ensureCanAccessConversations, conversationController.listConversations);
+router.get('/', ensureCanAccessConversations, (req, res) => conversationController.listConversations(req, res, false));
 
 // مسار عرض المحادثات المسندة للمستخدم الحالي
-router.get('/my', ensureCanAccessConversations, conversationController.listMyConversations);
+router.get('/my', ensureCanAccessConversations, (req, res) => conversationController.listConversations(req, res, true));
 
 /* -------------------------------------------
  *          مسارات AJAX الجديدة
  * ------------------------------------------- */
 
 // 1) صفحة عرض المحادثات بأسلوب AJAX (صفحة عمودين)
-router.get('/ajax', ensureCanAccessConversations, conversationController.listConversationsAjax);
+router.get('/ajax', ensureCanAccessConversations, (req, res) => conversationController.listConversationsAjax(req, res, 'page'));
 
 // 2) جلب قائمة المحادثات للتحديث عبر AJAX
-router.get('/ajax/list', ensureCanAccessConversations, conversationController.listConversationsAjaxList);
+router.get('/ajax/list', ensureCanAccessConversations, (req, res) => conversationController.listConversationsAjax(req, res, 'json'));
 
 // 3) جلب تفاصيل محادثة (Partial) عبر AJAX
 router.get('/ajax/details/:conversationId',
