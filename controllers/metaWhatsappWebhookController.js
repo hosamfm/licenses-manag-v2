@@ -131,9 +131,9 @@ const processedMessageIds = new Set();
  */
 exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
   try {
-    logger.info('metaWhatsappWebhookController', 'ØªØ­Ø¯ÙŠØ« Ø­Ø§Ù„Ø© Ø§Ù„Ø±Ø³Ø§Ù„Ø©', { externalId, newStatus });
+    logger.info('metaWhatsappWebhookController', 'ÊÍÏíË ÍÇáÉ ÇáÑÓÇáÉ', { externalId, newStatus });
     
-    // ØªØ­ÙˆÙŠÙ„ Ø§Ù„Ø­Ø§Ù„Ø§Øª Ø§Ù„ÙˆØ§Ø±Ø¯Ø© Ù…Ù† ÙˆØ§ØªØ³Ø§Ø¨ Ø¥Ù„Ù‰ Ø§Ù„Ø­Ø§Ù„Ø§Øª Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…Ø© ÙÙŠ Ø§Ù„Ù†Ø¸Ø§Ù…
+    // ÊÍæíá ÇáÍÇáÇÊ ÇáæÇÑÏÉ ãä æÇÊÓÇÈ Åáì ÇáÍÇáÇÊ ÇáãÓÊÎÏãÉ İí ÇáäÙÇã
     if (newStatus === 'delivered') {
       newStatus = 'delivered';
     } else if (newStatus === 'read') {
@@ -142,14 +142,14 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
       newStatus = 'failed';
     }
     
-    // Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ù†Ø¸Ø§Ù…
+    // ÇáÈÍË Úä ÇáÑÓÇáÉ İí ÇáäÙÇã
     let message = await WhatsappMessage.findOne({ externalMessageId: externalId });
     
     if (message) {
-      // ØªØ­Ø¯ÙŠØ« Ø­Ø§Ù„Ø© Ø§Ù„Ø±Ø³Ø§Ù„Ø©
+      // ÊÍÏíË ÍÇáÉ ÇáÑÓÇáÉ
       message.status = newStatus;
       
-      // ØªØ­Ø¯ÙŠØ« Ø£ÙˆÙ‚Ø§Øª Ø§Ù„Ù‚Ø±Ø§Ø¡Ø© ÙˆØ§Ù„ØªØ³Ù„ÙŠÙ…
+      // ÊÍÏíË ÃæŞÇÊ ÇáŞÑÇÁÉ æÇáÊÓáíã
       if (newStatus === 'delivered') {
         message.deliveredAt = timestamp;
       } else if (newStatus === 'read') {
@@ -157,6 +157,20 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
       }
       
       await message.save();
+      
+      // ÅÑÓÇá ÅÔÚÇÑ ÊÍÏíË ÍÇáÉ ÇáÑÓÇáÉ ÚÈÑ Socket.io
+      if (message.conversationId) {
+        socketService.notifyMessageStatusUpdate(
+          message.conversationId.toString(),
+          externalId,
+          newStatus
+        );
+        logger.info('metaWhatsappWebhookController', 'Êã ÅÑÓÇá ÅÔÚÇÑ ÊÍÏíË ÍÇáÉ ÇáÑÓÇáÉ', { 
+          externalId, 
+          newStatus,
+          conversationId: message.conversationId.toString()
+        });
+      }
       
       // ØªØ­Ø¯ÙŠØ« SemMessage Ø¥Ø°Ø§ ÙˆØ¬Ø¯Øª
       if (message.metadata && message.metadata.semMessageId) {
@@ -552,3 +566,4 @@ exports.handleIncomingMessages = async (messages, meta) => {
     logger.error('metaWhatsappWebhookController','Ø®Ø·Ø£ ÙÙŠ handleIncomingMessages', err);
   }
 };
+
