@@ -125,8 +125,8 @@ function setupNotificationListeners(socket) {
         // تحديث قائمة المحادثات إذا كانت موجودة
         updateConversationsList();
         
-        // تشغيل صوت الإشعار
-        if (typeof window.playNotificationSound === 'function') {
+        // تشغيل صوت الإشعار للرسائل الواردة فقط
+        if (typeof window.playNotificationSound === 'function' && message.direction === 'incoming') {
             window.playNotificationSound();
         }
     });
@@ -192,8 +192,8 @@ function setupNotificationListeners(socket) {
         // تحديث قائمة المحادثات
         updateConversationsList();
         
-        // تشغيل صوت الإشعار
-        if (typeof window.playNotificationSound === 'function') {
+        // تشغيل صوت الإشعار للرسائل الواردة فقط
+        if (typeof window.playNotificationSound === 'function' && message.direction === 'incoming') {
             window.playNotificationSound();
         }
     });
@@ -246,8 +246,9 @@ function setupNotificationListeners(socket) {
         // تحديث قائمة المحادثات
         updateConversationsList();
         
-        // تشغيل صوت الإشعار
-        if (typeof window.playNotificationSound === 'function') {
+        // تشغيل صوت الإشعار للملاحظات الداخلية إذا لم تكن من المستخدم الحالي
+        if (typeof window.playNotificationSound === 'function' && 
+            (!note.author || note.author._id !== window.currentUserId)) {
             window.playNotificationSound();
         }
     });

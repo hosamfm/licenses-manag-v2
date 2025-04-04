@@ -195,9 +195,10 @@
       return;
     }
     
-    // البحث عن حاوية التفاعلات أو إنشاء واحدة جديدة
+    // البحث عن وجود حاوية التفاعلات في الرسالة
     let reactionsContainer = messageElem.querySelector('.message-reactions');
     
+    // إذا لم تكن موجودة، أنشئها
     if (!reactionsContainer) {
       reactionsContainer = document.createElement('div');
       reactionsContainer.className = 'message-reactions';
@@ -900,67 +901,61 @@
   /**
    * دالة لتهيئة خاصية السحب والإفلات
    */
-  function setupDragAndDrop() {
-    const uploadArea = document.getElementById('uploadArea');
+  window.setupDragAndDrop = function() {
+    const mediaPreview = document.getElementById('mediaPreview');
     const fileInput = document.getElementById('mediaFile');
     
-    if (!uploadArea || !fileInput) return;
+    if (!mediaPreview || !fileInput) return;
     
     // إضافة أنماط CSS لمنطقة السحب والإفلات
     if (!document.getElementById('dragDropStyles')) {
       const style = document.createElement('style');
       style.id = 'dragDropStyles';
       style.textContent = `
-        .upload-area {
-          border: 2px dashed #ccc;
+        .message-input {
+          border: 2px solid #ccc;
           border-radius: 5px;
-          padding: 25px;
-          text-align: center;
-          position: relative;
+          padding: 10px;
           transition: all 0.3s;
-          background-color: #f8f9fa;
-          min-height: 150px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
         }
-        .upload-area.drag-over {
+        .message-input.drag-over {
           background-color: #e9ecef;
           border-color: #6c757d;
-        }
-        .upload-area-inner {
-          pointer-events: none;
         }
       `;
       document.head.appendChild(style);
     }
     
+    // الحصول على منطقة الكتابة
+    const messageInput = document.getElementById('replyMessage');
+    if (!messageInput) return;
+    
     // معالجة أحداث السحب والإفلات
-    uploadArea.addEventListener('dragover', function(e) {
+    messageInput.addEventListener('dragover', function(e) {
       e.preventDefault();
       e.stopPropagation();
       this.classList.add('drag-over');
     });
     
-    uploadArea.addEventListener('dragleave', function(e) {
+    messageInput.addEventListener('dragleave', function(e) {
       e.preventDefault();
       e.stopPropagation();
       this.classList.remove('drag-over');
     });
     
-    uploadArea.addEventListener('drop', function(e) {
+    messageInput.addEventListener('drop', function(e) {
       e.preventDefault();
       e.stopPropagation();
       this.classList.remove('drag-over');
       
       if (e.dataTransfer.files.length) {
         fileInput.files = e.dataTransfer.files;
-        handleFileSelection();
+        window.handleFileSelection();
       }
     });
     
     // معالجة اختيار الملف عن طريق النقر
-    fileInput.addEventListener('change', handleFileSelection);
+    fileInput.addEventListener('change', window.handleFileSelection);
   }
 
   /**
@@ -968,69 +963,80 @@
    */
   function handleFileSelection() {
     const fileInput = document.getElementById('mediaFile');
-    const filePreview = document.getElementById('filePreview');
-    const selectedFileName = document.getElementById('selectedFileName');
-    const fileTypeIcon = document.getElementById('fileTypeIcon');
+    const mediaPreview = document.getElementById('mediaPreview');
+    const mediaFileName = document.getElementById('mediaFileName');
     const uploadMediaType = document.getElementById('uploadMediaType');
     
     if (fileInput.files && fileInput.files.length > 0) {
       const file = fileInput.files[0];
       
       // عرض اسم الملف
-      selectedFileName.textContent = file.name;
+      mediaFileName.textContent = file.name;
       
-      // تحديد نوع الملف وتعيين الأيقونة المناسبة
-      let iconClass = 'fa-file';
+      // تحديد نوع الملف وتحديث القيمة
       let mediaType = 'document';
       
       if (file.type.startsWith('image/')) {
-        iconClass = 'fa-image';
         mediaType = 'image';
       } else if (file.type.startsWith('video/')) {
-        iconClass = 'fa-video';
         mediaType = 'video';
       } else if (file.type.startsWith('audio/')) {
-        iconClass = 'fa-music';
         mediaType = 'audio';
-      } else if (file.type === 'application/pdf') {
-        iconClass = 'fa-file-pdf';
-      } else if (file.type.includes('word') || file.type.includes('document')) {
-        iconClass = 'fa-file-word';
-      } else if (file.type.includes('excel') || file.type.includes('sheet')) {
-        iconClass = 'fa-file-excel';
-      } else if (file.type.includes('powerpoint') || file.type.includes('presentation')) {
-        iconClass = 'fa-file-powerpoint';
       }
       
-      // تعيين الأيقونة
-      fileTypeIcon.className = `fas ${iconClass} me-2`;
+      // قائمة أنواع MIME المدعومة في واتساب API
+      const supportedTypes = {
+        'image': ['image/jpeg', 'image/png', 'image/webp'],
+        'video': ['video/mp4'],
+        'audio': ['audio/mpeg', 'audio/ogg', 'audio/mp3', 'audio/mp4'],
+        'document': [
+          'application/pdf', 
+          'application/msword', 
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-powerpoint',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        ]
+      };
       
-      // تحديث نوع الوسائط إذا كان تلقائيًا
-      if (uploadMediaType.value === 'auto') {
-        uploadMediaType.value = mediaType;
+      // التحقق من دعم نوع الملف
+      let isSupported = false;
+      for (const type in supportedTypes) {
+        if (supportedTypes[type].includes(file.type)) {
+          isSupported = true;
+          break;
+        }
+      }
+      
+      if (!isSupported) {
+        window.showToast && window.showToast(`نوع الملف ${file.type} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`, 'warning');
+        fileInput.value = '';
+        return;
       }
       
       // إظهار معاينة الملف
-      filePreview.style.display = 'block';
+      mediaPreview.style.display = 'block';
+      
+      // تحديث نوع الوسائط إذا كان تلقائيًا
+      if (uploadMediaType && uploadMediaType.value === 'auto') {
+        uploadMediaType.value = mediaType;
+      }
+      
+      // بدء تحميل الملف تلقائياً
+      window.uploadMedia && window.uploadMedia();
     }
   }
-
-  /**
-   * دالة لمسح الملف المحدد
-   */
-  window.clearSelectedFile = function() {
-    document.getElementById('mediaFile').value = '';
-    document.getElementById('filePreview').style.display = 'none';
-  };
 
   /**
    * دالة لتحميل الوسائط إلى الخادم
    */
   window.uploadMedia = function() {
-    const form = document.getElementById('mediaUploadForm');
     const fileInput = document.getElementById('mediaFile');
     const mediaType = document.getElementById('uploadMediaType').value;
     const conversationId = document.getElementById('uploadConversationId').value;
+    const progressBar = document.querySelector('.upload-progress .progress-bar');
+    const progressContainer = document.querySelector('.upload-progress');
     
     // التحقق من اختيار ملف
     if (!fileInput.files || fileInput.files.length === 0) {
@@ -1038,60 +1044,14 @@
       return;
     }
     
-    // التحقق من نوع الملف
-    const file = fileInput.files[0];
-    const supportedTypes = {
-      'image': ['image/jpeg', 'image/png', 'image/webp'],
-      'video': ['video/mp4', 'video/3gpp'],
-      'audio': ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'],
-      'document': [
-        'application/pdf', 
-        'application/vnd.ms-powerpoint', 
-        'application/msword', 
-        'application/vnd.ms-excel', 
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation', 
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-        'text/plain'
-      ]
-    };
-    
-    // إذا كان النوع تلقائيًا، نحدده بناءً على نوع الملف
-    if (mediaType === 'auto') {
-      if (file.type.startsWith('image/')) {
-        document.getElementById('uploadMediaType').value = 'image';
-      } else if (file.type.startsWith('video/')) {
-        document.getElementById('uploadMediaType').value = 'video';
-      } else if (file.type.startsWith('audio/')) {
-        document.getElementById('uploadMediaType').value = 'audio';
-      } else {
-        document.getElementById('uploadMediaType').value = 'document';
-      }
-    }
-    
-    // التحقق من دعم نوع الملف
-    let isSupported = false;
-    for (const type in supportedTypes) {
-      if (supportedTypes[type].includes(file.type)) {
-        isSupported = true;
-        break;
-      }
-    }
-    
-    if (!isSupported) {
-      window.showToast && window.showToast(`نوع الملف ${file.type} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`, 'warning');
-      return;
-    }
-    
     // إنشاء FormData
     const formData = new FormData();
     formData.append('mediaFile', fileInput.files[0]);
-    formData.append('mediaType', document.getElementById('uploadMediaType').value);
+    formData.append('mediaType', mediaType);
     formData.append('conversationId', conversationId);
     
     // إظهار شريط التقدم
-    const progressBar = document.querySelector('.upload-progress .progress-bar');
-    document.querySelector('.upload-progress').style.display = 'block';
+    progressContainer.style.display = 'block';
     progressBar.style.width = '0%';
     progressBar.textContent = '0%';
     
@@ -1122,20 +1082,8 @@
         const response = JSON.parse(xhr.responseText);
         
         if (response.success) {
-          // إخفاء النموذج
-          const modal = bootstrap.Modal.getInstance(document.getElementById('mediaUploadModal'));
-          modal.hide();
-          
-          // عرض معاينة الملف المرفق
-          document.getElementById('mediaPreview').style.display = 'block';
-          document.getElementById('mediaFileName').textContent = response.media.fileName || 'ملف مرفق';
           document.getElementById('mediaId').value = response.media._id;
           document.getElementById('mediaType').value = response.media.mediaType;
-          
-          // تنظيف نموذج التحميل
-          fileInput.value = '';
-          document.getElementById('filePreview').style.display = 'none';
-          
           window.showToast && window.showToast('تم تحميل الملف بنجاح', 'success');
         } else {
           window.showToast && window.showToast(response.error || 'حدث خطأ أثناء تحميل الملف', 'danger');
@@ -1146,14 +1094,10 @@
           console.error('خطأ في معالجة استجابة تحميل الملف:', error);
         }
       } finally {
-        // إعادة تفعيل زر التحميل
-        if (uploadBtn) {
-          uploadBtn.disabled = false;
-          uploadBtn.innerHTML = 'تحميل';
-        }
-        
-        // إخفاء شريط التقدم
-        document.querySelector('.upload-progress').style.display = 'none';
+        // إخفاء شريط التقدم بعد الانتهاء
+        setTimeout(function() {
+          progressContainer.style.display = 'none';
+        }, 1000);
       }
     };
     
@@ -1161,14 +1105,8 @@
     xhr.onerror = function() {
       window.showToast && window.showToast('حدث خطأ أثناء الاتصال بالخادم', 'danger');
       
-      // إعادة تفعيل زر التحميل
-      if (uploadBtn) {
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = 'تحميل';
-      }
-      
       // إخفاء شريط التقدم
-      document.querySelector('.upload-progress').style.display = 'none';
+      progressContainer.style.display = 'none';
     };
     
     // إرسال البيانات
@@ -1176,7 +1114,7 @@
   };
 
   /**
-   * دالة لإزالة ملف مرفق من الرسالة
+   * دالة لمسح الملف المرفق من الرسالة
    */
   window.clearMediaAttachment = function() {
     document.getElementById('mediaPreview').style.display = 'none';
@@ -1390,23 +1328,19 @@ function handleFileSelection() {
       mediaType = 'audio';
     }
     
-    // تحديث نوع الوسائط
-    uploadMediaType.value = mediaType;
-    
-    // التحقق من دعم نوع الملف
+    // قائمة أنواع MIME المدعومة في واتساب API
     const supportedTypes = {
       'image': ['image/jpeg', 'image/png', 'image/webp'],
-      'video': ['video/mp4', 'video/3gpp'],
-      'audio': ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'],
+      'video': ['video/mp4'],
+      'audio': ['audio/mpeg', 'audio/ogg', 'audio/mp3', 'audio/mp4'],
       'document': [
         'application/pdf', 
-        'application/vnd.ms-powerpoint', 
         'application/msword', 
-        'application/vnd.ms-excel', 
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation', 
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-        'text/plain'
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation'
       ]
     };
     
@@ -1428,8 +1362,13 @@ function handleFileSelection() {
     // إظهار معاينة الملف
     mediaPreview.style.display = 'block';
     
+    // تحديث نوع الوسائط إذا كان تلقائيًا
+    if (uploadMediaType && uploadMediaType.value === 'auto') {
+      uploadMediaType.value = mediaType;
+    }
+    
     // بدء تحميل الملف تلقائياً
-    window.uploadMedia();
+    window.uploadMedia && window.uploadMedia();
   }
 }
 
