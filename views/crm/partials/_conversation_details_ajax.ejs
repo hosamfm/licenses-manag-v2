@@ -6,8 +6,6 @@
   window.currentUsername = "<%= typeof user !== 'undefined' && user ? user.username : 'مستخدم النظام' %>";
 </script>
 
-<!-- استدعاء ملف المساعدة للمحادثات -->
-<script src="/js/conversation-utils.js"></script>
 
 <!-- دوال مساعدة محلية -->
 <script>
@@ -85,8 +83,18 @@
               </div>
             <% } %>
             
-            <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %> <%= msg.mediaType ? 'message-with-media' : '' %>">
-              <% if (msg.mediaType) { %>
+            <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : (msg.direction === 'internal' ? 'internal-note-bubble' : 'outgoing-bubble') %> <%= msg.mediaType ? 'message-with-media' : '' %>">
+              <% if (msg.direction === 'internal') { %>
+                <!-- عرض التعليق الداخلي -->
+                <div class="internal-note-header">
+                  <i class="fas fa-sticky-note me-1"></i>
+                  <strong>ملاحظة داخلية</strong>
+                  <span class="from-user"><%= msg.sentBy ? `- ${msg.sentBy.username || msg.sentBy}` : 'النظام' %></span>
+                </div>
+                <div class="internal-note-content">
+                  <%- msg.content.replace(/\n/g, '<br>') %>
+                </div>
+              <% } else if (msg.mediaType) { %>
                 <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
                 <% 
                   // الحصول على معلومات الوسائط من الكائن المناسب (سواء من الرسالة مباشرة أو من كائن الوسائط المضاف)
@@ -173,7 +181,7 @@
                 <% } %>
               <% } %>
               
-              <% if (msg.content && msg.content.trim() !== '') { %>
+              <% if (msg.content && msg.content.trim() !== '' && msg.direction !== 'internal') { %>
                 <div class="message-text <%= msg.mediaType ? 'with-media' : '' %>">
                   <%= msg.content %>
                 </div>

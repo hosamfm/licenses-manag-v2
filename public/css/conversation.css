@@ -623,6 +623,54 @@ body {
   transition: width 0.3s ease;
 }
 
+/* أنماط التعليقات الداخلية */
+.internal-note-bubble {
+  background-color: #fff3cd !important;
+  border: 1px solid #ffeeba;
+  color: #856404;
+  margin: 5px 0;
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.internal-note-header {
+  border-bottom: 1px dashed #ffeeba;
+  padding-bottom: 5px;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+}
+
+.internal-note-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.internal-note-header .from-user {
+  font-style: italic;
+  margin-right: 5px;
+  font-size: 0.85rem;
+}
+
+.message.internal {
+  padding: 5px 15px;
+  text-align: center;
+  float: none;
+  margin: 10px auto;
+  max-width: 90%;
+  clear: both;
+}
+
+/* زر إضافة ملاحظة داخلية */
+.internal-note-btn {
+  margin: 0 5px;
+}
+
+.note-input-container {
+  margin-top: 10px;
+  display: none;
+}
+
 /* أنماط تفاصيل المحادثة على الهواتف */
 @media (max-width: 991.98px) {
   .crm-content > .row > .col-lg-4 {

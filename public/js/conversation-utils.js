@@ -384,6 +384,80 @@
         if (typeof playMessageSound === 'function') {
           playMessageSound('sent');
         }
+        
+        // إضافة الرسالة إلى واجهة المستخدم مباشرة بعد الإرسال الناجح
+        if (typeof window.addMessageToConversation === 'function') {
+          // إنشاء معرف فريد للرسالة لمنع التكرار
+          const clientMessageId = 'local_' + Date.now().toString();
+          
+          // تخزين المعرف المؤقت في متغير عام لمنع تكرار الرسالة عند استقبالها من الخادم
+          if (!window.sentMessageIds) {
+            window.sentMessageIds = new Set();
+          }
+          window.sentMessageIds.add(clientMessageId);
+          window.sentMessageIds.add(data.messageId); // أيضًا تخزين معرف الرسالة من الخادم إن وجد
+          
+          // إنشاء كائن الرسالة لإضافته إلى واجهة المستخدم
+          const outgoingMessage = {
+            _id: data.messageId || clientMessageId,
+            direction: 'outgoing',
+            content: messageText,
+            timestamp: new Date().toISOString(),
+            status: 'sending',
+            conversationId: conversationId.value,
+            _clientId: clientMessageId // إضافة معرف العميل للتعرف على الرسالة لاحقًا
+          };
+          
+          // إضافة معلومات الرد إذا كانت موجودة
+          if (requestData.replyToMessageId) {
+            outgoingMessage.replyToMessageId = requestData.replyToMessageId;
+          }
+          
+          // إضافة معلومات الوسائط إذا كانت موجودة
+          if (requestData.media && requestData.media.type) {
+            outgoingMessage.mediaType = requestData.media.type;
+            
+            // عرض معلومات الملف في واجهة المستخدم بشكل مؤقت
+            if (fileInfo) {
+              outgoingMessage.fileName = fileInfo.name;
+              outgoingMessage.fileSize = fileInfo.size;
+            }
+            
+            // إضافة التعليق إذا كان موجودًا
+            if (requestData.media.caption) {
+              outgoingMessage.caption = requestData.media.caption;
+            }
+          }
+          
+          // إضافة الرسالة إلى واجهة المستخدم
+          window.addMessageToConversation(outgoingMessage);
+          
+          // تعديل دالة إضافة الرسائل لتجنب التكرار
+          const originalAddMessage = window.addMessageToConversation;
+          window.addMessageToConversation = function(messageData) {
+            // تجاهل الرسائل التي أرسلناها بالفعل
+            if (window.sentMessageIds && (
+              window.sentMessageIds.has(messageData._id) || 
+              (messageData._clientId && window.sentMessageIds.has(messageData._clientId))
+            )) {
+              console.log('تجاهل رسالة مكررة:', messageData._id);
+              return;
+            }
+            
+            // إضافة معرف الرسالة إلى قائمة الرسائل المرسلة لتجنب التكرار
+            if (window.sentMessageIds && messageData._id) {
+              window.sentMessageIds.add(messageData._id);
+            }
+            
+            // استدعاء الدالة الأصلية
+            return originalAddMessage(messageData);
+          };
+          
+          // إعادة الدالة الأصلية بعد ثانيتين لتجنب التداخل مع الرسائل المستقبلية
+          setTimeout(function() {
+            window.addMessageToConversation = originalAddMessage;
+          }, 2000);
+        }
       } else {
         throw new Error(data.error || 'فشل في إرسال الرسالة');
       }
@@ -1040,10 +1114,12 @@
     progressBar.style.width = '0%';
     progressBar.textContent = '0%';
     
-    // تعطيل زر التحميل
+    // تعطيل زر التحميل (إذا كان موجودًا)
     const uploadBtn = document.getElementById('uploadMediaBtn');
-    uploadBtn.disabled = true;
-    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+    if (uploadBtn) {
+      uploadBtn.disabled = true;
+      uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+    }
     
     // إرسال طلب تحميل الملف باستخدام XMLHttpRequest لتتبع التقدم
     const xhr = new XMLHttpRequest();
@@ -1090,8 +1166,10 @@
         }
       } finally {
         // إعادة تفعيل زر التحميل
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = 'تحميل';
+        if (uploadBtn) {
+          uploadBtn.disabled = false;
+          uploadBtn.innerHTML = 'تحميل';
+        }
         
         // إخفاء شريط التقدم
         document.querySelector('.upload-progress').style.display = 'none';
@@ -1103,8 +1181,10 @@
       window.showToast && window.showToast('حدث خطأ أثناء الاتصال بالخادم', 'danger');
       
       // إعادة تفعيل زر التحميل
-      uploadBtn.disabled = false;
-      uploadBtn.innerHTML = 'تحميل';
+      if (uploadBtn) {
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = 'تحميل';
+      }
       
       // إخفاء شريط التقدم
       document.querySelector('.upload-progress').style.display = 'none';
@@ -1398,6 +1478,13 @@ window.uploadMedia = function() {
   progressContainer.style.display = 'block';
   progressBar.style.width = '0%';
   progressBar.textContent = '0%';
+  
+  // تعطيل زر التحميل (إذا كان موجودًا)
+  const uploadBtn = document.getElementById('uploadMediaBtn');
+  if (uploadBtn) {
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+  }
   
   // إرسال طلب تحميل الملف باستخدام XMLHttpRequest لتتبع التقدم
   const xhr = new XMLHttpRequest();

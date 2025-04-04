@@ -211,34 +211,74 @@ exports.addInternalNote = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const noteContent = req.body.noteContent || '';
+    // الحصول على المستخدم الحالي
+    const currentUserId = req.user ? req.user._id : null;
+    const currentUser = req.user ? req.user : null;
 
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
+      if (req.xhr) {
+        return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
+      }
       req.flash('error', 'المحادثة غير موجودة');
       return res.redirect('/crm/conversations');
     }
 
     if (!noteContent.trim()) {
+      if (req.xhr) {
+        return res.status(400).json({ success: false, error: 'لا يمكن إضافة ملاحظة فارغة' });
+      }
       req.flash('error', 'لا يمكن إضافة ملاحظة فارغة');
       return res.redirect(`/crm/conversations/${conversationId}`);
     }
 
-    // تنشئ رسالة خاصة بالإدخال الداخلي (يمكنك إضافة حقل isInternalNote=true في النموذج)
+    // تنشئ رسالة خاصة بالإدخال الداخلي
     const noteMsg = new WhatsappMessage({
       conversationId,
       direction: 'internal', 
       content: noteContent,
       timestamp: new Date(),
-      status: 'note'
+      status: 'note',
+      sentBy: currentUserId
     });
     await noteMsg.save();
+    
+    // تحميل المستخدم الحالي للحصول على اسم المستخدم
+    await noteMsg.populate('sentBy', 'username');
+    
+    // إرسال الملاحظة عبر Socket.io
+    socketService.emitToRoom(`conversation-${conversationId}`, 'internal-note', {
+      conversationId,
+      note: {
+        _id: noteMsg._id,
+        conversationId: noteMsg.conversationId,
+        content: noteMsg.content,
+        timestamp: noteMsg.timestamp,
+        direction: noteMsg.direction,
+        status: noteMsg.status,
+        sentBy: noteMsg.sentBy || (currentUser ? { 
+          _id: currentUser._id, 
+          username: currentUser.username 
+        } : null)
+      }
+    });
 
-    req.flash('success', 'تمت إضافة الملاحظة بنجاح');
-    res.redirect(`/crm/conversations/${conversationId}`);
+    // الاستجابة وفقاً لنوع الطلب (AJAX أو عادي)
+    if (req.xhr) {
+      res.json({ success: true, note: noteMsg });
+    } else {
+      req.flash('success', 'تمت إضافة الملاحظة بنجاح');
+      res.redirect(`/crm/conversations/${conversationId}`);
+    }
   } catch (error) {
     logger.error('conversationController', 'خطأ في إضافة ملاحظة', error);
-    req.flash('error', 'حدث خطأ أثناء إضافة الملاحظة');
-    res.redirect('/crm/conversations');
+    
+    if (req.xhr) {
+      res.status(500).json({ success: false, error: 'حدث خطأ أثناء إضافة الملاحظة' });
+    } else {
+      req.flash('error', 'حدث خطأ أثناء إضافة الملاحظة');
+      res.redirect('/crm/conversations');
+    }
   }
 };
 

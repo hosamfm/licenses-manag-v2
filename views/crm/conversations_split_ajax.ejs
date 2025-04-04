@@ -8,7 +8,8 @@
   <link rel="stylesheet" href="/css/conversation.css">
   <!-- إضافة مكتبة Socket.IO - مهم لوظائف المحادثات الفورية -->
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-  
+  <!-- استدعاء ملف مساعد التعليقات الداخلية -->
+  <script src="/js/conversation-notes-utils.js"></script>
   <!-- تعريف معلومات المستخدم كمتغيرات عامة -->
   <script>
     window.currentUserId = "<%= typeof user !== 'undefined' && user ? user._id : 'system' %>";
@@ -18,8 +19,6 @@
   <!-- استدعاء ملف المساعدة للمحادثات -->
   <script src="/js/conversation-utils.js"></script>
   
-<!-- استدعاء ملف مساعد تحميل الوسائط والتسجيل -->
-<script src="/js/conversation-uploade-utils.js" onload="console.log('تم تحميل ملف upload utils بنجاح')" onerror="console.error('خطأ في تحميل ملف upload utils:', this.src)"></script>
 <!-- استدعاء ملف خدمة الإشعارات -->
   <script src="/js/notifications.js"></script>
 </head>
@@ -220,6 +219,23 @@
         messageElem.setAttribute('data-external-id', data.externalId);
       });
       
+      // معالج حدث للملاحظات الداخلية
+      socket.on('internal-note', function(data) {
+        console.log('تم استلام ملاحظة داخلية جديدة:', data);
+        
+        // التحقق من أن الملاحظة تنتمي إلى المحادثة الحالية
+        if (data.conversationId === currentConversationId) {
+          // إضافة الملاحظة الداخلية إلى واجهة المستخدم
+          window.addNoteToUI(data.note);
+          
+          // تشغيل صوت الإشعار للملاحظات الجديدة
+          window.playNotificationSound();
+          
+          // تحديث قائمة المحادثات لعرض آخر رسالة
+          refreshConversationsList();
+        }
+      });
+      
       // تحديث قائمة المحادثات بدون إعادة تحميل الصفحة
       function refreshConversationsList() {
         fetch('/crm/conversations/ajax/list', {
@@ -320,11 +336,17 @@
       }
       
       // تحميل تفاصيل المحادثة
-      function loadConversationDetails(conversationId) {
+      function loadConversationDetails(conversationId, skipCache = false) {
         if (!conversationId) return;
         
         const detailsContainer = document.getElementById('conversationDetailsContainer');
         if (!detailsContainer) return;
+        
+        // الانضمام إلى غرفة المحادثة عبر Socket.io للحصول على الإشعارات الفورية
+        if (socket && socket.connected) {
+          console.log('الانضمام إلى غرفة المحادثة:', conversationId);
+          socket.emit('join-conversation', conversationId);
+        }
         
         // عرض مؤشر التحميل
         detailsContainer.innerHTML = `
@@ -336,11 +358,20 @@
           </div>
         `;
         
+        // إنشاء رابط مع إضافة معلمة لتخطي الكاش عند الحاجة
+        const url = new URL(`/crm/conversations/ajax/details/${conversationId}`, window.location.origin);
+        
+        // إضافة معلمة لتجاوز الكاش عند الحاجة
+        if (skipCache) {
+          url.searchParams.append('t', new Date().getTime());
+        }
+        
         // طلب التفاصيل من الخادم
-        fetch(`/crm/conversations/ajax/details/${conversationId}`, {
+        fetch(url.toString(), {
           method: 'GET',
           headers: {
-            'X-Requested-With': 'XMLHttpRequest'
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cache-Control': skipCache ? 'no-cache, no-store, must-revalidate' : 'default'
           }
         })
         .then(response => {
@@ -353,9 +384,6 @@
           
           // تحديث معرف المحادثة الحالية
           currentConversationId = conversationId;
-          
-          // الانضمام إلى غرفة المحادثة عبر الويب سوكت
-          socket.emit('join-conversation', conversationId);
           
           // التمرير لأسفل آخر الرسائل
           setTimeout(() => {
@@ -381,7 +409,7 @@
       // تحديث تفاصيل المحادثة (إعادة تحميل)
       window.refreshConversationDetails = function() {
         if (currentConversationId) {
-          loadConversationDetails(currentConversationId);
+          loadConversationDetails(currentConversationId, true);
         }
       };
       
@@ -573,6 +601,58 @@
         if (newMessage) {
           window.setupMessageActions(newMessage);
         }
+      };
+      
+      // وظيفة لإضافة ملاحظة داخلية إلى واجهة المستخدم مباشرة
+      window.addNoteToUI = function(note) {
+        console.log('إضافة ملاحظة داخلية للواجهة:', note);
+        const messageContainer = document.getElementById('messageContainer');
+        if (!messageContainer) {
+          console.error('لم يتم العثور على حاوية الرسائل!');
+          return;
+        }
+        
+        // التحقق من وجود الملاحظة مسبقاً (لمنع إضافتها مرتين)
+        const noteExists = document.querySelector(`.message[data-message-id="${note._id}"]`);
+        if (noteExists) {
+          console.log('الملاحظة موجودة مسبقاً:', note._id);
+          return;
+        }
+        
+        // إنشاء عنصر جديد للملاحظة
+        const noteElement = document.createElement('div');
+        noteElement.className = 'message internal-note';
+        noteElement.setAttribute('data-message-id', note._id);
+        
+        // تنسيق التاريخ
+        const timestamp = new Date(note.timestamp);
+        const timeString = timestamp.toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' });
+        
+        // إضافة HTML للملاحظة
+        noteElement.innerHTML = `
+          <div class="message-bubble internal-note-bubble">
+            <div class="internal-note-header">
+              <i class="fas fa-sticky-note me-1"></i>
+              <strong>ملاحظة داخلية</strong>
+              <span class="from-user">${note.sentBy && note.sentBy.username ? `- ${note.sentBy.username}` : note.sentBy ? `- ${note.sentBy}` : ''}</span>
+            </div>
+            <div class="internal-note-content">
+              ${note.content.replace(/\n/g, '<br>')}
+            </div>
+            <div class="message-meta">
+              <span class="message-time" title="${timestamp.toLocaleString()}">
+                ${timeString}
+              </span>
+            </div>
+          </div>
+          <div class="clear-both"></div>
+        `;
+        
+        // إضافة الملاحظة إلى الحاوية
+        messageContainer.appendChild(noteElement);
+        
+        // التمرير إلى أسفل لعرض الملاحظة الجديدة
+        messageContainer.scrollTop = messageContainer.scrollHeight;
       };
       
       // تهيئة الصفحة عند التحميل
