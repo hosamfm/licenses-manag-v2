@@ -79,140 +79,58 @@ const whatsappMessageSchema = new mongoose.Schema({
 
 /**
  * إنشاء رسالة واردة جديدة
- * @param {Object} conversationId - معرّف المحادثة
- * @param {Object} messageData - بيانات الرسالة
+ * @param {Object} whatsappData بيانات الرسالة
+ * @param {Object} conversationId معرّف المحادثة
+ * @param {Object} options خيارات إضافية
+ * @returns {Promise<Object>} الرسالة التي تم إنشاؤها
  */
-whatsappMessageSchema.statics.createIncomingMessage = async function(conversationId, messageData) {
+whatsappMessageSchema.statics.createIncomingMessage = async function(whatsappData, conversationId, options = {}) {
   try {
-    const { from, id, type, timestamp } = messageData;
-    let content = '';
-    let mediaUrl = '';
-    let replyToMessageId = null;
-    let context = null;
+    const { id, messageType, text, timestamp = new Date(), from } = whatsappData;
     
-    // تحسين سجلات التشخيص - سجل واحد موحد بدلاً من سجلات متعددة
-    logger.debug('WhatsappMessageModel', 'بيانات رسالة واتساب الواردة', { 
-      messageId: id, 
-      type, 
-      from, 
-      hasContext: !!messageData.context || !!messageData.metadata?.context 
-    });
-    
-    // استخراج محتوى الرسالة حسب نوعها
-    if (type === 'text' && messageData.text) {
-      content = messageData.text.body;
-    } else if (type === 'image' && messageData.image) {
-      mediaUrl = messageData.image.link || messageData.image.id;
-    } else if (type === 'video' && messageData.video) {
-      mediaUrl = messageData.video.link || messageData.video.id;
-    } else if (type === 'audio' && messageData.audio) {
-      mediaUrl = messageData.audio.link || messageData.audio.id;
-    } else if (type === 'document' && messageData.document) {
-      mediaUrl = messageData.document.link || messageData.document.id;
-      content = messageData.document.filename || '';
-    } else if (type === 'location' && messageData.location) {
-      content = `Latitude: ${messageData.location.latitude}, Longitude: ${messageData.location.longitude}`;
-      if (messageData.location.name) {
-        content += `, Name: ${messageData.location.name}`;
-      }
-      if (messageData.location.address) {
-        content += `, Address: ${messageData.location.address}`;
-      }
-    } else if (type === 'reaction' && messageData.reaction) {
-      // معالجة التفاعلات
-      const reactedMessage = await this.findOne({ externalMessageId: messageData.reaction.message_id });
-      if (reactedMessage) {
-        await this.updateReaction(reactedMessage._id, {
-          sender: from,
-          emoji: messageData.reaction.emoji,
-          timestamp: timestamp ? new Date(timestamp * 1000) : new Date()
-        });
-        
-        return {
-          isReaction: true,
-          originalMessageId: reactedMessage._id,
-          reaction: messageData.reaction.emoji
-        };
-      }
-      
-      // تفاعل على رسالة غير موجودة
-      return null;
+    // التحقق من وجود الرسالة مسبقاً لتجنب التكرار
+    const existingMessage = await this.findOne({ externalMessageId: id });
+    if (existingMessage) {
+      logger.info('تجاهل الرسالة المكررة', { id, conversationId });
+      return existingMessage;
     }
     
-    // استخراج معلومات الرد إذا وجدت
-    try {
-      if (messageData.context && messageData.context.message_id) {
-        replyToMessageId = messageData.context.message_id;
-        context = messageData.context;
-      } else if (messageData.context && messageData.context.id) {
-        replyToMessageId = messageData.context.id;
-        context = messageData.context;
-      } else if (messageData.metadata && messageData.metadata.context && messageData.metadata.context.id) {
-        replyToMessageId = messageData.metadata.context.id;
-        context = messageData.metadata.context;
-      }
-    } catch (contextError) {
-      logger.error('WhatsappMessageModel', 'خطأ في استخراج معلومات الرد', contextError);
-    }
+    // تحديد حالة الرسالة (افتراضياً 'تم الاستلام')
+    const status = options.status || 'received';
     
-    // إنشاء سجل الرسالة الجديدة
-    const message = await this.create({
-      conversationId,
-      direction: 'incoming',
-      content,
-      mediaUrl,
-      mediaType: type === 'text' ? null : type,
-      timestamp: timestamp ? new Date(timestamp * 1000) : new Date(),
-      status: 'received',
+    // إنشاء كائن الرسالة الجديدة
+    const messageData = {
       externalMessageId: id,
-      replyToMessageId,
-      context,
-      metadata: {
-        from,
-        ...messageData.metadata
-      }
-    });
+      conversationId,
+      senderPhone: from,
+      text: messageType === 'text' ? text : options.textOverride || '',
+      timestamp: new Date(timestamp), // تحويل الطابع الزمني إلى كائن Date
+      direction: 'incoming',
+      status,
+      mediaType: options.mediaType || null,
+      metadata: options.metadata || {}
+    };
     
-    // البحث عن تحديثات حالة مخزنة مؤقتاً لهذه الرسالة
-    // استيراد خدمة التخزين المؤقت (نضع هذا داخل الدالة لتجنب مشكلة الاعتماد الدائري)
-    const cacheService = require('../services/cacheService');
-    const cachedStatus = cacheService.getMessageStatusCache(id);
+    // حفظ الرسالة الجديدة في قاعدة البيانات
+    const newMessage = new this(messageData);
+    const savedMessage = await newMessage.save();
     
-    if (cachedStatus) {
-      logger.info('WhatsappMessageModel', 'تم العثور على حالة مخزنة مؤقتاً للرسالة', { 
-        messageId: message._id, 
-        externalId: id, 
-        status: cachedStatus.status 
-      });
-      
-      // تطبيق الحالة والتوقيت على الرسالة
-      message.status = cachedStatus.status;
-      
-      if (cachedStatus.status === 'delivered') {
-        message.deliveredAt = cachedStatus.timestamp;
-      } else if (cachedStatus.status === 'read') {
-        message.readAt = cachedStatus.timestamp;
-      }
-      
-      await message.save();
-      
-      // حذف الحالة المخزنة مؤقتاً بعد تطبيقها
-      cacheService.deleteMessageStatusCache(id);
-    }
+    // تسجيل نجاح العملية
+    logger.info('تم إنشاء رسالة واردة جديدة', { id, conversationId });
     
-    return message;
+    return savedMessage;
   } catch (error) {
-    logger.error('WhatsappMessageModel', 'خطأ في إنشاء رسالة واردة', error);
+    logger.error('خطأ في إنشاء رسالة واردة', error);
     throw error;
   }
 };
 
 /**
  * إنشاء رسالة صادرة جديدة
- * @param {Object} conversationId - معرّف المحادثة
- * @param {string} content - محتوى الرسالة
- * @param {Object} userId - معرّف المستخدم المرسل
- * @param {string} replyToMessageId - معرّف الرسالة التي يتم الرد عليها (اختياري)
+ * @param {Object} conversationId معرّف المحادثة
+ * @param {string} content محتوى الرسالة
+ * @param {Object} userId معرّف المستخدم المرسل
+ * @param {string} replyToMessageId معرّف الرسالة التي يتم الرد عليها (اختياري)
  */
 whatsappMessageSchema.statics.createOutgoingMessage = async function(conversationId, content, userId, replyToMessageId = null) {
   try {
@@ -248,9 +166,9 @@ whatsappMessageSchema.statics.createOutgoingMessage = async function(conversatio
 
 /**
  * تحديث حالة الرسالة
- * @param {string} externalMessageId - معرّف الرسالة الخارجي
- * @param {string} status - الحالة الجديدة
- * @param {Date} timestamp - توقيت التحديث
+ * @param {string} externalMessageId معرّف الرسالة الخارجي
+ * @param {string} status الحالة الجديدة
+ * @param {Date} timestamp توقيت التحديث
  */
 whatsappMessageSchema.statics.updateMessageStatus = async function(externalMessageId, status, timestamp) {
   try {
@@ -278,8 +196,8 @@ whatsappMessageSchema.statics.updateMessageStatus = async function(externalMessa
 
 /**
  * تحديث التفاعل على رسالة
- * @param {string} messageId - معرّف الرسالة الأصلية
- * @param {Object} reactionData - بيانات التفاعل (المرسل، الإيموجي، التوقيت)
+ * @param {string} messageId معرّف الرسالة الأصلية
+ * @param {Object} reactionData بيانات التفاعل (المرسل، الإيموجي، التوقيت)
  */
 whatsappMessageSchema.statics.updateReaction = async function(messageId, reactionData) {
   try {
@@ -345,10 +263,10 @@ whatsappMessageSchema.statics.updateReaction = async function(messageId, reactio
 
 /**
  * إنشاء رسالة رد صادرة جديدة
- * @param {Object} conversationId - معرّف المحادثة
- * @param {string} content - محتوى الرسالة
- * @param {Object} userId - معرّف المستخدم المرسل
- * @param {string} replyToMessageId - معرّف الرسالة التي يتم الرد عليها
+ * @param {Object} conversationId معرّف المحادثة
+ * @param {string} content محتوى الرسالة
+ * @param {Object} userId معرّف المستخدم المرسل
+ * @param {string} replyToMessageId معرّف الرسالة التي يتم الرد عليها
  */
 whatsappMessageSchema.statics.createReplyMessage = async function(conversationId, content, userId, replyToMessageId) {
   try {
@@ -397,7 +315,7 @@ whatsappMessageSchema.statics.createReplyMessage = async function(conversationId
 
 /**
  * الحصول على رسالة بواسطة المعرف الخارجي
- * @param {string} externalMessageId - المعرف الخارجي للرسالة
+ * @param {string} externalMessageId المعرف الخارجي للرسالة
  */
 whatsappMessageSchema.statics.getMessageByExternalId = async function(externalMessageId) {
   try {

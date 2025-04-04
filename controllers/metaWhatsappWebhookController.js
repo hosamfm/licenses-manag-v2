@@ -11,7 +11,6 @@ const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const whatsappMediaController = require('./whatsappMediaController');
 const mediaService = require('../services/mediaService');
-const cacheService = require('../services/cacheService');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -189,9 +188,9 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
         }
       }
     } else {
-      // تخزين حالة الرسالة غير الموجودة في التخزين المؤقت للتطبيق لاحقاً
-      cacheService.setMessageStatusCache(externalId, newStatus, timestamp);
-      logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage، تم تخزين الحالة مؤقتاً', { externalId, newStatus });
+      // لا نستخدم الكاش بعد الآن
+      // cacheService.setMessageStatusCache(externalId, newStatus, timestamp);
+      logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage، تم تجاهل الحالة', { externalId, newStatus });
     }
   } catch (err) {
     logger.error('metaWhatsappWebhookController', 'خطأ في updateMessageStatus', err);
@@ -507,22 +506,12 @@ exports.handleIncomingMessages = async (messages, meta) => {
           externalId: savedMsg.externalMessageId 
         });
 
-        // تحديث التخزين المؤقت للمحادثة بإضافة الرسالة الجديدة بدلاً من مسحه
-        const isCacheUpdated = cacheService.updateCachedMessages(conversation._id.toString(), savedMsg.toObject());
+        // تحديث التخزين المؤقت للمحادثة غير مطلوب بعد الآن
+        // const isCacheUpdated = cacheService.updateCachedMessages(conversation._id.toString(), savedMsg.toObject());
         
-        if (isCacheUpdated) {
-          logger.info('metaWhatsappWebhookController', 'تم تحديث التخزين المؤقت للمحادثة بعد استلام رسالة جديدة', { 
-            conversationId: conversation._id.toString()
-          });
-        } else {
-          // إذا فشل التحديث (ربما لأن التخزين المؤقت غير موجود)، نقوم بمسح التخزين المؤقت
-          const cacheCleared = await cacheService.clearConversationCache(conversation._id.toString());
-          logger.info('metaWhatsappWebhookController', 'تم مسح التخزين المؤقت للمحادثة بعد فشل التحديث', { 
-            conversationId: conversation._id.toString(),
-            clearedKeys: cacheCleared
-          });
-        }
-
+        // لا نحتاج لمسح الكاش
+        // const cacheCleared = await cacheService.clearConversationCache(conversation._id.toString());
+        
         // التحقق ما إذا كانت تفاعل
         // جلب معلومات الوسائط إذا كانت الرسالة تحتوي على وسائط
         let messageWithMedia = savedMsg.toObject();
