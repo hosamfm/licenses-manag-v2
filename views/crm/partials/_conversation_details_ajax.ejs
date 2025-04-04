@@ -8,7 +8,6 @@
 
 <!-- استدعاء ملف المساعدة للمحادثات -->
 <script src="/js/conversation-utils.js"></script>
-<script src="/js/conversation-uploade-utils.js" defer></script>
 
 <!-- دوال مساعدة محلية -->
 <script>
@@ -216,13 +215,13 @@
             
             <!-- قائمة خيارات الرسالة -->
             <div class="message-actions">
-              <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" id="reactionBtn_<%= msg._id %>">
+              <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('<%= msg._id %>', '<%= msg.externalMessageId %>', this)">
                 <i class="far fa-smile"></i>
               </button>
               <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
                       data-message-id="<%= msg._id %>" 
                       data-external-id="<%= msg.externalMessageId %>" 
-                      title="رد" id="replyBtn_<%= msg._id %>">
+                      title="رد" onclick="window.showReplyForm('<%= msg._id %>', '<%= msg.externalMessageId %>', this.closest('.message'))">
                 <i class="fas fa-reply"></i>
               </button>
             </div>
@@ -258,12 +257,6 @@
                 rows="3" placeholder="اكتب رسالتك... (Enter للإرسال)" 
                 onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); window.sendReply(event); }"></textarea>
           <div class="message-input-actions">
-            <button type="button" class="btn btn-link text-secondary media-capture-btn" id="recordAudioBtn" title="تسجيل صوت">
-              <i class="fas fa-microphone"></i>
-            </button>
-            <button type="button" class="btn btn-link text-secondary media-capture-btn" id="captureImageBtn" title="التقاط صورة">
-              <i class="fas fa-camera"></i>
-            </button>
             <button type="button" class="btn btn-link text-secondary" id="attachMediaBtn" title="إرفاق ملف">
               <i class="fas fa-paperclip"></i>
             </button>
@@ -282,7 +275,7 @@
               <input type="hidden" id="mediaType" name="mediaType">
               <input type="hidden" id="uploadMediaType" name="mediaType" value="auto">
               <input type="hidden" id="uploadConversationId" name="conversationId" value="<%= conversation._id %>">
-              <button type="button" class="btn btn-sm btn-danger ms-auto" id="clearMediaAttachmentBtn">
+              <button type="button" class="btn btn-sm btn-danger ms-auto" onclick="window.clearMediaAttachment()">
                 <i class="fas fa-times"></i>
               </button>
             </div>
@@ -298,9 +291,7 @@
         <span class="sending-indicator" id="sendingIndicator" style="display: none;">
           <i class="fas fa-circle-notch fa-spin"></i> جاري الإرسال...
         </span>
-        <button type="button" class="btn btn-outline-secondary" id="clearReplyMessageBtn">
-          مسح
-        </button>
+        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('replyMessage').value = ''">مسح</button>
         <button type="submit" class="btn btn-primary" id="sendButton">
           <i class="fas fa-paper-plane me-1"></i> إرسال
         </button>
@@ -321,32 +312,6 @@
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
             <a href="#" class="btn btn-primary" id="downloadMediaBtn" download>تنزيل</a>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- نافذة التقاط الصور من الكاميرا -->
-    <div id="cameraCaptureModal" class="modal fade" tabindex="-1" data-bs-backdrop="static">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">التقاط صورة</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق" id="closeCameraCaptureBtn">
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="camera-container mb-3">
-              <video id="cameraStream" autoplay playsinline></video>
-              <div class="capture-button" id="capturePhotoBtn">
-                <div class="capture-inner-circle"></div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancelCameraCaptureBtn">
-              إلغاء
-            </button>
           </div>
         </div>
       </div>
