@@ -90,9 +90,22 @@ function setupNotificationListeners(socket) {
     socket.on('new-message', function(data) {
         console.log('تم استلام رسالة جديدة:', data);
         
+        // التعامل مع بنيتين مختلفتين للبيانات: إما الرسالة مباشرة أو داخل كائن message
+        const message = data.message || data;
+        
         // تحديث واجهة المستخدم إذا كانت الرسالة تخص المحادثة الحالية
-        if (window.currentConversationId && data.conversationId === window.currentConversationId) {
-            appendNewMessage(data.message);
+        if (window.currentConversationId && message.conversationId === window.currentConversationId) {
+            // نقوم باستدعاء الدالة الصحيحة لإضافة الرسالة
+            if (typeof window.addMessageToConversation === 'function') {
+                window.addMessageToConversation(message);
+            } else {
+                appendNewMessage(message);
+            }
+            
+            // تسجيل تأكيد في السجل
+            console.log('تمت إضافة رسالة جديدة للمحادثة:', message._id);
+        } else {
+            console.log('تم تجاهل الرسالة لأنها لا تخص المحادثة الحالية');
         }
         
         // تحديث قائمة المحادثات إذا كانت موجودة
@@ -141,6 +154,64 @@ function setupNotificationListeners(socket) {
         
         // تحديث قائمة المحادثات
         updateConversationsList();
+    });
+    
+    // استقبال إشعار برد على رسالة
+    socket.on('message-reply', function(data) {
+        console.log('تم استلام رد على رسالة:', data);
+        
+        // التعامل مع بنيتين مختلفتين للبيانات
+        const message = data.message || data;
+        
+        // تحديث واجهة المستخدم إذا كان الرد يخص المحادثة الحالية
+        if (window.currentConversationId && message.conversationId === window.currentConversationId) {
+            // استخدام نفس الدالة لإضافة الرسالة في واجهة المستخدم
+            if (typeof window.addMessageToConversation === 'function') {
+                window.addMessageToConversation(message);
+            } else {
+                appendNewMessage(message);
+            }
+            
+            console.log('تمت إضافة رد جديد للمحادثة:', message._id);
+        }
+        
+        // تحديث قائمة المحادثات
+        updateConversationsList();
+        
+        // تشغيل صوت الإشعار
+        if (typeof window.playNotificationSound === 'function') {
+            window.playNotificationSound();
+        }
+    });
+    
+    // استقبال إشعار بملاحظة داخلية جديدة
+    socket.on('internal-note', function(data) {
+        console.log('تم استلام ملاحظة داخلية جديدة:', data);
+        
+        // التعامل مع الهيكل المتوقع للبيانات
+        const note = data.note || data;
+        
+        // تحديث واجهة المستخدم إذا كانت الملاحظة تخص المحادثة الحالية
+        if (window.currentConversationId && note.conversationId === window.currentConversationId) {
+            // إضافة الملاحظة إلى واجهة المستخدم
+            if (typeof window.addNoteToUI === 'function') {
+                // التحقق من عدم وجود الملاحظة مسبقاً (لتجنب التكرار)
+                if (!window.sentNoteIds || !window.sentNoteIds.has(note._id)) {
+                    window.addNoteToUI(note);
+                    console.log('تمت إضافة ملاحظة داخلية جديدة للمحادثة:', note._id);
+                } else {
+                    console.log('تم تجاهل ملاحظة داخلية مكررة:', note._id);
+                }
+            }
+        }
+        
+        // تحديث قائمة المحادثات
+        updateConversationsList();
+        
+        // تشغيل صوت الإشعار
+        if (typeof window.playNotificationSound === 'function') {
+            window.playNotificationSound();
+        }
     });
 }
 
