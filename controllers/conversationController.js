@@ -405,7 +405,7 @@ exports.replyToConversation = async (req, res) => {
         
         // استخدام الدالة الموحدة لإرسال الوسائط (مع أو بدون رد)
         const options = {
-          caption: content || media.caption || '', // استخدام محتوى الرسالة النصية كـ caption أولاً
+          caption: content || '', // استخدام محتوى الرسالة النصية فقط وليس caption من الوسائط
           filename: mediaType === 'document' ? media.fileName : undefined
         };
 
