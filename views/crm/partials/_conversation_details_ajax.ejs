@@ -8,8 +8,7 @@
 
 <!-- استدعاء ملف المساعدة للمحادثات -->
 <script src="/js/conversation-utils.js"></script>
-<!-- ملاحظة: من الأفضل إزالة defer هنا حتى يحمّل مباشرة، أو قم باستدعائه من الـlayout -->
-<script src="/js/conversation-uploade-utils.js"></script>
+<script src="/js/conversation-uploade-utils.js" defer></script>
 
 <!-- دوال مساعدة محلية -->
 <script>
@@ -47,352 +46,363 @@
 </script>
 
 <div class="card">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h5 class="mb-0">
-      <i class="fas fa-comments me-1"></i>
-      المحادثة مع <%= conversation.customerName || conversation.phoneNumber %>
-    </h5>
-    <span class="badge bg-primary"><%= messages.length %> رسالة</span>
-  </div>
-  <div class="card-body p-0" id="messageContainer" style="max-height: 500px; overflow-y: auto;">
-    <% if (messages && messages.length) { %>
-      <% messages.forEach((msg, index) => { %>
-        <div class="message <%= msg.direction %>"
-             data-message-id="<%= msg._id %>"
-             data-status="<%= msg.status %>"
-             <% if (msg.externalMessageId) { %> data-external-id="<%= msg.externalMessageId %>" <% } %>>
-          
-          <% if (msg.replyToMessageId) { %>
-            <!-- عرض الرسالة المقتبسة في حالة وجود رد -->
-            <div class="replied-message">
-              <% 
-                const repliedMsg = messages.find(m => 
-                  (m.externalMessageId && m.externalMessageId === msg.replyToMessageId) || 
-                  (m._id && m._id.toString() === msg.replyToMessageId)
-                ); 
-              %>
-              <% if (repliedMsg) { %>
-                <div class="replied-content">
-                  <i class="fas fa-reply"></i>
-                  <span><%= repliedMsg.content.length > 50 ? repliedMsg.content.substring(0, 50) + '...' : repliedMsg.content %></span>
-                </div>
-              <% } else { %>
-                <div class="replied-content text-muted">
-                  <i class="fas fa-reply"></i>
-                  <span>رد على رسالة غير موجودة</span>
-                  <small class="text-muted d-block">(المعرف: <%= msg.replyToMessageId.substring(0, 10) %>...)</small>
-                </div>
-              <% } %>
-            </div>
-          <% } %>
-          
-          <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %> <%= msg.mediaType ? 'message-with-media' : '' %>">
-            <% if (msg.mediaType) { %>
-              <% 
-                const mediaId = msg.mediaId || (msg.media && msg.media._id) || msg._id;
-                const mediaType = msg.mediaType;
-                const fileName = msg.fileName || (msg.media && msg.media.fileName) || 'ملف';
-                const fileSize = msg.fileSize || (msg.media && msg.media.fileSize) || 0;
-                const mimeType = msg.mimeType || (msg.media && msg.media.mimeType) || '';
-              %>
-
-              <!-- عرض الوسائط حسب النوع -->
-              <% if (mediaType === 'image') { %>
-                <div class="media-container">
-                  <img src="/whatsapp/media/content/<%= mediaId %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
-                </div>
-              <% } else if (mediaType === 'video') { %>
-                <div class="media-container">
-                  <video controls class="media-video">
-                    <source src="/whatsapp/media/content/<%= mediaId %>" type="video/mp4">
-                    المتصفح لا يدعم عرض الفيديو
-                  </video>
-                </div>
-              <% } else if (mediaType === 'audio') { %>
-                <div class="media-container">
-                  <audio controls class="media-audio" preload="metadata" controlsList="nodownload">
-                    <source src="/whatsapp/media/content/<%= mediaId %>" type="audio/ogg">
-                    المتصفح لا يدعم تشغيل الملفات الصوتية
-                  </audio>
-                </div>
-              <% } else if (mediaType === 'document') { %>
-                <div class="document-container">
-                  <div class="document-icon">
-                    <i class="fas fa-file-alt"></i>
-                  </div>
-                  <div class="document-info">
-                    <div class="document-name"><%= fileName %></div>
-                    <div class="document-size"><%= fileSize ? (Math.round(fileSize / 1024) + ' كيلوبايت') : '' %></div>
-                  </div>
-                  <a href="/whatsapp/media/content/<%= mediaId %>" target="_blank" class="document-download">
-                    <i class="fas fa-download"></i>
-                  </a>
-                </div>
-              <% } else if (mediaType === 'sticker') { %>
-                <div class="media-container">
-                  <img src="/whatsapp/media/content/<%= mediaId %>" class="media-sticker" alt="ملصق">
-                </div>
-              <% } else if (mediaType === 'location') { %>
-                <div class="location-container">
-                  <div class="location-icon">
-                    <i class="fas fa-map-marker-alt"></i>
-                  </div>
-                  <div class="location-info">
-                    <% 
-                      const locationName = (msg.media && msg.media.locationName) || 
-                                         (msg.metaData && msg.metaData.name) || 
-                                         'موقع جغرافي';
-                      const latitude = (msg.media && msg.media.latitude) || 
-                                       (msg.metaData && msg.metaData.latitude) || '';
-                      const longitude = (msg.media && msg.media.longitude) || 
-                                        (msg.metaData && msg.metaData.longitude) || '';
-                      const coordinatesText = (latitude && longitude) ? `${latitude}, ${longitude}` : 'إحداثيات غير متوفرة';
-                    %>
-                    <div class="location-name"><%= locationName %></div>
-                    <div class="location-coordinates"><%= coordinatesText %></div>
-                    <% if (latitude && longitude) { %>
-                      <a href="https://maps.google.com/maps?q=<%= latitude %>,<%= longitude %>" 
-                         target="_blank" class="btn btn-sm btn-outline-primary mt-1">
-                        <i class="fas fa-external-link-alt"></i> عرض على الخريطة
-                      </a>
-                    <% } %>
-                  </div>
-                </div>
-              <% } %>
-            <% } %>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">
+        <i class="fas fa-comments me-1"></i>
+        المحادثة مع <%= conversation.customerName || conversation.phoneNumber %>
+      </h5>
+      <span class="badge bg-primary"><%= messages.length %> رسالة</span>
+    </div>
+    <div class="card-body p-0" id="messageContainer" style="max-height: 500px; overflow-y: auto;">
+      <% if (messages && messages.length) { %>
+        <% messages.forEach((msg, index) => { %>
+          <div class="message <%= msg.direction %>"
+               data-message-id="<%= msg._id %>"
+               data-status="<%= msg.status %>"
+               <% if (msg.externalMessageId) { %> data-external-id="<%= msg.externalMessageId %>" <% } %>>
             
-            <% if (msg.content && msg.content.trim() !== '') { %>
-              <div class="message-text <%= msg.mediaType ? 'with-media' : '' %>">
-                <%= msg.content %>
+            <% if (msg.replyToMessageId) { %>
+              <!-- عرض الرسالة المقتبسة في حالة وجود رد -->
+              <div class="replied-message">
+                <% 
+                  // البحث عن الرسالة التي تم الرد عليها باستخدام المعرف الخارجي أو الداخلي
+                  const repliedMsg = messages.find(m => 
+                    (m.externalMessageId && m.externalMessageId === msg.replyToMessageId) || 
+                    (m._id && m._id.toString() === msg.replyToMessageId)
+                  ); 
+                %>
+                <% if (repliedMsg) { %>
+                  <div class="replied-content">
+                    <i class="fas fa-reply"></i>
+                    <span><%= repliedMsg.content.length > 50 ? repliedMsg.content.substring(0, 50) + '...' : repliedMsg.content %></span>
+                  </div>
+                <% } else { %>
+                  <div class="replied-content text-muted">
+                    <i class="fas fa-reply"></i>
+                    <span>رد على رسالة غير موجودة</span>
+                    <small class="text-muted d-block">(المعرف: <%= msg.replyToMessageId.substring(0, 10) %>...)</small>
+                  </div>
+                <% } %>
               </div>
             <% } %>
             
-            <div class="message-meta">
-              <span class="message-time" title="<%= new Date(msg.timestamp).toLocaleString() %>">
-                <%= new Date(msg.timestamp).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
-              </span>
-              
-              <% if (msg.direction === 'outgoing') { %>
-                <span class="message-status" title="حالة الرسالة: <%= msg.status %>">
-                  <% if (msg.status === 'sent') { %>
-                    <i class="fas fa-check text-secondary"></i>
-                  <% } else if (msg.status === 'delivered') { %>
-                    <i class="fas fa-check-double text-secondary"></i>
-                  <% } else if (msg.status === 'read') { %>
-                    <i class="fas fa-check-double text-primary"></i>
-                  <% } else if (msg.status === 'failed') { %>
-                    <i class="fas fa-exclamation-circle text-danger"></i>
-                  <% } else { %>
-                    <i class="fas fa-clock text-secondary"></i>
-                  <% } %>
-                </span>
+            <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble' %> <%= msg.mediaType ? 'message-with-media' : '' %>">
+              <% if (msg.mediaType) { %>
+                <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
+                <% 
+                  // الحصول على معلومات الوسائط من الكائن المناسب (سواء من الرسالة مباشرة أو من كائن الوسائط المضاف)
+                  // بترتيب الأولوية: mediaId (إذا وجد) ثم معرف الوسائط من التعديل الجديد، ثم معرف الرسالة
+                  const mediaId = msg.mediaId || (msg.media && msg.media._id) || msg._id;
+                  const mediaType = msg.mediaType;
+                  const fileName = msg.fileName || (msg.media && msg.media.fileName) || 'ملف';
+                  const fileSize = msg.fileSize || (msg.media && msg.media.fileSize) || 0;
+                  const mimeType = msg.mimeType || (msg.media && msg.media.mimeType) || '';
+                %>
+
+                <!-- عرض الوسائط حسب النوع -->
+                <% if (mediaType === 'image') { %>
+                  <div class="media-container">
+                    <img src="/whatsapp/media/content/<%= mediaId %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
+                  </div>
+                <% } else if (mediaType === 'video') { %>
+                  <div class="media-container">
+                    <video controls class="media-video">
+                      <source src="/whatsapp/media/content/<%= mediaId %>" type="video/mp4">
+                      المتصفح لا يدعم عرض الفيديو
+                    </video>
+                  </div>
+                <% } else if (mediaType === 'audio') { %>
+                  <div class="media-container">
+                    <audio controls class="media-audio" preload="metadata" controlsList="nodownload">
+                      <source src="/whatsapp/media/content/<%= mediaId %>" type="audio/ogg">
+                      المتصفح لا يدعم تشغيل الملفات الصوتية
+                    </audio>
+                  </div>
+                <% } else if (mediaType === 'document') { %>
+                  <div class="document-container">
+                    <div class="document-icon">
+                      <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="document-info">
+                      <div class="document-name"><%= fileName %></div>
+                      <div class="document-size"><%= fileSize ? (Math.round(fileSize / 1024) + ' كيلوبايت') : '' %></div>
+                    </div>
+                    <a href="/whatsapp/media/content/<%= mediaId %>" target="_blank" class="document-download">
+                      <i class="fas fa-download"></i>
+                    </a>
+                  </div>
+                <% } else if (mediaType === 'sticker') { %>
+                  <div class="media-container">
+                    <img src="/whatsapp/media/content/<%= mediaId %>" class="media-sticker" alt="ملصق">
+                  </div>
+                <% } else if (mediaType === 'location') { %>
+                  <div class="location-container">
+                    <div class="location-icon">
+                      <i class="fas fa-map-marker-alt"></i>
+                    </div>
+                    <div class="location-info">
+                      <div class="location-name">
+                        <% 
+                          // الحصول على اسم الموقع من بيانات الوسائط إذا كانت متوفرة
+                          const locationName = (msg.media && msg.media.locationName) || 
+                                             (msg.metaData && msg.metaData.name) || 
+                                             'موقع جغرافي';
+                          
+                          // الحصول على الإحداثيات
+                          const latitude = (msg.media && msg.media.latitude) || 
+                                         (msg.metaData && msg.metaData.latitude) || '';
+                          const longitude = (msg.media && msg.media.longitude) || 
+                                          (msg.metaData && msg.metaData.longitude) || '';
+                          
+                          const coordinatesText = (latitude && longitude) ? 
+                                                `${latitude}, ${longitude}` : 
+                                                'إحداثيات غير متوفرة';
+                        %>
+                        <%= locationName %>
+                      </div>
+                      <div class="location-coordinates">
+                        <%= coordinatesText %>
+                      </div>
+                      <% if (latitude && longitude) { %>
+                        <a href="https://maps.google.com/maps?q=<%= latitude %>,<%= longitude %>" 
+                           target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                          <i class="fas fa-external-link-alt"></i> عرض على الخريطة
+                        </a>
+                      <% } %>
+                    </div>
+                  </div>
+                <% } %>
               <% } %>
+              
+              <% if (msg.content && msg.content.trim() !== '') { %>
+                <div class="message-text <%= msg.mediaType ? 'with-media' : '' %>">
+                  <%= msg.content %>
+                </div>
+              <% } %>
+              
+              <div class="message-meta">
+                <span class="message-time" title="<%= new Date(msg.timestamp).toLocaleString() %>">
+                  <%= new Date(msg.timestamp).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
+                </span>
+                
+                <% if (msg.direction === 'outgoing') { %>
+                  <span class="message-status" title="حالة الرسالة: <%= msg.status %>">
+                    <% if (msg.status === 'sent') { %>
+                      <i class="fas fa-check text-secondary"></i>
+                    <% } else if (msg.status === 'delivered') { %>
+                      <i class="fas fa-check-double text-secondary"></i>
+                    <% } else if (msg.status === 'read') { %>
+                      <i class="fas fa-check-double text-primary"></i>
+                    <% } else if (msg.status === 'failed') { %>
+                      <i class="fas fa-exclamation-circle text-danger"></i>
+                    <% } else { %>
+                      <i class="fas fa-clock text-secondary"></i>
+                    <% } %>
+                  </span>
+                <% } %>
+              </div>
+            </div>
+            
+            <!-- عرض التفاعلات على الرسالة -->
+            <% if (msg.reactions && msg.reactions.length > 0) { %>
+              <div class="message-reactions">
+                <% msg.reactions.forEach(function(reaction) { %>
+                  <span class="reaction-emoji" title="تفاعل من <%= reaction.sender %>">
+                    <%= reaction.emoji %>
+                  </span>
+                <% }); %>
+              </div>
+            <% } %>
+            
+            <!-- قائمة خيارات الرسالة -->
+            <div class="message-actions">
+              <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" id="reactionBtn_<%= msg._id %>">
+                <i class="far fa-smile"></i>
+              </button>
+              <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
+                      data-message-id="<%= msg._id %>" 
+                      data-external-id="<%= msg.externalMessageId %>" 
+                      title="رد" id="replyBtn_<%= msg._id %>">
+                <i class="fas fa-reply"></i>
+              </button>
             </div>
           </div>
+          <div class="clear-both"></div>
           
-          <!-- عرض التفاعلات على الرسالة -->
-          <% if (msg.reactions && msg.reactions.length > 0) { %>
-            <div class="message-reactions">
-              <% msg.reactions.forEach(function(reaction) { %>
-                <span class="reaction-emoji" title="تفاعل من <%= reaction.sender %>">
-                  <%= reaction.emoji %>
-                </span>
-              <% }); %>
+          <% if (index < messages.length - 1 && 
+                  new Date(messages[index+1].timestamp) - new Date(msg.timestamp) > 3600000) { %>
+            <div class="message-internal-note text-muted my-2" style="font-size: 0.85rem;">
+              <i class="fas fa-clock me-1"></i>
+              مرت <%= Math.round((new Date(messages[index+1].timestamp) - new Date(msg.timestamp)) / 3600000) %> ساعة
             </div>
           <% } %>
-          
-          <!-- قائمة خيارات الرسالة -->
-          <div class="message-actions">
-            <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" id="reactionBtn_<%= msg._id %>">
-              <i class="far fa-smile"></i>
+        <% }) %>
+      <% } else { %>
+        <div class="text-center text-muted py-3">
+          <i class="fas fa-comment-dots mb-3" style="font-size: 3rem; opacity: 0.2;"></i>
+          <p>لا توجد رسائل في هذه المحادثة.</p>
+        </div>
+      <% } %>
+    </div>
+  </div>
+  
+  <!-- نموذج إرسال الرد (إذا كانت المحادثة غير مغلقة) -->
+  <% if (conversation.status !== 'closed') { %>
+    <!-- النموذج مع الاعتماد على دالة sendReply المتوفرة من ملف conversation-utils.js -->
+    <form id="replyForm" class="mt-3" onsubmit="window.sendReply(event)">
+      <input type="hidden" id="conversationId" value="<%= conversation._id %>">
+      <div class="mb-3">
+        <label for="replyMessage" class="form-label">إرسال رد</label>
+        <div class="position-relative message-input-container">
+          <textarea class="form-control message-input" id="replyMessage" name="content"
+                rows="3" placeholder="اكتب رسالتك... (Enter للإرسال)" 
+                onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); window.sendReply(event); }"></textarea>
+          <div class="message-input-actions">
+            <button type="button" class="btn btn-link text-secondary media-capture-btn" id="recordAudioBtn" title="تسجيل صوت">
+              <i class="fas fa-microphone"></i>
             </button>
-            <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
-                    data-message-id="<%= msg._id %>" 
-                    data-external-id="<%= msg.externalMessageId %>" 
-                    title="رد" id="replyBtn_<%= msg._id %>">
-              <i class="fas fa-reply"></i>
+            <button type="button" class="btn btn-link text-secondary media-capture-btn" id="captureImageBtn" title="التقاط صورة">
+              <i class="fas fa-camera"></i>
+            </button>
+            <button type="button" class="btn btn-link text-secondary" id="attachMediaBtn" title="إرفاق ملف">
+              <i class="fas fa-paperclip"></i>
+            </button>
+            <input type="file" class="d-none" id="mediaFile" name="mediaFile">
+          </div>
+        </div>
+      </div>
+
+      <div id="mediaPreview" class="media-preview mt-2" style="display: none;">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex align-items-center">
+              <i class="fas fa-paperclip me-2"></i>
+              <span id="mediaFileName">اسم الملف</span>
+              <input type="hidden" id="mediaId" name="mediaId">
+              <input type="hidden" id="mediaType" name="mediaType">
+              <input type="hidden" id="uploadMediaType" name="mediaType" value="auto">
+              <input type="hidden" id="uploadConversationId" name="conversationId" value="<%= conversation._id %>">
+              <button type="button" class="btn btn-sm btn-danger ms-auto" id="clearMediaAttachmentBtn">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="upload-progress mt-2" style="display: none;">
+              <div class="progress">
+                <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="sending-indicator" id="sendingIndicator" style="display: none;">
+          <i class="fas fa-circle-notch fa-spin"></i> جاري الإرسال...
+        </span>
+        <button type="button" class="btn btn-outline-secondary" id="clearReplyMessageBtn">
+          مسح
+        </button>
+        <button type="submit" class="btn btn-primary" id="sendButton">
+          <i class="fas fa-paper-plane me-1"></i> إرسال
+        </button>
+      </div>
+    </form>
+    
+    <!-- نافذة معاينة الوسائط -->
+    <div id="mediaPreviewModal" class="modal fade" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">معاينة الوسائط</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+          </div>
+          <div class="modal-body text-center" id="mediaPreviewContent">
+            <!-- سيتم إضافة محتوى الوسائط هنا ديناميكياً -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            <a href="#" class="btn btn-primary" id="downloadMediaBtn" download>تنزيل</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- نافذة التقاط الصور من الكاميرا -->
+    <div id="cameraCaptureModal" class="modal fade" tabindex="-1" data-bs-backdrop="static">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">التقاط صورة</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق" id="closeCameraCaptureBtn">
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="camera-container mb-3">
+              <video id="cameraStream" autoplay playsinline></video>
+              <div class="capture-button" id="capturePhotoBtn">
+                <div class="capture-inner-circle"></div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancelCameraCaptureBtn">
+              إلغاء
             </button>
           </div>
         </div>
-        <div class="clear-both"></div>
+      </div>
+    </div>
+  <% } else { %>
+    <div class="alert alert-secondary mt-3">
+      <i class="fas fa-lock me-1"></i>
+      المحادثة مغلقة، لا يمكن الرد.
+    </div>
+  <% } %>
+  
+  <!-- جافاسكريبت لعمل التصفح بالصفحات -->
+  <script>
+    $(document).ready(function() {
+      // استدعاء للصفحة التالية من الرسائل
+      $('.load-more-messages').click(function() {
+        const $button = $(this);
+        const conversationId = $('.conversation-detail-wrapper').data('conversation-id');
+        const currentPage = parseInt($button.data('current-page'));
+        const nextPage = currentPage + 1;
         
-        <% if (index < messages.length - 1 && 
-                new Date(messages[index+1].timestamp) - new Date(msg.timestamp) > 3600000) { %>
-          <div class="message-internal-note text-muted my-2" style="font-size: 0.85rem;">
-            <i class="fas fa-clock me-1"></i>
-            مرت <%= Math.round((new Date(messages[index+1].timestamp) - new Date(msg.timestamp)) / 3600000) %> ساعة
-          </div>
-        <% } %>
-      <% }) %>
-    <% } else { %>
-      <div class="text-center text-muted py-3">
-        <i class="fas fa-comment-dots mb-3" style="font-size: 3rem; opacity: 0.2;"></i>
-        <p>لا توجد رسائل في هذه المحادثة.</p>
-      </div>
-    <% } %>
-  </div>
-</div>
-
-<!-- نموذج إرسال الرد (إذا كانت المحادثة غير مغلقة) -->
-<% if (conversation.status !== 'closed') { %>
-  <form id="replyForm" class="mt-3" onsubmit="window.sendReply(event)">
-    <input type="hidden" id="conversationId" value="<%= conversation._id %>">
-    <div class="mb-3">
-      <label for="replyMessage" class="form-label">إرسال رد</label>
-      <div class="position-relative message-input-container">
-        <textarea
-          class="form-control message-input"
-          id="replyMessage"
-          name="content"
-          rows="3"
-          placeholder="اكتب رسالتك... (Enter للإرسال) أو Ctrl+V للصق الصور"
-          onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); window.sendReply(event); }"
-        ></textarea>
-        <div class="message-input-actions">
-          <button type="button" class="btn btn-link text-secondary media-capture-btn" id="recordAudioBtn" title="تسجيل صوت">
-            <i class="fas fa-microphone"></i>
-          </button>
-          <button type="button" class="btn btn-link text-secondary media-capture-btn" id="captureImageBtn" title="التقاط صورة">
-            <i class="fas fa-camera"></i>
-          </button>
-          <button type="button" class="btn btn-link text-secondary" id="attachMediaBtn" title="إرفاق ملف">
-            <i class="fas fa-paperclip"></i>
-          </button>
-          <input type="file" class="d-none" id="mediaFile" name="mediaFile">
-        </div>
-      </div>
-    </div>
-
-    <div id="mediaPreview" class="media-preview mt-2" style="display: none;">
-      <div class="card">
-        <div class="card-body">
-          <div class="d-flex align-items-center">
-            <i class="fas fa-paperclip me-2"></i>
-            <span id="mediaFileName">اسم الملف</span>
-            <input type="hidden" id="mediaId" name="mediaId">
-            <input type="hidden" id="mediaType" name="mediaType">
-            <input type="hidden" id="uploadMediaType" name="mediaType" value="auto">
-            <input type="hidden" id="uploadConversationId" name="conversationId" value="<%= conversation._id %>">
-            <button type="button" class="btn btn-sm btn-danger ms-auto" id="clearMediaAttachmentBtn">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <div class="upload-progress mt-2" style="display: none;">
-            <div class="progress">
-              <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="d-flex justify-content-between align-items-center">
-      <span class="sending-indicator" id="sendingIndicator" style="display: none;">
-        <i class="fas fa-circle-notch fa-spin"></i> جاري الإرسال...
-      </span>
-      <button type="button" class="btn btn-outline-secondary" id="clearReplyMessageBtn">مسح</button>
-      <button type="submit" class="btn btn-primary" id="sendButton">
-        <i class="fas fa-paper-plane me-1"></i> إرسال
-      </button>
-    </div>
-  </form>
-  
-  <!-- نافذة معاينة الوسائط -->
-  <div id="mediaPreviewModal" class="modal fade" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">معاينة الوسائط</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-        </div>
-        <div class="modal-body text-center" id="mediaPreviewContent">
-          <!-- سيتم إضافة محتوى الوسائط هنا ديناميكياً -->
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-          <a href="#" class="btn btn-primary" id="downloadMediaBtn" download>تنزيل</a>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- نافذة التقاط الصور من الكاميرا -->
-  <div id="cameraCaptureModal" class="modal fade" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">التقاط صورة</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق" id="closeCameraCaptureBtn">
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="camera-container mb-3">
-            <video id="cameraStream" autoplay playsinline></video>
-            <div class="capture-button" id="capturePhotoBtn">
-              <div class="capture-inner-circle"></div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancelCameraCaptureBtn">
-            إلغاء
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-<% } else { %>
-  <div class="alert alert-secondary mt-3">
-    <i class="fas fa-lock me-1"></i>
-    المحادثة مغلقة، لا يمكن الرد.
-  </div>
-<% } %>
-
-<!-- جافاسكريبت لعمل التصفح بالصفحات -->
-<script>
-  $(document).ready(function() {
-    // زر "تحميل المزيد من الرسائل"
-    $('.load-more-messages').click(function() {
-      const $button = $(this);
-      const conversationId = $('.conversation-detail-wrapper').data('conversation-id');
-      const currentPage = parseInt($button.data('current-page'));
-      const nextPage = currentPage + 1;
-      
-      $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> جاري التحميل...');
-      
-      $.ajax({
-        url: `/crm/conversations/ajax/details/${conversationId}?page=${nextPage}`,
-        type: 'GET',
-        success: function(response) {
-          const $newResponse = $(response);
-          const $newMessages = $newResponse.find('.message');
-          
-          $('#messageContainer').prepend($newMessages);
-          
-          const hasMore = $newResponse.find('.load-more-messages').length > 0;
-          if (hasMore) {
-            $button
-              .prop('disabled', false)
-              .html(`تحميل المزيد من الرسائل (${nextPage}/${$button.data('total-pages')})`)
-              .data('current-page', nextPage);
-          } else {
-            $button.parent().remove(); 
+        // تغيير حالة الزر
+        $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> جاري التحميل...');
+        
+        // طلب الصفحة التالية من الرسائل
+        $.ajax({
+          url: `/crm/conversations/ajax/details/${conversationId}?page=${nextPage}`,
+          type: 'GET',
+          success: function(response) {
+            // استخراج الرسائل الجديدة فقط من الاستجابة
+            const $newResponse = $(response);
+            const $newMessages = $newResponse.find('.message');
+            
+            // إضافة الرسائل الجديدة في بداية قائمة الرسائل (لأنها الأقدم)
+            $('#messageContainer').prepend($newMessages);
+            
+            // تحديث زر التحميل أو إخفائه إذا وصلنا لنهاية الرسائل
+            const hasMore = $newResponse.find('.load-more-messages').length > 0;
+            if (hasMore) {
+              $button
+                .prop('disabled', false)
+                .html(`تحميل المزيد من الرسائل (${nextPage}/${$button.data('total-pages')})`)
+                .data('current-page', nextPage);
+            } else {
+              $button.parent().remove(); // إزالة الزر إذا وصلنا للنهاية
+            }
+            
+            // تفعيل المشغلات للوسائط الجديدة
+            if (window.setupAudioPlayers) {
+              window.setupAudioPlayers();
+            }
+          },
+          error: function() {
+            $button.prop('disabled', false).html('حدث خطأ أثناء التحميل. حاول مرة أخرى.');
           }
-          
-          if (window.setupAudioPlayers) {
-            window.setupAudioPlayers();
-          }
-        },
-        error: function() {
-          $button.prop('disabled', false).html('حدث خطأ أثناء التحميل. حاول مرة أخرى.');
-        }
+        });
       });
     });
-  });
-</script>
-
-<!-- استدعاء تهيئة الأزرار والأحداث (هام جداً) -->
-<script>
-  if (typeof window.initConversationUploadUtils === 'function') {
-    window.initConversationUploadUtils();
-  }
-</script>
+  </script>
