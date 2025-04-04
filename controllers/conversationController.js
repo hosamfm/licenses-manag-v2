@@ -405,7 +405,7 @@ exports.replyToConversation = async (req, res) => {
         
         // استخدام الدالة الموحدة لإرسال الوسائط (مع أو بدون رد)
         const options = {
-          caption: content || '', // استخدام محتوى الرسالة النصية فقط وليس caption من الوسائط
+          caption: content && content.trim() ? content.trim() : undefined, // إرسال caption فقط إذا كان هناك محتوى غير فارغ
           filename: mediaType === 'document' ? media.fileName : undefined
         };
 
@@ -413,7 +413,7 @@ exports.replyToConversation = async (req, res) => {
         logger.info('conversationController', 'خيارات إرسال الوسائط', {
           contentLength: content ? content.length : 0,
           captionFromMedia: media.caption ? media.caption.length : 0,
-          finalCaption: options.caption.length
+          finalCaption: options.caption ? options.caption.length : 0
         });
         
         // استخدام معرف الرد الخارجي إذا كان موجوداً، وإلا null للإرسال كرسالة عادية
