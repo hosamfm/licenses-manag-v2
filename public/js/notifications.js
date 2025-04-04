@@ -39,6 +39,7 @@ function initializeSocketConnection() {
         // تسجيل نجاح الاتصال
         socket.on('connect', function() {
             console.log('تم الاتصال بنظام الإشعارات الفورية');
+            window.socketConnected = true;
             
             // الانضمام إلى غرف المستخدم
             if (window.currentUserId) {
@@ -49,11 +50,23 @@ function initializeSocketConnection() {
             if (window.currentConversationId) {
                 socket.emit('join', { room: `conversation-${window.currentConversationId}` });
             }
+            
+            // تنفيذ أي عمليات معلقة بانتظار اتصال Socket.io
+            if (Array.isArray(window.pendingSocketOperations)) {
+                console.log('تنفيذ العمليات المعلقة:', window.pendingSocketOperations.length);
+                window.pendingSocketOperations.forEach(operation => {
+                    if (typeof operation === 'function') {
+                        operation(socket);
+                    }
+                });
+                window.pendingSocketOperations = [];
+            }
         });
         
         // تسجيل إعادة الاتصال
         socket.on('reconnect', function() {
             console.log('تم إعادة الاتصال بنظام الإشعارات');
+            window.socketConnected = true;
             
             // تحديث المحتوى بعد إعادة الاتصال
             refreshCurrentContent();
@@ -62,6 +75,7 @@ function initializeSocketConnection() {
         // تسجيل فقدان الاتصال
         socket.on('disconnect', function() {
             console.log('تم فقدان الاتصال بنظام الإشعارات');
+            window.socketConnected = false;
         });
         
         // تسجيل الأخطاء

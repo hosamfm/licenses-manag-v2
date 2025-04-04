@@ -21,6 +21,7 @@
   
 <!-- استدعاء ملف خدمة الإشعارات -->
   <script src="/js/notifications.js"></script>
+  <script src="/js/socket-utils.js"></script>
 </head>
 <body>
 
@@ -343,22 +344,47 @@
         if (!detailsContainer) return;
         
         // الانضمام إلى غرفة المحادثة عبر Socket.io للحصول على الإشعارات الفورية
-        if (window.socketConnection && window.socketConnection.connected) {
-          console.log('الانضمام إلى غرفة المحادثة:', conversationId);
-          window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
-          
-          // مغادرة الغرفة السابقة إذا وجدت
-          if (window.previousConversationId && window.previousConversationId !== conversationId) {
-            window.socketConnection.emit('leave', { room: `conversation-${window.previousConversationId}` });
-          }
-          
-          // تحديث المعرف الحالي في المتغير العام للنافذة
-          window.currentConversationId = conversationId;
-          
-          // حفظ معرف المحادثة الحالية للمرة القادمة
-          window.previousConversationId = conversationId;
+        if (typeof window.joinConversationRoom === 'function') {
+          // استخدام الوظيفة المساعدة الجديدة
+          window.joinConversationRoom(conversationId);
         } else {
-          console.warn('لا يمكن الانضمام إلى غرفة المحادثة: اتصال Socket.io غير متاح');
+          // الطريقة القديمة كاحتياط
+          if (window.socketConnection) {
+            // إذا كان الاتصال جاهزًا
+            if (window.socketConnected) {
+              console.log('الانضمام إلى غرفة المحادثة:', conversationId);
+              window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
+              
+              // مغادرة الغرفة السابقة إذا وجدت
+              if (window.previousConversationId && window.previousConversationId !== conversationId) {
+                window.socketConnection.emit('leave', { room: `conversation-${window.previousConversationId}` });
+              }
+            } else {
+              // تخزين العملية للتنفيذ لاحقًا عند اكتمال الاتصال
+              console.log('تخزين عملية الانضمام لغرفة المحادثة للتنفيذ لاحقًا:', conversationId);
+              if (!Array.isArray(window.pendingSocketOperations)) {
+                window.pendingSocketOperations = [];
+              }
+              
+              window.pendingSocketOperations.push((socket) => {
+                console.log('تنفيذ عملية انضمام معلقة للغرفة:', conversationId);
+                socket.emit('join', { room: `conversation-${conversationId}` });
+                
+                // مغادرة الغرفة السابقة إذا وجدت
+                if (window.previousConversationId && window.previousConversationId !== conversationId) {
+                  socket.emit('leave', { room: `conversation-${window.previousConversationId}` });
+                }
+              });
+            }
+            
+            // تحديث المعرف الحالي في المتغير العام للنافذة
+            window.currentConversationId = conversationId;
+            
+            // حفظ معرف المحادثة الحالية للمرة القادمة
+            window.previousConversationId = conversationId;
+          } else {
+            console.warn('لا يمكن الانضمام إلى غرفة المحادثة: اتصال Socket.io غير متاح');
+          }
         }
         
         // عرض مؤشر التحميل
