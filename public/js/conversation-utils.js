@@ -335,23 +335,45 @@
       return;
     }
     
-    // تعطيل زر الإرسال وإظهار مؤشر الإرسال
-    sendButton.disabled = true;
-    sendingIndicator.style.display = 'inline-block';
-    
-    // الحصول على معرف الرسالة المراد الرد عليها (إن وجد)
-    const replyToMessageId = window.currentReplyToId || null;
-    
-    // إنشاء كائن البيانات للإرسال
-    const requestData = {
+    // تخزين محتوى الرسالة والوسائط قبل تفريغ الحقول
+    const messageData = {
       content: messageText,
-      replyToId: replyToMessageId
+      mediaId: mediaId,
+      mediaType: mediaType,
+      replyToId: window.currentReplyToId || null
     };
     
-    // إضافة معلومات الوسائط إذا كانت متوفرة
-    if (mediaId && mediaType) {
-      requestData.mediaId = mediaId;
-      requestData.mediaType = mediaType;
+    // تفريغ حقل الرسالة مباشرة بعد الإرسال للسماح بكتابة رسالة جديدة
+    messageInput.value = '';
+    
+    // مسح مؤشر الرد إذا كان موجودا
+    window.clearReplyIndicator();
+    
+    // مسح الملف المرفق إذا كان موجوداً
+    window.clearMediaAttachment();
+    
+    // إظهار مؤشر للرسالة قيد الإرسال في الواجهة
+    const tempMessageId = 'pending_' + Date.now().toString();
+    const pendingMessageElement = document.createElement('div');
+    pendingMessageElement.className = 'message outgoing message-pending';
+    pendingMessageElement.setAttribute('data-message-id', tempMessageId);
+    
+    // عرض محتوى الرسالة مع مؤشر الحالة قيد الإرسال
+    pendingMessageElement.innerHTML = `
+      <div class="message-content">
+        <div class="message-text">${messageData.content || (mediaId ? 'وسائط' : '')}</div>
+        <div class="message-meta">
+          <span class="message-time">${new Date().toLocaleTimeString()}</span>
+          <span class="message-status"><i class="fas fa-clock"></i></span>
+        </div>
+      </div>
+    `;
+    
+    // إضافة الرسالة المؤقتة إلى الواجهة
+    const messagesContainer = document.querySelector('.messages-container');
+    if (messagesContainer) {
+      messagesContainer.appendChild(pendingMessageElement);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
     
     // تخزين المعرف المؤقت في متغير عام لمنع تكرار الرسالة عند استقبالها من الخادم
@@ -360,6 +382,19 @@
       window.sentMessageIds = new Set();
     }
     window.sentMessageIds.add(clientMessageId);
+    window.sentMessageIds.add(tempMessageId);
+    
+    // إنشاء كائن البيانات للإرسال
+    const requestData = {
+      content: messageData.content,
+      replyToId: messageData.replyToId
+    };
+    
+    // إضافة معلومات الوسائط إذا كانت متوفرة
+    if (messageData.mediaId && messageData.mediaType) {
+      requestData.mediaId = messageData.mediaId;
+      requestData.mediaType = messageData.mediaType;
+    }
     
     // إرسال الرسالة باستخدام Fetch API
     fetch(`/crm/conversations/${conversationId.value}/reply`, {
@@ -378,15 +413,6 @@
     })
     .then(data => {
       if (data.success) {
-        // مسح حقل الإدخال
-        messageInput.value = '';
-        
-        // مسح مؤشر الرد إذا كان موجودا
-        window.clearReplyIndicator();
-        
-        // مسح الملف المرفق إذا كان موجوداً
-        window.clearMediaAttachment();
-        
         // تمرير المحتوى إلى وظيفة تشغيل صوت الرسالة (اختياري)
         if (typeof playMessageSound === 'function') {
           playMessageSound('sent');
@@ -395,19 +421,42 @@
         // حفظ معرف الرسالة الحقيقي أيضاً لمنع التكرار عند استقبالها من خلال الإشعارات
         if (data.messageId) {
           window.sentMessageIds.add(data.messageId);
+          
+          // ربط المعرف المؤقت بالمعرف الحقيقي
+          if (window.pendingMessageMapping === undefined) {
+            window.pendingMessageMapping = {};
+          }
+          window.pendingMessageMapping[tempMessageId] = data.messageId;
+        }
+        
+        // تحديث حالة الرسالة المؤقتة إلى "تم الإرسال"
+        const pendingMessage = document.querySelector(`[data-message-id="${tempMessageId}"]`);
+        if (pendingMessage) {
+          const statusElement = pendingMessage.querySelector('.message-status');
+          if (statusElement) {
+            statusElement.innerHTML = '<i class="fas fa-check"></i>';
+          }
+          pendingMessage.classList.remove('message-pending');
         }
       }
     })
     .catch(error => {
       console.error('خطأ في إرسال الرسالة:', error);
+      
+      // تحديث حالة الرسالة المؤقتة إلى "فشل الإرسال"
+      const pendingMessage = document.querySelector(`[data-message-id="${tempMessageId}"]`);
+      if (pendingMessage) {
+        const statusElement = pendingMessage.querySelector('.message-status');
+        if (statusElement) {
+          statusElement.innerHTML = '<i class="fas fa-exclamation-triangle text-danger"></i>';
+        }
+        pendingMessage.classList.remove('message-pending');
+        pendingMessage.classList.add('message-failed');
+      }
+      
       if (window.showToast) {
         window.showToast('حدث خطأ أثناء إرسال الرسالة', 'error');
       }
-    })
-    .finally(() => {
-      // إعادة تفعيل زر الإرسال وإخفاء مؤشر الإرسال بعد الانتهاء
-      sendButton.disabled = false;
-      sendingIndicator.style.display = 'none';
     });
   };
 

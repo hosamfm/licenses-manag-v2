@@ -286,39 +286,83 @@ function appendNewMessage(message) {
     // 1. التحقق من وجود الرسالة في الواجهة بالفعل
     const existingMessage = document.querySelector(`[data-message-id="${message._id}"]`);
     if (existingMessage) {
-        console.log('تم تجاهل رسالة مكررة (موجودة في DOM بالفعل):', message._id);
+        if (window.DEBUG_MESSAGES) {
+            console.log(`منع تكرار الرسالة (نفس المعرف): ${message._id}`);
+        }
+        
+        // تحديث حالة الرسالة الموجودة إذا تغيرت
+        if (message.status) {
+            const statusElement = existingMessage.querySelector('.message-status');
+            if (statusElement) {
+                statusElement.innerHTML = getStatusIcon(message.status);
+            }
+        }
+        
         return;
     }
     
-    // 2. التحقق من وجود الرسالة في قائمة الرسائل المرسلة
-    if (window.sentMessageIds && (
-        window.sentMessageIds.has(message._id) || 
-        (message._clientId && window.sentMessageIds.has(message._clientId))
-    )) {
-        console.log('تم تجاهل رسالة مكررة (موجودة في sentMessageIds):', message._id);
+    // 2. التحقق من وجود المعرف في مجموعة الرسائل المرسلة
+    if (window.sentMessageIds && window.sentMessageIds.has(message._id)) {
+        if (window.DEBUG_MESSAGES) {
+            console.log(`منع تكرار الرسالة (معرف مرسل مسبقاً): ${message._id}`);
+        }
         return;
     }
     
-    // 3. إضافة معرف الرسالة إلى قائمة الرسائل المرسلة لتجنب التكرار المستقبلي
-    if (window.sentMessageIds && message._id) {
-        window.sentMessageIds.add(message._id);
-        if (message._clientId) {
-            window.sentMessageIds.add(message._clientId);
+    // 3. التحقق من وجود رسالة مؤقتة مرتبطة برسالة حقيقية
+    if (window.pendingMessageMapping) {
+        const tempIdEntries = Object.entries(window.pendingMessageMapping).filter(([tempId, realId]) => realId === message._id);
+        if (tempIdEntries.length > 0) {
+            const tempId = tempIdEntries[0][0];
+            const pendingMessage = document.querySelector(`[data-message-id="${tempId}"]`);
+            
+            if (pendingMessage) {
+                if (window.DEBUG_MESSAGES) {
+                    console.log(`استبدال رسالة مؤقتة بالرسالة الحقيقية: ${tempId} -> ${message._id}`);
+                }
+                
+                // استبدال الرسالة المؤقتة بالرسالة الحقيقية
+                pendingMessage.setAttribute('data-message-id', message._id);
+                if (message.externalMessageId) {
+                    pendingMessage.setAttribute('data-external-id', message.externalMessageId);
+                }
+                
+                // تحديث محتوى الرسالة
+                pendingMessage.className = `message ${message.direction === 'incoming' ? 'incoming' : 'outgoing'}`;
+                pendingMessage.innerHTML = getMessageTemplate(message);
+                
+                // تحديث الإجراءات
+                if (typeof window.setupMessageActions === 'function') {
+                    window.setupMessageActions(pendingMessage);
+                }
+                
+                // حذف المعرف المؤقت من التخطيط
+                delete window.pendingMessageMapping[tempId];
+                return;
+            }
         }
     }
     
-    // إنشاء عنصر الرسالة الجديدة
+    // عرض الرسالة في الواجهة
     try {
-        // للحصول على قالب الرسالة، يمكننا إما استخدام قالب موجود أو إنشاء واحد
-        const messageTemplate = getMessageTemplate(message);
+        // إضافة الرسالة إلى DOM
+        const newMessageElement = document.createElement('div');
+        newMessageElement.className = `message ${message.direction === 'incoming' ? 'incoming' : 'outgoing'}`;
+        newMessageElement.setAttribute('data-message-id', message._id);
+        
+        if (message.externalMessageId) {
+            newMessageElement.setAttribute('data-external-id', message.externalMessageId);
+        }
+        
+        // إضافة قالب الرسالة
+        newMessageElement.innerHTML = getMessageTemplate(message);
         
         // إضافة الرسالة إلى حاوية الرسائل
-        messagesContainer.insertAdjacentHTML('afterbegin', messageTemplate);
+        messagesContainer.appendChild(newMessageElement);
         
-        // تفعيل مستمعات الأحداث للرسالة الجديدة
-        const messageElement = document.querySelector(`[data-message-id="${message._id}"]`);
-        if (messageElement && typeof window.setupMessageActions === 'function') {
-            window.setupMessageActions(messageElement);
+        // إعداد الإجراءات للرسالة الجديدة
+        if (typeof window.setupMessageActions === 'function') {
+            window.setupMessageActions(newMessageElement);
         }
         
         // تمرير حدث بأن الرسائل تم تحديثها
@@ -538,7 +582,7 @@ function updateConversationsUI(conversations) {
  * @param {Object} data - بيانات المحادثة المحدثة
  */
 function updateConversationInfo(data) {
-    // التحقق من أن هذه هي المحادثة الحالية
+    // التحقق مما إذا كانت هذه هي المحادثة الحالية
     if (!window.currentConversationId || data._id !== window.currentConversationId) return;
     
     // تحديث معلومات المحادثة في واجهة المستخدم

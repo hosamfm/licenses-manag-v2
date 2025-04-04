@@ -127,6 +127,58 @@ body {
   border: 1px solid #f43f5e;
 }
 
+/* أنماط للرسائل قيد الإرسال */
+.message-pending {
+  position: relative;
+}
+
+.message-pending .message-bubble {
+  opacity: 0.8;
+  background: linear-gradient(135deg, #8cb5ff, #5f91d1);
+  color: #fff;
+  border-bottom-left-radius: 0.25rem;
+  border-bottom-right-radius: 1.25rem;
+}
+
+.message-pending::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #007bff, transparent);
+  animation: pendingAnimation 1.5s infinite;
+}
+
+.message-failed .message-bubble {
+  background: linear-gradient(135deg, #ff8c8c, #d15f5f);
+  color: #fff;
+  border-bottom-left-radius: 0.25rem;
+  border-bottom-right-radius: 1.25rem;
+}
+
+.message-with-media {
+  padding-bottom: 10px;
+}
+
+/* تحسين عرض حالة الرسالة */
+.message-status {
+  margin-left: 5px;
+}
+
+@keyframes pendingAnimation {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* نموذج الرد */
 .reply-form {
   padding: 1.25rem;
@@ -368,13 +420,31 @@ body {
 
 /* أنماط الوسائط في الرسائل */
 .media-container {
-  margin-bottom: 0.5rem;
-  border-radius: 0.5rem;
+  margin-bottom: 8px;
+  border-radius: 8px;
   overflow: hidden;
-  position: relative;
+  max-width: 300px;
+}
+
+.media-container img {
   max-width: 100%;
-  background-color: #f0f0f0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+
+.media-info {
+  display: flex;
+  align-items: center;
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.media-info i {
+  margin-right: 5px;
+}
+
+.media-size {
+  margin-left: 8px;
+  opacity: 0.7;
 }
 
 .media-container img {
