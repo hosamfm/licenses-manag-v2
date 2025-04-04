@@ -207,15 +207,39 @@ function setupNotificationListeners(socket) {
         
         // تحديث واجهة المستخدم إذا كانت الملاحظة تخص المحادثة الحالية
         if (window.currentConversationId && note.conversationId === window.currentConversationId) {
+            // فحص متقدم لمنع تكرار الملاحظات
+
+            // 1. التحقق من وجود الملاحظة في واجهة المستخدم بالفعل
+            const existingNote = document.querySelector(`[data-note-id="${note._id}"]`);
+            if (existingNote) {
+                console.log('تم تجاهل ملاحظة داخلية مكررة (موجودة في DOM بالفعل):', note._id);
+                return;
+            }
+
+            // 2. التحقق من وجود الملاحظة في قائمة الملاحظات المرسلة
+            if (window.sentNoteIds && (
+                window.sentNoteIds.has(note._id) || 
+                (note._clientId && window.sentNoteIds.has(note._clientId))
+            )) {
+                console.log('تم تجاهل ملاحظة داخلية مكررة (موجودة في sentNoteIds):', note._id);
+                return;
+            }
+
+            // 3. إضافة معرف الملاحظة إلى قائمة الملاحظات المرسلة لتجنب التكرار المستقبلي
+            if (window.sentNoteIds && note._id) {
+                window.sentNoteIds.add(note._id);
+                if (note._clientId) {
+                    window.sentNoteIds.add(note._clientId);
+                }
+            } else if (!window.sentNoteIds) {
+                window.sentNoteIds = new Set();
+                window.sentNoteIds.add(note._id);
+            }
+
             // إضافة الملاحظة إلى واجهة المستخدم
             if (typeof window.addNoteToUI === 'function') {
-                // التحقق من عدم وجود الملاحظة مسبقاً (لتجنب التكرار)
-                if (!window.sentNoteIds || !window.sentNoteIds.has(note._id)) {
-                    window.addNoteToUI(note);
-                    console.log('تمت إضافة ملاحظة داخلية جديدة للمحادثة:', note._id);
-                } else {
-                    console.log('تم تجاهل ملاحظة داخلية مكررة:', note._id);
-                }
+                window.addNoteToUI(note);
+                console.log('تمت إضافة ملاحظة داخلية جديدة للمحادثة:', note._id);
             }
         }
         
@@ -257,9 +281,31 @@ function appendNewMessage(message) {
     const messagesContainer = document.querySelector('.messages-container');
     if (!messagesContainer) return;
     
-    // التحقق من وجود الرسالة في الواجهة بالفعل
+    // فحص متقدم لمنع تكرار الرسائل
+    
+    // 1. التحقق من وجود الرسالة في الواجهة بالفعل
     const existingMessage = document.querySelector(`[data-message-id="${message._id}"]`);
-    if (existingMessage) return;
+    if (existingMessage) {
+        console.log('تم تجاهل رسالة مكررة (موجودة في DOM بالفعل):', message._id);
+        return;
+    }
+    
+    // 2. التحقق من وجود الرسالة في قائمة الرسائل المرسلة
+    if (window.sentMessageIds && (
+        window.sentMessageIds.has(message._id) || 
+        (message._clientId && window.sentMessageIds.has(message._clientId))
+    )) {
+        console.log('تم تجاهل رسالة مكررة (موجودة في sentMessageIds):', message._id);
+        return;
+    }
+    
+    // 3. إضافة معرف الرسالة إلى قائمة الرسائل المرسلة لتجنب التكرار المستقبلي
+    if (window.sentMessageIds && message._id) {
+        window.sentMessageIds.add(message._id);
+        if (message._clientId) {
+            window.sentMessageIds.add(message._clientId);
+        }
+    }
     
     // إنشاء عنصر الرسالة الجديدة
     try {
@@ -267,13 +313,7 @@ function appendNewMessage(message) {
         const messageTemplate = getMessageTemplate(message);
         
         // إضافة الرسالة إلى حاوية الرسائل
-        if (message.direction === 'incoming') {
-            // إضافة الرسالة في بداية الحاوية للرسائل الواردة
-            messagesContainer.insertAdjacentHTML('afterbegin', messageTemplate);
-        } else {
-            // إضافة الرسالة في بداية الحاوية للرسائل الصادرة
-            messagesContainer.insertAdjacentHTML('afterbegin', messageTemplate);
-        }
+        messagesContainer.insertAdjacentHTML('afterbegin', messageTemplate);
         
         // تفعيل مستمعات الأحداث للرسالة الجديدة
         const messageElement = document.querySelector(`[data-message-id="${message._id}"]`);

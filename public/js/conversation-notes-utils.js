@@ -37,52 +37,11 @@
       // إنشاء معرف مؤقت للملاحظة
       const tempNoteId = 'temp_note_' + Date.now();
 
-      // إنشاء كائن ملاحظة مؤقت لعرضه في الواجهة قبل الاستجابة من الخادم
-      const tempNote = {
-        _id: tempNoteId,
-        _clientId: tempNoteId, // معرف من جانب العميل للتتبع
-        conversationId: conversationId,
-        content: noteContent,
-        timestamp: new Date(),
-        sentBy: {
-          username: window.currentUser ? window.currentUser.username : 'أنا'
-        },
-        isTemp: true // علامة لتمييز الملاحظات المؤقتة
-      };
-
-      // إضافة الملاحظة المؤقتة إلى واجهة المستخدم فوراً
-      if (typeof window.addNoteToUI === 'function') {
-        window.addNoteToUI(tempNote);
-      }
-
       // تتبع الملاحظات المرسلة لمنع التكرار
       if (!window.sentNoteIds) {
         window.sentNoteIds = new Set();
       }
       window.sentNoteIds.add(tempNoteId);
-
-      // الاحتفاظ بنسخة من دالة addNoteToUI الأصلية
-      const originalAddNoteToUI = window.addNoteToUI;
-
-      // تجاوز دالة addNoteToUI مؤقتاً لمنع التكرار
-      window.addNoteToUI = function(note) {
-        // التحقق مما إذا كانت الملاحظة قد أُضيفت بالفعل
-        if (window.sentNoteIds && (
-          window.sentNoteIds.has(note._id) || 
-          (note._clientId && window.sentNoteIds.has(note._clientId))
-        )) {
-          console.log('تجاهل ملاحظة مكررة:', note._id);
-          return;
-        }
-
-        // استدعاء الدالة الأصلية إذا لم تكن الملاحظة مكررة
-        originalAddNoteToUI(note);
-      };
-
-      // ضبط مؤقت لإعادة الدالة الأصلية بعد فترة زمنية (لتجنب مشكلات التزامن)
-      setTimeout(() => {
-        window.addNoteToUI = originalAddNoteToUI;
-      }, 2000);
 
       // إرسال طلب AJAX لإضافة الملاحظة الداخلية
       const response = await fetch(`/crm/conversations/${conversationId}/note`, {
@@ -111,11 +70,9 @@
             alert('تمت إضافة الملاحظة بنجاح');
           }
 
-          // إضافة الملاحظة إلى واجهة المستخدم مباشرة
-          // هذا سيضمن أن الملاحظة تظهر فوراً للمستخدم الذي أضادها،
-          // بينما سيتم إرسالها للمستخدمين الآخرين عبر Socket.io
-          if (data.note && typeof window.addNoteToUI === 'function') {
-            window.addNoteToUI(data.note);
+          // إضافة معرف الملاحظة الحقيقي إلى القائمة لمنع التكرار
+          if (data.note && data.note._id) {
+            window.sentNoteIds.add(data.note._id);
           }
         } else {
           if (window.showToast) {
@@ -141,24 +98,25 @@
             alert('تمت إضافة الملاحظة بنجاح');
           }
         } else {
-          console.error('خطأ في استجابة الخادم (غير JSON):', parseError);
+          // عرض خطأ عام
+          console.error('خطأ في إضافة الملاحظة:', parseError);
           if (window.showToast) {
-            window.showToast('فشل في إضافة الملاحظة', 'error');
+            window.showToast('حدث خطأ أثناء إضافة الملاحظة', 'error');
           } else {
-            alert('فشل في إضافة الملاحظة');
+            alert('حدث خطأ أثناء إضافة الملاحظة');
           }
         }
       }
     } catch (error) {
-      console.error('خطأ في إضافة ملاحظة داخلية:', error);
+      // معالجة أي أخطاء أثناء عملية الإرسال
+      console.error('خطأ في إرسال الملاحظة:', error);
       if (window.showToast) {
-        window.showToast('حدث خطأ أثناء إضافة الملاحظة', 'error');
+        window.showToast('حدث خطأ أثناء إرسال الملاحظة', 'error');
       } else {
-        alert('حدث خطأ أثناء إضافة الملاحظة');
+        alert('حدث خطأ أثناء إرسال الملاحظة');
       }
     } finally {
-      // إعادة الزر لحالته الطبيعية
-      const submitBtn = document.getElementById('submitNoteBtn');
+      // إعادة حالة الزر
       submitBtn.disabled = false;
       submitBtn.innerHTML = '<i class="fas fa-check me-1"></i> إضافة ملاحظة';
     }
