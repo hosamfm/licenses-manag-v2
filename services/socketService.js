@@ -100,7 +100,23 @@ function initialize(server) {
       }
     });
 
-    // الانضمام لغرفة المحادثة
+    // الانضمام لغرفة - أمر عام (تنسيق جديد)
+    socket.on('join', (data) => {
+      if (data && data.room) {
+        socket.join(data.room);
+        logger.info('socketService', 'انضمام إلى غرفة', { room: data.room, socketId: socket.id });
+      }
+    });
+
+    // مغادرة غرفة - أمر عام (تنسيق جديد)
+    socket.on('leave', (data) => {
+      if (data && data.room) {
+        socket.leave(data.room);
+        logger.info('socketService', 'مغادرة غرفة', { room: data.room, socketId: socket.id });
+      }
+    });
+
+    // الانضمام لغرفة المحادثة (تنسيق قديم للتوافق)
     socket.on('join-conversation', (conversationId) => {
       if (conversationId) {
         socket.join(`conversation-${conversationId}`);
@@ -108,7 +124,7 @@ function initialize(server) {
       }
     });
 
-    // مغادرة غرفة المحادثة
+    // مغادرة غرفة المحادثة (تنسيق قديم للتوافق)
     socket.on('leave-conversation', (conversationId) => {
       if (conversationId) {
         socket.leave(`conversation-${conversationId}`);

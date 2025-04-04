@@ -345,12 +345,15 @@
         // الانضمام إلى غرفة المحادثة عبر Socket.io للحصول على الإشعارات الفورية
         if (window.socketConnection && window.socketConnection.connected) {
           console.log('الانضمام إلى غرفة المحادثة:', conversationId);
-          window.socketConnection.emit('join-conversation', conversationId);
+          window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
           
           // مغادرة الغرفة السابقة إذا وجدت
           if (window.previousConversationId && window.previousConversationId !== conversationId) {
-            window.socketConnection.emit('leave-conversation', window.previousConversationId);
+            window.socketConnection.emit('leave', { room: `conversation-${window.previousConversationId}` });
           }
+          
+          // تحديث المعرف الحالي في المتغير العام للنافذة
+          window.currentConversationId = conversationId;
           
           // حفظ معرف المحادثة الحالية للمرة القادمة
           window.previousConversationId = conversationId;
