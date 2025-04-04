@@ -9,7 +9,6 @@
  * 4. وظائف تحميل الوسائط (الصور، الملفات، الفيديو، الصوت) تستخدم API واتساب الرسمي.
  */
 const Conversation = require('../models/Conversation');
-const Contact = require('../models/Contact');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const WhatsappChannel = require('../models/WhatsAppChannel');
 const User = require('../models/User');
@@ -18,149 +17,122 @@ const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const mediaService = require('../services/mediaService');
 const cacheService = require('../services/cacheService');
+const conversationService = require('../services/conversationService');
 
 /**
- * عرض جميع المحادثات
+ * دالة مساعدة لتوحيد منطق جلب المحادثات
+ * تستخدم في عرض جميع المحادثات وعرض محادثات المستخدم الحالي
+ * @param {Object} options - خيارات جلب المحادثات
+ * @param {Object} req - كائن الطلب
+ * @param {Object} res - كائن الاستجابة
+ * @param {String} viewName - اسم القالب للعرض
+ * @param {String} pageTitle - عنوان الصفحة
+ * @returns {Promise} 
  */
-exports.listConversations = async (req, res) => {
+async function renderConversationsList(options, req, res, viewName, pageTitle) {
   try {
     const status = req.query.status || 'all';
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-
-    const filter = {};
-    if (status !== 'all') {
-      filter.status = status;
-    }
-
-    const total = await Conversation.countDocuments(filter);
-
-    const conversations = await Conversation.find(filter)
-      .sort({ lastMessageAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('channelId', 'name')
-      .populate('assignedTo', 'username full_name')
-      .lean();
-
-    // إحضار آخر رسالة لكل محادثة
-    const convWithLast = await Promise.all(conversations.map(async (c) => {
-      try {
-        const lastMsg = await WhatsappMessage.findOne({ conversationId: c._id })
-          .sort({ timestamp: -1 })
-          .lean();
-        return { ...c, lastMessage: lastMsg || null };
-      } catch (err) {
-        logger.error('conversationController', 'خطأ في آخر رسالة', { err, convId: c._id });
-        return { ...c, lastMessage: null };
-      }
-    }));
-
-    const totalPages = Math.ceil(total / limit);
-    const pagination = {
-      current: page,
-      prev: page > 1 ? page - 1 : null,
-      next: page < totalPages ? page + 1 : null,
-      total: totalPages
+    
+    // بناء معايير التصفية والتصفح
+    const filterOptions = {
+      status: status,
+      ...options.filters
     };
-
-    res.render('crm/conversations', {
-      title: 'المحادثات',
-      conversations: convWithLast,
+    
+    const paginationOptions = {
+      page: page,
+      limit: limit,
+      sort: { lastMessageAt: -1 }
+    };
+    
+    // استخدام خدمة المحادثات للحصول على قائمة المحادثات
+    const result = await conversationService.getConversationsList(
+      filterOptions,
+      paginationOptions,
+      true,
+      true
+    );
+    
+    // الحصول على إحصاءات المحادثات
+    const counts = options.getStats 
+      ? await options.getStats(req.user)
+      : await conversationService.getConversationStats();
+    
+    // إعداد بيانات التصفح للقالب
+    const pagination = {
+      current: result.pagination.currentPage,
+      prev: result.pagination.prevPage,
+      next: result.pagination.nextPage,
+      total: result.pagination.totalPages
+    };
+    
+    res.render(viewName, {
+      title: pageTitle,
+      conversations: result.conversations,
       pagination,
       filters: {
         status,
         availableStatuses: ['all', 'open', 'assigned', 'closed']
       },
-      counts: {
-        total,
-        open: await Conversation.countDocuments({ status: 'open' }),
-        assigned: await Conversation.countDocuments({ status: 'assigned' }),
-        closed: await Conversation.countDocuments({ status: 'closed' })
-      },
+      counts,
       user: req.user,
       layout: 'crm/layout',
       flashMessages: req.flash()
     });
   } catch (error) {
-    logger.error('conversationController', 'خطأ في عرض المحادثات', error);
+    logger.error('conversationController', `خطأ في عرض ${pageTitle}`, error);
     req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
     res.redirect('/');
   }
+}
+
+/**
+ * عرض جميع المحادثات
+ */
+exports.listConversations = async (req, res) => {
+  await renderConversationsList(
+    {
+      filters: {}, // لا توجد فلاتر إضافية لجميع المحادثات
+      getStats: null // استخدام الإحصاءات العامة
+    },
+    req,
+    res,
+    'crm/conversations',
+    'المحادثات'
+  );
 };
 
 /**
  * عرض المحادثات المسندة للمستخدم الحالي
  */
 exports.listMyConversations = async (req, res) => {
-  try {
-    if (!req.user || !req.user._id) {
-      req.flash('error', 'يرجى تسجيل الدخول أولاً');
-      return res.redirect('/crm/conversations');
-    }
-    const status = req.query.status || 'all';
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-
-    const filter = { assignedTo: req.user._id };
-    if (status !== 'all') filter.status = status;
-
-    const total = await Conversation.countDocuments(filter);
-
-    const conversations = await Conversation.find(filter)
-      .sort({ lastMessageAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('channelId', 'name')
-      .populate('assignedTo', 'username full_name')
-      .lean();
-
-    const convWithLast = await Promise.all(conversations.map(async (c) => {
-      try {
-        const lastMsg = await WhatsappMessage.findOne({ conversationId: c._id })
-          .sort({ timestamp: -1 })
-          .lean();
-        return { ...c, lastMessage: lastMsg || null };
-      } catch (err) {
-        logger.error('conversationController', 'خطأ في آخر رسالة', { err, convId: c._id });
-        return { ...c, lastMessage: null };
-      }
-    }));
-
-    const totalPages = Math.ceil(total / limit);
-    const pagination = {
-      current: page,
-      prev: page > 1 ? page - 1 : null,
-      next: page < totalPages ? page + 1 : null,
-      total: totalPages
-    };
-
-    res.render('crm/conversations', {
-      title: 'محادثاتي',
-      conversations: convWithLast,
-      pagination,
-      filters: {
-        status,
-        availableStatuses: ['all', 'open', 'assigned', 'closed']
-      },
-      counts: {
-        total,
-        open: await Conversation.countDocuments({ status: 'open', assignedTo: req.user._id }),
-        assigned: await Conversation.countDocuments({ status: 'assigned', assignedTo: req.user._id }),
-        closed: await Conversation.countDocuments({ status: 'closed', assignedTo: req.user._id })
-      },
-      user: req.user,
-      layout: 'crm/layout',
-      isMyConversations: true,
-      flashMessages: req.flash()
-    });
-  } catch (error) {
-    logger.error('conversationController', 'خطأ في عرض محادثات المستخدم', error);
-    req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
-    res.redirect('/crm/conversations');
+  if (!req.user || !req.user._id) {
+    req.flash('error', 'يرجى تسجيل الدخول أولاً');
+    return res.redirect('/crm/conversations');
   }
+  
+  await renderConversationsList(
+    {
+      filters: {
+        assignedTo: req.user._id // محادثات المستخدم الحالي فقط
+      },
+      getStats: async (user) => {
+        // إحصاءات خاصة بمحادثات المستخدم الحالي
+        return {
+          total: await Conversation.countDocuments({ assignedTo: user._id }),
+          open: await Conversation.countDocuments({ assignedTo: user._id, status: 'open' }),
+          assigned: await Conversation.countDocuments({ assignedTo: user._id, status: 'assigned' }),
+          closed: await Conversation.countDocuments({ assignedTo: user._id, status: 'closed' })
+        };
+      }
+    },
+    req,
+    res,
+    'crm/my_conversations',
+    'محادثاتي'
+  );
 };
 
 /**
@@ -431,88 +403,21 @@ exports.replyToConversation = async (req, res) => {
         // تحديث معرف الرسالة في سجل الوسائط
         await whatsappMediaController.updateMessageIdForMedia(mediaId, msg._id);
         
-        // إرسال الوسائط حسب النوع
-        if (replyToMessageId && externalReplyId) {
-          // إرسال رد وسائط على رسالة
-          switch (mediaType) {
-            case 'image':
-              apiResponse = await metaWhatsappService.sendReplyImage(
-                conversation.phoneNumber,
-                media.fileData,
-                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
-                externalReplyId,
-                phoneNumberId
-              );
-              break;
-            case 'video':
-              apiResponse = await metaWhatsappService.sendReplyVideo(
-                conversation.phoneNumber,
-                media.fileData,
-                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
-                externalReplyId,
-                phoneNumberId
-              );
-              break;
-            case 'document':
-              apiResponse = await metaWhatsappService.sendReplyDocument(
-                conversation.phoneNumber,
-                media.fileData,
-                media.fileName || 'document',
-                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
-                externalReplyId,
-                phoneNumberId
-              );
-              break;
-            case 'audio':
-              apiResponse = await metaWhatsappService.sendReplyAudio(
-                conversation.phoneNumber,
-                media.fileData,
-                externalReplyId,
-                phoneNumberId
-              );
-              break;
-            default:
-              throw new Error(`نوع وسائط غير مدعوم: ${mediaType}`);
-          }
-        } else {
-          // إرسال وسائط عادية (ليست رداً)
-          switch (mediaType) {
-            case 'image':
-              apiResponse = await metaWhatsappService.sendImage(
-                conversation.phoneNumber,
-                media.fileData,
-                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
-                phoneNumberId
-              );
-              break;
-            case 'video':
-              apiResponse = await metaWhatsappService.sendVideo(
-                conversation.phoneNumber,
-                media.fileData,
-                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
-                phoneNumberId
-              );
-              break;
-            case 'document':
-              apiResponse = await metaWhatsappService.sendDocument(
-                conversation.phoneNumber,
-                media.fileData,
-                media.fileName || 'document',
-                media.caption || '', // استخدام النص المصاحب المخزن في الوسائط
-                phoneNumberId
-              );
-              break;
-            case 'audio':
-              apiResponse = await metaWhatsappService.sendAudio(
-                conversation.phoneNumber,
-                media.fileData,
-                phoneNumberId
-              );
-              break;
-            default:
-              throw new Error(`نوع وسائط غير مدعوم: ${mediaType}`);
-          }
-        }
+        // استخدام الدالة الموحدة لإرسال الوسائط (مع أو بدون رد)
+        const options = {
+          caption: media.caption || '',
+          filename: mediaType === 'document' ? (media.fileName || 'document') : undefined
+        };
+        
+        // استخدام معرف الرد الخارجي إذا كان موجوداً، وإلا null للإرسال كرسالة عادية
+        apiResponse = await metaWhatsappService.sendMediaMessage(
+          conversation.phoneNumber,
+          mediaType,
+          media.fileData,
+          options,
+          externalReplyId, // null إذا لم يكن هناك رد
+          phoneNumberId
+        );
       } else {
         // إرسال رسالة نصية عادية
         // إذا كان رد على رسالة سابقة
@@ -565,6 +470,9 @@ exports.replyToConversation = async (req, res) => {
     msg.status = finalStatus;
     await msg.save();
 
+    // مسح التخزين المؤقت للمحادثة لضمان عرض البيانات المحدثة
+    cacheService.clearConversationCache(conversationId);
+
     // إشعار Socket.io - اعتماداً على ما إذا كانت رداً أو رسالة عادية
     if (replyToMessageId) {
       socketService.notifyMessageReply(conversationId, {
@@ -615,7 +523,7 @@ exports.replyToConversation = async (req, res) => {
           status: msg.status,
           externalMessageId: msg.externalMessageId || null,
           replyToMessageId: replyToMessageId || null
-        }
+        } 
       });
     } else {
       req.flash('success', 'تم إرسال الرسالة');
@@ -673,13 +581,15 @@ exports.reactToMessage = async (req, res) => {
     }
 
     try {
-      // إرسال التفاعل عبر واتساب
       const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
       if (!metaWhatsappService.initialized) {
         await metaWhatsappService.initialize();
       }
-
       const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
+      
+      let apiResponse;
+      
+      // التحقق من وجود وسائط
       // استخدام المعرف الخارجي للرسالة المخزن في قاعدة البيانات
       const messageIdToUse = message.externalMessageId;
       
@@ -735,7 +645,6 @@ exports.reactToMessage = async (req, res) => {
         success: true,
         message: 'تم إرسال التفاعل بنجاح'
       });
-
     } catch (error) {
       logger.error('conversationController', 'خطأ في إرسال التفاعل', error);
       return res.json({ success: false, error: 'حدث خطأ أثناء إرسال التفاعل' });
@@ -923,54 +832,35 @@ exports.getConversationDetailsAjax = async (req, res) => {
  */
 exports.listConversationsAjaxList = async (req, res) => {
   try {
-    // إرجاع البيانات بصيغة JSON
-    // تحديد الاستعلام بناءً على صلاحيات المستخدم
-    let query = {};
+    // بناء معايير التصفية
+    const filterOptions = {
+      status: req.query.status || 'all'
+    };
     
-    // التحقق من وجود حالة محددة في الاستعلام
-    const status = req.query.status || 'all';
-    if (status !== 'all') {
-      query.status = status;
+    // إضافة فلتر المستخدم المسند إليه إذا كان المستخدم ليس مشرفًا أو مديرًا
+    if (req.user && req.user.user_role !== 'admin' && req.user.user_role !== 'supervisor') {
+      filterOptions.assignedTo = req.user._id;
     }
     
-    // إضافة فلتر إذا كان المستخدم ليس مشرفاً أو مديراً
-    if (req.user && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
-      query.assignedTo = req.user._id;
-    }
+    // خيارات التصفح
+    const paginationOptions = {
+      limit: 50,
+      skipPagination: true,
+      sort: { updatedAt: -1 }
+    };
     
-    const conversations = await Conversation.find(query)
-      .sort({ updatedAt: -1 })
-      .limit(50)
-      .lean();
-
-    // احسب عدد الرسائل غير المقروءة لكل محادثة
-    const convWithUnread = await Promise.all(
-      conversations.map(async (conv) => {
-        // حساب عدد الرسائل غير المقروءة
-        const unreadCount = await WhatsappMessage.countDocuments({
-          conversationId: conv._id,
-          direction: 'incoming',
-          status: { $ne: 'read' }
-        });
-        
-        // جلب آخر رسالة
-        const lastMsg = await WhatsappMessage.findOne({ conversationId: conv._id })
-          .sort({ timestamp: -1 })
-          .lean();
-          
-        // إرجاع المحادثة مع البيانات الإضافية
-        return { 
-          ...conv, 
-          unreadCount, 
-          lastMessage: lastMsg || null 
-        };
-      })
+    // استخدام خدمة المحادثات للحصول على قائمة المحادثات
+    const result = await conversationService.getConversationsList(
+      filterOptions,
+      paginationOptions,
+      true,  // تضمين آخر رسالة
+      true   // تضمين عدد الرسائل غير المقروءة
     );
-
+    
     // إرجاع البيانات بصيغة JSON
     return res.json({
       success: true,
-      conversations: convWithUnread
+      conversations: result.conversations
     });
   } catch (err) {
     logger.error('conversationController', 'خطأ في listConversationsAjaxList', err);

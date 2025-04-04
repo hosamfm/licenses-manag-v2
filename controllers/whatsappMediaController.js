@@ -9,8 +9,6 @@ const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const logger = require('../services/loggerService');
 const mediaService = require('../services/mediaService');
-const fs = require('fs');
-const path = require('path');
 require('dotenv').config();
 
 /**
@@ -289,14 +287,35 @@ exports.getMediaContent = async (req, res) => {
     const { mediaId } = req.params;
     
     if (!mediaId) {
+      logger.warn('whatsappMediaController', 'معرف الوسائط مطلوب');
       return res.status(400).json({ success: false, error: 'معرف الوسائط مطلوب' });
     }
+    
+    logger.info('whatsappMediaController', `طلب محتوى الوسائط: ${mediaId}`);
     
     // استرجاع بيانات الوسائط باستخدام خدمة الوسائط
     const mediaContent = await mediaService.getMediaContent(mediaId);
     
     if (!mediaContent) {
-      logger.warn(`لم يتم العثور على وسائط بالمعرف: ${mediaId}`);
+      logger.warn('whatsappMediaController', `لم يتم العثور على وسائط بالمعرف: ${mediaId}`);
+      
+      // محاولة البحث عن الوسائط باستخدام معرف الرسالة
+      try {
+        const message = await WhatsappMessage.findById(mediaId);
+        if (message && message.mediaType) {
+          logger.info('whatsappMediaController', 'تم العثور على رسالة بنفس المعرف، محاولة استرجاع الوسائط المرتبطة');
+          const mediaFromMessage = await mediaService.findMediaForMessage(message);
+          
+          if (mediaFromMessage) {
+            logger.info('whatsappMediaController', 'تم العثور على وسائط مرتبطة بالرسالة');
+            // إعادة توجيه الطلب إلى معرف الوسائط الصحيح
+            return res.redirect(`/whatsapp/media/content/${mediaFromMessage._id}`);
+          }
+        }
+      } catch (messageError) {
+        logger.debug('whatsappMediaController', 'خطأ في البحث عن الرسالة', { error: messageError.message });
+      }
+      
       return res.status(404).json({ success: false, error: 'لم يتم العثور على الوسائط المطلوبة' });
     }
     
@@ -319,12 +338,23 @@ exports.getMediaContent = async (req, res) => {
         
         // ضبط نوع المحتوى
         res.set('Content-Type', mediaContent.mimeType || 'application/octet-stream');
-        res.set('Content-Disposition', `inline; filename="${mediaContent.fileName}"`);
+        res.set('Content-Disposition', `inline; filename="${mediaContent.fileName || 'file'}"`);
+        
+        // إضافة سجل للتشخيص
+        logger.info('whatsappMediaController', `إرسال محتوى الوسائط بنجاح: ${mediaId}`, {
+          contentType: mediaContent.mimeType,
+          fileName: mediaContent.fileName,
+          size: buffer.length
+        });
         
         // إرسال البيانات
         return res.send(buffer);
       } catch (bufferError) {
-        logger.error(`خطأ في معالجة بيانات الوسائط: ${bufferError.message}`);
+        logger.error('whatsappMediaController', `خطأ في معالجة بيانات الوسائط: ${bufferError.message}`, {
+          mediaId,
+          error: bufferError.stack
+        });
+        
         return res.status(500).json({ 
           success: false, 
           error: 'خطأ في معالجة بيانات الوسائط', 
@@ -334,14 +364,22 @@ exports.getMediaContent = async (req, res) => {
     }
     
     // في حالة عدم وجود بيانات للملف، نرسل رسالة خطأ
-    logger.warn(`لا توجد بيانات مشفرة للوسائط: ${mediaId}`);
+    logger.warn('whatsappMediaController', `لا توجد بيانات مشفرة للوسائط: ${mediaId}`, {
+      mediaType: mediaContent.mediaType,
+      hasContent: mediaContent.hasContent,
+      messageId: mediaContent.messageId
+    });
+    
     return res.status(404).json({ 
       success: false, 
       error: 'بيانات الوسائط غير متوفرة', 
       mediaType: mediaContent.mediaType
     });
   } catch (error) {
-    logger.error(`خطأ في استرجاع محتوى الوسائط: ${error.message}`);
+    logger.error('whatsappMediaController', `خطأ في استرجاع محتوى الوسائط: ${error.message}`, {
+      error: error.stack,
+      mediaId: req.params.mediaId
+    });
     
     return res.status(500).json({
       success: false,
@@ -481,15 +519,70 @@ exports.uploadMediaForSending = async (req, res) => {
  */
 exports.updateMessageIdForMedia = async (mediaId, messageId) => {
   try {
-    // استخدام خدمة الوسائط لربط الوسائط بالرسالة
+    if (!mediaId || !messageId) {
+      logger.warn('whatsappMediaController', 'معرف الوسائط أو معرف الرسالة غير موجود', {
+        mediaId,
+        messageId
+      });
+      return false;
+    }
+
+    // التحقق من وجود الوسائط أولاً
+    const media = await WhatsappMedia.findById(mediaId);
+    if (!media) {
+      logger.warn('whatsappMediaController', 'لم يتم العثور على الوسائط للتحديث', {
+        mediaId,
+        messageId
+      });
+      return false;
+    }
+
+    // تحديث معرف الرسالة في الوسائط
+    media.messageId = messageId;
+    media.updatedAt = new Date();
+    
+    // إضافة معرف الرسالة في البيانات الوصفية أيضاً للاحتياط
+    if (!media.metaData) {
+      media.metaData = {};
+    }
+    media.metaData.messageId = messageId.toString();
+    
+    await media.save();
+    
+    logger.info('whatsappMediaController', 'تم تحديث معرف الرسالة للوسائط بنجاح', {
+      mediaId,
+      messageId
+    });
+    
+    // استخدام خدمة الوسائط كطريقة ثانية للتأكد من الربط
     const result = await mediaService.linkMediaToMessage(mediaId, messageId);
-    return result;
+    
+    return true;
   } catch (error) {
     logger.error('whatsappMediaController', 'خطأ في تحديث معرف الرسالة للوسائط', {
       error: error.message,
       mediaId,
       messageId
     });
+    
+    // محاولة إعادة الربط باستخدام خدمة الوسائط مباشرة في حالة الفشل
+    try {
+      const result = await mediaService.linkMediaToMessage(mediaId, messageId);
+      if (result) {
+        logger.info('whatsappMediaController', 'تم ربط الوسائط بالرسالة بنجاح بعد المحاولة الثانية', {
+          mediaId,
+          messageId
+        });
+        return true;
+      }
+    } catch (retryError) {
+      logger.error('whatsappMediaController', 'فشل في محاولة الربط الثانية', {
+        error: retryError.message,
+        mediaId,
+        messageId
+      });
+    }
+    
     return false;
   }
 };

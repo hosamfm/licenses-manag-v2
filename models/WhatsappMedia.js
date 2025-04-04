@@ -70,23 +70,15 @@ const whatsappMediaSchema = new mongoose.Schema({
 });
 
 /**
- * إنشاء ملف وسائط جديد
- * @param {Object} mediaData - بيانات الوسائط
- * @returns {Promise} - الملف المخزن
+ * @deprecated استخدم mediaService.createMedia بدلاً من هذه الدالة
+ * لتجنب الازدواجية في الكود وضمان اتساق المنطق في مكان واحد
+ * 
+ * الحصول على وسائط رسالة معينة
+ * @param {ObjectId} messageId - معرف الرسالة
+ * @returns {Promise} - سجل الوسائط
  */
-whatsappMediaSchema.statics.createMedia = async function(mediaData) {
-  try {
-    logger.info('WhatsappMedia', 'جاري إنشاء ملف وسائط جديد', {
-      messageId: mediaData.messageId,
-      mediaType: mediaData.mediaType
-    });
-    
-    const media = await this.create(mediaData);
-    return media;
-  } catch (error) {
-    logger.error('WhatsappMedia', 'خطأ في إنشاء ملف وسائط', error);
-    throw error;
-  }
+whatsappMediaSchema.statics.getMediaByMessageId = async function(messageId) {
+  return this.findOne({ messageId });
 };
 
 /**

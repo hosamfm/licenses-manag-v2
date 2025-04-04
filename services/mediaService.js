@@ -127,25 +127,72 @@ async function findMediaForMessage(message) {
 async function linkMediaToMessage(mediaId, messageId) {
   try {
     if (!mediaId || !messageId) {
-      logger.warn('محاولة ربط وسائط برسالة بدون معرفات صالحة');
+      logger.warn('mediaService', 'معرف الوسائط أو معرف الرسالة غير موجود', { mediaId, messageId });
       return false;
     }
 
-    const result = await WhatsappMedia.updateOne(
-      { _id: mediaId },
-      { $set: { messageId: messageId } }
-    );
-
-    const success = result.modifiedCount > 0;
-    if (success) {
-      logger.info(`تم ربط الوسائط ${mediaId} بالرسالة ${messageId}`);
-    } else {
-      logger.warn(`فشل ربط الوسائط ${mediaId} بالرسالة ${messageId}`);
+    // البحث عن الوسائط
+    const media = await WhatsappMedia.findById(mediaId);
+    if (!media) {
+      logger.warn('mediaService', 'لم يتم العثور على الوسائط للربط', { mediaId, messageId });
+      return false;
     }
 
-    return success;
+    // البحث عن الرسالة للتأكد من وجودها
+    const message = await WhatsappMessage.findById(messageId);
+    if (!message) {
+      logger.warn('mediaService', 'لم يتم العثور على الرسالة للربط', { mediaId, messageId });
+      return false;
+    }
+
+    // تحديث معرف الرسالة في الوسائط
+    media.messageId = messageId;
+    media.updatedAt = new Date();
+    
+    // إضافة معرف الرسالة في البيانات الوصفية أيضاً للاحتياط
+    if (!media.metaData) {
+      media.metaData = {};
+    }
+    media.metaData.messageId = messageId.toString();
+    
+    // تحديث معلومات المحادثة إذا كانت غير موجودة
+    if (!media.conversationId && message.conversationId) {
+      media.conversationId = message.conversationId;
+      
+      if (media.metaData) {
+        media.metaData.conversationId = message.conversationId.toString();
+      }
+    }
+    
+    // تحديث الاتجاه إذا كان غير موجود
+    if (!media.direction && message.direction) {
+      media.direction = message.direction;
+    }
+    
+    await media.save();
+    
+    // تحديث الرسالة بمعلومات الوسائط إذا لم تكن موجودة
+    if (message.mediaType !== media.mediaType || !message.mediaId) {
+      message.mediaType = media.mediaType;
+      message.mediaId = media._id;
+      
+      if (media.caption && !message.text) {
+        message.text = media.caption;
+      }
+      
+      await message.save();
+      logger.info('mediaService', 'تم تحديث معلومات الوسائط في الرسالة', { mediaId, messageId });
+    }
+    
+    logger.info('mediaService', 'تم ربط الوسائط بالرسالة بنجاح', { mediaId, messageId });
+    return true;
   } catch (error) {
-    logger.error(`خطأ في ربط الوسائط بالرسالة: ${error.message}`);
+    logger.error('mediaService', 'خطأ في ربط الوسائط بالرسالة', { 
+      error: error.message, 
+      mediaId, 
+      messageId,
+      stack: error.stack
+    });
     return false;
   }
 }
@@ -226,29 +273,42 @@ async function processMessagesWithMedia(messages) {
 async function getMediaContent(mediaId) {
   try {
     if (!mediaId) {
-      logger.warn('محاولة الحصول على محتوى وسائط بدون معرف صالح');
+      logger.warn('mediaService', 'معرف الوسائط غير موجود');
       return null;
     }
 
     // البحث عن الوسائط بالمعرف
     let media = await WhatsappMedia.findById(mediaId);
     
-    // إذا لم نجد بالمعرف، نبحث عن طريق معرف الرسالة
+    // إذا لم يتم العثور على الوسائط، نحاول البحث بطرق أخرى
     if (!media) {
-      media = await WhatsappMedia.findOne({ messageId: mediaId });
+      logger.warn('mediaService', `لم يتم العثور على وسائط بالمعرف المباشر: ${mediaId}`);
+      
+      // محاولة البحث باستخدام المعرف كنص
+      try {
+        media = await WhatsappMedia.findOne({ _id: mediaId.toString() });
+      } catch (idError) {
+        logger.debug('mediaService', 'خطأ في البحث بالمعرف كنص', { error: idError.message });
+      }
+      
+      // إذا لم نجد الوسائط، نحاول البحث في البيانات الوصفية
+      if (!media) {
+        media = await WhatsappMedia.findOne({ 'metaData.id': mediaId });
+      }
+      
+      // إذا لم نجد الوسائط، نحاول البحث باستخدام معرف الرسالة
+      if (!media) {
+        media = await WhatsappMedia.findOne({ messageId: mediaId });
+      }
+      
+      // إذا لم نجد الوسائط، نعود بقيمة فارغة
+      if (!media) {
+        logger.warn('mediaService', `لم يتم العثور على وسائط بأي طريقة للمعرف: ${mediaId}`);
+        return null;
+      }
     }
 
-    if (!media) {
-      logger.warn(`لم يتم العثور على وسائط بالمعرف: ${mediaId}`);
-      return null;
-    }
-
-    // التحقق من صحة نوع الوسائط
-    if (!MEDIA_TYPES[media.mediaType.toUpperCase()] && media.mediaType !== 'location') {
-      logger.warn(`نوع وسائط غير مدعوم: ${media.mediaType}`);
-    }
-
-    // معالجة خاصة للموقع
+    // معالجة وسائط الموقع بشكل خاص
     if (media.mediaType === 'location') {
       return {
         ...media.toObject(),
@@ -273,11 +333,24 @@ async function getMediaContent(mediaId) {
     if (!media.fileData && media.metaData && media.metaData.base64Data) {
       media.fileData = media.metaData.base64Data;
       logger.info(`تم استرداد بيانات الوسائط من metaData: ${mediaId}`);
+      
+      // تحديث سجل الوسائط لتخزين البيانات في الحقل الصحيح
+      try {
+        await WhatsappMedia.updateOne(
+          { _id: media._id },
+          { $set: { fileData: media.metaData.base64Data } }
+        );
+        logger.info(`تم تحديث حقل fileData للوسائط: ${mediaId}`);
+      } catch (updateError) {
+        logger.error(`خطأ في تحديث حقل fileData للوسائط: ${updateError.message}`);
+      }
     }
     
     // إضافة سجل للتشخيص
     if (!hasDataInDb) {
       logger.debug(`وسائط بدون بيانات مشفرة في قاعدة البيانات (messageId: ${media.messageId}, conversationId: ${media.conversationId})`);
+    } else {
+      logger.debug(`تم العثور على بيانات الوسائط بنجاح: ${mediaId}`);
     }
     
     return {
@@ -289,7 +362,7 @@ async function getMediaContent(mediaId) {
       hasContent: hasDataInDb
     };
   } catch (error) {
-    logger.error(`خطأ في الحصول على محتوى الوسائط: ${error.message}`);
+    logger.error(`خطأ في الحصول على محتوى الوسائط: ${error.message}`, { mediaId, error: error.stack });
     return null;
   }
 }
