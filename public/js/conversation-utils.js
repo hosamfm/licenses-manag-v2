@@ -608,6 +608,8 @@
     const sendButton = document.getElementById('sendButton');
     const sendingIndicator = document.getElementById('sendingIndicator');
     const conversationId = document.getElementById('conversationId')?.value;
+    const attachMediaBtn = document.getElementById('attachMediaBtn');
+    const mediaFile = document.getElementById('mediaFile');
     
     if (!conversationId) {
       return;
@@ -639,6 +641,19 @@
             window.sendReply();
           }
         });
+
+        // تفعيل خاصية السحب والإفلات على منطقة الكتابة
+        setupDragAndDropOnMessageInput(replyMessage);
+      }
+
+      // إضافة حدث النقر على زر إرفاق ملف
+      if (attachMediaBtn && mediaFile) {
+        attachMediaBtn.addEventListener('click', function() {
+          mediaFile.click();
+        });
+
+        // إضافة حدث تغيير الملف المختار
+        mediaFile.addEventListener('change', handleFileSelection);
       }
     } else {
     }
@@ -1222,3 +1237,215 @@
     });
   });
 })(window);
+
+/**
+ * دالة لتفعيل خاصية السحب والإفلات على منطقة الكتابة
+ * @param {HTMLElement} messageInput - عنصر منطقة الكتابة
+ */
+function setupDragAndDropOnMessageInput(messageInput) {
+  if (!messageInput) return;
+
+  // إضافة أنماط CSS لتأثيرات السحب والإفلات
+  if (!document.getElementById('messageDragDropStyles')) {
+    const style = document.createElement('style');
+    style.id = 'messageDragDropStyles';
+    style.textContent = `
+      .message-input-container {
+        position: relative;
+      }
+      .message-input {
+        transition: all 0.3s;
+      }
+      .message-input.drag-over {
+        background-color: #e9ecef;
+        border-color: #6c757d;
+      }
+      .message-input-actions {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        z-index: 5;
+      }
+      .rtl .message-input-actions {
+        left: auto;
+        right: 10px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // أحداث السحب والإفلات
+  messageInput.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.add('drag-over');
+  });
+
+  messageInput.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.remove('drag-over');
+  });
+
+  messageInput.addEventListener('drop', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.remove('drag-over');
+    
+    // التأكد من وجود ملفات
+    if (e.dataTransfer.files.length) {
+      const fileInput = document.getElementById('mediaFile');
+      if (fileInput) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileSelection();
+      }
+    }
+  });
+}
+
+/**
+ * دالة لمعالجة اختيار الملف
+ */
+function handleFileSelection() {
+  const fileInput = document.getElementById('mediaFile');
+  const mediaPreview = document.getElementById('mediaPreview');
+  const mediaFileName = document.getElementById('mediaFileName');
+  const uploadMediaType = document.getElementById('uploadMediaType');
+  
+  if (fileInput.files && fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    
+    // عرض اسم الملف
+    mediaFileName.textContent = file.name;
+    
+    // تحديد نوع الملف وتحديث القيمة
+    let mediaType = 'document';
+    
+    if (file.type.startsWith('image/')) {
+      mediaType = 'image';
+    } else if (file.type.startsWith('video/')) {
+      mediaType = 'video';
+    } else if (file.type.startsWith('audio/')) {
+      mediaType = 'audio';
+    }
+    
+    // تحديث نوع الوسائط
+    uploadMediaType.value = mediaType;
+    
+    // التحقق من دعم نوع الملف
+    const supportedTypes = {
+      'image': ['image/jpeg', 'image/png', 'image/webp'],
+      'video': ['video/mp4', 'video/3gpp'],
+      'audio': ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'],
+      'document': [
+        'application/pdf', 
+        'application/vnd.ms-powerpoint', 
+        'application/msword', 
+        'application/vnd.ms-excel', 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation', 
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+        'text/plain'
+      ]
+    };
+    
+    // التحقق من دعم نوع الملف
+    let isSupported = false;
+    for (const type in supportedTypes) {
+      if (supportedTypes[type].includes(file.type)) {
+        isSupported = true;
+        break;
+      }
+    }
+    
+    if (!isSupported) {
+      window.showToast && window.showToast(`نوع الملف ${file.type} غير مدعوم في واتساب. الأنواع المدعومة هي: JPEG, PNG, WEBP للصور، MP4 للفيديو، MP3/OGG للصوت، PDF/DOC/DOCX/XLS/XLSX للمستندات.`, 'warning');
+      fileInput.value = '';
+      return;
+    }
+    
+    // إظهار معاينة الملف
+    mediaPreview.style.display = 'block';
+    
+    // بدء تحميل الملف تلقائياً
+    window.uploadMedia();
+  }
+}
+
+/**
+ * دالة لتحميل الوسائط إلى الخادم
+ */
+window.uploadMedia = function() {
+  const fileInput = document.getElementById('mediaFile');
+  const mediaType = document.getElementById('uploadMediaType').value;
+  const conversationId = document.getElementById('uploadConversationId').value;
+  const progressBar = document.querySelector('.upload-progress .progress-bar');
+  const progressContainer = document.querySelector('.upload-progress');
+  
+  // التحقق من اختيار ملف
+  if (!fileInput.files || fileInput.files.length === 0) {
+    window.showToast && window.showToast('يرجى اختيار ملف للتحميل', 'warning');
+    return;
+  }
+  
+  // إنشاء FormData
+  const formData = new FormData();
+  formData.append('mediaFile', fileInput.files[0]);
+  formData.append('mediaType', mediaType);
+  formData.append('conversationId', conversationId);
+  
+  // إظهار شريط التقدم
+  progressContainer.style.display = 'block';
+  progressBar.style.width = '0%';
+  progressBar.textContent = '0%';
+  
+  // إرسال طلب تحميل الملف باستخدام XMLHttpRequest لتتبع التقدم
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/whatsapp/media/upload', true);
+  
+  // مراقبة تقدم التحميل
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const percentComplete = Math.round((e.loaded / e.total) * 100);
+      progressBar.style.width = percentComplete + '%';
+      progressBar.textContent = percentComplete + '%';
+      progressBar.setAttribute('aria-valuenow', percentComplete);
+    }
+  };
+  
+  // معالجة الاستجابة
+  xhr.onload = function() {
+    try {
+      const response = JSON.parse(xhr.responseText);
+      
+      if (response.success) {
+        document.getElementById('mediaId').value = response.media._id;
+        document.getElementById('mediaType').value = response.media.mediaType;
+        window.showToast && window.showToast('تم تحميل الملف بنجاح', 'success');
+      } else {
+        window.showToast && window.showToast(response.error || 'حدث خطأ أثناء تحميل الملف', 'danger');
+      }
+    } catch (error) {
+      window.showToast && window.showToast('حدث خطأ أثناء معالجة الاستجابة', 'danger');
+      if (window.debugMode === true) {
+        console.error('خطأ في معالجة استجابة تحميل الملف:', error);
+      }
+    } finally {
+      // إخفاء شريط التقدم بعد الانتهاء
+      setTimeout(function() {
+        progressContainer.style.display = 'none';
+      }, 1000);
+    }
+  };
+  
+  // معالجة الأخطاء
+  xhr.onerror = function() {
+    window.showToast && window.showToast('حدث خطأ أثناء الاتصال بالخادم', 'danger');
+    
+    // إخفاء شريط التقدم
+    progressContainer.style.display = 'none';
+  };
+  
+  // إرسال البيانات
+  xhr.send(formData);
+};
