@@ -405,9 +405,16 @@ exports.replyToConversation = async (req, res) => {
         
         // استخدام الدالة الموحدة لإرسال الوسائط (مع أو بدون رد)
         const options = {
-          caption: media.caption || '',
-          filename: mediaType === 'document' ? (media.fileName || 'document') : undefined
+          caption: content || media.caption || '', // استخدام محتوى الرسالة النصية كـ caption أولاً
+          filename: mediaType === 'document' ? media.fileName : undefined
         };
+
+        // تسجيل معلومات إضافية للتشخيص
+        logger.info('conversationController', 'خيارات إرسال الوسائط', {
+          contentLength: content ? content.length : 0,
+          captionFromMedia: media.caption ? media.caption.length : 0,
+          finalCaption: options.caption.length
+        });
         
         // استخدام معرف الرد الخارجي إذا كان موجوداً، وإلا null للإرسال كرسالة عادية
         apiResponse = await metaWhatsappService.sendMediaMessage(
