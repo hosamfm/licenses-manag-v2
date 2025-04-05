@@ -722,6 +722,25 @@ body {
   font-size: 0.85rem;
 }
 
+/* أنماط المنشنات في الملاحظات الداخلية */
+.user-mention {
+  display: inline-block;
+  background-color: #f0e6d2;
+  color: #856404;
+  font-weight: bold;
+  padding: 0px 4px;
+  border-radius: 4px;
+  border: 1px solid #ffd97d;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-mention:hover {
+  background-color: #ffd97d;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transform: translateY(-1px);
+}
+
 .message.internal {
   padding: 5px 15px;
   text-align: center;

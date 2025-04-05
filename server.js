@@ -25,6 +25,7 @@ const whatsappChannelRoutes = require('./routes/whatsappChannelRoutes'); // اس
 const crmRoutes = require('./routes/crmRoutes'); // استيراد مسارات نظام إدارة العملاء (CRM)
 const apiRoutes = require('./routes/apiRoutes'); // استيراد مسارات API
 const whatsappMediaRoutes = require('./routes/whatsappMediaRoutes'); // استيراد مسارات وسائط الواتساب
+const userApiRoutes = require('./routes/api/userRoutes'); // استيراد مسارات API للمستخدمين
 const { startTelegramBot } = require('./services/telegramService'); // استيراد دالة startTelegramBot
 const telegramMessagesRoutes = require('./routes/telegramMessages'); // استيراد مسارات الرسائل التلغرامية
 
@@ -157,6 +158,7 @@ app.use('/telegram', telegramMessagesRoutes);
 app.use('/crm', crmRoutes);
 app.use('/api', apiRoutes);
 app.use('/whatsapp/media', whatsappMediaRoutes); // تسجيل مسارات وسائط الواتساب
+app.use('/api/user', userApiRoutes); // تسجيل مسارات API للمستخدمين
 
 // توجيه المسار القديم للمحادثات إلى نظام CRM
 app.get('/conversations', (req, res) => {

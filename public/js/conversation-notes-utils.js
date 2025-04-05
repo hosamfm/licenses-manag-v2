@@ -11,6 +11,22 @@
 
   // تعريف المتغيرات العالمية
   let replyingToMessage = null;
+  let usersList = []; // قائمة المستخدمين للمنشن
+
+  // جلب قائمة المستخدمين الذين يمكن منشنهم
+  window.fetchUsersForMention = async function() {
+    try {
+      const response = await fetch('/api/user/can-access-conversations');
+      const data = await response.json();
+      if (data.success) {
+        usersList = data.users || [];
+        return usersList;
+      }
+    } catch (error) {
+      console.error('خطأ في جلب قائمة المستخدمين:', error);
+    }
+    return [];
+  };
 
   // إضافة تعليق داخلي للمحادثة
   window.addInternalNote = async function(event) {
@@ -108,7 +124,6 @@
         }
       }
     } catch (error) {
-      // معالجة أي أخطاء أثناء عملية الإرسال
       console.error('خطأ في إرسال الملاحظة:', error);
       if (window.showToast) {
         window.showToast('حدث خطأ أثناء إرسال الملاحظة', 'error');
@@ -116,51 +131,45 @@
         alert('حدث خطأ أثناء إرسال الملاحظة');
       }
     } finally {
-      // إعادة حالة الزر
+      // إعادة الزر إلى حالته الطبيعية
+      const submitBtn = document.getElementById('submitNoteBtn');
       submitBtn.disabled = false;
       submitBtn.innerHTML = '<i class="fas fa-check me-1"></i> إضافة ملاحظة';
     }
   };
 
-  /**
-   * إضافة زر التعليق الداخلي إلى واجهة الرسائل
-   */
+  // إضافة زر التعليق الداخلي إلى واجهة الرسائل
   window.addInternalNoteButton = function() {
-    // البحث عن نموذج الرد والتأكد من وجوده
-    const replyForm = document.querySelector('form#replyForm');
-
-    if (!replyForm) {
-      return;
-    }
-
-    // البحث عن مجموعة الأزرار
-    let actionButtons = replyForm.querySelector('.d-flex.justify-content-between.align-items-center');
-
-    // في حالة عدم وجود العنصر بالضبط، نحاول البحث عن عناصر مشابهة
-    if (!actionButtons) {
-      actionButtons = replyForm.querySelector('.d-flex.justify-content-between') || 
-                      replyForm.querySelector('.action-buttons') || 
-                      replyForm.querySelector('.message-actions');
-
-      if (!actionButtons) {
-        return;
-      }
-    }
-
-    // التحقق من عدم وجود الزر مسبقاً
-    if (actionButtons.querySelector('.internal-note-btn')) {
-      return;
-    }
-
+    // التحقق من وجود نموذج الرد
+    const actionButtons = document.querySelector('.reply-form-actions');
+    if (!actionButtons) return;
+    
+    // التحقق من وجود زر التعليق مسبقاً
+    if (actionButtons.querySelector('.internal-note-btn')) return;
+    
     // إنشاء زر التعليق الداخلي
     const noteButton = document.createElement('button');
     noteButton.type = 'button';
-    noteButton.className = 'btn btn-outline-warning internal-note-btn';
-    noteButton.innerHTML = '<i class="fas fa-sticky-note me-1"></i> إضافة ملاحظة داخلية';
+    noteButton.className = 'btn btn-sm btn-outline-secondary me-2 internal-note-btn';
+    noteButton.innerHTML = '<i class="fas fa-sticky-note"></i> ملاحظة داخلية';
+    
+    // إضافة معالج النقر
     noteButton.onclick = function() {
-      // نقل معرف المحادثة إلى النموذج وفتح النافذة المنبثقة
-      const conversationId = document.getElementById('conversationId').value;
-      document.querySelector('#internalNoteModal #conversationId').value = conversationId;
+      // الحصول على معرف المحادثة من النموذج
+      const replyForm = document.getElementById('replyForm');
+      if (!replyForm) return;
+      
+      // نستخدم معرف المحادثة من عنوان الطلب
+      const conversationId = window.location.pathname.split('/').pop();
+      
+      // تعيين معرف المحادثة في النافذة المنبثقة
+      document.getElementById('conversationId').value = conversationId;
+      
+      // تحميل قائمة المستخدمين للمنشن
+      window.fetchUsersForMention().then(() => {
+        // تعيين المنشن تلقائياً للحقل
+        window.initializeMentionsInNoteField();
+      });
 
       // فتح النافذة المنبثقة
       const modal = new bootstrap.Modal(document.getElementById('internalNoteModal'));
@@ -170,6 +179,86 @@
     // إدراج الزر قبل زر الإرسال (آخر زر)
     const lastButton = actionButtons.lastElementChild;
     actionButtons.insertBefore(noteButton, lastButton);
+  };
+
+  // تهيئة ميزة المنشن في حقل الملاحظة
+  window.initializeMentionsInNoteField = function() {
+    // التأكد من وجود مكتبة Tribute
+    if (typeof Tribute === 'undefined') {
+      console.error('يجب تحميل مكتبة Tribute.js لدعم المنشن');
+      return;
+    }
+
+    // التأكد من وجود المستخدمين
+    if (!usersList || usersList.length === 0) {
+      console.warn('قائمة المستخدمين فارغة، يتم تحميلها...');
+      return;
+    }
+
+    // إنشاء كائن المنشن
+    window.tributeInstance = new Tribute({
+      values: usersList.map(user => ({
+        key: user.username,
+        value: user.full_name,
+        id: user._id
+      })),
+      trigger: '@',
+      menuItemTemplate: function(item) {
+        return `<span class="mention-item">${item.original.value} (@${item.original.key})</span>`;
+      },
+      selectTemplate: function(item) {
+        return `@${item.original.key}`;
+      },
+      noMatchTemplate: function() {
+        return '<span style="display:none;"></span>';
+      },
+      lookup: 'value',
+      fillAttr: 'value'
+    });
+
+    // إضافة المنشن إلى حقل الملاحظة
+    window.tributeInstance.attach(document.getElementById('internalNoteContent'));
+  };
+
+  // إضافة زر المنشن للمستخدمين
+  window.addMentionButton = function() {
+    // إنشاء زر المنشن
+    const mentionButton = document.createElement('button');
+    mentionButton.type = 'button';
+    mentionButton.className = 'btn btn-sm btn-outline-secondary mention-btn';
+    mentionButton.innerHTML = '<i class="fas fa-at"></i>';
+    mentionButton.title = 'منشن لمستخدم';
+    
+    // إضافة معالج النقر
+    mentionButton.onclick = function() {
+      const noteField = document.getElementById('internalNoteContent');
+      if (noteField) {
+        // إضافة @ في الموقع الحالي للمؤشر
+        const cursorPos = noteField.selectionStart;
+        const textBefore = noteField.value.substring(0, cursorPos);
+        const textAfter = noteField.value.substring(cursorPos);
+        noteField.value = textBefore + '@' + textAfter;
+        
+        // تحريك المؤشر بعد @
+        noteField.focus();
+        noteField.selectionStart = cursorPos + 1;
+        noteField.selectionEnd = cursorPos + 1;
+        
+        // تشغيل المنشن يدوياً
+        const event = new Event('input', { bubbles: true });
+        noteField.dispatchEvent(event);
+      }
+    };
+    
+    // إضافة إلى النافذة المنبثقة
+    const modalFooter = document.querySelector('#internalNoteModal .modal-footer');
+    if (modalFooter) {
+      // التأكد من عدم وجود الزر مسبقاً
+      if (!modalFooter.querySelector('.mention-btn')) {
+        const cancelButton = modalFooter.querySelector('button[data-bs-dismiss="modal"]');
+        modalFooter.insertBefore(mentionButton, cancelButton);
+      }
+    }
   };
 
   // إنشاء نافذة منبثقة للتعليقات الداخلية
@@ -194,7 +283,7 @@
                 <div class="mb-3">
                   <label for="internalNoteContent" class="form-label">نص الملاحظة</label>
                   <textarea class="form-control" id="internalNoteContent" rows="4" 
-                    placeholder="اكتب ملاحظة داخلية للفريق (لن يراها العميل)"></textarea>
+                    placeholder="اكتب ملاحظة داخلية للفريق (لن يراها العميل). استخدم @ لمنشن لمستخدم."></textarea>
                 </div>
               </form>
             </div>
@@ -211,6 +300,29 @@
 
     // إضافة النافذة إلى الصفحة
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // إضافة ملف CSS لتنسيق المنشن
+    const tributeCssLink = document.createElement('link');
+    tributeCssLink.rel = 'stylesheet';
+    tributeCssLink.href = 'https://cdn.jsdelivr.net/npm/tributejs@5.1.3/dist/tribute.min.css';
+    document.head.appendChild(tributeCssLink);
+
+    // التأكد من تحميل مكتبة Tribute.js للمنشن إذا لم تكن موجودة
+    if (typeof Tribute === 'undefined') {
+      const tributeScript = document.createElement('script');
+      tributeScript.src = 'https://cdn.jsdelivr.net/npm/tributejs@5.1.3/dist/tribute.min.js';
+      tributeScript.onload = function() {
+        // تحميل قائمة المستخدمين بعد تحميل المكتبة
+        window.fetchUsersForMention();
+        // إضافة زر المنشن بعد تحميل المكتبة
+        window.addMentionButton();
+      };
+      document.body.appendChild(tributeScript);
+    } else {
+      // إذا كانت المكتبة محملة بالفعل، نضيف زر المنشن مباشرة
+      window.fetchUsersForMention();
+      window.addMentionButton();
+    }
 
     // إضافة زر التعليق الداخلي
     window.addInternalNoteButton();

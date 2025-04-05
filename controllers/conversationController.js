@@ -8,6 +8,7 @@
  * 3. النظام يستخدم SemySMS وواجهة ميتا الرسمية للواتس أب.
  * 4. وظائف تحميل الوسائط (الصور، الملفات، الفيديو، الصوت) تستخدم API واتساب الرسمي.
  */
+const mongoose = require('mongoose');
 const Conversation = require('../models/Conversation');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const WhatsappChannel = require('../models/WhatsAppChannel');
@@ -148,43 +149,26 @@ exports.assignConversation = async (req, res) => {
       return res.redirect('/crm/conversations');
     }
 
-    // تحويل لقيمة null إذا كان الإسناد فارغ (إلغاء الإسناد)
-    const assignedToId = assignedTo && assignedTo.trim() ? assignedTo : null;
-    
-    // التحقق من وجود المستخدم المسند إليه (إذا كان هناك)
-    if (assignedToId) {
-      const assignedUser = await User.findOne({ _id: assignedToId, can_access_conversations: true });
-      if (!assignedUser) {
-        req.flash('error', 'المستخدم المسند إليه غير صالح أو غير مصرح له بالوصول للمحادثات');
-        return res.redirect(`/crm/conversations/${conversationId}`);
-      }
-    }
-
-    // تحديث المحادثة
-    const oldAssignee = conversation.assignedTo;
-    conversation.assignedTo = assignedToId;
-    conversation.assignedAt = assignedToId ? new Date() : null;
-    conversation.assignedBy = assignedToId ? (req.user ? req.user._id : null) : null;
+    conversation.assignedTo = assignedTo && assignedTo.trim() ? assignedTo : null;
+    conversation.assignedAt = assignedTo ? new Date() : null;
+    conversation.assignedBy = assignedTo ? (req.user ? req.user._id : null) : null;
     await conversation.save();
 
-    // إرسال إشعار بالتحديث عبر Socket.io
     socketService.notifyConversationUpdate(conversationId, {
       type: 'assigned',
-      assignedTo: assignedToId,
+      assignedTo: assignedTo ? assignedTo : null,
       assignedBy: req.user?._id || null
     });
 
-    // إذا كان هناك مستخدم مسند سابق مختلف عن المسند الجديد، نرسل له إشعار
-    if (oldAssignee && oldAssignee.toString() !== (assignedToId || '')) {
-      socketService.notifyUser(oldAssignee, 'conversation_unassigned', {
+    if (conversation.assignedTo && conversation.assignedTo.toString() !== (assignedTo || '')) {
+      socketService.notifyUser(conversation.assignedTo, 'conversation_unassigned', {
         conversationId,
         unassignedBy: req.user ? req.user.full_name || req.user.username : 'مستخدم النظام'
       });
     }
 
-    // إذا كان هناك مستخدم مسند جديد، نرسل له إشعار
-    if (assignedToId) {
-      socketService.notifyUser(assignedToId, 'conversation_assigned', {
+    if (assignedTo) {
+      socketService.notifyUser(assignedTo, 'conversation_assigned', {
         conversationId,
         assignedBy: req.user ? req.user.full_name || req.user.username : 'مستخدم النظام',
         customerName: conversation.customerName,
@@ -192,7 +176,7 @@ exports.assignConversation = async (req, res) => {
       });
     }
 
-    req.flash('success', assignedToId 
+    req.flash('success', assignedTo 
       ? 'تم إسناد المحادثة بنجاح' 
       : 'تم إلغاء إسناد المحادثة بنجاح');
     res.redirect(`/crm/conversations/${conversationId}`);
@@ -231,6 +215,30 @@ exports.addInternalNote = async (req, res) => {
       return res.redirect(`/crm/conversations/${conversationId}`);
     }
 
+    // استخراج المنشنات من محتوى الملاحظة
+    const mentions = [];
+    const mentionRegex = /@(\w+)/g;
+    let mentionMatch;
+    
+    // استخراج جميع المنشنات من النص
+    while ((mentionMatch = mentionRegex.exec(noteContent)) !== null) {
+      const username = mentionMatch[1];
+      
+      // البحث عن المستخدم بواسطة اسم المستخدم
+      const mentionedUser = await User.findOne({ 
+        username: username,
+        can_access_conversations: true,
+        account_status: 'active'
+      });
+      
+      if (mentionedUser) {
+        mentions.push({
+          user: mentionedUser._id,
+          username: mentionedUser.username
+        });
+      }
+    }
+
     // تنشئ رسالة خاصة بالإدخال الداخلي
     const noteMsg = new WhatsappMessage({
       conversationId,
@@ -238,12 +246,22 @@ exports.addInternalNote = async (req, res) => {
       content: noteContent,
       timestamp: new Date(),
       status: 'note',
-      sentBy: currentUserId
+      sentBy: currentUserId,  // تأكد من أن هذا هو كائن ObjectId
+      mentions: mentions // إضافة قائمة المنشنات
     });
+    
+    // تحويل currentUserId إلى ObjectId إذا كان نصياً
+    if (currentUserId && typeof currentUserId === 'string') {
+      noteMsg.sentBy = mongoose.Types.ObjectId(currentUserId);
+    }
+    
     await noteMsg.save();
     
-    // تحميل المستخدم الحالي للحصول على اسم المستخدم
-    await noteMsg.populate('sentBy', 'username');
+    // تحميل المستخدم الحالي للحصول على اسم المستخدم والمستخدمين المذكورين
+    await noteMsg.populate([
+      { path: 'sentBy', select: 'username full_name' },
+      { path: 'mentions.user', select: 'username full_name' }
+    ]);
     
     // إرسال الملاحظة عبر Socket.io
     socketService.emitToRoom(`conversation-${conversationId}`, 'internal-note', {
@@ -257,10 +275,20 @@ exports.addInternalNote = async (req, res) => {
         status: noteMsg.status,
         sentBy: noteMsg.sentBy || (currentUser ? { 
           _id: currentUser._id, 
-          username: currentUser.username 
-        } : null)
+          username: currentUser.username,
+          full_name: currentUser.full_name
+        } : null),
+        mentions: noteMsg.mentions
       }
     });
+
+    // إرسال إشعارات للمستخدمين المذكورين (إذا كان لديك نظام إشعارات)
+    if (mentions.length > 0) {
+      // يمكنك هنا إضافة منطق إرسال إشعارات للمستخدمين المذكورين
+      // على سبيل المثال: notificationService.sendMentionNotification(noteMsg);
+      
+      // لاحظ: يمكن تنفيذ هذا لاحقًا كميزة منفصلة
+    }
 
     // الاستجابة وفقاً لنوع الطلب (AJAX أو عادي)
     if (req.xhr) {

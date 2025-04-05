@@ -72,6 +72,17 @@ const whatsappMessageSchema = new mongoose.Schema({
   context: {
     type: Object,
     default: null
+  },
+  // إضافة دعم منشن المستخدمين في الملاحظات الداخلية
+  mentions: {
+    type: [{
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      username: String
+    }],
+    default: []
   }
 }, {
   timestamps: true
