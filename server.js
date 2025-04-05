@@ -28,6 +28,7 @@ const whatsappMediaRoutes = require('./routes/whatsappMediaRoutes'); // استي
 const userApiRoutes = require('./routes/api/userRoutes'); // استيراد مسارات API للمستخدمين
 const { startTelegramBot } = require('./services/telegramService'); // استيراد دالة startTelegramBot
 const telegramMessagesRoutes = require('./routes/telegramMessages'); // استيراد مسارات الرسائل التلغرامية
+const conversationRoutes = require('./routes/conversationRoutes'); // استيراد مسارات المحادثات
 
 if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
   console.error("Error: config environment variables not set. Please create/edit .env configuration file.");
@@ -157,6 +158,7 @@ app.use('/crm', crmRoutes);
 app.use('/api', apiRoutes);
 app.use('/whatsapp/media', whatsappMediaRoutes); // تسجيل مسارات وسائط الواتساب
 app.use('/api/user', userApiRoutes); // تسجيل مسارات API للمستخدمين
+app.use('/api/conversations', conversationRoutes); // تسجيل مسارات المحادثات
 
 // توجيه المسار القديم للمحادثات إلى نظام CRM
 app.get('/conversations', (req, res) => {

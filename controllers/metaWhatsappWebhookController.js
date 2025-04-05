@@ -315,34 +315,38 @@ exports.handleIncomingMessages = async (messages, meta) => {
         
         // البحث عن المحادثة أو إنشاء واحدة جديدة
         const phone = msg.from;
-        let conversation = await Conversation.findOne({ 
+        let conversationInstance = await Conversation.findOne({
           phoneNumber: phone, 
           channelId: channel._id 
-        }).lean();
+        });
         
-        if (!conversation) {
+        let isNewConversation = false;
+        if (!conversationInstance) {
           logger.info('metaWhatsappWebhookController', 'إنشاء محادثة جديدة', { phone, channelId: channel._id });
-          
+          isNewConversation = true;
           // إنشاء محادثة جديدة
-          conversation = await Conversation.create({
+          conversationInstance = await Conversation.create({
             channelId: channel._id,
             phoneNumber: phone,
-            platform: 'whatsapp',
             status: 'open',
-            lastMessageAt: new Date()
+            lastMessageAt: new Date(),
+            lastOpenedAt: new Date()
           });
         } else {
-          // تحديث وقت آخر رسالة
-          await Conversation.findByIdAndUpdate(conversation._id, { 
-            lastMessageAt: new Date(),
-            // إرجاع المحادثة المغلقة إلى حالة مفتوحة
-            status: conversation.status === 'closed' ? 'open' : conversation.status
-          });
-          
-          // تحديث المحادثة المستخدمة
-          conversation = await Conversation.findById(conversation._id).lean();
+          // التحقق من حالة المحادثة وإعادة فتحها تلقائيًا إذا كانت مغلقة
+          if (conversationInstance.status === 'closed') {
+            logger.info('metaWhatsappWebhookController', 'إعادة فتح المحادثة المغلقة تلقائيًا', { conversationId: conversationInstance._id });
+            await conversationInstance.automaticReopen();
+          } else {
+            // إذا لم تكن مغلقة، فقط نحدث وقت آخر رسالة
+            conversationInstance.lastMessageAt = new Date();
+            await conversationInstance.save();
+          }
         }
-        
+
+        // الحصول على نسخة lean من المحادثة للاستخدام في إنشاء الرسالة (إذا لزم الأمر)
+        const conversation = conversationInstance.toObject();
+
         // إنشاء كائن رسالة جديد
         const messageData = {
           conversationId: conversation._id.toString(),
@@ -542,11 +546,14 @@ exports.handleIncomingMessages = async (messages, meta) => {
         );
         
         // إشعار بتحديث المحادثة
-        socketService.notifyConversationUpdate(conversation._id.toString(), {
-          _id: conversation._id,
-          lastMessageAt: conversation.lastMessageAt,
-          status: conversation.status
-        });
+        const updatedConversationForNotification = await Conversation.findById(conversation._id).lean();
+        if (updatedConversationForNotification) {
+          socketService.notifyConversationUpdate(conversation._id.toString(), {
+            _id: updatedConversationForNotification._id,
+            lastMessageAt: updatedConversationForNotification.lastMessageAt,
+            status: updatedConversationForNotification.status,
+          });
+        }
       } catch (errMsg) {
         logger.error('metaWhatsappWebhookController','خطأ في معالجة رسالة واردة', errMsg);
       }

@@ -1236,6 +1236,158 @@
       window.setupAudioPlayers();
     });
   });
+
+  /**
+   * دالة لإغلاق المحادثة
+   */
+  window.closeConversation = async function(conversationId, reason, note) {
+    if (!conversationId) return Promise.reject('معرف المحادثة مطلوب');
+
+    // إعادة تعريف مؤقت لمنع النافذة الافتراضية
+    const originalConfirm = window.confirm;
+    const originalPrompt = window.prompt;
+    window.confirm = () => true; // افتراض أن التأكيد تم بواسطة SweetAlert2
+    window.prompt = () => null; // افتراض أن البيانات تم جمعها بواسطة SweetAlert2
+
+    const fetchCallImpl = window.fetchCallImpl || window.fetch;
+
+    try {
+      const response = await fetchCallImpl(`/crm/conversations/${conversationId}/close`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ reason, note })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `فشل إغلاق المحادثة: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'فشل إغلاق المحادثة');
+      }
+
+      // إزالة استدعاء الدالة غير الموجودة
+      // window.updateConversationUI(conversationId, 'closed');
+      return result;
+    } catch (error) {
+      console.error('Error closing conversation:', error);
+      return Promise.reject(error.message || 'حدث خطأ غير متوقع');
+    } finally {
+      // استعادة الدوال الأصلية
+      window.confirm = originalConfirm;
+      window.prompt = originalPrompt;
+    }
+  };
+
+  /**
+   * دالة لإعادة فتح المحادثة
+   */
+  window.reopenConversation = async function(conversationId) {
+    if (!conversationId) return Promise.reject('معرف المحادثة مطلوب');
+
+    // إعادة تعريف مؤقت لمنع النافذة الافتراضية
+    const originalConfirm = window.confirm;
+    window.confirm = () => true; // افتراض أن التأكيد تم بواسطة SweetAlert2
+
+    const fetchCallImpl = window.fetchCallImpl || window.fetch;
+
+    try {
+      const response = await fetchCallImpl(`/crm/conversations/${conversationId}/reopen`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `فشل إعادة فتح المحادثة: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'فشل إعادة فتح المحادثة');
+      }
+
+      // إزالة استدعاء الدالة غير الموجودة
+      // window.updateConversationUI(conversationId, 'open');
+      return result;
+    } catch (error) {
+      console.error('Error reopening conversation:', error);
+      return Promise.reject(error.message || 'حدث خطأ غير متوقع');
+    } finally {
+      // استعادة الدالة الأصلية
+      window.confirm = originalConfirm;
+    }
+  };
+
+  /**
+   * دالة لربط مستمعات الأحداث لعناصر المحادثة (تُستدعى بعد تحميل التفاصيل)
+   */
+  window.attachConversationEventListeners = function() {
+    // --- ربط الأحداث الموجودة --- 
+    // (تأكد من أن هذا الجزء لا يتعارض مع الكود الموجود بالفعل لربط الأحداث)
+    
+    // ربط حدث النقر لأزرار التفاعل
+    document.querySelectorAll('.reaction-btn').forEach(button => {
+      // التأكد من عدم إضافة المستمع مرتين
+      if (!button.dataset.listenerAttached) {
+        button.addEventListener('click', function(e) {
+          e.stopPropagation(); // منع انتشار الحدث للرسالة نفسها
+          const messageId = this.closest('.message').dataset.messageId;
+          const externalId = this.closest('.message').dataset.externalId || '';
+          window.showReactionPicker(messageId, externalId, this);
+        });
+        button.dataset.listenerAttached = 'true';
+      }
+    });
+
+    // ربط حدث النقر لأزرار الرد
+    document.querySelectorAll('.reply-btn').forEach(button => {
+      if (!button.dataset.listenerAttached) {
+        button.addEventListener('click', function(e) {
+          e.stopPropagation();
+          const messageId = this.dataset.messageId;
+          const externalId = this.dataset.externalId || '';
+          const messageElem = this.closest('.message');
+          window.showReplyForm(messageId, externalId, messageElem);
+        });
+        button.dataset.listenerAttached = 'true';
+      }
+    });
+
+    // --- ربط الأحداث الجديدة --- 
+    // << إزالة الكود الخاص بأزرار الإغلاق وإعادة الفتح من هنا >>
+    
+    // ربط حدث النقر لزر إرفاق الوسائط
+    const attachMediaBtn = document.getElementById('attachMediaBtn');
+    const mediaFileInput = document.getElementById('mediaFile');
+    if (attachMediaBtn && mediaFileInput && !attachMediaBtn.dataset.listenerAttached) {
+      attachMediaBtn.addEventListener('click', () => {
+        mediaFileInput.click();
+      });
+      mediaFileInput.addEventListener('change', handleFileSelection);
+      attachMediaBtn.dataset.listenerAttached = 'true';
+    }
+
+    // تفعيل السحب والإفلات
+    const messageInput = document.getElementById('replyMessage');
+    if (messageInput) {
+      setupDragAndDropOnMessageInput(messageInput);
+    }
+    
+    // استدعاء وظائف أخرى ضرورية بعد تحميل المحادثة
+    window.setupAudioPlayers && window.setupAudioPlayers();
+  };
+
+  // استدعاء attachConversationEventListeners عند تحميل الصفحة لأول مرة (إذا لزم الأمر)
+  // أو تأكد من استدعائها بعد كل تحميل AJAX لتفاصيل المحادثة
+  // (الكود الموجود في conversations_split_ajax.ejs يستدعيها بالفعل)
 })(window);
 
 /**

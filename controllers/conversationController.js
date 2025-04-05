@@ -960,7 +960,14 @@ exports.getConversationDetailsAjax = async (req, res) => {
       }
     });
   } catch (err) {
-    return res.status(500).send('<div class="alert alert-danger">خطأ في الخادم</div>');
+    // تسجيل الخطأ الفعلي في السجلات
+    logger.error('conversationController', 'خطأ في getConversationDetailsAjax', { 
+      error: err.message,
+      stack: err.stack,
+      conversationId: req.params.conversationId,
+      user: req.user ? req.user._id : 'N/A'
+    });
+    return res.status(500).send('<div class="alert alert-danger">خطأ في الخادم. يرجى مراجعة السجلات.</div>');
   }
 };
 
@@ -1004,5 +1011,100 @@ exports.listConversationsAjaxList = async (req, res) => {
       success: false, 
       error: 'حدث خطأ أثناء تحميل المحادثات' 
     });
+  }
+};
+
+/**
+ * إغلاق محادثة يدوياً بواسطة مستخدم
+ */
+exports.closeConversation = async (req, res) => {
+  try {
+    const conversationId = req.params.conversationId;
+    const userId = req.user?._id; // افتراض أن middleware المصادقة يضع معلومات المستخدم في req.user
+    const { reason, note } = req.body;
+
+    if (!userId) {
+      logger.warn('conversationController', 'محاولة إغلاق محادثة بدون مصادقة', { conversationId });
+      return res.status(401).json({ success: false, error: 'المصادقة مطلوبة' });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+
+    if (!conversation) {
+      logger.warn('conversationController', 'المحادثة غير موجودة عند محاولة الإغلاق', { conversationId });
+      return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
+    }
+
+    // --- نقطة للتحقق من الصلاحيات --- 
+    // هنا يمكنك إضافة منطق للتحقق مما إذا كان المستخدم الحالي (userId)
+    // يمتلك الصلاحية لإغلاق هذه المحادثة (مثلاً، هل هو مشرف أو معين لهذه المحادثة؟)
+    // if (!userHasPermissionToClose(userId, conversation)) {
+    //   return res.status(403).json({ success: false, error: 'غير مصرح لك بإغلاق هذه المحادثة' });
+    // }
+    // -------
+
+    const updatedConversation = await conversation.close(userId, reason, note);
+
+    // إرسال إشعار بتحديث حالة المحادثة عبر Socket.io
+    socketService.notifyConversationUpdate(conversationId, {
+      _id: updatedConversation._id,
+      status: updatedConversation.status,
+      assignedTo: updatedConversation.assignedTo, // قد يكون null الآن
+      // أضف أي حقول أخرى تحتاجها الواجهة الأمامية
+    });
+
+    logger.info('conversationController', 'تم إغلاق المحادثة يدوياً', { conversationId, userId, reason });
+    res.status(200).json({ success: true, conversation: updatedConversation });
+
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في إغلاق المحادثة', { error, params: req.params, body: req.body });
+    res.status(500).json({ success: false, error: 'حدث خطأ أثناء إغلاق المحادثة' });
+  }
+};
+
+/**
+ * إعادة فتح محادثة يدوياً بواسطة مستخدم
+ */
+exports.reopenConversation = async (req, res) => {
+  try {
+    const conversationId = req.params.conversationId;
+    const userId = req.user?._id; // افتراض أن middleware المصادقة يضع معلومات المستخدم في req.user
+
+    if (!userId) {
+      logger.warn('conversationController', 'محاولة إعادة فتح محادثة بدون مصادقة', { conversationId });
+      return res.status(401).json({ success: false, error: 'المصادقة مطلوبة' });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+
+    if (!conversation) {
+      logger.warn('conversationController', 'المحادثة غير موجودة عند محاولة إعادة الفتح', { conversationId });
+      return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
+    }
+
+    // --- نقطة للتحقق من الصلاحيات --- 
+    // هنا يمكنك إضافة منطق للتحقق مما إذا كان المستخدم الحالي (userId)
+    // يمتلك الصلاحية لإعادة فتح هذه المحادثة
+    // if (!userHasPermissionToReopen(userId, conversation)) {
+    //   return res.status(403).json({ success: false, error: 'غير مصرح لك بإعادة فتح هذه المحادثة' });
+    // }
+    // -------
+
+    const updatedConversation = await conversation.reopen(userId);
+
+    // إرسال إشعار بتحديث حالة المحادثة عبر Socket.io
+    socketService.notifyConversationUpdate(conversationId, {
+      _id: updatedConversation._id,
+      status: updatedConversation.status,
+      lastOpenedAt: updatedConversation.lastOpenedAt, // إرسال وقت الفتح الجديد
+      // أضف أي حقول أخرى تحتاجها الواجهة الأمامية
+    });
+
+    logger.info('conversationController', 'تمت إعادة فتح المحادثة يدوياً', { conversationId, userId });
+    res.status(200).json({ success: true, conversation: updatedConversation });
+
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في إعادة فتح المحادثة', { error, params: req.params });
+    res.status(500).json({ success: false, error: 'حدث خطأ أثناء إعادة فتح المحادثة' });
   }
 };

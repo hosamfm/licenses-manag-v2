@@ -3,9 +3,13 @@
 <head>
   <%- include('../partials/_head') %>
   <title>المحادثات</title>
+  <!-- إضافة SweetAlert2 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+  
   <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
   <link rel="stylesheet" href="/css/crm.css">
-  <link rel="stylesheet" href="/css/conversation.css">
+  <link rel="stylesheet" href="/css/conversation-new.css">
   <!-- إضافة مكتبة Socket.IO - مهم لوظائف المحادثات الفورية -->
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <!-- استدعاء ملف مساعد التعليقات الداخلية -->
@@ -55,46 +59,93 @@
 
         <!-- العمود الأيمن: قائمة المحادثات -->
         <div class="col-lg-4">
-          <h5 class="mb-3">قائمة المحادثات</h5>
-          <% if (conversations && conversations.length > 0) { %>
-            <div class="list-group" id="conversationList">
-              <% conversations.forEach(function(conv) { %>
-                <button type="button"
-                        class="list-group-item list-group-item-action conversation-item"
-                        data-conversation-id="<%= conv._id %>">
-                  <div class="d-flex justify-content-between">
-                    <strong><%= conv.customerName || conv.phoneNumber %></strong>
-                    <% if (conv.unreadCount > 0) { %>
-                      <span class="badge bg-danger ms-2"><%= conv.unreadCount %></span>
-                    <% } %>
-                  </div>
-                  <div class="mt-1">
-                    <% if (conv.lastMessage) { %>
-                      <small class="text-muted">
-                        <%= conv.lastMessage.direction === 'incoming' ? 'رسالة واردة: ' : 'رسالة صادرة: ' %>
-                        <%= conv.lastMessage.content
-                             ? conv.lastMessage.content.substring(0, 30)
-                             : 'محتوى وسائط' %>...
-                      </small>
-                    <% } else { %>
-                      <small class="text-muted">لا توجد رسائل</small>
-                    <% } %>
-                  </div>
-                  <small class="text-muted d-block">
-                    <%= new Date(conv.lastMessageAt || conv.updatedAt).toLocaleString('ar-LY') %>
-                  </small>
+          <div class="conversations-sidebar">
+            <div class="conversations-header d-flex justify-content-between align-items-center">
+              <h5 class="mb-0"><i class="fas fa-comments me-2 text-primary"></i> المحادثات</h5>
+              <div class="conversation-filters">
+                <button type="button" class="btn btn-sm btn-outline-primary filter-all active" data-filter="all">
+                  <i class="fas fa-list"></i> الكل
                 </button>
-              <% }) %>
+                <button type="button" class="btn btn-sm btn-outline-primary filter-unread" data-filter="unread">
+                  <i class="fas fa-envelope"></i> غير المقروءة
+                </button>
+              </div>
             </div>
-          <% } else { %>
-            <div class="alert alert-info">لا توجد محادثات متاحة.</div>
-          <% } %>
+            
+            <div class="conversations-search mt-3 mb-3">
+              <div class="input-group">
+                <span class="input-group-text bg-light border-end-0">
+                  <i class="fas fa-search text-muted"></i>
+                </span>
+                <input type="text" id="conversationSearchInput" class="form-control border-start-0" placeholder="بحث في المحادثات...">
+              </div>
+            </div>
+            
+            <% if (conversations && conversations.length > 0) { %>
+              <div class="list-group conversations-list shadow-sm" id="conversationList">
+                <% conversations.forEach(function(conv) { %>
+                  <button type="button"
+                          class="list-group-item list-group-item-action conversation-item d-flex flex-column <%= conv.unreadCount > 0 ? 'has-unread' : '' %>"
+                          data-conversation-id="<%= conv._id %>">
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                      <div class="conversation-info">
+                        <div class="conversation-name">
+                          <i class="<%= conv.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary' %> me-2"></i>
+                          <span><%= conv.customerName || conv.phoneNumber %></span>
+                        </div>
+                        <div class="conversation-preview">
+                          <% if (conv.lastMessage) { %>
+                            <small class="<%= conv.unreadCount > 0 ? 'fw-bold' : 'text-muted' %>">
+                              <% if (conv.lastMessage.direction === 'incoming') { %>
+                                <i class="fas fa-reply-all text-muted me-1 fa-flip-horizontal"></i>
+                              <% } else { %>
+                                <i class="fas fa-reply text-muted me-1"></i>
+                              <% } %>
+                              <%= conv.lastMessage.content
+                                   ? conv.lastMessage.content.substring(0, 30)
+                                   : (conv.lastMessage.mediaType ? 'محتوى وسائط' : 'رسالة') %>
+                              <%= conv.lastMessage.content && conv.lastMessage.content.length > 30 ? '...' : '' %>
+                            </small>
+                          <% } else { %>
+                            <small class="text-muted"><i class="fas fa-info-circle me-1"></i> محادثة جديدة</small>
+                          <% } %>
+                        </div>
+                      </div>
+                      <div class="conversation-meta text-end">
+                        <% if (conv.unreadCount > 0) { %>
+                          <span class="badge bg-danger rounded-pill conversation-badge mb-1"><%= conv.unreadCount %></span>
+                        <% } %>
+                        <div class="conversation-time small">
+                          <%= new Date(conv.lastMessageAt || conv.updatedAt).toLocaleString('ar-LY', {hour: '2-digit', minute: '2-digit'}) %>
+                        </div>
+                        <% if (conv.status === 'closed') { %>
+                          <span class="status-indicator closed" title="محادثة مغلقة"><i class="fas fa-lock"></i></span>
+                        <% } else if (conv.status === 'assigned') { %>
+                          <span class="status-indicator assigned" title="محادثة مسندة"><i class="fas fa-user-check"></i></span>
+                        <% } else { %>
+                          <span class="status-indicator open" title="محادثة مفتوحة"><i class="fas fa-door-open"></i></span>
+                        <% } %>
+                      </div>
+                    </div>
+                  </button>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i> لا توجد محادثات متاحة.
+              </div>
+            <% } %>
+          </div>
         </div>
 
         <!-- العمود الأيسر: سيتم حقن تفاصيل المحادثة فيه بواسطة AJAX -->
         <div class="col-lg-8" id="conversationDetailsContainer">
-          <div class="alert alert-secondary">
-            اختر محادثة من القائمة لعرض تفاصيلها...
+          <div class="conversation-welcome">
+            <div class="text-center p-5">
+              <i class="fas fa-comments text-primary mb-4" style="font-size: 4rem;"></i>
+              <h3 class="mb-3">مرحباً بك في نظام المحادثات</h3>
+              <p class="text-muted">اختر محادثة من القائمة للبدء في الرد والتفاعل مع العملاء.</p>
+            </div>
           </div>
         </div>
 
@@ -120,6 +171,86 @@
       socket.on('connect', function() {
         // تم الاتصال بالخادم
       });
+      
+      // وظائف تصفية وبحث المحادثات
+      const filterButtons = document.querySelectorAll('.conversation-filters button');
+      const searchInput = document.getElementById('conversationSearchInput');
+      
+      // إذا وجدت أزرار الفلترة أضف لها المستمعات
+      if (filterButtons.length > 0) {
+        filterButtons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            // إزالة الفئة النشطة من جميع الأزرار
+            filterButtons.forEach(b => b.classList.remove('active'));
+            
+            // إضافة الفئة النشطة للزر المحدد
+            btn.classList.add('active');
+            
+            // تطبيق الفلتر على قائمة المحادثات
+            const filterType = btn.dataset.filter;
+            filterConversations(filterType, searchInput ? searchInput.value : '');
+          });
+        });
+      }
+      
+      // إذا وجد مربع البحث أضف له مستمع
+      if (searchInput) {
+        searchInput.addEventListener('input', () => {
+          // الحصول على الفلتر النشط حاليًا
+          const activeFilter = document.querySelector('.conversation-filters button.active');
+          const filterType = activeFilter ? activeFilter.dataset.filter : 'all';
+          
+          // تطبيق الفلتر مع البحث
+          filterConversations(filterType, searchInput.value);
+        });
+      }
+      
+      // دالة الفلترة والبحث في المحادثات
+      function filterConversations(filterType, searchTerm) {
+        const conversationItems = document.querySelectorAll('#conversationList .conversation-item');
+        if (!conversationItems.length) return;
+        
+        searchTerm = searchTerm.trim().toLowerCase();
+        
+        conversationItems.forEach(item => {
+          // التحقق من انطباق الفلتر
+          const hasUnread = item.classList.contains('has-unread');
+          const matchesFilter = (filterType === 'all') || (filterType === 'unread' && hasUnread);
+          
+          // التحقق من انطباق البحث
+          const conversationText = item.textContent.toLowerCase();
+          const matchesSearch = !searchTerm || conversationText.includes(searchTerm);
+          
+          // إظهار أو إخفاء العنصر بناءً على الفلتر والبحث
+          if (matchesFilter && matchesSearch) {
+            item.style.display = '';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+        
+        // إظهار رسالة إذا لم تظهر أي محادثة
+        const visibleCount = [...conversationItems].filter(item => item.style.display !== 'none').length;
+        const noResultsMsg = document.getElementById('noConversationsResults');
+        
+        if (visibleCount === 0) {
+          if (!noResultsMsg) {
+            const msgElem = document.createElement('div');
+            msgElem.id = 'noConversationsResults';
+            msgElem.className = 'alert alert-info m-3';
+            msgElem.innerHTML = '<i class="fas fa-search me-2"></i> لا توجد محادثات تطابق البحث.';
+            
+            const listContainer = document.getElementById('conversationList');
+            if (listContainer) {
+              listContainer.parentNode.appendChild(msgElem);
+            }
+          }
+        } else {
+          if (noResultsMsg) {
+            noResultsMsg.remove();
+          }
+        }
+      }
       
       // الاستماع لأحداث قطع الاتصال
       socket.on('disconnect', function() {
@@ -650,51 +781,73 @@
       
       // وظيفة لإضافة ملاحظة داخلية إلى واجهة المستخدم مباشرة
       window.addNoteToUI = function(note) {
-        const messageContainer = document.getElementById('messageContainer');
-        if (!messageContainer) {
+        const messageContainerWrapper = document.querySelector('#messageContainer .message-container-wrapper'); // استهداف الحاوية الجديدة
+        if (!messageContainerWrapper) {
           return;
         }
         
         // التحقق من وجود الملاحظة مسبقاً (لمنع إضافتها مرتين)
-        const noteExists = document.querySelector(`.message[data-message-id="${note._id}"]`);
+        const noteExists = messageContainerWrapper.querySelector(`.message[data-message-id="${note._id}"]`);
         if (noteExists) {
           return;
         }
         
         // إنشاء عنصر جديد للملاحظة
         const noteElement = document.createElement('div');
-        noteElement.className = 'message internal-note';
+        noteElement.className = 'message internal'; // استخدام الكلاس 'internal' فقط
         noteElement.setAttribute('data-message-id', note._id);
+        noteElement.setAttribute('data-status', 'note');
+
+        // بناء HTML الداخلي باستخدام القالب الجزئي (يتطلب تعديل طريقة الاستدعاء لتناسب JS)
+        // هنا، سنبني HTML يدوياً بشكل مشابه للقالب الجزئي
+        let senderName = 'مستخدم غير معروف';
+        if (note.metadata && note.metadata.senderInfo) {
+          senderName = note.metadata.senderInfo.full_name || note.metadata.senderInfo.username || senderName;
+        }
         
-        // تنسيق التاريخ
-        const timestamp = new Date(note.timestamp);
+        let noteContent = note.content || '';
+        if (note.mentions && note.mentions.length > 0) {
+          note.mentions.forEach(mention => {
+            const username = mention.username;
+            const mentionRegex = new RegExp(`@${username}\\b`, 'g');
+            const mentionFullName = mention.user && mention.user.full_name ? mention.user.full_name : username;
+            noteContent = noteContent.replace(
+              mentionRegex,
+              `<span class="user-mention" data-user-id="${mention.user && mention.user._id ? mention.user._id : ''}" title="${mentionFullName}">@${username}</span>`
+            );
+          });
+        }
+        
+        const timestamp = new Date(note.timestamp || note.createdAt);
         const timeString = timestamp.toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' });
-        
-        // إضافة HTML للملاحظة
+        const fullTimeString = timestamp.toLocaleString();
+
         noteElement.innerHTML = `
           <div class="message-bubble internal-note-bubble">
             <div class="internal-note-header">
               <i class="fas fa-sticky-note me-1"></i>
               <strong>ملاحظة داخلية</strong>
-              <span class="from-user">${note.sentBy && note.sentBy.username ? `- ${note.sentBy.username}` : note.sentBy ? `- ${note.sentBy}` : ''}</span>
+              <span class="from-user ms-2 text-muted">- ${senderName}</span>
             </div>
             <div class="internal-note-content">
-              ${note.content.replace(/\n/g, '<br>')}
+              ${noteContent.replace(/\n/g, '<br>')}
             </div>
             <div class="message-meta">
-              <span class="message-time" title="${timestamp.toLocaleString()}">
+              <span class="message-time" title="${fullTimeString}">
                 ${timeString}
               </span>
             </div>
           </div>
-          <div class="clear-both"></div>
         `;
         
         // إضافة الملاحظة إلى الحاوية
-        messageContainer.appendChild(noteElement);
+        messageContainerWrapper.appendChild(noteElement);
         
         // التمرير إلى أسفل لعرض الملاحظة الجديدة
-        messageContainer.scrollTop = messageContainer.scrollHeight;
+        const mainContainer = document.getElementById('messageContainer');
+        if (mainContainer) {
+          mainContainer.scrollTop = mainContainer.scrollHeight;
+        }
       };
       
       // تهيئة الصفحة عند التحميل
@@ -751,6 +904,85 @@
           }
         }
       });
+      
+      // تفويض الأحداث لأزرار الإغلاق وإعادة الفتح
+      const detailsContainer = document.getElementById('conversationDetailsContainer');
+      if (detailsContainer) {
+        detailsContainer.addEventListener('click', function(event) {
+          
+          // معالجة زر الإغلاق
+          if (event.target.matches('.close-conversation-btn')) {
+            const conversationId = event.target.dataset.conversationId;
+            Swal.fire({
+              title: 'إغلاق المحادثة',
+              text: 'يرجى إدخال سبب إغلاق المحادثة (اختياري)',
+              input: 'text',
+              inputAttributes: {
+                autocapitalize: 'off',
+                maxlength: 100
+              },
+              showCancelButton: true,
+              confirmButtonText: 'إغلاق المحادثة',
+              confirmButtonColor: '#d33',
+              cancelButtonText: 'إلغاء',
+              showLoaderOnConfirm: true,
+              preConfirm: (reason) => {
+                return window.closeConversation(conversationId, reason)
+                  .then(response => {
+                    if (!response.success) {
+                      throw new Error(response.error || 'فشل إغلاق المحادثة');
+                    }
+                    return response;
+                  })
+                  .catch(error => {
+                    Swal.showValidationMessage(`فشل: ${error.message}`);
+                  });
+              },
+              allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+              if (result.isConfirmed) {
+                Swal.fire('تم!', 'تم إغلاق المحادثة بنجاح.', 'success');
+                // تحديث الواجهة (اختياري، يمكن الاعتماد على إشعارات السوكت)
+                refreshConversationDetails(); 
+              }
+            });
+          }
+
+          // معالجة زر إعادة الفتح
+          if (event.target.matches('.reopen-conversation-btn')) {
+            const conversationId = event.target.dataset.conversationId;
+            Swal.fire({
+              title: 'إعادة فتح المحادثة',
+              text: 'هل أنت متأكد؟',
+              icon: 'question',
+              showCancelButton: true,
+              confirmButtonText: 'إعادة فتح',
+              confirmButtonColor: '#3085d6',
+              cancelButtonText: 'إلغاء',
+              showLoaderOnConfirm: true,
+              preConfirm: () => {
+                return window.reopenConversation(conversationId)
+                  .then(response => {
+                    if (!response.success) {
+                      throw new Error(response.error || 'فشل إعادة فتح المحادثة');
+                    }
+                    return response;
+                  })
+                  .catch(error => {
+                    Swal.showValidationMessage(`فشل: ${error.message}`);
+                  });
+              },
+              allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+              if (result.isConfirmed) {
+                Swal.fire('تم!', 'تم إعادة فتح المحادثة بنجاح.', 'success');
+                // تحديث الواجهة (اختياري، يمكن الاعتماد على إشعارات السوكت)
+                refreshConversationDetails(); 
+              }
+            });
+          }
+        });
+      }
       
       // تحديث القائمة كل دقيقة للتأكد من الحصول على أحدث المحادثات
       setInterval(refreshConversationsList, 60000);

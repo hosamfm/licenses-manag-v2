@@ -42,290 +42,164 @@
   }
 </script>
 
-<div class="card">
+<div class="card shadow-sm border-0">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0">
-        <i class="fas fa-comments me-1"></i>
-        المحادثة مع <%= conversation.customerName || conversation.phoneNumber %>
+      <h5 class="mb-0 d-flex align-items-center">
+        <i class="fas fa-comments me-2 text-primary"></i>
+        <span>المحادثة مع <%= conversation.customerName || conversation.phoneNumber %></span>
+        <% if (conversation.status === 'closed') { %>
+          <span class="badge bg-secondary ms-2 conversation-status-badge"><i class="fas fa-lock me-1"></i> مغلقة</span>
+        <% } else if (conversation.status === 'assigned') { %>
+          <span class="badge bg-info ms-2 conversation-status-badge"><i class="fas fa-user-check me-1"></i> مسندة</span>
+        <% } else { %>
+          <span class="badge bg-success ms-2 conversation-status-badge"><i class="fas fa-door-open me-1"></i> مفتوحة</span>
+        <% } %>
       </h5>
-      <span class="badge bg-primary"><%= messages.length %> رسالة</span>
+      <div class="conversation-actions">
+        <% if (conversation.status !== 'closed') { %>
+          <button class="btn btn-danger close-conversation-btn" 
+                  data-conversation-id="<%= conversation._id %>" 
+                  title="إغلاق المحادثة">
+            <i class="fas fa-lock me-1"></i> إغلاق
+          </button>
+        <% } else { %>
+          <button class="btn btn-success reopen-conversation-btn" 
+                  data-conversation-id="<%= conversation._id %>" 
+                  title="إعادة فتح المحادثة">
+            <i class="fas fa-lock-open me-1"></i> إعادة فتح
+          </button>
+        <% } %>
+        <span class="badge bg-primary ms-2"><i class="fas fa-comments me-1"></i> <%= messages.length %> رسالة</span>
+      </div>
     </div>
     <div class="card-body p-0" id="messageContainer" style="max-height: 500px; overflow-y: auto;">
-      <% if (messages && messages.length) { %>
-        <% messages.forEach((msg, index) => { %>
-          <div class="message <%= msg.direction %>"
-               data-message-id="<%= msg._id %>"
-               data-status="<%= msg.status %>"
-               <% if (msg.externalMessageId) { %> data-external-id="<%= msg.externalMessageId %>" <% } %>>
-            
-            <% if (msg.replyToMessageId) { %>
-              <!-- عرض الرسالة المقتبسة في حالة وجود رد -->
-              <div class="replied-message">
-                <% 
-                  // البحث عن الرسالة التي تم الرد عليها باستخدام المعرف الخارجي أو الداخلي
-                  const repliedMsg = messages.find(m => 
-                    (m.externalMessageId && m.externalMessageId === msg.replyToMessageId) || 
-                    (m._id && m._id.toString() === msg.replyToMessageId)
-                  ); 
+      <% if (conversation.status === 'closed') { %>
+        <div class="alert alert-info m-3 text-center">
+          <i class="fas fa-info-circle me-1"></i> هذه المحادثة مغلقة.
+          <br>
+          <small>سيتم إعادة فتحها تلقائيًا إذا أرسل العميل رسالة جديدة.</small>
+        </div>
+      <% } %>
+      <div class="message-container-wrapper">
+        <% if (messages && messages.length) { %>
+            <% messages.forEach(function(message) { %>
+              <div class="message <%= message.direction %>" 
+                  data-message-id="<%= message._id %>" 
+                  data-status="<%= message.status || 'sent' %>"
+                  <%= message.externalMessageId ? `data-external-id="${message.externalMessageId}"` : '' %>>
+                
+                <% if (message.replyToMessageId) { 
+                  // البحث عن الرسالة المرد عليها
+                  let repliedMsg = null;
+                  for (let i = 0; i < messages.length; i++) {
+                    if (messages[i]._id.toString() === message.replyToMessageId.toString() || 
+                        (messages[i].externalMessageId && messages[i].externalMessageId === message.replyToMessageId)) {
+                      repliedMsg = messages[i];
+                      break;
+                    }
+                  }
                 %>
-                <% if (repliedMsg) { %>
-                  <div class="replied-content">
-                    <i class="fas fa-reply"></i>
-                    <span><%= repliedMsg.content.length > 50 ? repliedMsg.content.substring(0, 50) + '...' : repliedMsg.content %></span>
-                  </div>
-                <% } else { %>
-                  <div class="replied-content text-muted">
-                    <i class="fas fa-reply"></i>
-                    <span>رد على رسالة غير موجودة</span>
-                    <small class="text-muted d-block">(المعرف: <%= msg.replyToMessageId.substring(0, 10) %>...)</small>
+                  <div class="replied-message">
+                    <div class="replied-content">
+                      <i class="fas fa-reply"></i>
+                      <span><%= repliedMsg ? 
+                        (repliedMsg.content ? repliedMsg.content.substring(0, 50) + (repliedMsg.content.length > 50 ? '...' : '') : 'محتوى وسائط') : 
+                        `رد على رسالة محذوفة` %></span>
+                    </div>
                   </div>
                 <% } %>
-              </div>
-            <% } %>
-            
-            <div class="message-bubble <%= msg.direction === 'incoming' ? 'incoming-bubble' : (msg.direction === 'internal' ? 'internal-note-bubble' : 'outgoing-bubble') %> <%= msg.mediaType ? 'message-with-media' : '' %>">
-              <% if (msg.direction === 'internal') { %>
-                <!-- عرض التعليق الداخلي -->
-                <div class="internal-note-header">
-                  <i class="fas fa-sticky-note me-1"></i>
-                  <strong>ملاحظة داخلية</strong>
-                  <% 
-                    // التحقق من وجود معلومات المرسل للملاحظة
-                    let sender = null;
-                    if (msg.metadata && msg.metadata.senderInfo) {
-                      sender = msg.metadata.senderInfo;
-                    }
-                  %>
-                  <% if (sender) { %>
-                    <span class="text-muted ms-1">
-                      بواسطة <%= sender.full_name || sender.username %>
-                    </span>
-                  <% } %>
-                </div>
-                <div class="internal-note-content">
-                  <% 
-                  // عرض محتوى الملاحظة مع تمييز المنشنات
-                  let noteContent = msg.content;
-                  
-                  // إذا كانت الملاحظة تحتوي على منشنات
-                  if (msg.mentions && msg.mentions.length > 0) {
-                    // استبدال كل منشن @ بعلامة تجميلية
-                    msg.mentions.forEach(mention => {
-                      const username = mention.username;
-                      const mentionRegex = new RegExp(`@${username}\\b`, 'g');
-                      const mentionName = mention.user && mention.user.full_name ? mention.user.full_name : username;
-                      
-                      // استبدال المنشنات بعناصر HTML مخصصة
-                      noteContent = noteContent.replace(
-                        mentionRegex, 
-                        `<span class="user-mention" data-user-id="${mention.user && mention.user._id ? mention.user._id : ''}" title="${mentionName}">@${username}</span>`
-                      );
-                    });
-                  }
-                  
-                  // عرض المحتوى مع تحويل النص البسيط إلى HTML
-                  %>
-                  <%- noteContent.replace(/\n/g, '<br>') %>
-                </div>
-              <% } else { %>
-                <!-- إضافة اسم المرسل لغير الملاحظات الداخلية -->
-                <% 
-                  let senderName = '';
-                  
-                  // للرسائل الصادرة: نستخدم معلومات المرسل من metadata أو من المستخدم الحالي
-                  if (msg.direction === 'outgoing') {
-                    if (msg.metadata && msg.metadata.senderInfo) {
-                      senderName = msg.metadata.senderInfo.username || msg.metadata.senderInfo.full_name || 'النظام';
-                    } else if (msg.sentByUsername) {
-                      senderName = msg.sentByUsername;
-                    } else if (msg.sentBy) {
-                      try {
-                        const senderId = msg.sentBy.toString();
-                        if (senderId === 'system') {
-                          senderName = 'النظام';
-                        } else if (typeof user !== 'undefined' && user && senderId === user._id.toString()) {
-                          senderName = user.username || user.full_name || 'النظام';
-                        }
-                      } catch (e) { }
-                    }
+                
+                <div class="message-bubble <%= message.direction === 'incoming' ? 'incoming-bubble' : (message.direction === 'internal' ? 'internal-note-bubble' : 'outgoing-bubble') %> <%= message.mediaType ? 'message-with-media' : '' %>">
+                  <% if (message.direction === 'internal') { %>
+                    <%- include('_internal_note', { note: message }) %>
+                  <% } else { %>
+                    <% if (message.direction === 'outgoing') { %>
+                    <!-- إضافة اسم المرسل فقط للرسائل الصادرة -->
+                    <div class="message-sender">
+                      <%= message.metadata && message.metadata.senderInfo 
+                        ? message.metadata.senderInfo.username || message.metadata.senderInfo.full_name || 'مستخدم غير معروف'
+                        : message.sentByUsername || 'مستخدم غير معروف' %>
+                    </div>
+                    <% } %>
                     
-                    // إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي إذا كان متاحاً
-                    if (!senderName && typeof user !== 'undefined' && user) {
-                      senderName = user.username || user.full_name || 'النظام';
-                    }
-                  }
-                  // للرسائل الواردة: لا نعرض اسم المرسل لأنه معروف من سياق المحادثة
-                  else if (msg.direction === 'incoming') {
-                    senderName = '';
-                  }
-                %>
-                <% if (senderName) { %>
-                <div class="message-sender">
-                  <%= senderName %>
-                </div>
-                <% } %>
-                
-                <% if (msg.mediaType) { %>
-                  <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
-                  <% 
-                    // الحصول على معلومات الوسائط من الكائن المناسب (سواء من الرسالة مباشرة أو من كائن الوسائط المضاف)
-                    // بترتيب الأولوية: mediaId (إذا وجد) ثم معرف الوسائط من التعديل الجديد، ثم معرف الرسالة
-                    const mediaId = msg.mediaId || (msg.media && msg.media._id) || msg._id;
-                    const mediaType = msg.mediaType;
-                    const fileName = msg.fileName || (msg.media && msg.media.fileName) || 'ملف';
-                    const fileSize = msg.fileSize || (msg.media && msg.media.fileSize) || 0;
-                    const mimeType = msg.mimeType || (msg.media && msg.media.mimeType) || '';
-                  %>
-
-                  <!-- عرض الوسائط حسب النوع -->
-                  <% if (mediaType === 'image') { %>
-                    <div class="media-container">
-                      <img src="/whatsapp/media/content/<%= mediaId %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
-                    </div>
-                  <% } else if (mediaType === 'video') { %>
-                    <div class="media-container">
-                      <video controls class="media-video">
-                        <source src="/whatsapp/media/content/<%= mediaId %>" type="video/mp4">
-                        المتصفح لا يدعم عرض الفيديو
-                      </video>
-                    </div>
-                  <% } else if (mediaType === 'audio') { %>
-                    <div class="media-container">
-                      <audio controls class="media-audio" preload="metadata" controlsList="nodownload">
-                        <source src="/whatsapp/media/content/<%= mediaId %>" type="audio/ogg">
-                        المتصفح لا يدعم تشغيل الملفات الصوتية
-                      </audio>
-                    </div>
-                  <% } else if (mediaType === 'document') { %>
-                    <div class="document-container">
-                      <div class="document-icon">
-                        <i class="fas fa-file-alt"></i>
+                    <!-- عرض الوسائط -->
+                    <% if (message.mediaType) { %>
+                      <%- include('_message_media', { message: message }) %>
+                    <% } %>
+                    
+                    <% if (message.content && message.content.trim() !== '') { %>
+                      <div class="message-text <%= message.mediaType ? 'with-media' : '' %>">
+                        <%= message.content %>
                       </div>
-                      <div class="document-info">
-                        <div class="document-name"><%= fileName %></div>
-                        <div class="document-size"><%= fileSize ? (Math.round(fileSize / 1024) + ' كيلوبايت') : '' %></div>
-                      </div>
-                      <a href="/whatsapp/media/content/<%= mediaId %>" target="_blank" class="document-download">
-                        <i class="fas fa-download"></i>
-                      </a>
-                    </div>
-                  <% } else if (mediaType === 'sticker') { %>
-                    <div class="media-container">
-                      <img src="/whatsapp/media/content/<%= mediaId %>" class="media-sticker" alt="ملصق">
-                    </div>
-                  <% } else if (mediaType === 'location') { %>
-                    <div class="location-container">
-                      <div class="location-icon">
-                        <i class="fas fa-map-marker-alt"></i>
-                      </div>
-                      <div class="location-info">
-                        <div class="location-name">
-                          <% 
-                            // الحصول على اسم الموقع من بيانات الوسائط إذا كانت متوفرة
-                            const locationName = (msg.media && msg.media.locationName) || 
-                                               (msg.metaData && msg.metaData.name) || 
-                                               'موقع جغرافي';
-                            
-                            // الحصول على الإحداثيات
-                            const latitude = (msg.media && msg.media.latitude) || 
-                                           (msg.metaData && msg.metaData.latitude) || '';
-                            const longitude = (msg.media && msg.media.longitude) || 
-                                            (msg.metaData && msg.metaData.longitude) || '';
-                            
-                            const coordinatesText = (latitude && longitude) ? 
-                                                  `${latitude}, ${longitude}` : 
-                                                  'إحداثيات غير متوفرة';
-                          %>
-                          <%= locationName %>
-                        </div>
-                        <div class="location-coordinates">
-                          <%= coordinatesText %>
-                        </div>
-                        <% if (latitude && longitude) { %>
-                          <a href="https://maps.google.com/maps?q=<%= latitude %>,<%= longitude %>" 
-                             target="_blank" class="btn btn-sm btn-outline-primary mt-1">
-                            <i class="fas fa-external-link-alt"></i> عرض على الخريطة
-                          </a>
-                        <% } %>
-                      </div>
+                    <% } %>
+                    
+                    <div class="message-meta">
+                      <span class="message-time" title="<%= new Date(message.timestamp || message.createdAt).toLocaleString() %>">
+                        <%= new Date(message.timestamp || message.createdAt).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
+                      </span>
+                      
+                      <% if (message.direction === 'outgoing') { %>
+                        <span class="message-status" title="حالة الرسالة: <%= message.status || 'sent' %>">
+                          <% if (message.status === 'sent') { %>
+                            <i class="fas fa-check text-secondary"></i>
+                          <% } else if (message.status === 'delivered') { %>
+                            <i class="fas fa-check-double text-secondary"></i>
+                          <% } else if (message.status === 'read') { %>
+                            <i class="fas fa-check-double text-primary"></i>
+                          <% } else if (message.status === 'failed') { %>
+                            <i class="fas fa-exclamation-circle text-danger"></i>
+                          <% } else { /* sending or undefined */ %>
+                            <i class="fas fa-clock text-secondary"></i>
+                          <% } %>
+                        </span>
+                      <% } %>
                     </div>
                   <% } %>
+                </div>
+                
+                <% if (message.reactions && message.reactions.length > 0 && message.direction !== 'internal') { %>
+                  <div class="message-reactions">
+                    <% message.reactions.forEach(function(reaction) { %>
+                      <span class="reaction-emoji" title="تفاعل من <%= reaction.sender %>">
+                        <%= reaction.emoji %>
+                      </span>
+                    <% }); %>
+                  </div>
                 <% } %>
                 
-                <% if (msg.content && msg.content.trim() !== '' && msg.direction !== 'internal') { %>
-                  <div class="message-text <%= msg.mediaType ? 'with-media' : '' %>">
-                    <% if (msg.content.includes('\n')) { %>
-                      <pre><%= msg.content %></pre>
-                    <% } else { %>
-                      <%= msg.content %>
+                <!-- أزرار التفاعل مع الرسالة (باستثناء الملاحظات الداخلية) -->
+                <% if (message.direction !== 'internal') { %>
+                  <div class="message-actions">
+                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('<%= message._id %>', '<%= message.externalMessageId || '' %>', this)">
+                      <i class="far fa-smile"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
+                            data-message-id="<%= message._id %>" 
+                            data-external-id="<%= message.externalMessageId || '' %>" 
+                            title="رد" onclick="window.showReplyForm('<%= message._id %>', '<%= message.externalMessageId || '' %>', this.closest('.message'))">
+                      <i class="fas fa-reply"></i>
+                    </button>
+                    <% if (message.direction === 'outgoing') { %>
+                    <button type="button" class="btn btn-sm text-muted message-action-btn delete-btn" 
+                            data-message-id="<%= message._id %>" 
+                            data-external-id="<%= message.externalMessageId || '' %>" 
+                            title="حذف" onclick="window.confirmDeleteMessage('<%= message._id %>', '<%= message.externalMessageId || '' %>')">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
                     <% } %>
                   </div>
                 <% } %>
-                
-                <div class="message-meta">
-                  <span class="message-time" title="<%= new Date(msg.timestamp).toLocaleString() %>">
-                    <%= new Date(msg.timestamp).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
-                  </span>
-                  
-                  <% if (msg.direction === 'outgoing') { %>
-                    <span class="message-status" title="حالة الرسالة: <%= msg.status %>">
-                      <% if (msg.status === 'sent') { %>
-                        <i class="fas fa-check text-secondary"></i>
-                      <% } else if (msg.status === 'delivered') { %>
-                        <i class="fas fa-check-double text-secondary"></i>
-                      <% } else if (msg.status === 'read') { %>
-                        <i class="fas fa-check-double text-primary"></i>
-                      <% } else if (msg.status === 'failed') { %>
-                        <i class="fas fa-exclamation-circle text-danger"></i>
-                      <% } else { %>
-                        <i class="fas fa-clock text-secondary"></i>
-                      <% } %>
-                    </span>
-                  <% } %>
-                </div>
-              <% } %>
-            </div>
-            
-            <!-- عرض التفاعلات على الرسالة -->
-            <% if (msg.reactions && msg.reactions.length > 0) { %>
-              <div class="message-reactions">
-                <% msg.reactions.forEach(function(reaction) { %>
-                  <span class="reaction-emoji" title="تفاعل من <%= reaction.sender %>">
-                    <%= reaction.emoji %>
-                  </span>
-                <% }); %>
               </div>
-            <% } %>
-            
-            <!-- قائمة خيارات الرسالة -->
-            <div class="message-actions">
-              <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('<%= msg._id %>', '<%= msg.externalMessageId %>', this)">
-                <i class="far fa-smile"></i>
-              </button>
-              <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
-                      data-message-id="<%= msg._id %>" 
-                      data-external-id="<%= msg.externalMessageId %>" 
-                      title="رد" onclick="window.showReplyForm('<%= msg._id %>', '<%= msg.externalMessageId %>', this.closest('.message'))">
-                <i class="fas fa-reply"></i>
-              </button>
+            <% }); %>
+        <% } else { %>
+          <div class="text-center p-5">
+            <div class="empty-conversation">
+              <i class="far fa-comments"></i>
+              <p>لا توجد رسائل في هذه المحادثة حتى الآن.</p>
             </div>
           </div>
-          <div class="clear-both"></div>
-          
-          <% if (index < messages.length - 1 && 
-                  new Date(messages[index+1].timestamp) - new Date(msg.timestamp) > 3600000) { %>
-            <div class="message-internal-note text-muted my-2" style="font-size: 0.85rem;">
-              <i class="fas fa-clock me-1"></i>
-              مرت <%= Math.round((new Date(messages[index+1].timestamp) - new Date(msg.timestamp)) / 3600000) %> ساعة
-            </div>
-          <% } %>
-        <% }) %>
-      <% } else { %>
-        <div class="text-center text-muted py-3">
-          <i class="fas fa-comment-dots mb-3" style="font-size: 3rem; opacity: 0.2;"></i>
-          <p>لا توجد رسائل في هذه المحادثة.</p>
-        </div>
-      <% } %>
+        <% } %>
+      </div>
     </div>
   </div>
   
@@ -457,3 +331,18 @@
       });
     });
   </script>
+
+<!-- أنماط خاصة بهذه الصفحة -->
+<style>
+.message-container {
+  min-height: 150px;
+  max-height: 400px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  position: relative;
+}
+
+.clear-both {
+  clear: both;
+}
+</style>

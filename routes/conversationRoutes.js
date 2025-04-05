@@ -10,6 +10,9 @@ const logger = require('../services/loggerService');
 // وسيط للتحقق من صلاحية الوصول للمحادثات
 const ensureCanAccessConversations = [isAuthenticated, checkCanAccessConversations];
 
+// تطبيق middleware المصادقة على جميع المسارات في هذا الملف
+router.use(isAuthenticated);
+
 // مسار عرض جميع المحادثات
 router.get('/', ensureCanAccessConversations, conversationController.listConversations);
 
@@ -50,9 +53,9 @@ router.post('/:conversationId/reply', ensureCanAccessConversations, conversation
 // مسار التفاعل بالإيموجي على الرسائل
 router.post('/:conversationId/reaction', ensureCanAccessConversations, conversationController.reactToMessage);
 
-// مسارات تغيير حالة المحادثة
-router.post('/:conversationId/close', ensureCanAccessConversations, conversationController.toggleConversationStatus);
-router.post('/:conversationId/reopen', ensureCanAccessConversations, conversationController.toggleConversationStatus);
+// مسارات تغيير حالة المحادثة - استخدام الدوال الجديدة
+router.post('/:conversationId/close', ensureCanAccessConversations, conversationController.closeConversation);
+router.post('/:conversationId/reopen', ensureCanAccessConversations, conversationController.reopenConversation);
 
 // مسار وضع علامة "مقروء" على محادثة
 router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
