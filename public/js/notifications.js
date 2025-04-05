@@ -164,9 +164,25 @@ function setupNotificationListeners(socket) {
     socket.on('internal-note', function(data) {
         // التحقق من أن الملاحظة تخص المحادثة الحالية
         if (window.currentConversationId && data.conversationId === window.currentConversationId) {
+            // التحقق من وجود بيانات الملاحظة
+            if (!data.note) {
+                console.error('بيانات الملاحظة غير موجودة:', data);
+                return;
+            }
+
+            // إضافة معرف مؤقت إذا لم يكن موجوداً
+            if (!data.note._id) {
+                data.note._id = 'temp-' + Date.now();
+            }
+
             // إضافة الملاحظة إلى واجهة المستخدم
             if (typeof window.addNoteToUI === 'function') {
-                window.addNoteToUI(data.note);
+                try {
+                    window.addNoteToUI(data.note);
+                } catch (error) {
+                    console.error('خطأ في إضافة الملاحظة:', error);
+                    appendInternalNote(data.note);
+                }
             } else {
                 appendInternalNote(data.note);
             }
@@ -614,11 +630,17 @@ function updateMessageExternalId(messageId, externalId) {
 function appendInternalNote(note) {
     // التحقق من وجود حاوية الرسائل
     const messagesContainer = document.querySelector('.messages-container');
-    if (!messagesContainer) return;
+    if (!messagesContainer) {
+        console.error('حاوية الرسائل غير موجودة');
+        return;
+    }
     
     // التحقق من وجود الملاحظة مسبقاً
     const existingNote = document.querySelector(`[data-message-id="${note._id}"]`);
-    if (existingNote) return;
+    if (existingNote) {
+        console.log('الملاحظة موجودة بالفعل:', note._id);
+        return;
+    }
     
     // إنشاء عنصر الملاحظة
     const noteElement = document.createElement('div');
@@ -626,8 +648,20 @@ function appendInternalNote(note) {
     noteElement.setAttribute('data-message-id', note._id);
     
     // تنسيق التاريخ
-    const timestamp = new Date(note.timestamp);
+    const timestamp = new Date(note.timestamp || Date.now());
     const timeString = timestamp.toLocaleString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+    
+    // استخراج اسم المرسل
+    let senderName = '';
+    if (note.sentBy) {
+        if (typeof note.sentBy === 'object' && note.sentBy.username) {
+            senderName = note.sentBy.username;
+        } else if (typeof note.sentBy === 'string') {
+            senderName = note.sentBy;
+        } else if (note.sentBy === window.currentUserId) {
+            senderName = window.currentUsername || 'أنت';
+        }
+    }
     
     // إضافة HTML للملاحظة
     noteElement.innerHTML = `
@@ -635,10 +669,10 @@ function appendInternalNote(note) {
             <div class="internal-note-header">
                 <i class="fas fa-sticky-note me-1"></i>
                 <strong>ملاحظة داخلية</strong>
-                <span class="from-user">${note.sentBy && note.sentBy.username ? `- ${note.sentBy.username}` : note.sentBy ? `- ${note.sentBy}` : ''}</span>
+                ${senderName ? `<span class="from-user">- ${senderName}</span>` : ''}
             </div>
             <div class="internal-note-content">
-                ${note.content.replace(/\n/g, '<br>')}
+                ${(note.content || '').replace(/\n/g, '<br>')}
             </div>
             <div class="message-meta">
                 <span class="message-time" title="${timestamp.toLocaleString()}">
@@ -654,4 +688,7 @@ function appendInternalNote(note) {
     
     // التمرير إلى أسفل لعرض الملاحظة الجديدة
     scrollToBottom(messagesContainer);
+    
+    // إرسال حدث تحديث المحتوى
+    document.dispatchEvent(new CustomEvent('messages-loaded'));
 }
