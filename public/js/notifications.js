@@ -2,6 +2,66 @@
  * نظام الإشعارات الفورية باستخدام Socket.IO
  * يستخدم لتحسين تجربة المستخدم مع التحديثات الفورية لنظام المراسلة
  */
+
+/**
+ * عرض إشعار على المتصفح
+ * @param {string} title - عنوان الإشعار
+ * @param {string} body - نص الإشعار
+ * @param {function} clickCallback - دالة تنفذ عند النقر على الإشعار
+ */
+window.showNotification = function(title, body, clickCallback) {
+    // التحقق من دعم الإشعارات في المتصفح
+    if (!("Notification" in window)) {
+        console.log("هذا المتصفح لا يدعم إشعارات سطح المكتب");
+        // استخدم toast كبديل
+        if (typeof window.showToast === 'function') {
+            window.showToast(title + ': ' + body, 'info', 5000);
+        }
+        return;
+    }
+    
+    // طلب إذن لعرض الإشعارات إذا لم يتم منحه بعد
+    if (Notification.permission === "granted") {
+        // إنشاء الإشعار
+        const notification = new Notification(title, {
+            body: body,
+            icon: '/images/logo.png'
+        });
+        
+        // تعيين سلوك النقر
+        if (clickCallback && typeof clickCallback === 'function') {
+            notification.onclick = clickCallback;
+        }
+    } 
+    // إذا لم يتم رفض الإذن سابقاً، اطلب الإذن
+    else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(function(permission) {
+            if (permission === "granted") {
+                // إنشاء الإشعار بعد الحصول على الإذن
+                const notification = new Notification(title, {
+                    body: body,
+                    icon: '/images/logo.png'
+                });
+                
+                // تعيين سلوك النقر
+                if (clickCallback && typeof clickCallback === 'function') {
+                    notification.onclick = clickCallback;
+                }
+            } else {
+                // استخدم toast كبديل
+                if (typeof window.showToast === 'function') {
+                    window.showToast(title + ': ' + body, 'info', 5000);
+                }
+            }
+        });
+    } else {
+        // استخدم toast كبديل إذا تم رفض الإذن
+        if (typeof window.showToast === 'function') {
+            window.showToast(title + ': ' + body, 'info', 5000);
+        }
+    }
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // تهيئة اتصال Socket.io
     const socketConnection = initializeSocketConnection();
@@ -149,6 +209,14 @@ function setupNotificationListeners(socket) {
         else if (message.direction === 'internal') {
             if (message.metadata && message.metadata.senderInfo) {
                 senderName = message.metadata.senderInfo.full_name || message.metadata.senderInfo.username || 'مستخدم';
+            }
+        }
+
+        // تحقق مما إذا كنا في نفس المحادثة لإضافة الرسالة للواجهة
+        if (conversationId === window.currentConversationId) {
+            // إضافة الرسالة للواجهة بغض النظر عن مصدرها
+            if (typeof appendNewMessage === 'function') {
+                appendNewMessage(message);
             }
         }
 
