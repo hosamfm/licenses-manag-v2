@@ -285,93 +285,55 @@ function appendNewMessage(message) {
  * @returns {string} HTML للرسالة
  */
 function getMessageTemplate(message) {
-    // --- إزالة التسجيل التشخيصي 2 ---
-    // console.log('[getMessageTemplate] Processing message:', JSON.stringify(message, null, 2));
-    // -------------------------------
-
-    // تحديد اتجاه الرسالة
     const isOutgoing = message.direction === 'outgoing';
     const messageClass = isOutgoing ? 'message outgoing' : 'message incoming';
-    
-    // تنسيق الوقت
-    const formattedTime = typeof window.formatTime === 'function' ? 
-                          window.formatTime(message.timestamp) : 
-                          new Date(message.timestamp).toLocaleTimeString();
-    
-    // تحديد نص الحالة
-    const statusText = typeof window.getStatusText === 'function' ? 
-                      window.getStatusText(message.status) : 
-                      message.status;
-    
-    // تحديد اسم المرسل **فقط** للرسائل الصادرة
-    let senderHtml = ''; // يبدأ فارغًا
+    const formattedTime = typeof window.formatTime === 'function' ? window.formatTime(message.timestamp) : new Date(message.timestamp).toLocaleTimeString();
+    const statusText = typeof window.getStatusText === 'function' ? window.getStatusText(message.status) : message.status;
+
+    let senderHtml = ''; // التهيئة الأولية تبقى فارغة
+
     if (isOutgoing) {
         let senderName = '';
         const senderIdString = message.sentBy ? message.sentBy.toString() : '';
 
-        // 1. إذا كان المرسل هو المستخدم الحالي
         if (window.currentUserId && senderIdString === window.currentUserId) {
             senderName = window.currentUsername || 'أنت';
-        }
-        // 2. إذا كان المرسل هو النظام
-        else if (senderIdString === 'system') {
+        } else if (senderIdString === 'system') {
             senderName = 'النظام';
-        }
-        // 3. إذا كان المرسل مستخدم آخر في النظام
-        else {
-            // محاولة الحصول على الاسم من metadata
+        } else {
             if (message.metadata && message.metadata.senderInfo) {
                 senderName = message.metadata.senderInfo.username || message.metadata.senderInfo.full_name;
             }
-            // محاولة الحصول على الاسم من sentByUsername
             else if (message.sentByUsername) {
                 senderName = message.sentByUsername;
             }
-            // استخدام المعرف كحل أخير إذا لم نجد الاسم
             else if (senderIdString) {
-                senderName = senderIdString; // قد ترغب في استبدال هذا بـ "مستخدم" أو طلب الاسم من الخادم لاحقاً
+                senderName = senderIdString;
             }
         }
 
-        // اسم افتراضي إذا لم يتم العثور على اسم (للرسائل الصادرة فقط)
         if (!senderName) {
-            senderName = 'مستخدم'; // أو اتركه فارغًا إذا كنت تفضل عدم عرض أي شيء
+            senderName = 'مستخدم'; // اسم افتراضي للصادرة بدون اسم محدد
         }
-
-        // تسجيل معلومات التشخيص إذا كان وضع التصحيح مفعل
-        if (window.DEBUG_MESSAGES === true) {
-            console.log('معلومات المرسل للرسالة (Outgoing):', {
-                senderName: senderName,
-                messageId: message._id,
-                sentBy: message.sentBy,
-                metadata: message.metadata,
-                currentUserId: window.currentUserId
-            });
-        }
-
-        // إضافة اسم المرسل إلى قالب الرسالة فقط إذا وجدنا اسمًا
-        if (senderName) {
-             senderHtml = `<div class="message-sender">${senderName}</div>`;
-        } else {
-             senderHtml = `<div class="message-sender">مجهول</div>`; // أو اتركه فارغاً ''
-        }
+        
+        // تعيين senderHtml *فقط* إذا كانت الرسالة صادرة وهناك اسم مرسل
+        senderHtml = `<div class="message-sender">${senderName}</div>`;
     }
-    // إذا كانت الرسالة واردة (incoming), فإن senderHtml سيبقى فارغًا بشكل افتراضي
+    // للرسائل الواردة (incoming), ستبقى senderHtml القيمة الأولية ''
 
-    // محتوى الرسالة الأساسي
     let messageContent = `<div class="message-text">${message.content}</div>`;
-    
-    // إضافة عناصر الوسائط إذا كان هناك
     if (message.mediaType && message.mediaUrl) {
-        // تأكد من وجود دالة getMediaContent وتعريفها بشكل صحيح
         if (typeof getMediaContent === 'function') {
             messageContent += getMediaContent(message);
         } else {
             console.warn('الدالة getMediaContent غير معرفة.');
         }
     }
-    
-    // إنشاء قالب الرسالة
+
+    // --- تسجيل تشخيصي نهائي --- 
+    console.log(`[getMessageTemplate] Final check -> isOutgoing: ${isOutgoing}, senderHtml length: ${senderHtml.length}`);
+    // -------------------------
+
     return `
     <div class="${messageClass}" data-message-id="${message._id}" data-external-id="${message.externalMessageId || ''}">
         <div class="message-container">
