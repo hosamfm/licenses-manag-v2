@@ -165,12 +165,33 @@
       let currentConversationId = null;
       
       // تكوين وتهيئة الويب سوكت
-      const socket = io();
+      window.socketConnection = io();
       
       // الاستماع لأحداث الاتصال
-      socket.on('connect', function() {
-        // تم الاتصال بالخادم
+      window.socketConnection.on('connect', function() {
+        // تعيين حالة الاتصال
+        window.socketConnected = true;
+        console.log('تم الاتصال بالسوكت بنجاح');
       });
+
+      window.socketConnection.on('disconnect', function() {
+        // تعيين حالة الاتصال
+        window.socketConnected = false;
+        console.log('تم قطع الاتصال بالسوكت');
+      });
+      
+      // تنفيذ العمليات المعلقة بعد الاتصال
+      if (Array.isArray(window.pendingSocketOperations)) {
+        window.pendingSocketOperations.forEach(operation => {
+          operation(window.socketConnection);
+        });
+        window.pendingSocketOperations = [];
+      }
+
+      // إعداد مستمعات الإشعارات
+      if (typeof window.setupNotificationListeners === 'function') {
+        window.setupNotificationListeners(window.socketConnection);
+      }
       
       // وظائف تصفية وبحث المحادثات
       const filterButtons = document.querySelectorAll('.conversation-filters button');
@@ -252,13 +273,8 @@
         }
       }
       
-      // الاستماع لأحداث قطع الاتصال
-      socket.on('disconnect', function() {
-        // انقطع الاتصال بالخادم
-      });
-      
       // الاستماع لأحداث الرسائل الجديدة
-      socket.on('new-message', function(data) {
+      window.socketConnection.on('new-message', function(data) {
         // تشغيل صوت الإشعار للرسائل الواردة
         if (data.direction === 'incoming') {
           window.playNotificationSound();
@@ -274,7 +290,7 @@
       });
       
       // الاستماع لأحداث تحديث حالة الرسائل
-      socket.on('message-status-update', function(data) {
+      window.socketConnection.on('message-status-update', function(data) {
         // تحقق من وجود معرف المحادثة والتأكد من أنه يطابق المحادثة الحالية
         if (!data.conversationId || data.conversationId !== currentConversationId) {
           return;
@@ -290,7 +306,7 @@
       });
       
       // الاستماع لأحداث الردود الجديدة
-      socket.on('message-reply', function(data) {
+      window.socketConnection.on('message-reply', function(data) {
         // التحقق من وجود البيانات المطلوبة
         if (!data || !data.message) {
           return;
@@ -326,7 +342,7 @@
       });
       
       // الاستماع لأحداث التفاعلات الجديدة
-      socket.on('message-reaction', function(data) {
+      window.socketConnection.on('message-reaction', function(data) {
         // التحقق من أن البيانات تخص المحادثة الحالية
         if (!data.conversationId || data.conversationId !== currentConversationId) {
           return;
@@ -337,7 +353,7 @@
       });
       
       // الاستماع لأحداث تحديث المعرف الخارجي للرسالة
-      socket.on('message-external-id-update', function(data) {
+      window.socketConnection.on('message-external-id-update', function(data) {
         // التحقق من أن البيانات تخص المحادثة الحالية
         if (!data.conversationId || data.conversationId !== currentConversationId) {
           return;
@@ -355,7 +371,7 @@
       });
       
       // معالج حدث للملاحظات الداخلية
-      socket.on('internal-note', function(data) {
+      window.socketConnection.on('internal-note', function(data) {
         
         // التحقق من أن الملاحظة تنتمي إلى المحادثة الحالية
         if (data.conversationId === currentConversationId) {
