@@ -10,6 +10,8 @@
  *    - التفاعلات: POST /crm/conversations/:conversationId/reaction
  */
 const socketIO = require('socket.io');
+const logger = require('./loggerService');
+
 let io;
 
 /**
@@ -17,7 +19,6 @@ let io;
  * @param {Object} server - خادم HTTP
  */
 function initialize(server) {
-  // إنشاء مثيل Socket.io
   io = socketIO(server, {
     cors: {
       origin: '*', // في البيئة الإنتاجية، يجب تحديد أصول محددة فقط
@@ -25,102 +26,139 @@ function initialize(server) {
     }
   });
 
-  // معالجة اتصالات العملاء
   io.on('connection', async (socket) => {
     try {
       // استخراج معلومات المستخدم من الجلسة
       if (socket.handshake.session && socket.handshake.session.userId) {
-        // محاولة الحصول على معلومات المستخدم من قاعدة البيانات
+        // هناك معرف مستخدم في الجلسة - استخراج بيانات المستخدم من قاعدة البيانات
+        const User = require('../models/User');
+        const userId = socket.handshake.session.userId;
+        
         try {
-          const User = require('../models/User');
-          const userId = socket.handshake.session.userId;
-          
           const user = await User.findById(userId);
           if (user) {
             socket.userId = user._id.toString();
             socket.username = user.username;
-            socket.userRole = user.user_role;            
+            socket.userRole = user.user_role;
             
+            logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم من الجلسة', { 
+              socketId: socket.id, 
+              userId: socket.userId, 
+              username: socket.username, 
+              userRole: socket.userRole
+            });
           } else {
-            // إزالة التسجيل
+            logger.warning('socketService', 'لم يتم العثور على المستخدم رغم وجود معرف في الجلسة', { 
+              socketId: socket.id, 
+              sessionUserId: socket.handshake.session.userId 
+            });
           }
         } catch (err) {
-          // إزالة التسجيل
+          logger.error('socketService', 'خطأ في استخراج بيانات المستخدم من قاعدة البيانات', { 
+            socketId: socket.id, 
+            sessionUserId: socket.handshake.session.userId,
+            error: err.message 
+          });
         }
       } 
       // استخدام معلومات المستخدم من بيانات المصادقة إذا لم تكن متوفرة في الجلسة
       else if (socket.handshake.auth && socket.handshake.auth.userId && socket.handshake.auth.userId !== 'guest') {
         socket.userId = socket.handshake.auth.userId;
-        socket.username = socket.handshake.auth.username;       
+        socket.username = socket.handshake.auth.username;
         
+        logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم من بيانات المصادقة', { 
+          socketId: socket.id, 
+          userId: socket.userId, 
+          username: socket.username 
+        });
       } else {
         // لا توجد معلومات مستخدم متاحة
         socket.userId = 'guest';
-        socket.username = 'زائر';       
+        socket.username = 'زائر';
         
+        logger.info('socketService', 'اتصال جديد بواسطة Socket.io بدون معلومات المستخدم', { 
+          socketId: socket.id,
+          source: socket.handshake.headers.referer || 'غير معروف'
+        });
       }
     } catch (error) {
-      // إزالة التسجيل
+      logger.error('socketService', 'خطأ في معالجة معلومات المستخدم عند الاتصال', { 
+        socketId: socket.id, 
+        error: error.message 
+      });
+      
+      // استخدام قيم افتراضية في حالة حدوث خطأ
+      socket.userId = 'guest';
+      socket.username = 'زائر';
     }
 
-    // انضمام المستخدم إلى غرفته الخاصة
+    // الانضمام لغرفة المستخدم
     socket.on('join-user-room', (userId) => {
       if (userId) {
         socket.join(`user-${userId}`);
+        logger.info('socketService', 'انضمام المستخدم إلى غرفته الخاصة', { userId, socketId: socket.id });
       }
     });
 
-    // انضمام إلى غرفة محددة
+    // الانضمام لغرفة - أمر عام (تنسيق جديد)
     socket.on('join', (data) => {
       if (data && data.room) {
         socket.join(data.room);
+        logger.info('socketService', 'انضمام إلى غرفة', { room: data.room, socketId: socket.id });
       }
     });
 
-    // مغادرة غرفة محددة
+    // مغادرة غرفة - أمر عام (تنسيق جديد)
     socket.on('leave', (data) => {
       if (data && data.room) {
         socket.leave(data.room);
+        logger.info('socketService', 'مغادرة غرفة', { room: data.room, socketId: socket.id });
       }
     });
 
-    // انضمام إلى غرفة محادثة
+    // الانضمام لغرفة المحادثة (تنسيق قديم للتوافق)
     socket.on('join-conversation', (conversationId) => {
       if (conversationId) {
         socket.join(`conversation-${conversationId}`);
+        logger.info('socketService', 'انضمام إلى غرفة المحادثة', { conversationId, socketId: socket.id });
       }
     });
 
-    // مغادرة غرفة محادثة
+    // مغادرة غرفة المحادثة (تنسيق قديم للتوافق)
     socket.on('leave-conversation', (conversationId) => {
       if (conversationId) {
         socket.leave(`conversation-${conversationId}`);
+        logger.info('socketService', 'مغادرة غرفة المحادثة', { conversationId, socketId: socket.id });
       }
     });
 
-    // تسجيل حدث انقطاع الاتصال
     socket.on('disconnect', () => {
-      // إزالة التسجيل
+      logger.info('socketService', 'انقطع الاتصال', { socketId: socket.id });
     });
-    
-    // استقبال رسالة جديدة لإعادة البث
-    socket.on('broadcast-message', (message) => {
-      if (!message || !message.conversationId) {
-        return;
+
+    // استقبال إشعار برسالة جديدة من العميل وإعادة بثه لبقية المستخدمين
+    // ملاحظة هامة: هذا المعالج للإشعارات فقط وليس للإرسال الفعلي للرسائل الجديدة
+    // الإرسال الفعلي للرسائل يتم عبر طلب HTTP إلى /crm/conversations/:conversationId/reply
+    socket.on('new-message', (message) => {
+      if (!io) {
+        return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
       }
       
-      // إذا كانت الرسالة تحتوي على معلومات الملف المؤقت
-      if (message.tempId) {
-        io.to(`conversation-${message.conversationId}`).emit('message-external-id-update', {
-          messageId: message.tempId,
-          externalId: message._id
+      // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
+      if (message && message.mediaType) {
+        logger.info('socketService', 'إعادة بث إشعار برسالة جديدة مع وسائط', { 
+          conversationId: message.conversationId, 
+          mediaType: message.mediaType,
+          messageId: message._id
         });
       }
       
       io.to(`conversation-${message.conversationId}`).emit('new-message', message);
+      logger.info('socketService', 'تم إعادة بث إشعار برسالة جديدة', { conversationId: message.conversationId });
     });
   });
 
+  logger.info('socketService', 'تم تهيئة خدمة Socket.io');
   return io;
 }
 
@@ -128,84 +166,128 @@ function initialize(server) {
  * إرسال إشعار برسالة جديدة إلى غرفة المحادثة
  * ملاحظة: هذه الدالة للإشعارات فقط وليس لإرسال الرسالة نفسها
  * يتم استدعاء هذه الدالة من متحكم conversationController بعد حفظ الرسالة في قاعدة البيانات
+ * @param {String} conversationId - معرف المحادثة
  * @param {Object} message - الرسالة الجديدة
  */
-function notifyNewMessage(message) {
+function notifyNewMessage(conversationId, message) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
-  io.to(`conversation-${message.conversationId}`).emit('new-message', message);
+  // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
+  if (message && message.mediaType) {
+    logger.info('socketService', 'إرسال إشعار برسالة جديدة مع وسائط', { 
+      conversationId, 
+      mediaType: message.mediaType,
+      messageId: message._id
+    });
+  }
+  
+  io.to(`conversation-${conversationId}`).emit('new-message', message);
+  logger.info('socketService', 'تم إرسال إشعار برسالة جديدة', { conversationId });
 }
 
 /**
  * إرسال إشعار برد على رسالة
  * ملاحظة: هذه الدالة للإشعارات فقط وليس لإرسال الرد نفسه
  * يتم استدعاء هذه الدالة من متحكم conversationController بعد حفظ الرد في قاعدة البيانات
+ * @param {String} conversationId - معرف المحادثة
  * @param {Object} message - الرسالة الجديدة
+ * @param {String} replyToId - معرف الرسالة المرد عليها
  */
-function notifyMessageReply(message) {
+function notifyMessageReply(conversationId, message, replyToId) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
-  io.to(`conversation-${message.conversationId}`).emit('message-reply', message);
+  // إرسال إشعار إلى غرفة المحادثة بأن هناك رد جديد
+  message.replyToId = replyToId;
+  io.to(`conversation-${conversationId}`).emit('message-reply', message);
+  
+  logger.info('socketService', 'تم إرسال إشعار برد على رسالة', { 
+    conversationId, 
+    replyToId,
+    messageId: message._id 
+  });
 }
 
 /**
  * إرسال إشعار بتفاعل على رسالة
  * ملاحظة: هذه الدالة للإشعارات فقط، الإرسال الفعلي للتفاعلات يتم عبر HTTP
- * @param {string} conversationId - معرف المحادثة
- * @param {string} messageId - معرف الرسالة
- * @param {string} externalId - المعرف الخارجي للرسالة (اختياري)
- * @param {Object} reaction - معلومات التفاعل
+ * @param {String} conversationId - معرف المحادثة
+ * @param {String} externalId - المعرف الخارجي للرسالة
+ * @param {Object} reaction - بيانات التفاعل (المرسل، الإيموجي)
  */
-function notifyMessageReaction(conversationId, messageId, externalId, reaction) {
+function notifyMessageReaction(conversationId, externalId, reaction) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  
-  io.to(`conversation-${conversationId}`).emit('message-reaction', {
-    messageId,
-    externalId,
+
+  if (!externalId) {
+    return logger.warn('socketService', 'محاولة إرسال تفاعل لرسالة بدون معرف خارجي', { 
+      conversationId, 
+      reaction 
+    });
+  }
+
+  io.to(`conversation-${conversationId}`).emit('message-reaction', { 
+    externalId, 
     reaction, 
     conversationId 
+  });
+  
+  logger.info('socketService', 'تم إرسال إشعار بتفاعل على رسالة', { 
+    conversationId, 
+    externalId,
+    senderName: reaction.senderName 
   });
 }
 
 /**
- * إرسال إشعار بتحديث معلومات المحادثة
- * @param {string} conversationId - معرف المحادثة
- * @param {Object} update - التحديثات المطلوب إرسالها
+ * إرسال إشعار بتحديث المحادثة (مثلاً تغير الحالة أو الإسناد)
+ * @param {String} conversationId - معرف المحادثة
+ * @param {Object} update - التحديث الجديد
  */
 function notifyConversationUpdate(conversationId, update) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   io.to(`conversation-${conversationId}`).emit('conversation-update', update);
+  logger.info('socketService', 'تم إرسال إشعار بتحديث المحادثة', { conversationId });
 }
 
 /**
- * إرسال إشعار بتحديث حالة رسالة
- * @param {string} conversationId - معرف المحادثة
- * @param {string} messageId - معرف الرسالة
- * @param {string} externalId - المعرف الخارجي للرسالة
- * @param {string} status - الحالة الجديدة
- * @param {Object} additionalData - بيانات إضافية
+ * إرسال إشعار بتحديث حالة الرسالة
+ * @param {String} conversationId - معرف المحادثة
+ * @param {String} externalId - المعرف الخارجي للرسالة
+ * @param {String} status - الحالة الجديدة
  */
-function notifyMessageStatusUpdate(conversationId, messageId, externalId, status, additionalData = {}) {
+function notifyMessageStatusUpdate(conversationId, externalId, status) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
 
-  const data = {
-    messageId,
-    externalId,
-    status,
-    ...additionalData
+  if (!externalId) {
+    return logger.warn('socketService', 'محاولة تحديث حالة رسالة بدون معرف خارجي', { 
+      conversationId, 
+      status 
+    });
+  }
+
+  const data = { 
+    externalId, 
+    status, 
+    conversationId 
   };
 
   io.to(`conversation-${conversationId}`).emit('message-status-update', data);
+  
+  logger.info('socketService', 'تم إرسال إشعار بتحديث حالة الرسالة', { 
+    conversationId, 
+    externalId, 
+    status,
+    dataObject: JSON.stringify(data)
+  });
 }
 
 /**
@@ -216,10 +298,10 @@ function notifyMessageStatusUpdate(conversationId, messageId, externalId, status
  */
 function notifyUser(userId, type, data) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  
   io.to(`user-${userId}`).emit('user-notification', { type, data });
+  logger.info('socketService', 'تم إرسال إشعار للمستخدم', { userId, type });
 }
 
 /**
@@ -229,10 +311,10 @@ function notifyUser(userId, type, data) {
  */
 function broadcastNotification(type, data) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  
   io.emit(type, data);
+  logger.info('socketService', 'تم إرسال إشعار عام', { type });
 }
 
 /**
@@ -243,10 +325,10 @@ function broadcastNotification(type, data) {
  */
 function emitToRoom(roomName, eventName, data) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  
   io.to(`${roomName}`).emit(eventName, data);
+  logger.info('socketService', 'تم إرسال إشعار إلى غرفة محددة', { roomName, eventName });
 }
 
 /**
@@ -258,11 +340,11 @@ function emitToRoom(roomName, eventName, data) {
  */
 function notifyMessageExternalIdUpdate(conversationId, messageId, externalId) {
   if (!io) {
-    return;
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
   if (!conversationId || !messageId || !externalId) {
-    return;
+    return logger.warn('socketService', 'معلومات غير كاملة لتحديث معرف خارجي', { conversationId, messageId, externalId });
   }
   
   io.to(`conversation-${conversationId}`).emit('message-external-id-update', { 
@@ -270,6 +352,8 @@ function notifyMessageExternalIdUpdate(conversationId, messageId, externalId) {
     externalId, 
     conversationId 
   });
+  
+  logger.info('socketService', 'تم إرسال إشعار بتحديث معرف خارجي للرسالة', { conversationId, messageId, externalId });
 }
 
 module.exports = {
