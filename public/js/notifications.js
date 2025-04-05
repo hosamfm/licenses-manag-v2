@@ -100,22 +100,26 @@ function setupNotificationListeners(socket) {
         // التعامل مع بنيتين مختلفتين للبيانات
         const message = data.message || data;
         
+        // --- تسجيل تشخيصي 1: عرض الرسالة فور استلامها ---
+        console.log('[Socket Event] Received new-message:', JSON.stringify(message, null, 2));
+        // -----------------------------------------------
+
         // تأكد من تعريف حقل metadata إذا لم يكن موجودًا
         if (!message.metadata) {
             message.metadata = {};
         }
         
         // إضافة معلومات المرسل للرسائل الصادرة
-        if (message.direction === 'outgoing') {
-            // إذا كان المستخدم الحالي هو المرسل، استخدم معلوماته
-            if (window.currentUserId && message.sentBy === window.currentUserId) {
-                message.metadata.senderInfo = {
-                    username: window.currentUsername,
-                    _id: window.currentUserId
-                };
-                message.sentByUsername = window.currentUsername;
-            }
-        }
+        // *** ملاحظة: سنقوم بإزالة هذا الجزء لأن الخادم يضيف المعلومات بالفعل ***
+        // if (message.direction === 'outgoing') {
+        //     if (window.currentUserId && message.sentBy === window.currentUserId) {
+        //         message.metadata.senderInfo = {
+        //             username: window.currentUsername,
+        //             _id: window.currentUserId
+        //         };
+        //         message.sentByUsername = window.currentUsername;
+        //     }
+        // }
         
         // تحديث واجهة المستخدم إذا كانت الرسالة تخص المحادثة الحالية
         if (window.currentConversationId && message.conversationId === window.currentConversationId) {
@@ -281,6 +285,10 @@ function appendNewMessage(message) {
  * @returns {string} HTML للرسالة
  */
 function getMessageTemplate(message) {
+    // --- تسجيل تشخيصي 2: عرض الرسالة عند دخول getMessageTemplate ---
+    console.log('[getMessageTemplate] Processing message:', JSON.stringify(message, null, 2));
+    // -----------------------------------------------------------
+
     // تحديد اتجاه الرسالة
     const isOutgoing = message.direction === 'outgoing';
     const messageClass = isOutgoing ? 'message outgoing' : 'message incoming';
