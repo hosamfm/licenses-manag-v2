@@ -362,6 +362,7 @@
     // عرض محتوى الرسالة مع مؤشر الحالة قيد الإرسال
     pendingMessageElement.innerHTML = `
       <div class="message-content">
+        ${window.currentUsername ? `<div class="message-sender">${window.currentUsername}</div>` : ''}
         <div class="message-text">${messageData.content || (mediaId ? 'وسائط' : '')}</div>
         <div class="message-meta">
           <span class="message-time">${new Date().toLocaleTimeString()}</span>

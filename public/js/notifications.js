@@ -373,11 +373,16 @@ function getMessageTemplate(message) {
     let senderHtml = '';
     if (isOutgoing) {
         let senderName = '';
+        // 1. محاولة الحصول على الاسم من معلومات المرسل في metadata
         if (message.metadata && message.metadata.senderInfo) {
-            senderName = message.metadata.senderInfo.username || message.metadata.senderInfo.full_name;
-        } else if (message.sentByUsername) {
+            senderName = message.metadata.senderInfo.full_name || message.metadata.senderInfo.username;
+        }
+        // 2. محاولة الحصول على الاسم من sentByUsername مباشرة
+        else if (message.sentByUsername) {
             senderName = message.sentByUsername;
-        } else if (message.sentBy) {
+        }
+        // 3. محاولة الحصول على المعلومات من معرف المرسل
+        else if (message.sentBy) {
             // محاولة استخدام معرف المرسل
             const senderId = typeof message.sentBy === 'string' ? message.sentBy : 
                            (message.sentBy.toString ? message.sentBy.toString() : '');
@@ -389,14 +394,18 @@ function getMessageTemplate(message) {
             }
         }
         
-        // إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي
+        // 4. إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي
         if (!senderName && window.currentUsername) {
             senderName = window.currentUsername;
         }
         
-        if (senderName) {
-            senderHtml = `<div class="message-sender">${senderName}</div>`;
+        // 5. إذا لم يكن هناك اسم بعد كل هذه المحاولات، استخدم "أنت" كاسم افتراضي
+        if (!senderName) {
+            senderName = 'أنت';
         }
+        
+        // إضافة اسم المرسل إلى قالب الرسالة
+        senderHtml = `<div class="message-sender">${senderName}</div>`;
     }
     
     // محتوى الرسالة الأساسي
