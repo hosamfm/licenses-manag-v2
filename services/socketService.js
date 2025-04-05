@@ -169,7 +169,7 @@ function initialize(server) {
  * @param {String} conversationId - معرف المحادثة
  * @param {Object} message - الرسالة الجديدة
  */
-function notifyNewMessage(conversationId, message) {
+async function notifyNewMessage(conversationId, message) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
@@ -181,6 +181,48 @@ function notifyNewMessage(conversationId, message) {
       mediaType: message.mediaType,
       messageId: message._id
     });
+  }
+  
+  // إضافة معلومات المرسل إذا كانت الرسالة صادرة وليس هناك معلومات مرسل كاملة
+  if (message && message.direction === 'outgoing' && message.sentBy && 
+      (!message.metadata || !message.metadata.senderInfo)) {
+    try {
+      const User = require('../models/User');
+      const senderId = message.sentBy.toString();
+
+      // لا نحتاج لاسترجاع معلومات المرسل إذا كان النظام
+      if (senderId === 'system') {
+        if (!message.metadata) message.metadata = {};
+        message.metadata.senderInfo = { username: 'النظام', full_name: 'النظام' };
+      } 
+      // استرجاع معلومات المستخدم المرسل من قاعدة البيانات
+      else {
+        const user = await User.findById(senderId);
+        if (user) {
+          if (!message.metadata) message.metadata = {};
+          message.metadata.senderInfo = {
+            username: user.username,
+            full_name: user.full_name || user.username,
+            _id: user._id.toString()
+          };
+          
+          // تخزين اسم المستخدم المرسل بشكل مباشر أيضًا لتسهيل الوصول إليه
+          message.sentByUsername = user.username;
+          
+          logger.info('socketService', 'تم إضافة معلومات المرسل للإشعار', { 
+            conversationId, 
+            senderUsername: user.username,
+            senderId: user._id.toString()
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('socketService', 'خطأ في استرجاع معلومات المرسل للإشعار', { 
+        conversationId, 
+        senderId: message.sentBy.toString(),
+        error: error.message
+      });
+    }
   }
   
   io.to(`conversation-${conversationId}`).emit('new-message', message);
