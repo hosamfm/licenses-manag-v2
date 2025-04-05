@@ -173,14 +173,10 @@ async function notifyNewMessage(conversationId, message) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
-  console.log('[notifyNewMessage] Received message to notify:', JSON.stringify(message, null, 2));
-  
   // --- التأكد من إضافة معلومات المرسل للرسائل الصادرة --- 
   if (message && message.direction === 'outgoing' && message.sentBy) {
-    console.log('[notifyNewMessage] Processing outgoing message. sentBy:', message.sentBy);
     // تأكد من أن sentBy هو سلسلة نصية
-    const senderId = message.sentBy.toString(); 
-    console.log('[notifyNewMessage] senderId:', senderId);
+    const senderId = message.sentBy.toString();
     
     // تهيئة metadata إذا لم تكن موجودة
     if (!message.metadata) {
@@ -216,7 +212,6 @@ async function notifyNewMessage(conversationId, message) {
           logger.warn('socketService', 'لم يتم العثور على معلومات المستخدم للمرسل الصادر', { conversationId, senderId });
         }
       }
-      console.log('[notifyNewMessage] Added sender info:', JSON.stringify(message.metadata?.senderInfo), message.sentByUsername);
     } catch (error) {
       logger.error('socketService', 'خطأ في استرجاع معلومات المرسل لإشعار Socket.IO', { 
         conversationId, 
@@ -227,26 +222,7 @@ async function notifyNewMessage(conversationId, message) {
       if (!message.sentByUsername) message.sentByUsername = senderId; 
       if (!message.metadata.senderInfo.username) message.metadata.senderInfo.username = senderId;
     }
-  } else {
-      console.log('[notifyNewMessage] Not adding sender info. Details:', {
-          hasMessage: !!message,
-          direction: message?.direction,
-          hasSentBy: !!message?.sentBy
-      });
   }
-  // --- نهاية التأكد من معلومات المرسل ---
-  
-  // --- تسجيل تشخيصي قبل الإرسال ---
-  console.log('[notifyNewMessage] Emitting message:', JSON.stringify(message, null, 2));
-  logger.info('socketService', 'إرسال new-message عبر Socket.IO', { 
-    conversationId, 
-    messageId: message._id, 
-    direction: message.direction, 
-    sentBy: message.sentBy,
-    hasSenderInfo: !!(message.metadata && message.metadata.senderInfo && message.metadata.senderInfo.username),
-    sentByUsername: message.sentByUsername
-  });
-  // ------------------------------
   
   // إرسال التحديث إلى جميع المستخدمين في غرفة المحادثة
   io.to(`conversation-${conversationId}`).emit('new-message', message);

@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeSocketConnection() {
     // التحقق من وجود كائن socket.io في النافذة
     if (typeof io === 'undefined') {
-        // إزالة التسجيل - لم يتم العثور على مكتبة Socket.io
         return null;
     }
     
@@ -74,11 +73,6 @@ function initializeSocketConnection() {
             window.socketConnected = false;
         });
         
-        // تسجيل الأخطاء
-        socket.on('error', function(error) {
-            // إزالة التسجيل - خطأ في نظام الإشعارات
-        });
-        
         // تخزين الاتصال في نافذة المتصفح للاستخدام العام
         window.socketConnection = socket;
         
@@ -100,26 +94,10 @@ function setupNotificationListeners(socket) {
         // التعامل مع بنيتين مختلفتين للبيانات
         const message = data.message || data;
         
-        // --- تسجيل تشخيصي 1: عرض الرسالة فور استلامها ---
-        console.log('[Socket Event] Received new-message:', JSON.stringify(message, null, 2));
-        // -----------------------------------------------
-
         // تأكد من تعريف حقل metadata إذا لم يكن موجودًا
         if (!message.metadata) {
             message.metadata = {};
         }
-        
-        // إضافة معلومات المرسل للرسائل الصادرة
-        // *** ملاحظة: سنقوم بإزالة هذا الجزء لأن الخادم يضيف المعلومات بالفعل ***
-        // if (message.direction === 'outgoing') {
-        //     if (window.currentUserId && message.sentBy === window.currentUserId) {
-        //         message.metadata.senderInfo = {
-        //             username: window.currentUsername,
-        //             _id: window.currentUserId
-        //         };
-        //         message.sentByUsername = window.currentUsername;
-        //     }
-        // }
         
         // تحديث واجهة المستخدم إذا كانت الرسالة تخص المحادثة الحالية
         if (window.currentConversationId && message.conversationId === window.currentConversationId) {
@@ -173,26 +151,18 @@ function setupNotificationListeners(socket) {
                 timestamp: data.timestamp,
                 status: data.status,
                 sentBy: data.sentBy,
-                metadata: data.metadata || {},
-                mentions: data.mentions || []
+                metadata: data.metadata || {}
             };
-
-            // إضافة الملاحظة إلى واجهة المستخدم
+            
+            // إضافة الملاحظة إلى الواجهة
             if (typeof window.addNoteToUI === 'function') {
-                try {
-                    window.addNoteToUI(noteData);
-                } catch (error) {
-                    console.error('خطأ في إضافة الملاحظة:', error);
-                    appendInternalNote(noteData);
-                }
+                window.addNoteToUI(noteData);
             } else {
                 appendInternalNote(noteData);
             }
             
             // تشغيل صوت الإشعار
-            if (typeof window.playNotificationSound === 'function') {
-                window.playNotificationSound();
-            }
+            playNotificationSound();
         }
     });
 }
@@ -230,24 +200,17 @@ function appendNewMessage(message) {
     // 1. التحقق من وجود الرسالة في الواجهة بالفعل
     const existingMessage = document.querySelector(`[data-message-id="${message._id}"]`);
     if (existingMessage) {
-        if (window.DEBUG_MESSAGES) {
-        }
-        
-        // تحديث حالة الرسالة الموجودة إذا تغيرت
         if (message.status) {
             const statusElement = existingMessage.querySelector('.message-status');
             if (statusElement) {
                 statusElement.innerHTML = getStatusIcon(message.status);
             }
         }
-        
         return;
     }
     
     // 2. التحقق من وجود المعرف في مجموعة الرسائل المرسلة
     if (window.sentMessageIds && window.sentMessageIds.has(message._id)) {
-        if (window.DEBUG_MESSAGES) {
-        }
         return;
     }
     
@@ -259,9 +222,6 @@ function appendNewMessage(message) {
             const pendingMessage = document.querySelector(`[data-message-id="${tempId}"]`);
             
             if (pendingMessage) {
-                if (window.DEBUG_MESSAGES) {
-                }
-                
                 // استبدال الرسالة المؤقتة بالرسالة الحقيقية
                 pendingMessage.setAttribute('data-message-id', message._id);
                 if (message.externalMessageId) {
@@ -271,11 +231,6 @@ function appendNewMessage(message) {
                 // تحديث محتوى الرسالة
                 pendingMessage.className = `message ${message.direction === 'incoming' ? 'incoming' : 'outgoing'}`;
                 pendingMessage.innerHTML = getMessageTemplate(message);
-                
-                // تحديث الإجراءات
-                if (typeof window.setupMessageActions === 'function') {
-                    window.setupMessageActions(pendingMessage);
-                }
                 
                 // حذف المعرف المؤقت من التخطيط
                 delete window.pendingMessageMapping[tempId];
@@ -306,12 +261,10 @@ function appendNewMessage(message) {
             window.setupMessageActions(newMessageElement);
         }
         
-        // تمرير حدث بأن الرسائل تم تحديثها
-        document.dispatchEvent(new CustomEvent('messages-loaded'));
-        
         // تحديث الموضع إلى أحدث رسالة
         scrollToBottom(messagesContainer);
     } catch (error) {
+        console.error('خطأ في إضافة الرسالة:', error);
     }
 }
 
@@ -338,66 +291,24 @@ function getMessageTemplate(message) {
     if (isOutgoing) {
         let senderName = '';
         if (message.metadata && message.metadata.senderInfo) {
-            senderName = message.metadata.senderInfo.username || 
-                        message.metadata.senderInfo.full_name || 
-                        'مجهول';
+            senderName = message.metadata.senderInfo.full_name || message.metadata.senderInfo.username || 'مجهول';
         } else if (message.sentByUsername) {
             senderName = message.sentByUsername;
-        } else if (message.sentBy) {
-            try {
-                const senderId = message.sentBy.toString();
-                if (senderId === 'system') {
-                    senderName = 'النظام';
-                } else {
-                    senderName = senderId;
-                }
-            } catch (error) {
-                console.error('خطأ في معالجة معرف المرسل:', error);
-                senderName = 'مجهول';
-            }
-        } else if (message.sentBy === window.currentUserId) {
-            senderName = window.currentUsername;
-        } else {
-            senderName = 'مجهول';
         }
-        
         if (senderName) {
             senderHtml = `<div class="message-sender">${senderName}</div>`;
         }
     }
-
-    let messageContent = `<div class="message-text">${message.content}</div>`;
-    if (message.mediaType && message.mediaUrl) {
-        if (typeof getMediaContent === 'function') {
-            messageContent += getMediaContent(message);
-        } else {
-            console.warn('الدالة getMediaContent غير معرفة.');
-        }
-    }
-
-    // --- تسجيل تشخيصي نهائي --- 
-    console.log(`[getMessageTemplate] Final check -> isOutgoing: ${isOutgoing}, senderHtml length: ${senderHtml.length}`);
-    // -------------------------
-
+    
+    // إنشاء قالب الرسالة
     return `
-    <div class="${isOutgoing ? 'message outgoing' : 'message incoming'}" data-message-id="${message._id}" data-external-id="${message.externalMessageId || ''}">
-        <div class="message-container">
-            ${senderHtml}
-            ${messageContent}
-            <div class="message-meta">
-                <span class="message-time">${time}</span>
-                ${isOutgoing ? `<span class="message-status" title="${statusText}">${getStatusIcon(message.status)}</span>` : ''}
-            </div>
+        <div class="message-content">
+            ${message.content}
+            <div class="message-time">${time}</div>
+            ${statusText ? `<div class="message-status">${statusText}</div>` : ''}
         </div>
-        <div class="message-actions">
-            <button class="btn btn-sm reaction-btn" onclick="showReactionPicker('${message._id}', '${message.externalMessageId || ''}', this)">
-                <i class="far fa-smile"></i>
-            </button>
-            <button class="btn btn-sm reply-btn" onclick="showReplyForm('${message._id}', '${message.externalMessageId || ''}', this)">
-                <i class="fas fa-reply"></i>
-            </button>
-        </div>
-    </div>`;
+        ${senderHtml}
+    `;
 }
 
 /**
@@ -632,65 +543,51 @@ function updateMessageExternalId(messageId, externalId) {
 function appendInternalNote(note) {
     // التحقق من وجود حاوية الرسائل
     const messagesContainer = document.querySelector('.messages-container');
-    if (!messagesContainer) {
-        console.error('حاوية الرسائل غير موجودة');
+    if (!messagesContainer) return;
+    
+    // التحقق من وجود الملاحظة في الواجهة بالفعل
+    const existingNote = document.querySelector(`[data-note-id="${note._id}"]`);
+    if (existingNote) {
         return;
     }
     
-    // التحقق من وجود الملاحظة مسبقاً
-    const existingNote = document.querySelector(`[data-message-id="${note._id}"]`);
-    if (existingNote) {
-        console.log('الملاحظة موجودة بالفعل:', note._id);
-        return;
+    // تنسيق التاريخ
+    const date = new Date(note.timestamp || Date.now());
+    const formattedDate = date.toLocaleDateString('ar-SA', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    // استخراج اسم المرسل
+    let senderName = 'مجهول';
+    if (note.metadata && note.metadata.senderInfo) {
+        senderName = note.metadata.senderInfo.full_name || note.metadata.senderInfo.username || 'مجهول';
+    } else if (note.sentBy) {
+        senderName = note.sentBy.toString();
     }
     
     // إنشاء عنصر الملاحظة
     const noteElement = document.createElement('div');
-    noteElement.className = 'message internal-note';
-    noteElement.setAttribute('data-message-id', note._id);
+    noteElement.className = 'internal-note';
+    noteElement.setAttribute('data-note-id', note._id);
     
-    // تنسيق التاريخ
-    const timestamp = new Date(note.timestamp || Date.now());
-    const timeString = timestamp.toLocaleString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-    
-    // استخراج اسم المرسل
-    let senderName = '';
-    if (note.sentBy) {
-        if (typeof note.sentBy === 'object' && note.sentBy.username) {
-            senderName = note.sentBy.username;
-        } else if (typeof note.sentBy === 'string') {
-            senderName = note.sentBy;
-        } else if (note.sentBy === window.currentUserId) {
-            senderName = window.currentUsername || 'أنت';
-        }
-    }
-    
-    // إضافة HTML للملاحظة
+    // إضافة محتوى الملاحظة
     noteElement.innerHTML = `
-        <div class="message-bubble internal-note-bubble">
-            <div class="internal-note-header">
-                <i class="fas fa-sticky-note me-1"></i>
-                <strong>ملاحظة داخلية</strong>
-                ${senderName ? `<span class="from-user">- ${senderName}</span>` : ''}
-            </div>
-            <div class="internal-note-content">
-                ${(note.content || '').replace(/\n/g, '<br>')}
-            </div>
-            <div class="message-meta">
-                <span class="message-time" title="${timestamp.toLocaleString()}">
-                    ${timeString}
-                </span>
+        <div class="note-content">
+            <div class="note-text">${note.content}</div>
+            <div class="note-meta">
+                <span class="note-sender">${senderName}</span>
+                <span class="note-time">${formattedDate}</span>
             </div>
         </div>
-        <div class="clear-both"></div>
     `;
     
-    // إضافة الملاحظة إلى الحاوية
+    // إضافة الملاحظة إلى حاوية الرسائل
     messagesContainer.appendChild(noteElement);
     
-    // التمرير إلى أسفل لعرض الملاحظة الجديدة
+    // تحديث الموضع إلى أحدث رسالة
     scrollToBottom(messagesContainer);
-    
-    // إرسال حدث تحديث المحتوى
-    document.dispatchEvent(new CustomEvent('messages-loaded'));
 }
