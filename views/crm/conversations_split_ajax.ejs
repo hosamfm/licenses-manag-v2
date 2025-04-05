@@ -280,8 +280,12 @@
           window.playNotificationSound();
         }
         
-        // تحديث قائمة المحادثات
-        refreshConversationsList();
+        // تحديث قائمة المحادثات - استخدام إما الدالة العامة أو الدالة المحلية
+        if (typeof window.updateConversationsList === 'function') {
+          window.updateConversationsList();
+        } else {
+          refreshConversationsList();
+        }
         
         // إذا كانت الرسالة تخص المحادثة المفتوحة حالياً، أضفها للمحادثة
         if (data.conversationId === currentConversationId) {
@@ -386,6 +390,23 @@
         }
       });
       
+      // مستمع جديد: معالج حدث قراءة الرسائل
+      window.socketConnection.on('message-read-by-user', function(data) {
+        // التحقق من أن البيانات تخص المحادثة الحالية
+        if (!data.conversationId || data.conversationId !== currentConversationId) {
+          return;
+        }
+        
+        // البحث عن عنصر الرسالة حسب المعرف
+        const messageElem = document.querySelector(`.message[data-message-id="${data.messageId}"]`);
+        if (!messageElem) {
+          return;
+        }
+        
+        // تحديث واجهة الرسالة لإظهار من قرأها
+        window.updateMessageReadByUsers(messageElem, data.user, data.timestamp);
+      });
+      
       // تحديث قائمة المحادثات بدون إعادة تحميل الصفحة
       function refreshConversationsList() {
         fetch('/crm/conversations/ajax/list', {
@@ -439,16 +460,26 @@
               
               // إعادة تعيين مستمعات الأحداث
               attachConversationItemsEvents();
+              
+              // تسجيل نجاح التحديث
+              console.log('تم تحديث قائمة المحادثات - ' + new Date().toLocaleTimeString());
             }
           }
         })
         .catch(error => {
+          console.error('خطأ في تحديث قائمة المحادثات:', error);
           // في حالة الخطأ 404، قد يكون المستخدم في الواجهة القديمة - نقوم بإعادة التوجيه إلى الواجهة الجديدة
           if (error.message.includes('404')) {
             window.location.href = '/crm/conversations/ajax';
           }
         });
       }
+      
+      // جعل الدالة متاحة عالمياً لاستخدامها من ملفات جافاسكريبت أخرى
+      window.refreshConversationsList = refreshConversationsList;
+      
+      // إضافة دالة بديلة للتوافق مع الكود الموجود
+      window.updateConversationsList = refreshConversationsList;
       
       // دالة لتعيين مستمعات أحداث لعناصر قائمة المحادثات
       function attachConversationItemsEvents() {
@@ -488,78 +519,31 @@
       function loadConversationDetails(conversationId, skipCache = false) {
         if (!conversationId) return;
         
-        const detailsContainer = document.getElementById('conversationDetailsContainer');
-        if (!detailsContainer) return;
-        
-        // الانضمام إلى غرفة المحادثة عبر Socket.io للحصول على الإشعارات الفورية
-        if (typeof window.joinConversationRoom === 'function') {
-          // استخدام الوظيفة المساعدة الجديدة
-          window.joinConversationRoom(conversationId);
-        } else {
-          // الطريقة القديمة كاحتياط
-          if (window.socketConnection) {
-            // إذا كان الاتصال جاهزًا
-            if (window.socketConnected) {
-
-              window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
-              
-              // مغادرة الغرفة السابقة إذا وجدت
-              if (window.previousConversationId && window.previousConversationId !== conversationId) {
-                window.socketConnection.emit('leave', { room: `conversation-${window.previousConversationId}` });
-              }
-            } else {
-              // تخزين العملية للتنفيذ لاحقًا عند اكتمال الاتصال
-              if (!Array.isArray(window.pendingSocketOperations)) {
-                window.pendingSocketOperations = [];
-              }
-              
-              window.pendingSocketOperations.push((socket) => {
-                socket.emit('join', { room: `conversation-${conversationId}` });
-                
-                // مغادرة الغرفة السابقة إذا وجدت
-                if (window.previousConversationId && window.previousConversationId !== conversationId) {
-                  socket.emit('leave', { room: `conversation-${window.previousConversationId}` });
-                }
-              });
-            }
-            
-            // تحديث المعرف الحالي في المتغير العام للنافذة
-            window.currentConversationId = conversationId;
-            
-            // حفظ معرف المحادثة الحالية للمرة القادمة
-            window.previousConversationId = conversationId;
-          } else {
-          }
-        }
-        
         // عرض مؤشر التحميل
+        const detailsContainer = document.getElementById('conversationDetailsContainer');
         detailsContainer.innerHTML = `
-          <div class="text-center p-5">
-            <div class="spinner-border text-primary" role="status">
-              <span class="visually-hidden">جاري التحميل...</span>
-            </div>
-            <p class="mt-2">جاري تحميل المحادثة...</p>
+          <div class="loading-container p-5 text-center">
+            <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
+            <p class="mt-3">جاري تحميل المحادثة...</p>
           </div>
         `;
         
-        // إنشاء رابط مع إضافة معلمة لتخطي الكاش عند الحاجة
+        // تكوين رابط الطلب
         const url = new URL(`/crm/conversations/ajax/details/${conversationId}`, window.location.origin);
-        
-        // إضافة معلمة لتجاوز الكاش عند الحاجة
         if (skipCache) {
-          url.searchParams.append('t', new Date().getTime());
+          url.searchParams.append('nocache', Date.now());
         }
         
-        // طلب التفاصيل من الخادم
+        // إرسال طلب AJAX
         fetch(url.toString(), {
-          method: 'GET',
           headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Cache-Control': skipCache ? 'no-cache, no-store, must-revalidate' : 'default'
+            'X-Requested-With': 'XMLHttpRequest'
           }
         })
         .then(response => {
-          if (!response.ok) throw new Error('HTTP error ' + response.status);
+          if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+          }
           return response.text();
         })
         .then(html => {
@@ -569,21 +553,46 @@
           // تحديث معرف المحادثة الحالية
           currentConversationId = conversationId;
           
-          // التمرير لأسفل آخر الرسائل
-          setTimeout(() => {
-            const msgContainer = document.getElementById('messageContainer');
-            if (msgContainer) {
-              msgContainer.scrollTop = msgContainer.scrollHeight;
+          // الانضمام لغرفة المحادثة (للإشعارات)
+          if (window.emitSocketEvent) {
+            window.emitSocketEvent('join', { room: `conversation-${conversationId}` });
+            window.emitSocketEvent('leave', { room: `conversation-${previousConversationId}` });
+            previousConversationId = conversationId;
+          } else if (window.socketConnection) {
+            window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
+            if (previousConversationId) {
+              window.socketConnection.emit('leave', { room: `conversation-${previousConversationId}` });
             }
-          }, 100);
-
-          // تعيين المستمعين للتفاعلات مع الرسائل بعد تحميل المحادثة
+            previousConversationId = conversationId;
+          }
+          
+          // تفعيل المستمعات
           window.attachConversationEventListeners && window.attachConversationEventListeners();
+          
+          // تمرير للأسفل (آخر الرسائل)
+          const messageContainer = document.querySelector('.conversation-messages');
+          if (messageContainer) {
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+          }
+          
+          // تحديث حالة المحادثة في القائمة
+          markConversationAsRead(conversationId);
+          
+          // تعليم الرسائل الواردة كمقروءة من قبل المستخدم الحالي
+          window.markIncomingMessagesAsRead && window.markIncomingMessagesAsRead();
+          
+          // تشغيل مشغلات الصوت إن وجدت
+          window.setupAudioPlayers && window.setupAudioPlayers();
         })
-        .catch(err => {
+        .catch(error => {
+          console.error('خطأ في تحميل تفاصيل المحادثة:', error);
           detailsContainer.innerHTML = `
-            <div class="alert alert-danger">
-              حدث خطأ أثناء جلب تفاصيل المحادثة: ${err.message}
+            <div class="error-container p-5 text-center">
+              <i class="fas fa-exclamation-circle fa-3x text-danger"></i>
+              <p class="mt-3">حدث خطأ أثناء تحميل المحادثة!</p>
+              <button class="btn btn-outline-primary mt-2" onclick="loadConversationDetails('${conversationId}', true)">
+                <i class="fas fa-sync-alt me-1"></i> إعادة المحاولة
+              </button>
             </div>
           `;
         });

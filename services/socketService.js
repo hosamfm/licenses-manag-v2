@@ -173,6 +173,13 @@ async function notifyNewMessage(conversationId, message) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
+  // تسجيل بداية العملية
+  logger.info('socketService', 'بدء إرسال إشعار برسالة جديدة', { 
+    conversationId, 
+    messageId: message._id || 'غير محدد',
+    direction: message.direction
+  });
+  
   // --- التأكد من إضافة معلومات المرسل للرسائل الصادرة --- 
   if (message && message.direction === 'outgoing' && message.sentBy) {
     // تأكد من أن sentBy هو سلسلة نصية
@@ -224,8 +231,30 @@ async function notifyNewMessage(conversationId, message) {
     }
   }
   
-  // إرسال التحديث إلى جميع المستخدمين في غرفة المحادثة
-  io.to(`conversation-${conversationId}`).emit('new-message', message);
+  try {
+    // التأكد من أن المعرف نصي للتوافق
+    const roomId = `conversation-${conversationId.toString()}`;
+    
+    // إرسال التحديث إلى جميع المستخدمين في غرفة المحادثة
+    io.to(roomId).emit('new-message', message);
+    
+    // تسجيل نجاح العملية
+    logger.info('socketService', 'تم إرسال إشعار برسالة جديدة بنجاح', { 
+      conversationId,
+      room: roomId,
+      messageId: message._id || 'غير محدد',
+      content: message.content ? message.content.substring(0, 50) : '[بدون محتوى نصي]'
+    });
+    
+    return true;
+  } catch (error) {
+    logger.error('socketService', 'خطأ في إرسال إشعار برسالة جديدة', {
+      conversationId,
+      error: error.message,
+      stack: error.stack
+    });
+    return false;
+  }
 }
 
 /**
@@ -344,34 +373,48 @@ function notifyMessageExternalIdUpdate(conversationId, messageId, externalId) {
 }
 
 /**
- * إرسال تحديث بتفاعل على رسالة
+ * إرسال إشعار بتفاعل على رسالة
  * @param {String} conversationId - معرف المحادثة
  * @param {String} externalId - المعرف الخارجي للرسالة
- * @param {Object} reaction - بيانات التفاعل
+ * @param {Object} reaction - معلومات التفاعل
  */
 function notifyMessageReaction(conversationId, externalId, reaction) {
-    if (!io) {
-        return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-    }
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+  
+  io.to(`conversation-${conversationId}`).emit('message-reaction', {
+    conversationId,
+    externalId,
+    reaction
+  });
+  
+  logger.info('socketService', 'تم إرسال إشعار بتفاعل على رسالة', { conversationId, externalId });
+}
 
-    if (!externalId) {
-        return logger.warn('socketService', 'محاولة إرسال تفاعل لرسالة بدون معرف خارجي', { 
-            conversationId, 
-            reaction 
-        });
-    }
-
-    io.to(`conversation-${conversationId}`).emit('message-reaction', { 
-        externalId, 
-        reaction, 
-        conversationId 
-    });
-    
-    logger.info('socketService', 'تم إرسال تحديث بتفاعل على رسالة', { 
-        conversationId, 
-        externalId,
-        senderName: reaction.senderName 
-    });
+/**
+ * إرسال إشعار بقراءة رسالة من قبل مستخدم
+ * @param {String} conversationId - معرف المحادثة
+ * @param {String} messageId - معرف الرسالة
+ * @param {Object} userInfo - معلومات المستخدم القارئ
+ */
+function notifyMessageReadByUser(conversationId, messageId, userInfo) {
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+  
+  io.to(`conversation-${conversationId}`).emit('message-read-by-user', {
+    conversationId,
+    messageId,
+    user: userInfo,
+    timestamp: new Date()
+  });
+  
+  logger.info('socketService', 'تم إرسال إشعار بقراءة رسالة', { 
+    conversationId, 
+    messageId, 
+    user: userInfo._id
+  });
 }
 
 module.exports = {
@@ -379,9 +422,10 @@ module.exports = {
   notifyNewMessage,
   notifyConversationUpdate,
   notifyMessageStatusUpdate,
-  notifyMessageReaction,
   notifyUser,
   broadcastNotification,
   emitToRoom,
-  notifyMessageExternalIdUpdate
+  notifyMessageExternalIdUpdate,
+  notifyMessageReaction,
+  notifyMessageReadByUser
 };

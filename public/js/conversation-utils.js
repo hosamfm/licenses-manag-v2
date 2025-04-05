@@ -1609,3 +1609,168 @@ window.uploadMedia = function() {
   // إرسال البيانات
   xhr.send(formData);
 };
+
+/**
+ * تحديث التفاعل على رسالة
+ * @param {string} externalId - المعرف الخارجي للرسالة
+ * @param {object} reaction - معلومات التفاعل
+ */
+window.updateMessageReaction = function(externalId, reaction) {
+  if (!externalId) {
+    return console.error('تعذر تحديث التفاعل: المعرف الخارجي للرسالة غير محدد');
+  }
+  
+  // العثور على عنصر الرسالة
+  const messageElement = document.querySelector(`.message[data-external-id="${externalId}"]`);
+  if (!messageElement) {
+    return console.error('لم يتم العثور على الرسالة للتحديث', externalId);
+  }
+  
+  // تنفيذ المنطق المناسب لنوع التفاعل
+  if (reaction && reaction.type && reaction.emoji) {
+    // إضافة أو تحديث تفاعل
+    addOrUpdateReactionUI(messageElement, reaction);
+  } else if (reaction && reaction.removed) {
+    // إزالة التفاعل
+    removeReactionUI(messageElement, reaction);
+  }
+};
+
+/**
+ * تعليم الرسائل الواردة كمقروءة
+ * تستدعى هذه الدالة عند عرض المحادثة
+ */
+window.markIncomingMessagesAsRead = function() {
+  // البحث عن جميع الرسائل الواردة في المحادثة الحالية
+  const incomingMessages = document.querySelectorAll('.message.incoming');
+  
+  if (incomingMessages.length === 0) {
+    return; // لا توجد رسائل واردة
+  }
+  
+  // إرسال طلبات لتعليم كل رسالة كمقروءة
+  incomingMessages.forEach(message => {
+    const messageId = message.dataset.messageId;
+    if (messageId) {
+      fetch(`/crm/conversations/messages/${messageId}/mark-as-read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          console.log('تم تعليم الرسالة كمقروءة:', messageId);
+        }
+      })
+      .catch(err => console.error('خطأ في تعليم الرسالة كمقروءة:', err));
+    }
+  });
+};
+
+/**
+ * تحديث واجهة المستخدم لإظهار من قرأ الرسالة
+ * @param {HTMLElement} messageElem - عنصر الرسالة
+ * @param {Object} user - معلومات المستخدم
+ * @param {Date} timestamp - توقيت القراءة
+ */
+window.updateMessageReadByUsers = function(messageElem, user, timestamp) {
+  // التحقق مما إذا كانت الرسالة تحتوي بالفعل على قسم من قرؤوها
+  let readByContainer = messageElem.querySelector('.read-by-users');
+  
+  if (!readByContainer) {
+    // إنشاء حاوية جديدة إذا لم تكن موجودة
+    readByContainer = document.createElement('div');
+    readByContainer.className = 'read-by-users mt-1';
+    readByContainer.innerHTML = '<small class="text-muted">قُرئت بواسطة:</small>';
+    // البحث عن فقاعة الرسالة لإضافة حاوية من قرؤوها
+    const messageBubble = messageElem.querySelector('.message-bubble');
+    if (messageBubble) {
+      messageBubble.appendChild(readByContainer);
+    } else {
+      messageElem.appendChild(readByContainer);
+    }
+    
+    // إضافة زر عرض القائمة الكاملة
+    const showAllBtn = document.createElement('a');
+    showAllBtn.href = '#';
+    showAllBtn.className = 'ms-2 show-all-readers text-primary small';
+    showAllBtn.innerHTML = '<i class="fas fa-users"></i>';
+    showAllBtn.setAttribute('title', 'عرض قائمة جميع القارئين');
+    showAllBtn.onclick = function(e) {
+      e.preventDefault();
+      window.showMessageReadByList(messageElem.dataset.messageId);
+    };
+    readByContainer.appendChild(showAllBtn);
+  }
+  
+  // التحقق مما إذا كان المستخدم مضافًا بالفعل
+  const existingUser = readByContainer.querySelector(`[data-user-id="${user._id}"]`);
+  if (!existingUser) {
+    // إنشاء عنصر المستخدم وإضافته
+    const userElement = document.createElement('span');
+    userElement.className = 'read-by-user ms-1';
+    userElement.setAttribute('data-user-id', user._id);
+    userElement.setAttribute('title', `${user.fullName || user.username} - ${new Date(timestamp).toLocaleString()}`);
+    userElement.innerHTML = `
+      <img src="${user.profileImage || '/images/default-avatar.png'}" class="avatar-xs rounded-circle" />
+    `;
+    
+    readByContainer.appendChild(userElement);
+  }
+};
+
+/**
+ * عرض قائمة كاملة بالمستخدمين الذين قرؤوا الرسالة
+ * @param {string} messageId - معرف الرسالة
+ */
+window.showMessageReadByList = function(messageId) {
+  if (!messageId) {
+    return console.error('لم يتم تحديد معرف الرسالة');
+  }
+  
+  fetch(`/crm/conversations/messages/${messageId}/read-by`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.success && data.readBy && data.readBy.length > 0) {
+        let html = '<div class="read-by-list">';
+        data.readBy.forEach(item => {
+          const user = item.user;
+          const timestamp = new Date(item.timestamp).toLocaleString();
+          html += `
+            <div class="read-by-item d-flex align-items-center mb-2">
+              <img src="${user.profileImage || '/images/default-avatar.png'}" class="avatar-sm rounded-circle me-2" style="width: 32px; height: 32px;" />
+              <div>
+                <div class="user-name">${user.fullName || user.username}</div>
+                <div class="read-time text-muted small">${timestamp}</div>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div>';
+        
+        Swal.fire({
+          title: 'قُرئت بواسطة',
+          html: html,
+          showConfirmButton: false,
+          showCloseButton: true
+        });
+      } else {
+        Swal.fire({
+          title: 'لم تُقرأ بعد',
+          text: 'لم يقرأ أحد هذه الرسالة بعد',
+          icon: 'info'
+        });
+      }
+    })
+    .catch(error => {
+      console.error('خطأ في جلب قائمة القراء:', error);
+      Swal.fire({
+        title: 'خطأ',
+        text: 'حدث خطأ أثناء جلب بيانات القراءة',
+        icon: 'error'
+      });
+    });
+};

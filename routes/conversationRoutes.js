@@ -72,4 +72,89 @@ router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async
   }
 });
 
+// مسار تعليم رسالة محددة كمقروءة من قبل المستخدم الحالي
+router.post('/messages/:messageId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'غير مصرح' });
+    }
+
+    // استدعاء دالة تعليم الرسالة كمقروءة
+    const WhatsappMessage = require('../models/WhatsappMessageModel');
+    const message = await WhatsappMessage.markAsReadByUser(messageId, userId);
+
+    if (!message) {
+      return res.status(404).json({ success: false, error: 'الرسالة غير موجودة' });
+    }
+
+    // تحقق من وجود معرف المحادثة في الرسالة
+    const conversationId = message.conversationId;
+
+    if (conversationId) {
+      // إرسال إشعار عبر Socket.io بقراءة الرسالة
+      const socketService = require('../services/socketService');
+      const User = require('../models/User');
+      const user = await User.findById(userId, 'username full_name profile_image');
+      
+      socketService.notifyMessageReadByUser(conversationId.toString(), messageId, {
+        _id: userId,
+        username: user.username,
+        fullName: user.full_name || user.username,
+        profileImage: user.profile_image || '/images/default-avatar.png'
+      });
+    }
+
+    logger.info('conversationRoutes', 'تم تعليم الرسالة كمقروءة', { messageId, userId });
+    return res.json({ success: true, message: 'تم تعليم الرسالة كمقروءة' });
+  } catch (error) {
+    logger.error('conversationRoutes', 'خطأ في تعليم الرسالة كمقروءة', error);
+    return res.status(500).json({ success: false, error: 'حدث خطأ أثناء تعليم الرسالة كمقروءة' });
+  }
+});
+
+// مسار جلب قائمة المستخدمين الذين قرؤوا رسالة محددة
+router.get('/messages/:messageId/read-by', ensureCanAccessConversations, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    
+    // جلب الرسالة مع بيانات المستخدمين
+    const WhatsappMessage = require('../models/WhatsappMessageModel');
+    const message = await WhatsappMessage.findById(messageId)
+      .populate('readBy.user', 'username full_name profile_image');
+    
+    if (!message) {
+      return res.status(404).json({ success: false, error: 'الرسالة غير موجودة' });
+    }
+    
+    // تنسيق البيانات للواجهة
+    const readByList = message.readBy?.map(item => ({
+      user: {
+        _id: item.user._id,
+        username: item.user.username,
+        fullName: item.user.full_name || item.user.username,
+        profileImage: item.user.profile_image || '/images/default-avatar.png'
+      },
+      timestamp: item.timestamp
+    })) || [];
+    
+    logger.info('conversationRoutes', 'تم جلب قائمة من قرؤوا الرسالة', { 
+      messageId, 
+      count: readByList.length 
+    });
+    
+    return res.json({ 
+      success: true, 
+      readBy: readByList,
+      total: readByList.length,
+      messageId
+    });
+  } catch (error) {
+    logger.error('conversationRoutes', 'خطأ في جلب قائمة من قرؤوا الرسالة', error);
+    return res.status(500).json({ success: false, error: 'حدث خطأ أثناء جلب قائمة من قرؤوا الرسالة' });
+  }
+});
+
 module.exports = router;
