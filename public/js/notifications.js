@@ -295,54 +295,44 @@ function getMessageTemplate(message) {
                       window.getStatusText(message.status) : 
                       message.status;
     
-    // تحديد اسم المرسل للرسائل الصادرة فقط
+    // تحديد اسم المرسل
     let senderHtml = '';
     if (isOutgoing) {
         let senderName = '';
-        
-        // 1. محاولة الحصول على الاسم من معلومات المرسل في metadata
-        if (message.metadata && message.metadata.senderInfo) {
-            senderName = message.metadata.senderInfo.username || message.metadata.senderInfo.full_name;
+        const senderIdString = message.sentBy ? message.sentBy.toString() : '';
+
+        // 1. إذا كان المرسل هو المستخدم الحالي
+        if (window.currentUserId && senderIdString === window.currentUserId) {
+            senderName = window.currentUsername || 'أنت';
         }
-        // 2. محاولة الحصول على الاسم من sentByUsername مباشرة
-        else if (message.sentByUsername) {
-            senderName = message.sentByUsername;
+        // 2. إذا كان المرسل هو النظام
+        else if (senderIdString === 'system') {
+            senderName = 'النظام';
         }
-        // 3. محاولة الحصول على المعلومات من معرف المرسل
-        else if (message.sentBy) {
-            try {
-                const senderId = typeof message.sentBy === 'string' ? message.sentBy : 
-                              (message.sentBy.toString ? message.sentBy.toString() : '');
-                
-                if (senderId === 'system') {
-                    senderName = 'النظام';
-                } else if (window.currentUserId && senderId === window.currentUserId) {
-                    senderName = window.currentUsername || 'أنت';
-                } else {
-                    // إذا لم يكن المستخدم الحالي هو المرسل، نستخدم معرف المرسل
-                    senderName = senderId;
-                }
-            } catch (e) {
-                console.error('خطأ في استخراج معرف المرسل:', e);
-                senderName = 'مستخدم';
+        // 3. إذا كان المرسل مستخدم آخر في النظام
+        else {
+            // محاولة الحصول على الاسم من metadata
+            if (message.metadata && message.metadata.senderInfo) {
+                senderName = message.metadata.senderInfo.username || message.metadata.senderInfo.full_name;
+            }
+            // محاولة الحصول على الاسم من sentByUsername
+            else if (message.sentByUsername) {
+                senderName = message.sentByUsername;
+            }
+            // استخدام المعرف كحل أخير إذا لم نجد الاسم
+            else if (senderIdString) {
+                senderName = senderIdString; // قد ترغب في استبدال هذا بـ "مستخدم" أو طلب الاسم من الخادم لاحقاً
             }
         }
-        
-        // 4. إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي إذا كانت الرسالة صادرة من المستخدم الحالي
-        if (!senderName && window.currentUsername && 
-            ((message.sentBy && message.sentBy === window.currentUserId) || 
-             (message.metadata && message.metadata.senderInfo && message.metadata.senderInfo._id === window.currentUserId))) {
-            senderName = window.currentUsername;
-        }
-        
-        // 5. إذا لم يكن هناك اسم بعد كل هذه المحاولات، استخدم اسم افتراضي
+
+        // 4. اسم افتراضي إذا لم يتم العثور على اسم
         if (!senderName) {
-            senderName = 'مستخدم';
+            senderName = 'مستخدم'; // أو اتركها فارغة إذا كنت تفضل عدم عرض أي شيء
         }
-        
+
         // تسجيل معلومات التشخيص إذا كان وضع التصحيح مفعل
         if (window.DEBUG_MESSAGES === true) {
-            console.log('معلومات المرسل للرسالة:', {
+            console.log('معلومات المرسل للرسالة (Outgoing):', {
                 senderName: senderName,
                 messageId: message._id,
                 sentBy: message.sentBy,
@@ -350,7 +340,7 @@ function getMessageTemplate(message) {
                 currentUserId: window.currentUserId
             });
         }
-        
+
         // إضافة اسم المرسل إلى قالب الرسالة
         senderHtml = `<div class="message-sender">${senderName}</div>`;
     }
