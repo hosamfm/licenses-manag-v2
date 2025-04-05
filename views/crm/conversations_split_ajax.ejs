@@ -942,7 +942,7 @@
         }
         
         // إرسال طلب إلى الخادم لتعليم المحادثة كمقروءة
-        fetch(`/crm/conversations/${conversationId}/mark-read`, {
+        fetch(`/crm/conversations/${conversationId}/mark-as-read`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -952,16 +952,23 @@
         .then(response => {
           if (!response.ok) {
             console.warn('فشل تعليم المحادثة كمقروءة:', response.statusText);
+            return { success: false, error: response.statusText };
           }
-          return response.json();
+          try {
+            return response.json();
+          } catch (e) {
+            // في حالة وجود مشكلة في تحليل JSON، نعيد كائن نجاح بسيط
+            return { success: true };
+          }
         })
         .then(data => {
-          if (data.success) {
+          if (data && data.success) {
             console.log('تم تعليم المحادثة كمقروءة بنجاح');
           }
         })
         .catch(error => {
           console.error('خطأ في تعليم المحادثة كمقروءة:', error);
+          // نستمر في التطبيق حتى لو فشل الطلب لأن واجهة المستخدم تم تحديثها بالفعل
         });
       }
       
