@@ -38,7 +38,6 @@ function initializeSocketConnection() {
         
         // تسجيل نجاح الاتصال
         socket.on('connect', function() {
-            console.log('تم الاتصال بنظام الإشعارات الفورية');
             window.socketConnected = true;
             
             // الانضمام إلى غرف المستخدم
@@ -53,7 +52,6 @@ function initializeSocketConnection() {
             
             // تنفيذ أي عمليات معلقة بانتظار اتصال Socket.io
             if (Array.isArray(window.pendingSocketOperations)) {
-                console.log('تنفيذ العمليات المعلقة:', window.pendingSocketOperations.length);
                 window.pendingSocketOperations.forEach(operation => {
                     if (typeof operation === 'function') {
                         operation(socket);
@@ -65,7 +63,6 @@ function initializeSocketConnection() {
         
         // تسجيل إعادة الاتصال
         socket.on('reconnect', function() {
-            console.log('تم إعادة الاتصال بنظام الإشعارات');
             window.socketConnected = true;
             
             // تحديث المحتوى بعد إعادة الاتصال
@@ -74,7 +71,6 @@ function initializeSocketConnection() {
         
         // تسجيل فقدان الاتصال
         socket.on('disconnect', function() {
-            console.log('تم فقدان الاتصال بنظام الإشعارات');
             window.socketConnected = false;
         });
         
@@ -88,7 +84,6 @@ function initializeSocketConnection() {
         
         return socket;
     } catch (error) {
-        console.error('خطأ في إنشاء اتصال Socket.io:', error);
         return null;
     }
 }
@@ -102,7 +97,6 @@ function setupNotificationListeners(socket) {
     
     // استقبال إشعار برسالة جديدة
     socket.on('new-message', function(data) {
-        console.log('تم استلام رسالة جديدة:', data);
         
         // التعامل مع بنيتين مختلفتين للبيانات: إما الرسالة مباشرة أو داخل كائن message
         const message = data.message || data;
@@ -116,10 +110,7 @@ function setupNotificationListeners(socket) {
                 appendNewMessage(message);
             }
             
-            // تسجيل تأكيد في السجل
-            console.log('تمت إضافة رسالة جديدة للمحادثة:', message._id);
         } else {
-            console.log('تم تجاهل الرسالة لأنها لا تخص المحادثة الحالية');
         }
         
         // تحديث قائمة المحادثات إذا كانت موجودة
@@ -132,9 +123,7 @@ function setupNotificationListeners(socket) {
     });
     
     // استقبال إشعار بتحديث حالة الرسالة
-    socket.on('message-status-update', function(data) {
-        console.log('تم تحديث حالة الرسالة:', data);
-        
+    socket.on('message-status-update', function(data) {        
         // تحديث حالة الرسالة في واجهة المستخدم
         if (typeof window.updateMessageStatus === 'function') {
             window.updateMessageStatus(data.externalId, data.status);
@@ -142,9 +131,7 @@ function setupNotificationListeners(socket) {
     });
     
     // استقبال إشعار بتفاعل جديد
-    socket.on('message-reaction', function(data) {
-        console.log('تم استلام تفاعل جديد:', data);
-        
+    socket.on('message-reaction', function(data) {        
         // تحديث التفاعل في واجهة المستخدم
         if (typeof window.updateMessageReaction === 'function') {
             window.updateMessageReaction(data.messageId, data.reaction);
@@ -152,17 +139,13 @@ function setupNotificationListeners(socket) {
     });
     
     // استقبال إشعار بتحديث معرف خارجي للرسالة
-    socket.on('message-external-id-update', function(data) {
-        console.log('تم تحديث معرف خارجي للرسالة:', data);
-        
+    socket.on('message-external-id-update', function(data) {        
         // تحديث المعرف الخارجي في واجهة المستخدم
         updateMessageExternalId(data.messageId, data.externalId);
     });
     
     // استقبال إشعار بتحديث المحادثة
-    socket.on('conversation-update', function(data) {
-        console.log('تم تحديث المحادثة:', data);
-        
+    socket.on('conversation-update', function(data) {        
         // تحديث معلومات المحادثة في واجهة المستخدم
         updateConversationInfo(data);
         
@@ -171,9 +154,7 @@ function setupNotificationListeners(socket) {
     });
     
     // استقبال إشعار برد على رسالة
-    socket.on('message-reply', function(data) {
-        console.log('تم استلام رد على رسالة:', data);
-        
+    socket.on('message-reply', function(data) {        
         // التعامل مع بنيتين مختلفتين للبيانات
         const message = data.message || data;
         
@@ -185,9 +166,7 @@ function setupNotificationListeners(socket) {
             } else {
                 appendNewMessage(message);
             }
-            
-            console.log('تمت إضافة رد جديد للمحادثة:', message._id);
-        }
+            }
         
         // تحديث قائمة المحادثات
         updateConversationsList();
@@ -199,9 +178,7 @@ function setupNotificationListeners(socket) {
     });
     
     // استقبال إشعار بملاحظة داخلية جديدة
-    socket.on('internal-note', function(data) {
-        console.log('تم استلام ملاحظة داخلية جديدة:', data);
-        
+    socket.on('internal-note', function(data) {        
         // التعامل مع الهيكل المتوقع للبيانات
         const note = data.note || data;
         
@@ -212,7 +189,6 @@ function setupNotificationListeners(socket) {
             // 1. التحقق من وجود الملاحظة في واجهة المستخدم بالفعل
             const existingNote = document.querySelector(`[data-note-id="${note._id}"]`);
             if (existingNote) {
-                console.log('تم تجاهل ملاحظة داخلية مكررة (موجودة في DOM بالفعل):', note._id);
                 return;
             }
 
@@ -221,7 +197,6 @@ function setupNotificationListeners(socket) {
                 window.sentNoteIds.has(note._id) || 
                 (note._clientId && window.sentNoteIds.has(note._clientId))
             )) {
-                console.log('تم تجاهل ملاحظة داخلية مكررة (موجودة في sentNoteIds):', note._id);
                 return;
             }
 
@@ -239,7 +214,6 @@ function setupNotificationListeners(socket) {
             // إضافة الملاحظة إلى واجهة المستخدم
             if (typeof window.addNoteToUI === 'function') {
                 window.addNoteToUI(note);
-                console.log('تمت إضافة ملاحظة داخلية جديدة للمحادثة:', note._id);
             }
         }
         
@@ -288,7 +262,6 @@ function appendNewMessage(message) {
     const existingMessage = document.querySelector(`[data-message-id="${message._id}"]`);
     if (existingMessage) {
         if (window.DEBUG_MESSAGES) {
-            console.log(`منع تكرار الرسالة (نفس المعرف): ${message._id}`);
         }
         
         // تحديث حالة الرسالة الموجودة إذا تغيرت
@@ -305,7 +278,6 @@ function appendNewMessage(message) {
     // 2. التحقق من وجود المعرف في مجموعة الرسائل المرسلة
     if (window.sentMessageIds && window.sentMessageIds.has(message._id)) {
         if (window.DEBUG_MESSAGES) {
-            console.log(`منع تكرار الرسالة (معرف مرسل مسبقاً): ${message._id}`);
         }
         return;
     }
@@ -319,7 +291,6 @@ function appendNewMessage(message) {
             
             if (pendingMessage) {
                 if (window.DEBUG_MESSAGES) {
-                    console.log(`استبدال رسالة مؤقتة بالرسالة الحقيقية: ${tempId} -> ${message._id}`);
                 }
                 
                 // استبدال الرسالة المؤقتة بالرسالة الحقيقية
@@ -372,7 +343,6 @@ function appendNewMessage(message) {
         // تحديث الموضع إلى أحدث رسالة
         scrollToBottom(messagesContainer);
     } catch (error) {
-        console.error('خطأ في إضافة رسالة جديدة:', error);
     }
 }
 
