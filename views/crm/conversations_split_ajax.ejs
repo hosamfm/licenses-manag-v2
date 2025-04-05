@@ -495,12 +495,15 @@
         // إضافة فقاعة الرسالة مع دعم الوسائط
         messageHTML += `
           <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'} ${messageData.mediaType ? 'message-with-media' : ''}">
-            <!-- إضافة اسم المرسل -->
+            ${messageData.direction === 'outgoing' ? `
+            <!-- إضافة اسم المرسل فقط للرسائل الصادرة -->
             <div class="message-sender">
               ${messageData.metadata && messageData.metadata.senderInfo 
                 ? messageData.metadata.senderInfo.username || messageData.metadata.senderInfo.full_name || 'مجهول'
                 : messageData.sentByUsername || 'مجهول'}
             </div>
+            ` : ''}
+            <div class="message-content">
         `;
         
         // إضافة الوسائط حسب النوع

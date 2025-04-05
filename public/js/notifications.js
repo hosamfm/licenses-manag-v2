@@ -159,6 +159,24 @@ function setupNotificationListeners(socket) {
         updateConversationInfo(data);
         updateConversationsList();
     });
+
+    // إضافة معالج لحدث الملاحظات الداخلية
+    socket.on('internal-note', function(data) {
+        // التحقق من أن الملاحظة تخص المحادثة الحالية
+        if (window.currentConversationId && data.conversationId === window.currentConversationId) {
+            // إضافة الملاحظة إلى واجهة المستخدم
+            if (typeof window.addNoteToUI === 'function') {
+                window.addNoteToUI(data.note);
+            } else {
+                appendInternalNote(data.note);
+            }
+            
+            // تشغيل صوت الإشعار
+            if (typeof window.playNotificationSound === 'function') {
+                window.playNotificationSound();
+            }
+        }
+    });
 }
 
 /**
@@ -285,41 +303,50 @@ function appendNewMessage(message) {
  * @returns {string} HTML للرسالة
  */
 function getMessageTemplate(message) {
+    // تحديد اتجاه الرسالة
     const isOutgoing = message.direction === 'outgoing';
-    const messageClass = isOutgoing ? 'message outgoing' : 'message incoming';
-    const formattedTime = typeof window.formatTime === 'function' ? window.formatTime(message.timestamp) : new Date(message.timestamp).toLocaleTimeString();
-    const statusText = typeof window.getStatusText === 'function' ? window.getStatusText(message.status) : message.status;
-
-    let senderHtml = ''; // التهيئة الأولية تبقى فارغة
-
+    
+    // تنسيق الوقت
+    const time = new Date(message.timestamp).toLocaleTimeString('ar-SA', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    // الحصول على نص الحالة
+    const statusText = getStatusText(message.status);
+    
+    // استخراج اسم المرسل للرسائل الصادرة فقط
+    let senderHtml = '';
     if (isOutgoing) {
         let senderName = '';
-        const senderIdString = message.sentBy ? message.sentBy.toString() : '';
-
-        if (window.currentUserId && senderIdString === window.currentUserId) {
-            senderName = window.currentUsername || 'أنت';
-        } else if (senderIdString === 'system') {
-            senderName = 'النظام';
+        if (message.metadata && message.metadata.senderInfo) {
+            senderName = message.metadata.senderInfo.username || 
+                        message.metadata.senderInfo.full_name || 
+                        'مجهول';
+        } else if (message.sentByUsername) {
+            senderName = message.sentByUsername;
+        } else if (message.sentBy) {
+            try {
+                const senderId = message.sentBy.toString();
+                if (senderId === 'system') {
+                    senderName = 'النظام';
+                } else {
+                    senderName = senderId;
+                }
+            } catch (error) {
+                console.error('خطأ في معالجة معرف المرسل:', error);
+                senderName = 'مجهول';
+            }
+        } else if (message.sentBy === window.currentUserId) {
+            senderName = window.currentUsername;
         } else {
-            if (message.metadata && message.metadata.senderInfo) {
-                senderName = message.metadata.senderInfo.username || message.metadata.senderInfo.full_name;
-            }
-            else if (message.sentByUsername) {
-                senderName = message.sentByUsername;
-            }
-            else if (senderIdString) {
-                senderName = senderIdString;
-            }
-        }
-
-        if (!senderName) {
-            senderName = 'مستخدم'; // اسم افتراضي للصادرة بدون اسم محدد
+            senderName = 'مجهول';
         }
         
-        // تعيين senderHtml *فقط* إذا كانت الرسالة صادرة وهناك اسم مرسل
-        senderHtml = `<div class="message-sender">${senderName}</div>`;
+        if (senderName) {
+            senderHtml = `<div class="message-sender">${senderName}</div>`;
+        }
     }
-    // للرسائل الواردة (incoming), ستبقى senderHtml القيمة الأولية ''
 
     let messageContent = `<div class="message-text">${message.content}</div>`;
     if (message.mediaType && message.mediaUrl) {
@@ -335,12 +362,12 @@ function getMessageTemplate(message) {
     // -------------------------
 
     return `
-    <div class="${messageClass}" data-message-id="${message._id}" data-external-id="${message.externalMessageId || ''}">
+    <div class="${isOutgoing ? 'message outgoing' : 'message incoming'}" data-message-id="${message._id}" data-external-id="${message.externalMessageId || ''}">
         <div class="message-container">
             ${senderHtml}
             ${messageContent}
             <div class="message-meta">
-                <span class="message-time">${formattedTime}</span>
+                <span class="message-time">${time}</span>
                 ${isOutgoing ? `<span class="message-status" title="${statusText}">${getStatusIcon(message.status)}</span>` : ''}
             </div>
         </div>
@@ -578,4 +605,53 @@ function updateMessageExternalId(messageId, externalId) {
             button.setAttribute('onclick', `showReplyForm('${messageId}', '${externalId}', this)`);
         }
     });
+}
+
+/**
+ * إضافة ملاحظة داخلية إلى واجهة المستخدم
+ * @param {Object} note - الملاحظة الداخلية
+ */
+function appendInternalNote(note) {
+    // التحقق من وجود حاوية الرسائل
+    const messagesContainer = document.querySelector('.messages-container');
+    if (!messagesContainer) return;
+    
+    // التحقق من وجود الملاحظة مسبقاً
+    const existingNote = document.querySelector(`[data-message-id="${note._id}"]`);
+    if (existingNote) return;
+    
+    // إنشاء عنصر الملاحظة
+    const noteElement = document.createElement('div');
+    noteElement.className = 'message internal-note';
+    noteElement.setAttribute('data-message-id', note._id);
+    
+    // تنسيق التاريخ
+    const timestamp = new Date(note.timestamp);
+    const timeString = timestamp.toLocaleString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+    
+    // إضافة HTML للملاحظة
+    noteElement.innerHTML = `
+        <div class="message-bubble internal-note-bubble">
+            <div class="internal-note-header">
+                <i class="fas fa-sticky-note me-1"></i>
+                <strong>ملاحظة داخلية</strong>
+                <span class="from-user">${note.sentBy && note.sentBy.username ? `- ${note.sentBy.username}` : note.sentBy ? `- ${note.sentBy}` : ''}</span>
+            </div>
+            <div class="internal-note-content">
+                ${note.content.replace(/\n/g, '<br>')}
+            </div>
+            <div class="message-meta">
+                <span class="message-time" title="${timestamp.toLocaleString()}">
+                    ${timeString}
+                </span>
+            </div>
+        </div>
+        <div class="clear-both"></div>
+    `;
+    
+    // إضافة الملاحظة إلى الحاوية
+    messagesContainer.appendChild(noteElement);
+    
+    // التمرير إلى أسفل لعرض الملاحظة الجديدة
+    scrollToBottom(messagesContainer);
 }
