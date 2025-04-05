@@ -1661,11 +1661,11 @@ window.markIncomingMessagesAsRead = function() {
       })
       .then(response => response.json())
       .then(data => {
-        if (data.success) {
-          console.log('تم تعليم الرسالة كمقروءة:', messageId);
-        }
+        // تم إزالة رسالة السجل
       })
-      .catch(err => console.error('خطأ في تعليم الرسالة كمقروءة:', err));
+      .catch(err => {
+        // تم إزالة رسالة السجل
+      });
     }
   });
 };
@@ -1715,7 +1715,7 @@ window.updateMessageReadByUsers = function(messageElem, user, timestamp) {
     userElement.setAttribute('data-user-id', user._id);
     userElement.setAttribute('title', `${user.fullName || user.username} - ${new Date(timestamp).toLocaleString()}`);
     userElement.innerHTML = `
-      <img src="${user.profileImage || '/images/default-avatar.png'}" class="avatar-xs rounded-circle" />
+      <i class="fas fa-user-circle text-secondary"></i>
     `;
     
     readByContainer.appendChild(userElement);
@@ -1741,7 +1741,7 @@ window.showMessageReadByList = function(messageId) {
           const timestamp = new Date(item.timestamp).toLocaleString();
           html += `
             <div class="read-by-item d-flex align-items-center mb-2">
-              <img src="${user.profileImage || '/images/default-avatar.png'}" class="avatar-sm rounded-circle me-2" style="width: 32px; height: 32px;" />
+              <i class="fas fa-user-circle text-secondary me-2" style="font-size: 24px;"></i>
               <div>
                 <div class="user-name">${user.fullName || user.username}</div>
                 <div class="read-time text-muted small">${timestamp}</div>
