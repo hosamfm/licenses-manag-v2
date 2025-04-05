@@ -97,79 +97,108 @@ function setupNotificationListeners(socket) {
     
     // استقبال إشعار برسالة جديدة
     socket.on('new-message', function(data) {
-        
-        // التعامل مع بنيتين مختلفتين للبيانات: إما الرسالة مباشرة أو داخل كائن message
         const message = data.message || data;
+        const conversationId = message.conversationId;
+        const messageId = message._id;
         
-        // إضافة السجلات للتشخيص
-        if (window.DEBUG_MESSAGES === true) {
-            console.log('تم استلام رسالة جديدة عبر Socket.io:', message);
+        if (window.debugMode) console.log('استلام إشعار برسالة جديدة:', message);
+        
+        // التحقق ما إذا كانت هذه الرسالة قد تم إنشاؤها محلياً (لتجنب التكرار)
+        if (window.sentMessageIds && (window.sentMessageIds.has(messageId) || (message.clientMessageId && window.sentMessageIds.has(message.clientMessageId)))) {
+            if (window.debugMode) console.log('تجاهل الرسالة المكررة:', messageId);
+            return;
         }
         
-        // تأكد من تعريف حقل metadata إذا لم يكن موجودًا
-        if (!message.metadata) {
-            message.metadata = {};
-        }
+        // تحديد ما إذا كانت الرسالة واردة من شخص آخر
+        const isFromOthers = message.direction === 'incoming' || 
+                              (message.direction === 'outgoing' && message.sentBy && 
+                               window.currentUserId !== message.sentBy.toString());
         
-        // إضافة معلومات المرسل للرسائل الصادرة إذا لم تكن موجودة
-        if (message.direction === 'outgoing' && (!message.metadata.senderInfo || Object.keys(message.metadata.senderInfo).length === 0)) {
-            // سنتحقق إذا كانت معلومات المرسل متاحة بطريقة أخرى
-            if (message.sentBy) {
-                // إذا كان معرف المرسل موجود كـ string نستخدمه كما هو
-                const senderId = typeof message.sentBy === 'string' ? message.sentBy : message.sentBy.toString();
-                
-                // إذا كان النظام هو المرسل
-                if (senderId === 'system') {
-                    message.metadata.senderInfo = {
-                        username: 'النظام',
-                        full_name: 'النظام',
-                        _id: 'system'
-                    };
-                    message.sentByUsername = 'النظام';
-                }
-                // إذا كان المستخدم الحالي هو المرسل
-                else if (window.currentUserId && senderId === window.currentUserId) {
-                    message.metadata.senderInfo = {
-                        username: window.currentUsername,
-                        _id: window.currentUserId
-                    };
-                    message.sentByUsername = window.currentUsername;
-                }
-                // في حالة تعذر تحديد معلومات المرسل، نضع معلومات افتراضية مع إظهار المعرف للتمييز
-                else if (message.sentByUsername) {
-                    message.metadata.senderInfo = {
-                        username: message.sentByUsername,
-                        _id: senderId
-                    };
-                } else {
-                    // إذا لم تتوفر أي معلومات، نضع معرف المرسل مؤقتًا حتى يتم تحديثه
-                    message.metadata.senderInfo = {
-                        username: `مرسل (${senderId.substring(0, 5)}...)`,
-                        _id: senderId
-                    };
-                    message.sentByUsername = `مرسل (${senderId.substring(0, 5)}...)`;
-                }
-            }
-        }
+        // تحديد اسم المرسل بنفس منطق ملف _conversation_details_ajax.ejs
+        let senderName = '';
         
-        // تحديث واجهة المستخدم إذا كانت الرسالة تخص المحادثة الحالية
-        if (window.currentConversationId && message.conversationId === window.currentConversationId) {
-            // نقوم باستدعاء الدالة الصحيحة لإضافة الرسالة
-            if (typeof window.addMessageToConversation === 'function') {
-                window.addMessageToConversation(message);
-            } else {
-                appendNewMessage(message);
+        if (message.direction === 'outgoing') {
+            // للرسائل الصادرة: نستخدم معلومات المرسل بنفس الترتيب المستخدم في _conversation_details_ajax.ejs
+            if (message.metadata && message.metadata.senderInfo) {
+                senderName = message.metadata.senderInfo.username || message.metadata.senderInfo.full_name || 'النظام';
+            } else if (message.sentByUsername) {
+                senderName = message.sentByUsername;
+            } else if (message.sentBy) {
+                try {
+                    const senderId = message.sentBy.toString();
+                    if (senderId === 'system') {
+                        senderName = 'النظام';
+                    } else if (senderId === window.currentUserId) {
+                        senderName = window.currentUsername || 'أنت';
+                    }
+                } catch (e) { }
             }
             
-        } else {
+            // إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي إذا كان متاحاً
+            if (!senderName && window.currentUserId && message.sentBy && window.currentUserId === message.sentBy.toString()) {
+                senderName = window.currentUsername || 'أنت';
+            } else if (!senderName) {
+                senderName = 'مستخدم آخر';
+            }
+        } 
+        // للرسائل الواردة: نستخدم اسم العميل أو رقم الهاتف
+        else if (message.direction === 'incoming') {
+            senderName = '';  // لا نعرض اسم المرسل للرسائل الواردة كما في _conversation_details_ajax.ejs
         }
-        
-        // تحديث قائمة المحادثات إذا كانت موجودة
-        updateConversationsList();
-        
-        // تشغيل صوت الإشعار للرسائل الواردة فقط
-        if (typeof window.playNotificationSound === 'function' && message.direction === 'incoming') {
-            window.playNotificationSound();
+        // للملاحظات الداخلية: نستخدم معلومات المرسل من metadata
+        else if (message.direction === 'internal') {
+            if (message.metadata && message.metadata.senderInfo) {
+                senderName = message.metadata.senderInfo.full_name || message.metadata.senderInfo.username || 'مستخدم';
+            }
+        }
+
+        // عرض الإشعار فقط إذا كانت الرسالة من الآخرين أو كانت ملاحظة داخلية
+        if (isFromOthers || message.direction === 'internal') {
+            // تحديد نوع الرسالة للإشعار
+            const messageType = message.direction === 'internal' ? 'ملاحظة داخلية' : 'رسالة جديدة';
+            
+            // إزالة علامات HTML من المحتوى لعرضه في الإشعار
+            const cleanContent = message.content ? message.content.replace(/<[^>]*>?/gm, '') : '';
+            
+            // عرض عنوان مناسب حسب نوع الرسالة
+            let title = messageType;
+            if (message.direction === 'internal') {
+                title = `ملاحظة داخلية ${senderName ? 'من ' + senderName : ''}`;
+            } else if (message.direction === 'incoming') {
+                title = `رسالة واردة ${data.conversationName ? 'من ' + data.conversationName : ''}`;
+            } else {
+                title = `رسالة صادرة ${senderName ? 'من ' + senderName : ''}`;
+            }
+            
+            // عرض الإشعار
+            notifications.showNotification(title, cleanContent, function() {
+                if (conversationId) {
+                    // توجيه المستخدم إلى المحادثة ذات الصلة عند النقر على الإشعار
+                    if (window.location.href.includes(`/crm/conversations/${conversationId}`)) {
+                        // إذا كنا بالفعل في صفحة المحادثة، قم بالتحديث
+                        location.reload();
+                    } else {
+                        // وإلا انتقل إلى صفحة المحادثة
+                        window.location.href = `/crm/conversations/${conversationId}`;
+                    }
+                }
+            });
+        }
+
+        // عرض إشعار صغير في أعلى الشاشة
+        if (isFromOthers || message.direction === 'internal') {
+            let notificationText = '';
+            if (message.direction === 'internal') {
+                notificationText = `<b>ملاحظة داخلية جديدة${senderName ? ' من ' + senderName : ''}</b>`;
+            } else if (message.direction === 'incoming') {
+                notificationText = `<b>رسالة واردة جديدة${data.conversationName ? ' من ' + data.conversationName : ''}</b>`;
+            } else {
+                notificationText = `<b>رسالة صادرة جديدة${senderName ? ' من ' + senderName : ''}</b>`;
+            }
+            
+            if (window.showToast) {
+                window.showToast(notificationText, 'info', 5000);
+            }
         }
     });
     
