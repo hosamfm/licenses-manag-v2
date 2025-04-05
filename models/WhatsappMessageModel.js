@@ -273,6 +273,37 @@ whatsappMessageSchema.statics.updateReaction = async function(messageId, reactio
 };
 
 /**
+ * جلب معلومات المرسل
+ * @param {ObjectId} userId معرّف المستخدم
+ * @returns {Object} معلومات المستخدم المرسل
+ */
+whatsappMessageSchema.statics.fetchSenderInfo = async function(userId) {
+  if (!userId) return null;
+  
+  try {
+    // استيراد نموذج المستخدم
+    const User = mongoose.model('User');
+    
+    // البحث عن المستخدم حسب المعرف
+    const user = await User.findById(userId);
+    
+    if (user) {
+      return {
+        _id: user._id,
+        username: user.username,
+        full_name: user.full_name || user.username,
+        user_role: user.user_role || 'user'
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    logger.error('خطأ في جلب معلومات المرسل:', error);
+    return null;
+  }
+};
+
+/**
  * إنشاء رسالة رد صادرة جديدة
  * @param {Object} conversationId معرّف المحادثة
  * @param {string} content محتوى الرسالة
@@ -314,7 +345,10 @@ whatsappMessageSchema.statics.createReplyMessage = async function(conversationId
       status: 'sent',
       sentBy: userId,
       replyToMessageId: finalReplyId, // استخدام المعرف الخارجي إذا كان متاحاً
-      context: context
+      context: context,
+      metadata: {
+        senderInfo: await this.fetchSenderInfo(userId)
+      }
     });
     
     return message;

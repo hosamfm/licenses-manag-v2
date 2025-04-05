@@ -6,6 +6,20 @@ const isAuthenticated = (req, res, next) => {
   }
 };
 
+// وسيط جديد لتحميل معلومات المستخدم
+const loadUserInfo = async (req, res, next) => {
+  try {
+    if (req.session && req.session.userId && !req.user) {
+      const User = require('../models/User');
+      req.user = await User.findById(req.session.userId);
+    }
+    return next();
+  } catch (error) {
+    console.error('خطأ في تحميل معلومات المستخدم:', error);
+    return next();
+  }
+};
+
 const checkRole = (roles) => (req, res, next) => {
   if (req.session.userRole === 'no_permissions') {
     return res.redirect('/licenses/no_permissions'); // Use the correct redirect path
@@ -55,6 +69,7 @@ const checkCanAccessConversations = async (req, res, next) => {
 
 module.exports = {
   isAuthenticated,
+  loadUserInfo,
   checkRole,
   isAdmin, // تصدير دالة isAdmin
   checkCanAccessConversations, // تصدير دالة التحقق من صلاحية الوصول للمحادثات

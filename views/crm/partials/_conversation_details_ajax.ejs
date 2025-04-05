@@ -89,9 +89,16 @@
                 <div class="internal-note-header">
                   <i class="fas fa-sticky-note me-1"></i>
                   <strong>ملاحظة داخلية</strong>
-                  <% if (msg.sentBy && (msg.sentBy.username || msg.sentBy.full_name)) { %>
+                  <% 
+                    // التحقق من وجود معلومات المرسل للملاحظة
+                    let sender = null;
+                    if (msg.metadata && msg.metadata.senderInfo) {
+                      sender = msg.metadata.senderInfo;
+                    }
+                  %>
+                  <% if (sender) { %>
                     <span class="text-muted ms-1">
-                      بواسطة <%= msg.sentBy.full_name || msg.sentBy.username %>
+                      بواسطة <%= sender.full_name || sender.username %>
                     </span>
                   <% } %>
                 </div>
@@ -120,120 +127,146 @@
                   %>
                   <%- noteContent.replace(/\n/g, '<br>') %>
                 </div>
-              <% } else if (msg.mediaType) { %>
-                <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
+              <% } else { %>
+                <!-- إضافة اسم المرسل لغير الملاحظات الداخلية -->
                 <% 
-                  // الحصول على معلومات الوسائط من الكائن المناسب (سواء من الرسالة مباشرة أو من كائن الوسائط المضاف)
-                  // بترتيب الأولوية: mediaId (إذا وجد) ثم معرف الوسائط من التعديل الجديد، ثم معرف الرسالة
-                  const mediaId = msg.mediaId || (msg.media && msg.media._id) || msg._id;
-                  const mediaType = msg.mediaType;
-                  const fileName = msg.fileName || (msg.media && msg.media.fileName) || 'ملف';
-                  const fileSize = msg.fileSize || (msg.media && msg.media.fileSize) || 0;
-                  const mimeType = msg.mimeType || (msg.media && msg.media.mimeType) || '';
+                  let senderName = 'مجهول';
+                  if (msg.metadata && msg.metadata.senderInfo) {
+                    senderName = msg.metadata.senderInfo.username || msg.metadata.senderInfo.full_name || 'مجهول';
+                  } else if (msg.sentByUsername) {
+                    senderName = msg.sentByUsername;
+                  } else if (msg.sentBy) {
+                    // محاولة الحصول على اسم المستخدم من sentBy
+                    try {
+                      const senderId = msg.sentBy.toString();
+                      if (senderId === 'system') {
+                        senderName = 'النظام';
+                      }
+                    } catch (e) { }
+                  }
                 %>
+                <div class="message-sender">
+                  <%= senderName %>
+                </div>
+                <% if (msg.mediaType) { %>
+                  <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
+                  <% 
+                    // الحصول على معلومات الوسائط من الكائن المناسب (سواء من الرسالة مباشرة أو من كائن الوسائط المضاف)
+                    // بترتيب الأولوية: mediaId (إذا وجد) ثم معرف الوسائط من التعديل الجديد، ثم معرف الرسالة
+                    const mediaId = msg.mediaId || (msg.media && msg.media._id) || msg._id;
+                    const mediaType = msg.mediaType;
+                    const fileName = msg.fileName || (msg.media && msg.media.fileName) || 'ملف';
+                    const fileSize = msg.fileSize || (msg.media && msg.media.fileSize) || 0;
+                    const mimeType = msg.mimeType || (msg.media && msg.media.mimeType) || '';
+                  %>
 
-                <!-- عرض الوسائط حسب النوع -->
-                <% if (mediaType === 'image') { %>
-                  <div class="media-container">
-                    <img src="/whatsapp/media/content/<%= mediaId %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
-                  </div>
-                <% } else if (mediaType === 'video') { %>
-                  <div class="media-container">
-                    <video controls class="media-video">
-                      <source src="/whatsapp/media/content/<%= mediaId %>" type="video/mp4">
-                      المتصفح لا يدعم عرض الفيديو
-                    </video>
-                  </div>
-                <% } else if (mediaType === 'audio') { %>
-                  <div class="media-container">
-                    <audio controls class="media-audio" preload="metadata" controlsList="nodownload">
-                      <source src="/whatsapp/media/content/<%= mediaId %>" type="audio/ogg">
-                      المتصفح لا يدعم تشغيل الملفات الصوتية
-                    </audio>
-                  </div>
-                <% } else if (mediaType === 'document') { %>
-                  <div class="document-container">
-                    <div class="document-icon">
-                      <i class="fas fa-file-alt"></i>
+                  <!-- عرض الوسائط حسب النوع -->
+                  <% if (mediaType === 'image') { %>
+                    <div class="media-container">
+                      <img src="/whatsapp/media/content/<%= mediaId %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
                     </div>
-                    <div class="document-info">
-                      <div class="document-name"><%= fileName %></div>
-                      <div class="document-size"><%= fileSize ? (Math.round(fileSize / 1024) + ' كيلوبايت') : '' %></div>
+                  <% } else if (mediaType === 'video') { %>
+                    <div class="media-container">
+                      <video controls class="media-video">
+                        <source src="/whatsapp/media/content/<%= mediaId %>" type="video/mp4">
+                        المتصفح لا يدعم عرض الفيديو
+                      </video>
                     </div>
-                    <a href="/whatsapp/media/content/<%= mediaId %>" target="_blank" class="document-download">
-                      <i class="fas fa-download"></i>
-                    </a>
-                  </div>
-                <% } else if (mediaType === 'sticker') { %>
-                  <div class="media-container">
-                    <img src="/whatsapp/media/content/<%= mediaId %>" class="media-sticker" alt="ملصق">
-                  </div>
-                <% } else if (mediaType === 'location') { %>
-                  <div class="location-container">
-                    <div class="location-icon">
-                      <i class="fas fa-map-marker-alt"></i>
+                  <% } else if (mediaType === 'audio') { %>
+                    <div class="media-container">
+                      <audio controls class="media-audio" preload="metadata" controlsList="nodownload">
+                        <source src="/whatsapp/media/content/<%= mediaId %>" type="audio/ogg">
+                        المتصفح لا يدعم تشغيل الملفات الصوتية
+                      </audio>
                     </div>
-                    <div class="location-info">
-                      <div class="location-name">
-                        <% 
-                          // الحصول على اسم الموقع من بيانات الوسائط إذا كانت متوفرة
-                          const locationName = (msg.media && msg.media.locationName) || 
-                                             (msg.metaData && msg.metaData.name) || 
-                                             'موقع جغرافي';
-                          
-                          // الحصول على الإحداثيات
-                          const latitude = (msg.media && msg.media.latitude) || 
-                                         (msg.metaData && msg.metaData.latitude) || '';
-                          const longitude = (msg.media && msg.media.longitude) || 
-                                          (msg.metaData && msg.metaData.longitude) || '';
-                          
-                          const coordinatesText = (latitude && longitude) ? 
-                                                `${latitude}, ${longitude}` : 
-                                                'إحداثيات غير متوفرة';
-                        %>
-                        <%= locationName %>
+                  <% } else if (mediaType === 'document') { %>
+                    <div class="document-container">
+                      <div class="document-icon">
+                        <i class="fas fa-file-alt"></i>
                       </div>
-                      <div class="location-coordinates">
-                        <%= coordinatesText %>
+                      <div class="document-info">
+                        <div class="document-name"><%= fileName %></div>
+                        <div class="document-size"><%= fileSize ? (Math.round(fileSize / 1024) + ' كيلوبايت') : '' %></div>
                       </div>
-                      <% if (latitude && longitude) { %>
-                        <a href="https://maps.google.com/maps?q=<%= latitude %>,<%= longitude %>" 
-                           target="_blank" class="btn btn-sm btn-outline-primary mt-1">
-                          <i class="fas fa-external-link-alt"></i> عرض على الخريطة
-                        </a>
-                      <% } %>
+                      <a href="/whatsapp/media/content/<%= mediaId %>" target="_blank" class="document-download">
+                        <i class="fas fa-download"></i>
+                      </a>
                     </div>
+                  <% } else if (mediaType === 'sticker') { %>
+                    <div class="media-container">
+                      <img src="/whatsapp/media/content/<%= mediaId %>" class="media-sticker" alt="ملصق">
+                    </div>
+                  <% } else if (mediaType === 'location') { %>
+                    <div class="location-container">
+                      <div class="location-icon">
+                        <i class="fas fa-map-marker-alt"></i>
+                      </div>
+                      <div class="location-info">
+                        <div class="location-name">
+                          <% 
+                            // الحصول على اسم الموقع من بيانات الوسائط إذا كانت متوفرة
+                            const locationName = (msg.media && msg.media.locationName) || 
+                                               (msg.metaData && msg.metaData.name) || 
+                                               'موقع جغرافي';
+                            
+                            // الحصول على الإحداثيات
+                            const latitude = (msg.media && msg.media.latitude) || 
+                                           (msg.metaData && msg.metaData.latitude) || '';
+                            const longitude = (msg.media && msg.media.longitude) || 
+                                            (msg.metaData && msg.metaData.longitude) || '';
+                            
+                            const coordinatesText = (latitude && longitude) ? 
+                                                  `${latitude}, ${longitude}` : 
+                                                  'إحداثيات غير متوفرة';
+                          %>
+                          <%= locationName %>
+                        </div>
+                        <div class="location-coordinates">
+                          <%= coordinatesText %>
+                        </div>
+                        <% if (latitude && longitude) { %>
+                          <a href="https://maps.google.com/maps?q=<%= latitude %>,<%= longitude %>" 
+                             target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                            <i class="fas fa-external-link-alt"></i> عرض على الخريطة
+                          </a>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% } %>
+                <% } %>
+                
+                <% if (msg.content && msg.content.trim() !== '' && msg.direction !== 'internal') { %>
+                  <div class="message-text <%= msg.mediaType ? 'with-media' : '' %>">
+                    <% if (msg.content.includes('\n')) { %>
+                      <pre><%= msg.content %></pre>
+                    <% } else { %>
+                      <%= msg.content %>
+                    <% } %>
                   </div>
                 <% } %>
-              <% } %>
-              
-              <% if (msg.content && msg.content.trim() !== '' && msg.direction !== 'internal') { %>
-                <div class="message-text <%= msg.mediaType ? 'with-media' : '' %>">
-                  <%= msg.content %>
+                
+                <div class="message-meta">
+                  <span class="message-time" title="<%= new Date(msg.timestamp).toLocaleString() %>">
+                    <%= new Date(msg.timestamp).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
+                  </span>
+                  
+                  <% if (msg.direction === 'outgoing') { %>
+                    <span class="message-status" title="حالة الرسالة: <%= msg.status %>">
+                      <% if (msg.status === 'sent') { %>
+                        <i class="fas fa-check text-secondary"></i>
+                      <% } else if (msg.status === 'delivered') { %>
+                        <i class="fas fa-check-double text-secondary"></i>
+                      <% } else if (msg.status === 'read') { %>
+                        <i class="fas fa-check-double text-primary"></i>
+                      <% } else if (msg.status === 'failed') { %>
+                        <i class="fas fa-exclamation-circle text-danger"></i>
+                      <% } else { %>
+                        <i class="fas fa-clock text-secondary"></i>
+                      <% } %>
+                    </span>
+                  <% } %>
                 </div>
               <% } %>
-              
-              <div class="message-meta">
-                <span class="message-time" title="<%= new Date(msg.timestamp).toLocaleString() %>">
-                  <%= new Date(msg.timestamp).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
-                </span>
-                
-                <% if (msg.direction === 'outgoing') { %>
-                  <span class="message-status" title="حالة الرسالة: <%= msg.status %>">
-                    <% if (msg.status === 'sent') { %>
-                      <i class="fas fa-check text-secondary"></i>
-                    <% } else if (msg.status === 'delivered') { %>
-                      <i class="fas fa-check-double text-secondary"></i>
-                    <% } else if (msg.status === 'read') { %>
-                      <i class="fas fa-check-double text-primary"></i>
-                    <% } else if (msg.status === 'failed') { %>
-                      <i class="fas fa-exclamation-circle text-danger"></i>
-                    <% } else { %>
-                      <i class="fas fa-clock text-secondary"></i>
-                    <% } %>
-                  </span>
-                <% } %>
-              </div>
             </div>
             
             <!-- عرض التفاعلات على الرسالة -->

@@ -8,7 +8,7 @@ const flash = require('connect-flash');
 const authRoutes = require("./routes/authRoutes");
 const licenseRoutes = require('./routes/licenseRoutes');
 const licensesApiRoutes = require('./routes/licenses'); // استيراد مسارات API الرخص
-const { isAuthenticated } = require('./middleware/authMiddleware');
+const { isAuthenticated, loadUserInfo } = require('./middleware/authMiddleware');
 const User = require('./models/User');
 const chatIdRoutes = require('./routes/chatIdRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
@@ -52,10 +52,6 @@ app.use('/api/sms/webhook/status-update', upload.any(), (req, res, next) => {
 
 // إضافة طبقة وسيطة خاصة لمسار webhook للواتساب
 app.use('/api/whatsapp/webhook/status-update', upload.any(), (req, res, next) => {
-  // تسجيل البيانات المستلمة للتشخيص إذا كانت موجودة
-  if (req.files && req.files.length > 0) {
-    console.log(`[Whatsapp Webhook] استلام ${req.files.length} ملفات`);
-  }
   next();
 });
 
@@ -63,7 +59,6 @@ app.use('/api/whatsapp/webhook/status-update', upload.any(), (req, res, next) =>
 app.use('/api/whatsapp/webhook/incoming-message', upload.any(), (req, res, next) => {
   // معالجة البيانات الخام من الطلب
   if (req.files && req.files.length > 0) {
-    console.log(`[Whatsapp Incoming] استلام ${req.files.length} ملفات`);
     
     // تحويل محتوى الملفات إلى حقول في الطلب
     for (const file of req.files) {
@@ -115,6 +110,9 @@ const sessionMiddleware = session({
 
 // استخدام وسيط الجلسة مع Express
 app.use(sessionMiddleware);
+
+// استخدام وسيط تحميل معلومات المستخدم
+app.use(loadUserInfo);
 
 app.use(flash());
 

@@ -5,7 +5,7 @@
 (function() {
   // تأكد من تحميل jQuery
   if (typeof jQuery === 'undefined') {
-    console.error('يجب تحميل jQuery أولاً قبل استخدام هذا الملف');
+    // يجب تحميل jQuery أولاً قبل استخدام هذا الملف
     return;
   }
 
@@ -23,7 +23,7 @@
         return usersList;
       }
     } catch (error) {
-      console.error('خطأ في جلب قائمة المستخدمين:', error);
+      // حدث خطأ في جلب قائمة المستخدمين
     }
     return [];
   };
@@ -65,7 +65,12 @@
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ noteContent }),
+        body: JSON.stringify({
+          noteContent,
+          // إرسال معلومات المستخدم الحالي مع الطلب
+          userId: window.currentUserId,
+          username: window.currentUsername
+        }),
       });
 
       try {
@@ -101,7 +106,7 @@
         // إذا فشل التحليل كـ JSON، نفحص إذا كانت الاستجابة ناجحة بناءً على حالة الاستجابة
         if (response.status === 200 || response.status === 201) {
           // نفترض نجاح العملية
-          console.log('تم إضافة الملاحظة بنجاح (استجابة غير JSON)');
+          // تمت إضافة الملاحظة بنجاح (استجابة غير JSON)
 
           // مسح محتوى النموذج وإغلاق النافذة
           document.getElementById('internalNoteContent').value = '';
@@ -115,7 +120,7 @@
           }
         } else {
           // عرض خطأ عام
-          console.error('خطأ في إضافة الملاحظة:', parseError);
+          // حدث خطأ أثناء إضافة الملاحظة
           if (window.showToast) {
             window.showToast('حدث خطأ أثناء إضافة الملاحظة', 'error');
           } else {
@@ -124,7 +129,7 @@
         }
       }
     } catch (error) {
-      console.error('خطأ في إرسال الملاحظة:', error);
+      // حدث خطأ أثناء إرسال الملاحظة
       if (window.showToast) {
         window.showToast('حدث خطأ أثناء إرسال الملاحظة', 'error');
       } else {
@@ -185,13 +190,13 @@
   window.initializeMentionsInNoteField = function() {
     // التأكد من وجود مكتبة Tribute
     if (typeof Tribute === 'undefined') {
-      console.error('يجب تحميل مكتبة Tribute.js لدعم المنشن');
+      // يجب تحميل مكتبة Tribute.js لدعم المنشن
       return;
     }
 
     // التأكد من وجود المستخدمين
     if (!usersList || usersList.length === 0) {
-      console.warn('قائمة المستخدمين فارغة، يتم تحميلها...');
+      // قائمة المستخدمين فارغة، يتم تحميلها...
       return;
     }
 

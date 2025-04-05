@@ -12,8 +12,11 @@
   <script src="/js/conversation-notes-utils.js"></script>
   <!-- تعريف معلومات المستخدم كمتغيرات عامة -->
   <script>
-    window.currentUserId = "<%= typeof user !== 'undefined' && user ? user._id : 'system' %>";
-    window.currentUsername = "<%= typeof user !== 'undefined' && user ? user.username : 'مستخدم النظام' %>";
+    
+    // تعريف المتغيرات العامة بشكل صحيح
+    window.currentUserId = '<%= typeof user !== "undefined" && user && user._id ? user._id : "system" %>';
+    window.currentUsername = '<%= typeof user !== "undefined" && user && user.username ? user.username : "مستخدم النظام" %>';
+    
   </script>
   
   <!-- استدعاء ملف المساعدة للمحادثات -->
@@ -222,7 +225,6 @@
       
       // معالج حدث للملاحظات الداخلية
       socket.on('internal-note', function(data) {
-        console.log('تم استلام ملاحظة داخلية جديدة:', data);
         
         // التحقق من أن الملاحظة تنتمي إلى المحادثة الحالية
         if (data.conversationId === currentConversationId) {
@@ -294,7 +296,6 @@
           }
         })
         .catch(error => {
-          console.error('خطأ في تحديث قائمة المحادثات:', error);
           // في حالة الخطأ 404، قد يكون المستخدم في الواجهة القديمة - نقوم بإعادة التوجيه إلى الواجهة الجديدة
           if (error.message.includes('404')) {
             window.location.href = '/crm/conversations/ajax';
@@ -352,7 +353,7 @@
           if (window.socketConnection) {
             // إذا كان الاتصال جاهزًا
             if (window.socketConnected) {
-              console.log('الانضمام إلى غرفة المحادثة:', conversationId);
+
               window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
               
               // مغادرة الغرفة السابقة إذا وجدت
@@ -361,13 +362,11 @@
               }
             } else {
               // تخزين العملية للتنفيذ لاحقًا عند اكتمال الاتصال
-              console.log('تخزين عملية الانضمام لغرفة المحادثة للتنفيذ لاحقًا:', conversationId);
               if (!Array.isArray(window.pendingSocketOperations)) {
                 window.pendingSocketOperations = [];
               }
               
               window.pendingSocketOperations.push((socket) => {
-                console.log('تنفيذ عملية انضمام معلقة للغرفة:', conversationId);
                 socket.emit('join', { room: `conversation-${conversationId}` });
                 
                 // مغادرة الغرفة السابقة إذا وجدت
@@ -383,7 +382,6 @@
             // حفظ معرف المحادثة الحالية للمرة القادمة
             window.previousConversationId = conversationId;
           } else {
-            console.warn('لا يمكن الانضمام إلى غرفة المحادثة: اتصال Socket.io غير متاح');
           }
         }
         
@@ -436,7 +434,6 @@
           window.attachConversationEventListeners && window.attachConversationEventListeners();
         })
         .catch(err => {
-          console.error('خطأ في جلب تفاصيل المحادثة:', err);
           detailsContainer.innerHTML = `
             <div class="alert alert-danger">
               حدث خطأ أثناء جلب تفاصيل المحادثة: ${err.message}
@@ -498,6 +495,12 @@
         // إضافة فقاعة الرسالة مع دعم الوسائط
         messageHTML += `
           <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'} ${messageData.mediaType ? 'message-with-media' : ''}">
+            <!-- إضافة اسم المرسل -->
+            <div class="message-sender">
+              ${messageData.metadata && messageData.metadata.senderInfo 
+                ? messageData.metadata.senderInfo.username || messageData.metadata.senderInfo.full_name || 'مجهول'
+                : messageData.sentByUsername || 'مجهول'}
+            </div>
         `;
         
         // إضافة الوسائط حسب النوع
@@ -644,17 +647,14 @@
       
       // وظيفة لإضافة ملاحظة داخلية إلى واجهة المستخدم مباشرة
       window.addNoteToUI = function(note) {
-        console.log('إضافة ملاحظة داخلية للواجهة:', note);
         const messageContainer = document.getElementById('messageContainer');
         if (!messageContainer) {
-          console.error('لم يتم العثور على حاوية الرسائل!');
           return;
         }
         
         // التحقق من وجود الملاحظة مسبقاً (لمنع إضافتها مرتين)
         const noteExists = document.querySelector(`.message[data-message-id="${note._id}"]`);
         if (noteExists) {
-          console.log('الملاحظة موجودة مسبقاً:', note._id);
           return;
         }
         

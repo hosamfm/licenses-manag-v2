@@ -167,6 +167,23 @@ body {
   margin-left: 5px;
 }
 
+/* أنماط اسم المرسل */
+.message-sender {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+  opacity: 0.9;
+  direction: rtl;
+}
+
+.message.incoming .message-sender {
+  color: #4b5563;
+}
+
+.message.outgoing .message-sender {
+  color: rgba(255, 255, 255, 0.95);
+}
+
 @keyframes pendingAnimation {
   0% {
     opacity: 0;

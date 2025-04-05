@@ -134,7 +134,7 @@
     const senderId = document.getElementById('currentUserId')?.value;
     const senderName = document.getElementById('currentUserName')?.value || 'مستخدم';
     
-    if (window.debugMode) console.log(`إرسال تفاعل [${emoji}] للرسالة [${messageId}]`);
+    if (window.debugMode);
     
     fetch(`/crm/conversations/${conversationId}/reaction`, {
       method: 'POST',
@@ -156,7 +156,7 @@
       return response.json();
     })
     .then(data => {
-      if (window.debugMode) console.log('تم إرسال التفاعل بنجاح:', data);
+      if (window.debugMode);
       updateReactionInUI(messageId, externalId, emoji, senderId, senderName);
     })
     .catch(error => {
@@ -191,7 +191,7 @@
     }
     
     if (!messageElem) {
-      if (window.debugMode) console.error('لم يتم العثور على الرسالة لتحديث التفاعل:', { messageId, externalId });
+      if (window.debugMode);
       return;
     }
     
@@ -233,7 +233,6 @@
   window.showReplyForm = function(messageId, externalId, messageElem) {
     if (!messageElem || !messageId) {
       if (window.debugMode === true) {
-        console.error('بيانات غير كافية لعرض نموذج الرد:', { messageId, messageElem });
       }
       return;
     }
@@ -303,7 +302,7 @@
    * دالة إرسال الرد
    * @param {Event} event - حدث الإرسال (اختياري)
    */
-  window.sendReply = function(event) {
+  window.sendReply = async function(event) {
     if (event) {
       event.preventDefault();
     }
@@ -329,7 +328,8 @@
     }
     
     // التحقق من وجود معرف محادثة
-    if (!conversationId || !conversationId.value) {
+    const conversationIdValue = conversationId.value;
+    if (!conversationIdValue) {
       if (window.debugMode === true) {
         console.error('لم يتم العثور على معرّف المحادثة');
       }
@@ -388,7 +388,9 @@
     // إنشاء كائن البيانات للإرسال
     const requestData = {
       content: messageData.content,
-      replyToId: messageData.replyToId
+      replyToId: messageData.replyToId,
+      userId: window.currentUserId,
+      username: window.currentUsername
     };
     
     // إضافة معلومات الوسائط إذا كانت متوفرة
@@ -397,22 +399,22 @@
       requestData.mediaType = messageData.mediaType;
     }
     
-    // إرسال الرسالة باستخدام Fetch API
-    fetch(`/crm/conversations/${conversationId.value}/reply`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
-      },
-      body: JSON.stringify(requestData)
-    })
-    .then(response => {
+    
+    try {
+      const response = await fetch(`/crm/conversations/${conversationIdValue}/reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(requestData),
+      });
+      
       if (!response.ok) {
         throw new Error('فشل إرسال الرسالة');
       }
-      return response.json();
-    })
-    .then(data => {
+      const data = await response.json();
+      
       if (data.success) {
         // تمرير المحتوى إلى وظيفة تشغيل صوت الرسالة (اختياري)
         if (typeof playMessageSound === 'function') {
@@ -440,8 +442,7 @@
           pendingMessage.classList.remove('message-pending');
         }
       }
-    })
-    .catch(error => {
+    } catch (error) {
       console.error('خطأ في إرسال الرسالة:', error);
       
       // تحديث حالة الرسالة المؤقتة إلى "فشل الإرسال"
@@ -458,7 +459,7 @@
       if (window.showToast) {
         window.showToast('حدث خطأ أثناء إرسال الرسالة', 'error');
       }
-    });
+    }
   };
 
   /**

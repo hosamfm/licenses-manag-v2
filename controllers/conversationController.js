@@ -20,6 +20,42 @@ const mediaService = require('../services/mediaService');
 const conversationService = require('../services/conversationService');
 
 /**
+ * استخراج المنشنات من محتوى النص
+ * @param {string} content محتوى النص
+ * @returns {Array} قائمة بالمنشنات المستخرجة
+ */
+async function extractMentions(content) {
+  if (!content || typeof content !== 'string') {
+    return [];
+  }
+
+  const mentions = [];
+  const mentionRegex = /@(\w+)/g;
+  let mentionMatch;
+  
+  // استخراج جميع المنشنات من النص
+  while ((mentionMatch = mentionRegex.exec(content)) !== null) {
+    const username = mentionMatch[1];
+    
+    // البحث عن المستخدم بواسطة اسم المستخدم
+    const mentionedUser = await User.findOne({ 
+      username: username,
+      can_access_conversations: true,
+      account_status: 'active'
+    });
+    
+    if (mentionedUser) {
+      mentions.push({
+        user: mentionedUser._id,
+        username: mentionedUser.username
+      });
+    }
+  }
+  
+  return mentions;
+}
+
+/**
  * دالة مساعدة لتوحيد منطق جلب المحادثات
  * تستخدم في عرض جميع المحادثات وعرض محادثات المستخدم الحالي
  * @param {Object} options - خيارات جلب المحادثات
@@ -193,119 +229,109 @@ exports.assignConversation = async (req, res) => {
 exports.addInternalNote = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const noteContent = req.body.noteContent || '';
-    // الحصول على المستخدم الحالي
-    const currentUserId = req.user ? req.user._id : null;
-    const currentUser = req.user ? req.user : null;
+    const { noteContent, userId, username } = req.body;
+    
+    const mentions = await extractMentions(noteContent);
 
+    // التأكد من وجود المحادثة
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      if (req.xhr) {
-        return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
-      }
-      req.flash('error', 'المحادثة غير موجودة');
-      return res.redirect('/crm/conversations');
+      return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
     }
 
-    if (!noteContent.trim()) {
-      if (req.xhr) {
-        return res.status(400).json({ success: false, error: 'لا يمكن إضافة ملاحظة فارغة' });
-      }
-      req.flash('error', 'لا يمكن إضافة ملاحظة فارغة');
-      return res.redirect(`/crm/conversations/${conversationId}`);
-    }
-
-    // استخراج المنشنات من محتوى الملاحظة
-    const mentions = [];
-    const mentionRegex = /@(\w+)/g;
-    let mentionMatch;
+    // عالج معلومات المُرسل
+    let senderInfo = null;
     
-    // استخراج جميع المنشنات من النص
-    while ((mentionMatch = mentionRegex.exec(noteContent)) !== null) {
-      const username = mentionMatch[1];
-      
-      // البحث عن المستخدم بواسطة اسم المستخدم
-      const mentionedUser = await User.findOne({ 
-        username: username,
-        can_access_conversations: true,
-        account_status: 'active'
+    // 1. محاولة استخدام userId المرسل من العميل (إذا كان موجوداً وصحيحاً)
+    if (userId) {
+      // تسجيل تشخيصي إضافي للمساعدة في تحديد المشكلة
+      logger.info('conversationController', 'تحليل معرف المستخدم المستلم', {
+        userId: userId,
+        type: typeof userId,
+        isValid: mongoose.Types.ObjectId.isValid(userId),
+        userIdLength: userId.length,
+        hexFormat: /^[0-9a-fA-F]{24}$/.test(userId)
       });
       
-      if (mentionedUser) {
-        mentions.push({
-          user: mentionedUser._id,
-          username: mentionedUser.username
-        });
+      // حالة خاصة: مستخدم النظام
+      if (userId === 'system') {
+        // حالة خاصة: مستخدم النظام، نتركه فارغاً ونضيف معلومات خاصة لاحقاً
+        senderInfo = { username: username || 'مستخدم النظام' };
+      } 
+      else if (mongoose.Types.ObjectId.isValid(userId)) {
+        // البحث عن المستخدم في قاعدة البيانات
+        const user = await User.findById(userId);
+        if (user) {
+          senderInfo = {
+            _id: user._id,
+            username: user.username,
+            full_name: user.full_name || user.username
+          };
+        }
       }
     }
+    
+    // 2. استخدام معلومات المستخدم الحالي من الجلسة كخيار ثاني
+    if (!senderInfo && req.user) {
+      senderInfo = {
+        _id: req.user._id,
+        username: req.user.username,
+        full_name: req.user.full_name || req.user.username
+      };
+    }
+    
+    // سجل تشخيصي لمعلومات المستخدم المعالجة
+    logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
+      senderInfo: senderInfo ? {
+        _id: senderInfo._id ? senderInfo._id.toString() : null,
+        username: senderInfo.username
+      } : null
+    });
 
-    // تنشئ رسالة خاصة بالإدخال الداخلي
+    // 3. إنشاء وحفظ الملاحظة الداخلية
     const noteMsg = new WhatsappMessage({
       conversationId,
       direction: 'internal', 
       content: noteContent,
       timestamp: new Date(),
       status: 'note',
-      sentBy: currentUserId,  // تأكد من أن هذا هو كائن ObjectId
-      mentions: mentions // إضافة قائمة المنشنات
+      mentions: mentions,
+      // تخزين معرف المستخدم فقط في حقل sentBy (يجب أن يكون ObjectId)
+      sentBy: (senderInfo && senderInfo._id && mongoose.Types.ObjectId.isValid(senderInfo._id)) ? senderInfo._id : null
     });
     
-    // تحويل currentUserId إلى ObjectId إذا كان نصياً
-    if (currentUserId && typeof currentUserId === 'string') {
-      noteMsg.sentBy = mongoose.Types.ObjectId(currentUserId);
-    }
+    // تخزين معلومات المرسل الكاملة في الحقل الوصفي metadata
+    noteMsg.metadata = noteMsg.metadata || {};
+    noteMsg.metadata.senderInfo = senderInfo;
     
+    // 4. حفظ الملاحظة في قاعدة البيانات
     await noteMsg.save();
     
-    // تحميل المستخدم الحالي للحصول على اسم المستخدم والمستخدمين المذكورين
-    await noteMsg.populate([
-      { path: 'sentBy', select: 'username full_name' },
-      { path: 'mentions.user', select: 'username full_name' }
-    ]);
+    // 5. تحديث وقت آخر رسالة للمحادثة
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
     
-    // إرسال الملاحظة عبر Socket.io
-    socketService.emitToRoom(`conversation-${conversationId}`, 'internal-note', {
-      conversationId,
-      note: {
-        _id: noteMsg._id,
-        conversationId: noteMsg.conversationId,
-        content: noteMsg.content,
-        timestamp: noteMsg.timestamp,
-        direction: noteMsg.direction,
-        status: noteMsg.status,
-        sentBy: noteMsg.sentBy || (currentUser ? { 
-          _id: currentUser._id, 
-          username: currentUser.username,
-          full_name: currentUser.full_name
-        } : null),
-        mentions: noteMsg.mentions
-      }
+    // 6. إنشاء نسخة كاملة من الملاحظة لإرسالها عبر Socket.io
+    const noteWithSender = noteMsg.toObject();
+    if (senderInfo) {
+      noteWithSender.sentBy = senderInfo;
+    }
+    
+    // 7. إرسال إشعار للمستخدمين الآخرين في غرفة المحادثة
+    socketService.emitToRoom(`conversation-${conversationId}`, 'internal-note', noteWithSender);
+    logger.info('تم إرسال إشعار إلى غرفة محددة', {
+      roomName: `conversation-${conversationId}`,
+      eventName: 'internal-note'
     });
-
-    // إرسال إشعارات للمستخدمين المذكورين (إذا كان لديك نظام إشعارات)
-    if (mentions.length > 0) {
-      // يمكنك هنا إضافة منطق إرسال إشعارات للمستخدمين المذكورين
-      // على سبيل المثال: notificationService.sendMentionNotification(noteMsg);
-      
-      // لاحظ: يمكن تنفيذ هذا لاحقًا كميزة منفصلة
-    }
-
-    // الاستجابة وفقاً لنوع الطلب (AJAX أو عادي)
-    if (req.xhr) {
-      res.json({ success: true, note: noteMsg });
-    } else {
-      req.flash('success', 'تمت إضافة الملاحظة بنجاح');
-      res.redirect(`/crm/conversations/${conversationId}`);
-    }
-  } catch (error) {
-    logger.error('conversationController', 'خطأ في إضافة ملاحظة', error);
     
-    if (req.xhr) {
-      res.status(500).json({ success: false, error: 'حدث خطأ أثناء إضافة الملاحظة' });
-    } else {
-      req.flash('error', 'حدث خطأ أثناء إضافة الملاحظة');
-      res.redirect('/crm/conversations');
-    }
+    // 8. إرسال استجابة ناجحة
+    res.json({
+      success: true,
+      message: 'تمت إضافة الملاحظة بنجاح',
+      note: noteWithSender
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'خطأ في إضافة الملاحظة', message: error.message });
   }
 };
 
@@ -356,14 +382,73 @@ exports.replyToConversation = async (req, res) => {
   const isAjax = req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest';
   try {
     const { conversationId } = req.params;
-    const { content, replyToMessageId, mediaId, mediaType } = req.body;
+    const { content, replyToMessageId, mediaId, mediaType, userId, username } = req.body;
 
-    const conversation = await Conversation.findById(conversationId).populate('channelId');
-    if (!conversation) {
-      if (isAjax) return res.json({ success: false, error: 'المحادثة غير موجودة' });
-      req.flash('error', 'المحادثة غير موجودة');
-      return res.redirect('/crm/conversations');
+    // سجل تشخيصي لمعلومات المستخدم المرسلة
+    logger.info('conversationController', 'معلومات المستخدم المرسلة في طلب الرد', {
+      userId,
+      username,
+      sessionUser: req.user ? {
+        _id: req.user._id.toString(),
+        username: req.user.username
+      } : null
+    });
+
+    // التحقق من معلومات المستخدم المرسلة من العميل
+    let senderInfo = null;
+    if (userId) {
+      // تسجيل تشخيصي إضافي للمساعدة في تحديد المشكلة
+      logger.info('conversationController', 'تحليل معرف المستخدم المستلم', {
+        userId: userId,
+        type: typeof userId,
+        isValid: mongoose.Types.ObjectId.isValid(userId),
+        userIdLength: userId.length,
+        hexFormat: /^[0-9a-fA-F]{24}$/.test(userId)
+      });
+      
+      // حالة خاصة: مستخدم النظام
+      if (userId === 'system') {
+        senderInfo = { username: username || 'مستخدم النظام' };
+      } 
+      else if (mongoose.Types.ObjectId.isValid(userId)) {
+        try {
+          // البحث عن المستخدم في قاعدة البيانات
+          const user = await User.findById(userId);
+          if (user) {
+            senderInfo = {
+              _id: user._id,
+              username: user.username,
+              full_name: user.full_name || user.username
+            };
+          } else {
+            // لم يتم العثور على المستخدم - سجل تشخيصي
+            logger.warn('conversationController', 'تم إرسال معرف مستخدم صالح ولكن لم يتم العثور عليه', { userId });
+          }
+        } catch (err) {
+          logger.error('conversationController', 'خطأ أثناء البحث عن المستخدم', { userId, error: err.message });
+        }
+      } else {
+        // تم إرسال معرف غير صالح
+        logger.warn('conversationController', 'تم إرسال معرف مستخدم غير صالح', { userId });
+      }
     }
+    
+    // استخدام معلومات المستخدم الحالي من الجلسة كخيار ثاني
+    if (!senderInfo && req.user) {
+      senderInfo = {
+        _id: req.user._id,
+        username: req.user.username,
+        full_name: req.user.full_name || req.user.username
+      };
+    }
+    
+    // سجل تشخيصي لمعلومات المستخدم المعالجة
+    logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
+      senderInfo: senderInfo ? {
+        _id: senderInfo._id ? senderInfo._id.toString() : null,
+        username: senderInfo.username
+      } : null
+    });
 
     // التحقق من وجود محتوى أو وسائط على الأقل
     if ((!content || !content.trim()) && !mediaId) {
@@ -407,13 +492,21 @@ exports.replyToConversation = async (req, res) => {
       }
     }
 
+    const conversation = await Conversation.findById(conversationId).populate('channelId');
+    if (!conversation) {
+      if (isAjax) return res.json({ success: false, error: 'المحادثة غير موجودة' });
+      req.flash('error', 'المحادثة غير موجودة');
+      return res.redirect('/crm/conversations');
+    }
+
     // استخدام دالة createReplyMessage مباشرة إذا كان رداً على رسالة، وإلا createOutgoingMessage
     let msg;
     if (replyToMessageId) {
       msg = await WhatsappMessage.createReplyMessage(
         conversationId,
         content ? content.trim() : '',
-        req.user?._id || null,
+        // التأكد من أن sentBy هو ObjectId صالح فقط
+        senderInfo && senderInfo._id && mongoose.Types.ObjectId.isValid(senderInfo._id) ? senderInfo._id : null,
         replyToMessageId
       );
     } else {
@@ -422,8 +515,12 @@ exports.replyToConversation = async (req, res) => {
         direction: 'outgoing',
         content: content ? content.trim() : '',
         timestamp: new Date(),
-        sentBy: req.user?._id || null,
-        status: 'sent'
+        // التأكد من أن sentBy هو ObjectId صالح فقط
+        sentBy: senderInfo && senderInfo._id && mongoose.Types.ObjectId.isValid(senderInfo._id) ? senderInfo._id : null,
+        status: 'sent',
+        metadata: {
+          senderInfo: senderInfo
+        }
       });
       await msg.save();
     }
@@ -617,7 +714,7 @@ exports.reactToMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { messageId, emoji, externalMessageId } = req.body;
-
+    
     if (!emoji || (!messageId && !externalMessageId)) {
       return res.json({ success: false, error: 'بيانات غير كافية، يجب تحديد معرف الرسالة والإيموجي' });
     }
@@ -765,7 +862,6 @@ exports.listConversationsAjax = async (req, res) => {
       flashMessages: req.flash()
     });
   } catch (err) {
-    logger.error('conversationController', 'خطأ في listConversationsAjax', err);
     req.flash('error', 'حدث خطأ أثناء تحميل المحادثات (AJAX)');
     res.redirect('/'); 
   }
@@ -856,7 +952,6 @@ exports.getConversationDetailsAjax = async (req, res) => {
       }
     });
   } catch (err) {
-    logger.error('conversationController', 'خطأ في getConversationDetailsAjax', err);
     return res.status(500).send('<div class="alert alert-danger">خطأ في الخادم</div>');
   }
 };
@@ -897,7 +992,6 @@ exports.listConversationsAjaxList = async (req, res) => {
       conversations: result.conversations
     });
   } catch (err) {
-    logger.error('conversationController', 'خطأ في listConversationsAjaxList', err);
     return res.status(500).json({ 
       success: false, 
       error: 'حدث خطأ أثناء تحميل المحادثات' 
