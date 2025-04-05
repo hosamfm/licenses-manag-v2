@@ -641,33 +641,41 @@ exports.replyToConversation = async (req, res) => {
     msg.status = finalStatus;
     await msg.save();
 
+    // --- تحضير كائن الرسالة الكامل للإشعار ---
+    let messageForNotification = {
+      _id: msg._id,
+      conversationId,
+      content: msg.content,
+      direction: 'outgoing',
+      timestamp: msg.timestamp,
+      status: msg.status,
+      externalMessageId: externalId || null,
+      mediaType: mediaType || null,
+      fileName: null, // سيتم تحميله أدناه إذا كان مستندًا
+      fileSize: null, // سيتم تحميله أدناه إذا كان هناك وسائط
+      sentBy: msg.sentBy ? msg.sentBy.toString() : null, // <-- إضافة sentBy
+      metadata: msg.metadata || { senderInfo: {} } // <-- إضافة metadata (بما في ذلك senderInfo)
+    };
+
+    // تحميل معلومات الملف إذا كانت الرسالة وسائط
+    if (mediaType) {
+        const mediaInfo = await WhatsappMedia.findById(mediaId);
+        if (mediaInfo) {
+            messageForNotification.fileName = mediaType === 'document' ? mediaInfo.fileName : null;
+            messageForNotification.fileSize = mediaInfo.fileSize;
+        }
+    }
+    
+    // --- نهاية تحضير كائن الرسالة ---
+
     // إشعار Socket.io - اعتماداً على ما إذا كانت رداً أو رسالة عادية
     if (replyToMessageId) {
-      socketService.notifyMessageReply(conversationId, {
-        _id: msg._id,
-        conversationId,
-        content: msg.content,
-        direction: 'outgoing',
-        timestamp: msg.timestamp,
-        status: msg.status,
-        externalMessageId: externalId || null,
-        mediaType: mediaType || null,
-        fileName: mediaType === 'document' ? (await WhatsappMedia.findById(mediaId))?.fileName : null,
-        fileSize: mediaType ? (await WhatsappMedia.findById(mediaId))?.fileSize : null
-      }, externalReplyId || replyToMessageId); // استخدام المعرف الخارجي في الإشعارات أيضاً
+      // --- تعديل: تمرير الكائن الكامل للردود أيضًا ---
+      messageForNotification.replyToMessageId = externalReplyId || replyToMessageId; // إضافة معرف الرد
+      socketService.notifyMessageReply(conversationId, messageForNotification, externalReplyId || replyToMessageId);
     } else {
-      socketService.notifyNewMessage(conversationId, {
-        _id: msg._id,
-        conversationId,
-        content: msg.content,
-        direction: 'outgoing',
-        timestamp: msg.timestamp,
-        status: msg.status,
-        externalMessageId: externalId || null,
-        mediaType: mediaType || null,
-        fileName: mediaType === 'document' ? (await WhatsappMedia.findById(mediaId))?.fileName : null,
-        fileSize: mediaType ? (await WhatsappMedia.findById(mediaId))?.fileSize : null
-      });
+      // --- تعديل: تمرير الكائن الكامل للرسائل الجديدة ---
+      socketService.notifyNewMessage(conversationId, messageForNotification);
     }
 
     // إذا كان هناك مستخدم مسند غير المرسل

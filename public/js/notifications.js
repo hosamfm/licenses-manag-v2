@@ -285,9 +285,9 @@ function appendNewMessage(message) {
  * @returns {string} HTML للرسالة
  */
 function getMessageTemplate(message) {
-    // --- تسجيل تشخيصي 2: عرض الرسالة عند دخول getMessageTemplate ---
-    console.log('[getMessageTemplate] Processing message:', JSON.stringify(message, null, 2));
-    // -----------------------------------------------------------
+    // --- إزالة التسجيل التشخيصي 2 ---
+    // console.log('[getMessageTemplate] Processing message:', JSON.stringify(message, null, 2));
+    // -------------------------------
 
     // تحديد اتجاه الرسالة
     const isOutgoing = message.direction === 'outgoing';
