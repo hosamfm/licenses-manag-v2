@@ -1641,6 +1641,11 @@ window.updateMessageReaction = function(externalId, reaction) {
  * تستدعى هذه الدالة عند عرض المحادثة
  */
 window.markIncomingMessagesAsRead = function() {
+  // حفظ موضع التمرير الحالي قبل تعليم الرسائل كمقروءة
+  const messagesContainer = document.querySelector('.messages-container');
+  const isScrolledToBottom = messagesContainer ? 
+    (messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 10) : false;
+  
   // البحث عن جميع الرسائل الواردة في المحادثة الحالية
   const incomingMessages = document.querySelectorAll('.message.incoming');
   
@@ -1648,10 +1653,13 @@ window.markIncomingMessagesAsRead = function() {
     return; // لا توجد رسائل واردة
   }
   
+  let pendingRequests = 0;
+  
   // إرسال طلبات لتعليم كل رسالة كمقروءة
   incomingMessages.forEach(message => {
     const messageId = message.dataset.messageId;
     if (messageId) {
+      pendingRequests++;
       fetch(`/crm/conversations/messages/${messageId}/mark-as-read`, {
         method: 'POST',
         headers: {
@@ -1665,6 +1673,17 @@ window.markIncomingMessagesAsRead = function() {
       })
       .catch(err => {
         // تم إزالة رسالة السجل
+      })
+      .finally(() => {
+        pendingRequests--;
+        
+        // إذا كانت هذه آخر طلب، وكان المستخدم في الأسفل، حافظ على موضع التمرير
+        if (pendingRequests === 0 && isScrolledToBottom && messagesContainer) {
+          // تأخير قصير للتأكد من اكتمال تحديثات DOM
+          setTimeout(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }, 50);
+        }
       });
     }
   });
@@ -1679,6 +1698,11 @@ window.markIncomingMessagesAsRead = function() {
 window.updateMessageReadByUsers = function(messageElem, user, timestamp) {
   // التحقق مما إذا كانت الرسالة تحتوي بالفعل على قسم من قرؤوها
   let readByContainer = messageElem.querySelector('.read-by-users');
+  
+  // حفظ حالة التمرير الحالية
+  const messagesContainer = document.querySelector('.messages-container');
+  const isNearBottom = messagesContainer ? 
+    (messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 100) : false;
   
   if (!readByContainer) {
     // إنشاء حاوية جديدة إذا لم تكن موجودة
@@ -1719,6 +1743,11 @@ window.updateMessageReadByUsers = function(messageElem, user, timestamp) {
     `;
     
     readByContainer.appendChild(userElement);
+  }
+  
+  // استعادة موضع التمرير إذا كان المستخدم قريباً من الأسفل
+  if (isNearBottom && messagesContainer) {
+    window.scrollToBottomIfNeeded();
   }
 };
 
@@ -1773,4 +1802,83 @@ window.showMessageReadByList = function(messageId) {
         icon: 'error'
       });
     });
+};
+
+/**
+ * دالة للتأكد من أن التمرير في الأسفل للرسائل إن كان مناسباً
+ * @param {boolean} force - إجبار التمرير للأسفل بغض النظر عن الموضع الحالي
+ */
+window.scrollToBottomIfNeeded = function(force = false) {
+  const messagesContainer = document.querySelector('.messages-container');
+  if (!messagesContainer) return;
+  
+  // تحقق مما إذا كان المستخدم قريباً من الأسفل
+  const isNearBottom = (messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 100);
+  
+  // إذا كان المستخدم قريباً من الأسفل أو تم طلب الإجبار
+  if (isNearBottom || force) {
+    // استخدام تأخير قصير لضمان اكتمال تحديثات DOM
+    setTimeout(() => {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 50);
+  }
+};
+
+/**
+ * إضافة رسالة جديدة إلى المحادثة الحالية
+ * @param {Object} message - كائن الرسالة
+ * @param {boolean} forceScroll - إجبار التمرير للأسفل
+ */
+window.addMessageToConversation = function(message, forceScroll = false) {
+  if (!message) return;
+  
+  try {
+    // حفظ حالة التمرير الحالية
+    const messagesContainer = document.querySelector('.messages-container');
+    const isScrolledToBottom = messagesContainer ? 
+      (messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 100) : false;
+    
+    // التحقق من عدم تكرار الرسالة
+    if (window.sentMessageIds && (window.sentMessageIds.has(message._id) || window.sentMessageIds.has(message.externalMessageId))) {
+      return;
+    }
+    
+    // ... باقي التعليمات البرمجية ...
+    
+    // التمرير للأسفل إذا لزم الأمر
+    if ((isScrolledToBottom || forceScroll) && messagesContainer) {
+      window.scrollToBottomIfNeeded(forceScroll);
+    }
+  } catch (error) {
+    console.error('خطأ في إضافة الرسالة للمحادثة:', error);
+  }
+};
+
+/**
+ * دالة تحميل تفاصيل المحادثة
+ * @param {string} conversationId - معرف المحادثة
+ * @param {boolean} forceScroll - إجبار التمرير للأسفل بعد التحميل
+ */
+window.loadConversationDetails = function(conversationId, forceScroll = true) {
+  if (!conversationId) {
+    return;
+  }
+  
+  // تحديث المعرف الحالي
+  window.previousConversationId = window.currentConversationId;
+  window.currentConversationId = conversationId;
+  
+  // ... باقي التعليمات البرمجية ...
+  
+  // بعد الانتهاء من تحميل تفاصيل المحادثة
+  document.addEventListener('conversation-loaded', function onConversationLoaded() {
+    // تعليم الرسائل الواردة كمقروءة
+    window.markIncomingMessagesAsRead();
+    
+    // التمرير للأسفل
+    window.scrollToBottomIfNeeded(forceScroll);
+    
+    // إزالة هذا المستمع بعد استدعائه لمنع تكراره
+    document.removeEventListener('conversation-loaded', onConversationLoaded);
+  });
 };
