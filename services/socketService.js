@@ -174,6 +174,70 @@ async function notifyNewMessage(conversationId, message) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
+  // إضافة معلومات المرسل للرسائل الصادرة إذا لم تكن موجودة
+  if (message && message.direction === 'outgoing' && message.sentBy && 
+      (!message.metadata || !message.metadata.senderInfo || Object.keys(message.metadata.senderInfo).length === 0)) {
+    try {
+      const User = require('../models/User');
+      const senderId = typeof message.sentBy === 'string' ? message.sentBy : message.sentBy.toString();
+
+      // لا نحتاج لاسترجاع معلومات المرسل إذا كان النظام
+      if (senderId === 'system') {
+        if (!message.metadata) message.metadata = {};
+        message.metadata.senderInfo = { 
+          username: 'النظام', 
+          full_name: 'النظام',
+          _id: 'system'
+        };
+        message.sentByUsername = 'النظام';
+        
+        logger.info('socketService', 'تم إضافة معلومات النظام كمرسل للإشعار', { 
+          conversationId
+        });
+      } 
+      // استرجاع معلومات المستخدم المرسل من قاعدة البيانات
+      else {
+        const user = await User.findById(senderId);
+        if (user) {
+          if (!message.metadata) message.metadata = {};
+          message.metadata.senderInfo = {
+            username: user.username,
+            full_name: user.full_name || user.username,
+            _id: user._id.toString()
+          };
+          
+          // تخزين اسم المستخدم المرسل بشكل مباشر أيضًا لتسهيل الوصول إليه
+          message.sentByUsername = user.username;
+          
+          logger.info('socketService', 'تم إضافة معلومات المرسل للإشعار', { 
+            conversationId, 
+            senderUsername: user.username,
+            senderId: user._id.toString()
+          });
+        } else {
+          // في حالة عدم العثور على المستخدم، نضع بيانات افتراضية
+          if (!message.metadata) message.metadata = {};
+          message.metadata.senderInfo = { 
+            username: `مستخدم (${senderId.substring(0, 5)}...)`, 
+            _id: senderId 
+          };
+          message.sentByUsername = `مستخدم (${senderId.substring(0, 5)}...)`;
+          
+          logger.warn('socketService', 'لم يتم العثور على معلومات المرسل في قاعدة البيانات', { 
+            conversationId, 
+            senderId
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('socketService', 'خطأ في استرجاع معلومات المرسل للإشعار', { 
+        conversationId, 
+        senderId: typeof message.sentBy === 'string' ? message.sentBy : message.sentBy.toString(),
+        error: error.message
+      });
+    }
+  }
+  
   // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
   if (message && message.mediaType) {
     logger.info('socketService', 'إرسال إشعار برسالة جديدة مع وسائط', { 

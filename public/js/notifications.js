@@ -113,13 +113,42 @@ function setupNotificationListeners(socket) {
         
         // إضافة معلومات المرسل للرسائل الصادرة إذا لم تكن موجودة
         if (message.direction === 'outgoing' && (!message.metadata.senderInfo || Object.keys(message.metadata.senderInfo).length === 0)) {
-            // إذا كان المستخدم الحالي هو المرسل، استخدم معلوماته
-            if (window.currentUserId && message.sentBy === window.currentUserId) {
-                message.metadata.senderInfo = {
-                    username: window.currentUsername,
-                    _id: window.currentUserId
-                };
-                message.sentByUsername = window.currentUsername;
+            // سنتحقق إذا كانت معلومات المرسل متاحة بطريقة أخرى
+            if (message.sentBy) {
+                // إذا كان معرف المرسل موجود كـ string نستخدمه كما هو
+                const senderId = typeof message.sentBy === 'string' ? message.sentBy : message.sentBy.toString();
+                
+                // إذا كان النظام هو المرسل
+                if (senderId === 'system') {
+                    message.metadata.senderInfo = {
+                        username: 'النظام',
+                        full_name: 'النظام',
+                        _id: 'system'
+                    };
+                    message.sentByUsername = 'النظام';
+                }
+                // إذا كان المستخدم الحالي هو المرسل
+                else if (window.currentUserId && senderId === window.currentUserId) {
+                    message.metadata.senderInfo = {
+                        username: window.currentUsername,
+                        _id: window.currentUserId
+                    };
+                    message.sentByUsername = window.currentUsername;
+                }
+                // في حالة تعذر تحديد معلومات المرسل، نضع معلومات افتراضية مع إظهار المعرف للتمييز
+                else if (message.sentByUsername) {
+                    message.metadata.senderInfo = {
+                        username: message.sentByUsername,
+                        _id: senderId
+                    };
+                } else {
+                    // إذا لم تتوفر أي معلومات، نضع معرف المرسل مؤقتًا حتى يتم تحديثه
+                    message.metadata.senderInfo = {
+                        username: `مرسل (${senderId.substring(0, 5)}...)`,
+                        _id: senderId
+                    };
+                    message.sentByUsername = `مرسل (${senderId.substring(0, 5)}...)`;
+                }
             }
         }
         
