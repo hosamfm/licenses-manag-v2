@@ -164,27 +164,29 @@ function setupNotificationListeners(socket) {
     socket.on('internal-note', function(data) {
         // التحقق من أن الملاحظة تخص المحادثة الحالية
         if (window.currentConversationId && data.conversationId === window.currentConversationId) {
-            // التحقق من وجود بيانات الملاحظة
-            if (!data.note) {
-                console.error('بيانات الملاحظة غير موجودة:', data);
-                return;
-            }
-
-            // إضافة معرف مؤقت إذا لم يكن موجوداً
-            if (!data.note._id) {
-                data.note._id = 'temp-' + Date.now();
-            }
+            // تحويل البيانات إلى الشكل المطلوب
+            const noteData = {
+                _id: data._id || 'temp-' + Date.now(),
+                conversationId: data.conversationId,
+                direction: data.direction,
+                content: data.content,
+                timestamp: data.timestamp,
+                status: data.status,
+                sentBy: data.sentBy,
+                metadata: data.metadata || {},
+                mentions: data.mentions || []
+            };
 
             // إضافة الملاحظة إلى واجهة المستخدم
             if (typeof window.addNoteToUI === 'function') {
                 try {
-                    window.addNoteToUI(data.note);
+                    window.addNoteToUI(noteData);
                 } catch (error) {
                     console.error('خطأ في إضافة الملاحظة:', error);
-                    appendInternalNote(data.note);
+                    appendInternalNote(noteData);
                 }
             } else {
-                appendInternalNote(data.note);
+                appendInternalNote(noteData);
             }
             
             // تشغيل صوت الإشعار
