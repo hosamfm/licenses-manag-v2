@@ -924,6 +924,47 @@
         }
       }
       
+      // تعليم المحادثة كمقروءة في القائمة والخادم
+      function markConversationAsRead(conversationId) {
+        if (!conversationId) return;
+        
+        // تحديث واجهة المستخدم أولاً
+        const conversationItem = document.querySelector(`.conversation-item[data-conversation-id="${conversationId}"]`);
+        if (conversationItem) {
+          // إزالة فئة الرسائل غير المقروءة
+          conversationItem.classList.remove('has-unread');
+          
+          // إزالة شارة العدد إن وجدت
+          const badge = conversationItem.querySelector('.badge');
+          if (badge) {
+            badge.remove();
+          }
+        }
+        
+        // إرسال طلب إلى الخادم لتعليم المحادثة كمقروءة
+        fetch(`/crm/conversations/${conversationId}/mark-read`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => {
+          if (!response.ok) {
+            console.warn('فشل تعليم المحادثة كمقروءة:', response.statusText);
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data.success) {
+            console.log('تم تعليم المحادثة كمقروءة بنجاح');
+          }
+        })
+        .catch(error => {
+          console.error('خطأ في تعليم المحادثة كمقروءة:', error);
+        });
+      }
+      
       // تنفيذ عند تحميل الصفحة
       initializePage();
       
