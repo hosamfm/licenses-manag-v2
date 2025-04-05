@@ -336,13 +336,43 @@ function notifyMessageExternalIdUpdate(conversationId, messageId, externalId) {
   logger.info('socketService', 'تم إرسال إشعار بتحديث معرف خارجي للرسالة', { conversationId, messageId, externalId });
 }
 
+/**
+ * إرسال تحديث بتفاعل على رسالة
+ * @param {String} conversationId - معرف المحادثة
+ * @param {String} externalId - المعرف الخارجي للرسالة
+ * @param {Object} reaction - بيانات التفاعل
+ */
+function notifyMessageReaction(conversationId, externalId, reaction) {
+    if (!io) {
+        return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+    }
+
+    if (!externalId) {
+        return logger.warn('socketService', 'محاولة إرسال تفاعل لرسالة بدون معرف خارجي', { 
+            conversationId, 
+            reaction 
+        });
+    }
+
+    io.to(`conversation-${conversationId}`).emit('message-reaction', { 
+        externalId, 
+        reaction, 
+        conversationId 
+    });
+    
+    logger.info('socketService', 'تم إرسال تحديث بتفاعل على رسالة', { 
+        conversationId, 
+        externalId,
+        senderName: reaction.senderName 
+    });
+}
+
 module.exports = {
   initialize,
   notifyNewMessage,
   notifyConversationUpdate,
   notifyMessageStatusUpdate,
   notifyMessageReaction,
-  notifyMessageReply,
   notifyUser,
   broadcastNotification,
   emitToRoom,
