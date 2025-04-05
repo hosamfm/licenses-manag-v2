@@ -89,22 +89,16 @@ function initializeSocketConnection() {
 }
 
 /**
- * تفعيل مستمعات الإشعارات
+ * تفعيل مستمعات تحديث الواجهة
  * @param {Object} socket - كائن اتصال Socket.io
  */
 function setupNotificationListeners(socket) {
     if (!socket) return;
     
-    // استقبال إشعار برسالة جديدة
+    // استقبال تحديث برسالة جديدة
     socket.on('new-message', function(data) {
-        
-        // التعامل مع بنيتين مختلفتين للبيانات: إما الرسالة مباشرة أو داخل كائن message
+        // التعامل مع بنيتين مختلفتين للبيانات
         const message = data.message || data;
-        
-        // إضافة السجلات للتشخيص
-        if (window.DEBUG_MESSAGES === true) {
-            console.log('تم استلام رسالة جديدة عبر Socket.io:', message);
-        }
         
         // تأكد من تعريف حقل metadata إذا لم يكن موجودًا
         if (!message.metadata) {
@@ -120,36 +114,6 @@ function setupNotificationListeners(socket) {
                     _id: window.currentUserId
                 };
                 message.sentByUsername = window.currentUsername;
-            } 
-            // إذا كانت معلومات المرسل غير موجودة ولكن معرف المرسل موجود
-            else if (message.sentBy && (!message.metadata.senderInfo || Object.keys(message.metadata.senderInfo).length === 0)) {
-                // استعلام عن معلومات المستخدم من الخادم
-                fetch(`/api/users/${message.sentBy}/info`)
-                    .then(response => response.json())
-                    .then(userData => {
-                        if (userData && userData.username) {
-                            message.metadata.senderInfo = {
-                                username: userData.username,
-                                _id: message.sentBy
-                            };
-                            message.sentByUsername = userData.username;
-                            
-                            // تحديث الرسالة في واجهة المستخدم بعد الحصول على معلومات المرسل
-                            const messageElement = document.querySelector(`[data-message-id="${message._id}"]`);
-                            if (messageElement) {
-                                const senderElement = messageElement.querySelector('.message-sender');
-                                if (senderElement) {
-                                    senderElement.textContent = userData.username;
-                                } else {
-                                    // إذا لم يكن عنصر المرسل موجودًا، قم بتحديث المحتوى الكامل
-                                    messageElement.innerHTML = getMessageTemplate(message);
-                                }
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('خطأ في الحصول على معلومات المستخدم:', error);
-                    });
             }
         }
         
@@ -161,122 +125,35 @@ function setupNotificationListeners(socket) {
             } else {
                 appendNewMessage(message);
             }
-            
-        } else {
         }
         
-        // تحديث قائمة المحادثات إذا كانت موجودة
+        // تحديث قائمة المحادثات
         updateConversationsList();
-        
-        // تشغيل صوت الإشعار للرسائل الواردة فقط
-        if (typeof window.playNotificationSound === 'function' && message.direction === 'incoming') {
-            window.playNotificationSound();
-        }
     });
     
-    // استقبال إشعار بتحديث حالة الرسالة
+    // استقبال تحديث حالة الرسالة
     socket.on('message-status-update', function(data) {        
-        // تحديث حالة الرسالة في واجهة المستخدم
         if (typeof window.updateMessageStatus === 'function') {
             window.updateMessageStatus(data.externalId, data.status);
         }
     });
     
-    // استقبال إشعار بتفاعل جديد
+    // استقبال تحديث تفاعل
     socket.on('message-reaction', function(data) {        
-        // تحديث التفاعل في واجهة المستخدم
         if (typeof window.updateMessageReaction === 'function') {
             window.updateMessageReaction(data.externalId, data.reaction);
         }
     });
     
-    // استقبال إشعار بتحديث معرف خارجي للرسالة
+    // استقبال تحديث معرف خارجي للرسالة
     socket.on('message-external-id-update', function(data) {        
-        // تحديث المعرف الخارجي في واجهة المستخدم
         updateMessageExternalId(data.messageId, data.externalId);
     });
     
-    // استقبال إشعار بتحديث المحادثة
+    // استقبال تحديث المحادثة
     socket.on('conversation-update', function(data) {        
-        // تحديث معلومات المحادثة في واجهة المستخدم
         updateConversationInfo(data);
-        
-        // تحديث قائمة المحادثات
         updateConversationsList();
-    });
-    
-    // استقبال إشعار برد على رسالة
-    socket.on('message-reply', function(data) {        
-        // التعامل مع بنيتين مختلفتين للبيانات
-        const message = data.message || data;
-        
-        // تحديث واجهة المستخدم إذا كان الرد يخص المحادثة الحالية
-        if (window.currentConversationId && message.conversationId === window.currentConversationId) {
-            // استخدام نفس الدالة لإضافة الرسالة في واجهة المستخدم
-            if (typeof window.addMessageToConversation === 'function') {
-                window.addMessageToConversation(message);
-            } else {
-                appendNewMessage(message);
-            }
-            }
-        
-        // تحديث قائمة المحادثات
-        updateConversationsList();
-        
-        // تشغيل صوت الإشعار للرسائل الواردة فقط
-        if (typeof window.playNotificationSound === 'function' && message.direction === 'incoming') {
-            window.playNotificationSound();
-        }
-    });
-    
-    // استقبال إشعار بملاحظة داخلية جديدة
-    socket.on('internal-note', function(data) {        
-        // التعامل مع الهيكل المتوقع للبيانات
-        const note = data.note || data;
-        
-        // تحديث واجهة المستخدم إذا كانت الملاحظة تخص المحادثة الحالية
-        if (window.currentConversationId && note.conversationId === window.currentConversationId) {
-            // فحص متقدم لمنع تكرار الملاحظات
-
-            // 1. التحقق من وجود الملاحظة في واجهة المستخدم بالفعل
-            const existingNote = document.querySelector(`[data-note-id="${note._id}"]`);
-            if (existingNote) {
-                return;
-            }
-
-            // 2. التحقق من وجود الملاحظة في قائمة الملاحظات المرسلة
-            if (window.sentNoteIds && (
-                window.sentNoteIds.has(note._id) || 
-                (note._clientId && window.sentNoteIds.has(note._clientId))
-            )) {
-                return;
-            }
-
-            // 3. إضافة معرف الملاحظة إلى قائمة الملاحظات المرسلة لتجنب التكرار المستقبلي
-            if (window.sentNoteIds && note._id) {
-                window.sentNoteIds.add(note._id);
-                if (note._clientId) {
-                    window.sentNoteIds.add(note._clientId);
-                }
-            } else if (!window.sentNoteIds) {
-                window.sentNoteIds = new Set();
-                window.sentNoteIds.add(note._id);
-            }
-
-            // إضافة الملاحظة إلى واجهة المستخدم
-            if (typeof window.addNoteToUI === 'function') {
-                window.addNoteToUI(note);
-            }
-        }
-        
-        // تحديث قائمة المحادثات
-        updateConversationsList();
-        
-        // تشغيل صوت الإشعار للملاحظات الداخلية إذا لم تكن من المستخدم الحالي
-        if (typeof window.playNotificationSound === 'function' && 
-            (!note.author || note.author._id !== window.currentUserId)) {
-            window.playNotificationSound();
-        }
     });
 }
 
@@ -404,9 +281,6 @@ function appendNewMessage(message) {
  * @returns {string} HTML للرسالة
  */
 function getMessageTemplate(message) {
-    // إذا كان هناك قالب موجود بالفعل، يمكن استخدامه
-    // وإلا، نقوم بإنشاء قالب بسيط هنا
-    
     // تحديد اتجاه الرسالة
     const isOutgoing = message.direction === 'outgoing';
     const messageClass = isOutgoing ? 'message outgoing' : 'message incoming';
@@ -437,7 +311,6 @@ function getMessageTemplate(message) {
         // 3. محاولة الحصول على المعلومات من معرف المرسل
         else if (message.sentBy) {
             try {
-                // محاولة استخدام معرف المرسل
                 const senderId = typeof message.sentBy === 'string' ? message.sentBy : 
                               (message.sentBy.toString ? message.sentBy.toString() : '');
                 
@@ -445,9 +318,13 @@ function getMessageTemplate(message) {
                     senderName = 'النظام';
                 } else if (window.currentUserId && senderId === window.currentUserId) {
                     senderName = window.currentUsername || 'أنت';
+                } else {
+                    // إذا لم يكن المستخدم الحالي هو المرسل، نستخدم معرف المرسل
+                    senderName = senderId;
                 }
             } catch (e) {
                 console.error('خطأ في استخراج معرف المرسل:', e);
+                senderName = 'مستخدم';
             }
         }
         
@@ -460,7 +337,7 @@ function getMessageTemplate(message) {
         
         // 5. إذا لم يكن هناك اسم بعد كل هذه المحاولات، استخدم اسم افتراضي
         if (!senderName) {
-            senderName = 'المستخدم';
+            senderName = 'مستخدم';
         }
         
         // تسجيل معلومات التشخيص إذا كان وضع التصحيح مفعل
@@ -483,42 +360,7 @@ function getMessageTemplate(message) {
     
     // إضافة عناصر الوسائط إذا كان هناك
     if (message.mediaType && message.mediaUrl) {
-        if (message.mediaType === 'image') {
-            messageContent = `<div class="media-container">
-                <img src="${message.mediaUrl}" alt="صورة" class="message-media" 
-                     onclick="openMediaPreview('${message.mediaUrl}', 'image')">
-                ${message.caption ? `<div class="media-caption">${message.caption}</div>` : ''}
-                ${message.content ? `<div class="message-text">${message.content}</div>` : ''}
-            </div>`;
-        } else if (message.mediaType === 'video') {
-            messageContent = `<div class="media-container">
-                <video controls class="message-media">
-                    <source src="${message.mediaUrl}" type="video/mp4">
-                    المتصفح لا يدعم تشغيل الفيديو
-                </video>
-                ${message.caption ? `<div class="media-caption">${message.caption}</div>` : ''}
-                ${message.content ? `<div class="message-text">${message.content}</div>` : ''}
-            </div>`;
-        } else if (message.mediaType === 'audio') {
-            messageContent = `<div class="media-container">
-                <audio controls class="media-audio">
-                    <source src="${message.mediaUrl}" type="audio/mp3">
-                    المتصفح لا يدعم تشغيل الصوت
-                </audio>
-                ${message.content ? `<div class="message-text">${message.content}</div>` : ''}
-            </div>`;
-        } else if (message.mediaType === 'document') {
-            messageContent = `<div class="media-container">
-                <div class="document-preview">
-                    <i class="fas fa-file-alt"></i>
-                    <a href="${message.mediaUrl}" target="_blank" class="document-link">
-                        فتح المستند
-                    </a>
-                </div>
-                ${message.caption ? `<div class="media-caption">${message.caption}</div>` : ''}
-                ${message.content ? `<div class="message-text">${message.content}</div>` : ''}
-            </div>`;
-        }
+        messageContent += getMediaContent(message);
     }
     
     // إنشاء قالب الرسالة

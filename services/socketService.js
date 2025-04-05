@@ -163,9 +163,8 @@ function initialize(server) {
 }
 
 /**
- * إرسال إشعار برسالة جديدة إلى غرفة المحادثة
- * ملاحظة: هذه الدالة للإشعارات فقط وليس لإرسال الرسالة نفسها
- * يتم استدعاء هذه الدالة من متحكم conversationController بعد حفظ الرسالة في قاعدة البيانات
+ * إرسال تحديث برسالة جديدة إلى غرفة المحادثة
+ * هذه الدالة تستخدم لتحديث واجهة المستخدم فوراً عند استلام رسالة جديدة
  * @param {String} conversationId - معرف المحادثة
  * @param {Object} message - الرسالة الجديدة
  */
@@ -174,28 +173,19 @@ async function notifyNewMessage(conversationId, message) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
-  // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
-  if (message && message.mediaType) {
-    logger.info('socketService', 'إرسال إشعار برسالة جديدة مع وسائط', { 
-      conversationId, 
-      mediaType: message.mediaType,
-      messageId: message._id
-    });
-  }
-  
-  // إضافة معلومات المرسل إذا كانت الرسالة صادرة وليس هناك معلومات مرسل كاملة
-  if (message && message.direction === 'outgoing' && message.sentBy && 
-      (!message.metadata || !message.metadata.senderInfo)) {
+  // إضافة معلومات المرسل إذا كانت الرسالة صادرة
+  if (message && message.direction === 'outgoing' && message.sentBy) {
     try {
       const User = require('../models/User');
       const senderId = message.sentBy.toString();
 
-      // لا نحتاج لاسترجاع معلومات المرسل إذا كان النظام
+      // معالجة حالة النظام
       if (senderId === 'system') {
         if (!message.metadata) message.metadata = {};
         message.metadata.senderInfo = { username: 'النظام', full_name: 'النظام' };
+        message.sentByUsername = 'النظام';
       } 
-      // استرجاع معلومات المستخدم المرسل من قاعدة البيانات
+      // استرجاع معلومات المستخدم المرسل
       else {
         const user = await User.findById(senderId);
         if (user) {
@@ -205,19 +195,20 @@ async function notifyNewMessage(conversationId, message) {
             full_name: user.full_name || user.username,
             _id: user._id.toString()
           };
-          
-          // تخزين اسم المستخدم المرسل بشكل مباشر أيضًا لتسهيل الوصول إليه
           message.sentByUsername = user.username;
-          
-          logger.info('socketService', 'تم إضافة معلومات المرسل للإشعار', { 
-            conversationId, 
-            senderUsername: user.username,
-            senderId: user._id.toString()
-          });
+        } else {
+          // استخدام معرف المستخدم كاسم إذا لم يتم العثور على المستخدم
+          if (!message.metadata) message.metadata = {};
+          message.metadata.senderInfo = {
+            username: senderId,
+            full_name: senderId,
+            _id: senderId
+          };
+          message.sentByUsername = senderId;
         }
       }
     } catch (error) {
-      logger.error('socketService', 'خطأ في استرجاع معلومات المرسل للإشعار', { 
+      logger.error('socketService', 'خطأ في استرجاع معلومات المرسل', { 
         conversationId, 
         senderId: message.sentBy.toString(),
         error: error.message
@@ -225,72 +216,19 @@ async function notifyNewMessage(conversationId, message) {
     }
   }
   
+  // إرسال التحديث إلى جميع المستخدمين في غرفة المحادثة
   io.to(`conversation-${conversationId}`).emit('new-message', message);
-  logger.info('socketService', 'تم إرسال إشعار برسالة جديدة', { conversationId });
+  logger.info('socketService', 'تم إرسال تحديث برسالة جديدة', { conversationId });
 }
 
 /**
- * إرسال إشعار برد على رسالة
- * ملاحظة: هذه الدالة للإشعارات فقط وليس لإرسال الرد نفسه
- * يتم استدعاء هذه الدالة من متحكم conversationController بعد حفظ الرد في قاعدة البيانات
+ * إرسال إشعار برسالة جديدة إلى غرفة المحادثة
+ * ملاحظة: هذه الدالة للإشعارات فقط وليس لإرسال الرسالة نفسها
+ * يتم استدعاء هذه الدالة من متحكم conversationController بعد حفظ الرسالة في قاعدة البيانات
  * @param {String} conversationId - معرف المحادثة
  * @param {Object} message - الرسالة الجديدة
- * @param {String} replyToId - معرف الرسالة المرد عليها
  */
-function notifyMessageReply(conversationId, message, replyToId) {
-  if (!io) {
-    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-  }
-  
-  // إرسال إشعار إلى غرفة المحادثة بأن هناك رد جديد
-  message.replyToId = replyToId;
-  io.to(`conversation-${conversationId}`).emit('message-reply', message);
-  
-  logger.info('socketService', 'تم إرسال إشعار برد على رسالة', { 
-    conversationId, 
-    replyToId,
-    messageId: message._id 
-  });
-}
-
-/**
- * إرسال إشعار بتفاعل على رسالة
- * ملاحظة: هذه الدالة للإشعارات فقط، الإرسال الفعلي للتفاعلات يتم عبر HTTP
- * @param {String} conversationId - معرف المحادثة
- * @param {String} externalId - المعرف الخارجي للرسالة
- * @param {Object} reaction - بيانات التفاعل (المرسل، الإيموجي)
- */
-function notifyMessageReaction(conversationId, externalId, reaction) {
-  if (!io) {
-    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-  }
-
-  if (!externalId) {
-    return logger.warn('socketService', 'محاولة إرسال تفاعل لرسالة بدون معرف خارجي', { 
-      conversationId, 
-      reaction 
-    });
-  }
-
-  io.to(`conversation-${conversationId}`).emit('message-reaction', { 
-    externalId, 
-    reaction, 
-    conversationId 
-  });
-  
-  logger.info('socketService', 'تم إرسال إشعار بتفاعل على رسالة', { 
-    conversationId, 
-    externalId,
-    senderName: reaction.senderName 
-  });
-}
-
-/**
- * إرسال إشعار بتحديث المحادثة (مثلاً تغير الحالة أو الإسناد)
- * @param {String} conversationId - معرف المحادثة
- * @param {Object} update - التحديث الجديد
- */
-function notifyConversationUpdate(conversationId, update) {
+async function notifyConversationUpdate(conversationId, update) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
