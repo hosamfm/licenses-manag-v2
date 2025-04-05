@@ -89,10 +89,36 @@
                 <div class="internal-note-header">
                   <i class="fas fa-sticky-note me-1"></i>
                   <strong>ملاحظة داخلية</strong>
-                  <span class="from-user"><%= msg.sentBy ? `- ${msg.sentBy.username || msg.sentBy}` : 'النظام' %></span>
+                  <% if (msg.sentBy && (msg.sentBy.username || msg.sentBy.full_name)) { %>
+                    <span class="text-muted ms-1">
+                      بواسطة <%= msg.sentBy.full_name || msg.sentBy.username %>
+                    </span>
+                  <% } %>
                 </div>
                 <div class="internal-note-content">
-                  <%- msg.content.replace(/\n/g, '<br>') %>
+                  <% 
+                  // عرض محتوى الملاحظة مع تمييز المنشنات
+                  let noteContent = msg.content;
+                  
+                  // إذا كانت الملاحظة تحتوي على منشنات
+                  if (msg.mentions && msg.mentions.length > 0) {
+                    // استبدال كل منشن @ بعلامة تجميلية
+                    msg.mentions.forEach(mention => {
+                      const username = mention.username;
+                      const mentionRegex = new RegExp(`@${username}\\b`, 'g');
+                      const mentionName = mention.user && mention.user.full_name ? mention.user.full_name : username;
+                      
+                      // استبدال المنشنات بعناصر HTML مخصصة
+                      noteContent = noteContent.replace(
+                        mentionRegex, 
+                        `<span class="user-mention" data-user-id="${mention.user && mention.user._id ? mention.user._id : ''}" title="${mentionName}">@${username}</span>`
+                      );
+                    });
+                  }
+                  
+                  // عرض المحتوى مع تحويل النص البسيط إلى HTML
+                  %>
+                  <%- noteContent.replace(/\n/g, '<br>') %>
                 </div>
               <% } else if (msg.mediaType) { %>
                 <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
@@ -299,10 +325,12 @@
         <span class="sending-indicator" id="sendingIndicator" style="display: none;">
           <i class="fas fa-circle-notch fa-spin"></i> جاري الإرسال...
         </span>
-        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('replyMessage').value = ''">مسح</button>
-        <button type="submit" class="btn btn-primary" id="sendButton">
-          <i class="fas fa-paper-plane me-1"></i> إرسال
-        </button>
+        <div class="reply-form-actions">
+          <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('replyMessage').value = ''">مسح</button>
+          <button type="submit" class="btn btn-primary" id="sendButton">
+            <i class="fas fa-paper-plane me-1"></i> إرسال
+          </button>
+        </div>
       </div>
     </form>
     
