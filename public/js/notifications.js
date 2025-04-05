@@ -101,6 +101,28 @@ function setupNotificationListeners(socket) {
         // التعامل مع بنيتين مختلفتين للبيانات: إما الرسالة مباشرة أو داخل كائن message
         const message = data.message || data;
         
+        // إضافة السجلات للتشخيص
+        if (window.DEBUG_MESSAGES === true) {
+            console.log('تم استلام رسالة جديدة عبر Socket.io:', message);
+        }
+        
+        // تأكد من تعريف حقل metadata إذا لم يكن موجودًا
+        if (!message.metadata) {
+            message.metadata = {};
+        }
+        
+        // إضافة معلومات المرسل للرسائل الصادرة إذا لم تكن موجودة
+        if (message.direction === 'outgoing' && (!message.metadata.senderInfo || Object.keys(message.metadata.senderInfo).length === 0)) {
+            // إذا كان المستخدم الحالي هو المرسل، استخدم معلوماته
+            if (window.currentUserId && message.sentBy === window.currentUserId) {
+                message.metadata.senderInfo = {
+                    username: window.currentUsername,
+                    _id: window.currentUserId
+                };
+                message.sentByUsername = window.currentUsername;
+            }
+        }
+        
         // تحديث واجهة المستخدم إذا كانت الرسالة تخص المحادثة الحالية
         if (window.currentConversationId && message.conversationId === window.currentConversationId) {
             // نقوم باستدعاء الدالة الصحيحة لإضافة الرسالة
@@ -134,7 +156,7 @@ function setupNotificationListeners(socket) {
     socket.on('message-reaction', function(data) {        
         // تحديث التفاعل في واجهة المستخدم
         if (typeof window.updateMessageReaction === 'function') {
-            window.updateMessageReaction(data.messageId, data.reaction);
+            window.updateMessageReaction(data.externalId, data.reaction);
         }
     });
     
@@ -373,9 +395,10 @@ function getMessageTemplate(message) {
     let senderHtml = '';
     if (isOutgoing) {
         let senderName = '';
+        
         // 1. محاولة الحصول على الاسم من معلومات المرسل في metadata
         if (message.metadata && message.metadata.senderInfo) {
-            senderName = message.metadata.senderInfo.full_name || message.metadata.senderInfo.username;
+            senderName = message.metadata.senderInfo.username || message.metadata.senderInfo.full_name;
         }
         // 2. محاولة الحصول على الاسم من sentByUsername مباشرة
         else if (message.sentByUsername) {
@@ -383,25 +406,42 @@ function getMessageTemplate(message) {
         }
         // 3. محاولة الحصول على المعلومات من معرف المرسل
         else if (message.sentBy) {
-            // محاولة استخدام معرف المرسل
-            const senderId = typeof message.sentBy === 'string' ? message.sentBy : 
-                           (message.sentBy.toString ? message.sentBy.toString() : '');
-            
-            if (senderId === 'system') {
-                senderName = 'النظام';
-            } else if (window.currentUserId && senderId === window.currentUserId) {
-                senderName = window.currentUsername || 'أنت';
+            try {
+                // محاولة استخدام معرف المرسل
+                const senderId = typeof message.sentBy === 'string' ? message.sentBy : 
+                              (message.sentBy.toString ? message.sentBy.toString() : '');
+                
+                if (senderId === 'system') {
+                    senderName = 'النظام';
+                } else if (window.currentUserId && senderId === window.currentUserId) {
+                    senderName = window.currentUsername || 'أنت';
+                }
+            } catch (e) {
+                console.error('خطأ في استخراج معرف المرسل:', e);
             }
         }
         
-        // 4. إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي
-        if (!senderName && window.currentUsername) {
+        // 4. إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي إذا كانت الرسالة صادرة من المستخدم الحالي
+        if (!senderName && window.currentUsername && 
+            ((message.sentBy && message.sentBy === window.currentUserId) || 
+             (message.metadata && message.metadata.senderInfo && message.metadata.senderInfo._id === window.currentUserId))) {
             senderName = window.currentUsername;
         }
         
-        // 5. إذا لم يكن هناك اسم بعد كل هذه المحاولات، استخدم "أنت" كاسم افتراضي
+        // 5. إذا لم يكن هناك اسم بعد كل هذه المحاولات، استخدم اسم افتراضي
         if (!senderName) {
-            senderName = 'أنت';
+            senderName = 'المستخدم';
+        }
+        
+        // تسجيل معلومات التشخيص إذا كان وضع التصحيح مفعل
+        if (window.DEBUG_MESSAGES === true) {
+            console.log('معلومات المرسل للرسالة:', {
+                senderName: senderName,
+                messageId: message._id,
+                sentBy: message.sentBy,
+                metadata: message.metadata,
+                currentUserId: window.currentUserId
+            });
         }
         
         // إضافة اسم المرسل إلى قالب الرسالة
