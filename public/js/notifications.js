@@ -171,7 +171,7 @@ function setupNotificationListeners(socket) {
             }
             
             // عرض الإشعار
-            notifications.showNotification(title, cleanContent, function() {
+            window.showNotification(title, cleanContent, function() {
                 if (conversationId) {
                     // توجيه المستخدم إلى المحادثة ذات الصلة عند النقر على الإشعار
                     if (window.location.href.includes(`/crm/conversations/${conversationId}`)) {
