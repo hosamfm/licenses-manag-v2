@@ -14,6 +14,7 @@ const WhatsappMessage = require('../models/WhatsappMessageModel');
 const WhatsappChannel = require('../models/WhatsAppChannel');
 const User = require('../models/User');
 const WhatsappMedia = require('../models/WhatsappMedia');
+const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const mediaService = require('../services/mediaService');
 const conversationService = require('../services/conversationService');
@@ -117,6 +118,7 @@ async function renderConversationsList(options, req, res, viewName, pageTitle) {
       flashMessages: req.flash()
     });
   } catch (error) {
+    logger.error('conversationController', `خطأ في عرض ${pageTitle}`, error);
     req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
     res.redirect('/');
   }
@@ -215,6 +217,7 @@ exports.assignConversation = async (req, res) => {
       : 'تم إلغاء إسناد المحادثة بنجاح');
     res.redirect(`/crm/conversations/${conversationId}`);
   } catch (error) {
+    logger.error('conversationController', 'خطأ في إسناد المحادثة', error);
     req.flash('error', 'حدث خطأ أثناء محاولة إسناد المحادثة');
     res.redirect(`/crm/conversations/${req.params.conversationId || ''}`);
   }
@@ -241,8 +244,18 @@ exports.addInternalNote = async (req, res) => {
     
     // 1. محاولة استخدام userId المرسل من العميل (إذا كان موجوداً وصحيحاً)
     if (userId) {
+      // تسجيل تشخيصي إضافي للمساعدة في تحديد المشكلة
+      logger.info('conversationController', 'تحليل معرف المستخدم المستلم', {
+        userId: userId,
+        type: typeof userId,
+        isValid: mongoose.Types.ObjectId.isValid(userId),
+        userIdLength: userId.length,
+        hexFormat: /^[0-9a-fA-F]{24}$/.test(userId)
+      });
+      
       // حالة خاصة: مستخدم النظام
       if (userId === 'system') {
+        // حالة خاصة: مستخدم النظام، نتركه فارغاً ونضيف معلومات خاصة لاحقاً
         senderInfo = { username: username || 'مستخدم النظام' };
       } 
       else if (mongoose.Types.ObjectId.isValid(userId)) {
@@ -267,6 +280,14 @@ exports.addInternalNote = async (req, res) => {
       };
     }
     
+    // سجل تشخيصي لمعلومات المستخدم المعالجة
+    logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
+      senderInfo: senderInfo ? {
+        _id: senderInfo._id ? senderInfo._id.toString() : null,
+        username: senderInfo.username
+      } : null
+    });
+
     // 3. إنشاء وحفظ الملاحظة الداخلية
     const noteMsg = new WhatsappMessage({
       conversationId,
@@ -298,7 +319,10 @@ exports.addInternalNote = async (req, res) => {
     
     // 7. إرسال إشعار للمستخدمين الآخرين في غرفة المحادثة
     socketService.emitToRoom(`conversation-${conversationId}`, 'internal-note', noteWithSender);
-    // تم إرسال إشعار إلى غرفة المحادثة
+    logger.info('تم إرسال إشعار إلى غرفة محددة', {
+      roomName: `conversation-${conversationId}`,
+      eventName: 'internal-note'
+    });
     
     // 8. إرسال استجابة ناجحة
     res.json({
@@ -345,6 +369,7 @@ exports.toggleConversationStatus = async (req, res) => {
     req.flash('success', newStatus === 'closed' ? 'تم إغلاق المحادثة' : 'تم فتح المحادثة');
     res.redirect(`/crm/conversations/${conversationId}`);
   } catch (error) {
+    logger.error('conversationController', 'خطأ في تغيير حالة المحادثة', error);
     req.flash('error', 'حدث خطأ أثناء تغيير حالة المحادثة');
     res.redirect('/crm/conversations');
   }
@@ -359,23 +384,52 @@ exports.replyToConversation = async (req, res) => {
     const { conversationId } = req.params;
     const { content, replyToMessageId, mediaId, mediaType, userId, username } = req.body;
 
+    // سجل تشخيصي لمعلومات المستخدم المرسلة
+    logger.info('conversationController', 'معلومات المستخدم المرسلة في طلب الرد', {
+      userId,
+      username,
+      sessionUser: req.user ? {
+        _id: req.user._id.toString(),
+        username: req.user.username
+      } : null
+    });
+
     // التحقق من معلومات المستخدم المرسلة من العميل
     let senderInfo = null;
     if (userId) {
+      // تسجيل تشخيصي إضافي للمساعدة في تحديد المشكلة
+      logger.info('conversationController', 'تحليل معرف المستخدم المستلم', {
+        userId: userId,
+        type: typeof userId,
+        isValid: mongoose.Types.ObjectId.isValid(userId),
+        userIdLength: userId.length,
+        hexFormat: /^[0-9a-fA-F]{24}$/.test(userId)
+      });
+      
       // حالة خاصة: مستخدم النظام
       if (userId === 'system') {
         senderInfo = { username: username || 'مستخدم النظام' };
       } 
       else if (mongoose.Types.ObjectId.isValid(userId)) {
-        // البحث عن المستخدم في قاعدة البيانات
-        const user = await User.findById(userId);
-        if (user) {
-          senderInfo = {
-            _id: user._id,
-            username: user.username,
-            full_name: user.full_name || user.username
-          };
+        try {
+          // البحث عن المستخدم في قاعدة البيانات
+          const user = await User.findById(userId);
+          if (user) {
+            senderInfo = {
+              _id: user._id,
+              username: user.username,
+              full_name: user.full_name || user.username
+            };
+          } else {
+            // لم يتم العثور على المستخدم - سجل تشخيصي
+            logger.warn('conversationController', 'تم إرسال معرف مستخدم صالح ولكن لم يتم العثور عليه', { userId });
+          }
+        } catch (err) {
+          logger.error('conversationController', 'خطأ أثناء البحث عن المستخدم', { userId, error: err.message });
         }
+      } else {
+        // تم إرسال معرف غير صالح
+        logger.warn('conversationController', 'تم إرسال معرف مستخدم غير صالح', { userId });
       }
     }
     
@@ -388,6 +442,14 @@ exports.replyToConversation = async (req, res) => {
       };
     }
     
+    // سجل تشخيصي لمعلومات المستخدم المعالجة
+    logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
+      senderInfo: senderInfo ? {
+        _id: senderInfo._id ? senderInfo._id.toString() : null,
+        username: senderInfo.username
+      } : null
+    });
+
     // التحقق من وجود محتوى أو وسائط على الأقل
     if ((!content || !content.trim()) && !mediaId) {
       if (isAjax) return res.json({ success: false, error: 'لا يمكن إرسال رسالة فارغة' });
@@ -413,12 +475,20 @@ exports.replyToConversation = async (req, res) => {
         // استخدام المعرف الخارجي للرسالة الأصلية للرد
         externalReplyId = originalMessage.externalMessageId;
         
+        // تسجيل معلومات تشخيصية مفصلة
+        logger.info('conversationController', 'معلومات الرسالة الأصلية للرد', { 
+          originalMessageId: originalMessage._id.toString(),
+          externalMessageId: originalMessage.externalMessageId,
+          from: originalMessage.metadata?.from,
+          direction: originalMessage.direction
+        });
+        
         replyContext = {
           message_id: originalMessage.externalMessageId || replyToMessageId,
           from: originalMessage.metadata ? originalMessage.metadata.from : null
         };
       } else {
-        // لم يتم العثور على الرسالة الأصلية للرد
+        logger.warn('conversationController', 'لم يتم العثور على الرسالة الأصلية للرد', { replyToMessageId });
       }
     }
 
@@ -488,6 +558,12 @@ exports.replyToConversation = async (req, res) => {
           throw new Error('الوسائط غير موجودة');
         }
         
+        logger.info('conversationController', 'إرسال رسالة مع وسائط', {
+          mediaId,
+          mediaType,
+          conversationId
+        });
+        
         // تحديث معرف الرسالة في سجل الوسائط
         await whatsappMediaController.updateMessageIdForMedia(mediaId, msg._id);
         
@@ -497,6 +573,13 @@ exports.replyToConversation = async (req, res) => {
           filename: mediaType === 'document' ? media.fileName : undefined
         };
 
+        // تسجيل معلومات إضافية للتشخيص
+        logger.info('conversationController', 'خيارات إرسال الوسائط', {
+          contentLength: content ? content.length : 0,
+          captionFromMedia: media.caption ? media.caption.length : 0,
+          finalCaption: options.caption ? options.caption.length : 0
+        });
+        
         // استخدام معرف الرد الخارجي إذا كان موجوداً، وإلا null للإرسال كرسالة عادية
         apiResponse = await metaWhatsappService.sendMediaMessage(
           conversation.phoneNumber,
@@ -518,6 +601,12 @@ exports.replyToConversation = async (req, res) => {
               externalReplyId, // استخدام المعرف الخارجي بدلاً من replyToMessageId
               phoneNumberId
             );
+            
+            logger.info('conversationController', 'إرسال رد على رسالة', { 
+              originalMessageId: replyToMessageId,
+              externalReplyId,
+              phoneNumber: conversation.phoneNumber
+            });
           } else {
             // في حالة عدم وجود معرف خارجي، نرسل رسالة عادية
             apiResponse = await metaWhatsappService.sendTextMessage(
@@ -525,6 +614,9 @@ exports.replyToConversation = async (req, res) => {
               content,
               phoneNumberId
             );
+            logger.warn('conversationController', 'تم تحويل الرد إلى رسالة عادية (المعرف الخارجي غير موجود)', {
+              originalMessageId: replyToMessageId
+            });
           }
         } else {
           // رسالة عادية
@@ -541,7 +633,7 @@ exports.replyToConversation = async (req, res) => {
       }
       // نعتبر الحالة sent حالياً
     } catch (err) {
-      // إزالة التسجيل - خطأ في إرسال عبر WhatsApp API
+      logger.error('conversationController', 'فشل إرسال عبر WhatsApp API', err);
       finalStatus = 'failed';
     }
 
@@ -606,7 +698,7 @@ exports.replyToConversation = async (req, res) => {
       return res.redirect(`/crm/conversations/${conversationId}`);
     }
   } catch (error) {
-    // إزالة التسجيل - خطأ في إرسال رد
+    logger.error('conversationController', 'خطأ في إرسال رد', error);
     if (isAjax) {
       return res.json({ success: false, error: 'حدث خطأ أثناء الإرسال' });
     }
@@ -647,7 +739,12 @@ exports.reactToMessage = async (req, res) => {
     }
     
     if (!message) {
-      // لم يتم العثور على الرسالة
+      // تسجيل المزيد من التفاصيل للتشخيص
+      logger.error('conversationController', 'الرسالة غير موجودة في التفاعل', { 
+        messageId, 
+        externalMessageId, 
+        conversationId 
+      });
       return res.json({ success: false, error: 'الرسالة غير موجودة' });
     }
 
@@ -665,7 +762,10 @@ exports.reactToMessage = async (req, res) => {
       const messageIdToUse = message.externalMessageId;
       
       if (!messageIdToUse) {
-        // المعرف الخارجي للرسالة غير موجود
+        logger.error('conversationController', 'المعرف الخارجي للرسالة غير موجود', { 
+          internalId: message._id,
+          externalId: message.externalMessageId
+        });
         return res.json({ success: false, error: 'المعرف الخارجي للرسالة غير موجود' });
       }
       
@@ -687,9 +787,15 @@ exports.reactToMessage = async (req, res) => {
       const updatedMessage = await WhatsappMessage.updateReaction(messageIdToUse, reactionData);
       
       if (!updatedMessage) {
-        // فشل تحديث التفاعل في قاعدة البيانات
+        logger.warn('conversationController', 'فشل تحديث التفاعل في قاعدة البيانات', {
+          messageId: messageIdToUse,
+          reaction: reactionData
+        });
       } else {
-        // تم تحديث التفاعل في قاعدة البيانات بنجاح
+        logger.info('conversationController', 'تم تحديث التفاعل في قاعدة البيانات بنجاح', {
+          messageId: messageIdToUse,
+          reactionCount: updatedMessage.reactions.length
+        });
       }
 
       // إرسال إشعار عبر Socket
@@ -708,15 +814,12 @@ exports.reactToMessage = async (req, res) => {
         message: 'تم إرسال التفاعل بنجاح'
       });
     } catch (error) {
-      // خطأ في إرسال التفاعل
+      logger.error('conversationController', 'خطأ في إرسال التفاعل', error);
       return res.json({ success: false, error: 'حدث خطأ أثناء إرسال التفاعل' });
     }
   } catch (error) {
-    // خطأ في معالجة طلب التفاعل
-    return res.status(500).json({ 
-      success: false, 
-      error: 'حدث خطأ في الخادم' 
-    });
+    logger.error('conversationController', 'خطأ في معالجة طلب التفاعل', error);
+    return res.status(500).json({ success: false, error: 'حدث خطأ في الخادم' });
   }
 };
 
