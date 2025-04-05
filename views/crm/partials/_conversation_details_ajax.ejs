@@ -130,24 +130,41 @@
               <% } else { %>
                 <!-- إضافة اسم المرسل لغير الملاحظات الداخلية -->
                 <% 
-                  let senderName = 'مجهول';
-                  if (msg.metadata && msg.metadata.senderInfo) {
-                    senderName = msg.metadata.senderInfo.username || msg.metadata.senderInfo.full_name || 'مجهول';
-                  } else if (msg.sentByUsername) {
-                    senderName = msg.sentByUsername;
-                  } else if (msg.sentBy) {
-                    // محاولة الحصول على اسم المستخدم من sentBy
-                    try {
-                      const senderId = msg.sentBy.toString();
-                      if (senderId === 'system') {
-                        senderName = 'النظام';
-                      }
-                    } catch (e) { }
+                  let senderName = '';
+                  
+                  // للرسائل الصادرة: نستخدم معلومات المرسل من metadata أو من المستخدم الحالي
+                  if (msg.direction === 'outgoing') {
+                    if (msg.metadata && msg.metadata.senderInfo) {
+                      senderName = msg.metadata.senderInfo.username || msg.metadata.senderInfo.full_name || 'النظام';
+                    } else if (msg.sentByUsername) {
+                      senderName = msg.sentByUsername;
+                    } else if (msg.sentBy) {
+                      try {
+                        const senderId = msg.sentBy.toString();
+                        if (senderId === 'system') {
+                          senderName = 'النظام';
+                        } else if (senderId === currentUserId) {
+                          senderName = currentUsername;
+                        }
+                      } catch (e) { }
+                    }
+                    
+                    // إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي
+                    if (!senderName) {
+                      senderName = currentUsername || 'النظام';
+                    }
+                  }
+                  // للرسائل الواردة: لا نعرض اسم المرسل لأنه معروف من سياق المحادثة
+                  else if (msg.direction === 'incoming') {
+                    senderName = '';
                   }
                 %>
+                <% if (senderName) { %>
                 <div class="message-sender">
                   <%= senderName %>
                 </div>
+                <% } %>
+                
                 <% if (msg.mediaType) { %>
                   <!-- تجهيز معلومات الوسائط بغض النظر عن مصدرها -->
                   <% 

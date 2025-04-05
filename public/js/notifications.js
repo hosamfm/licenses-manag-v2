@@ -369,6 +369,36 @@ function getMessageTemplate(message) {
                       window.getStatusText(message.status) : 
                       message.status;
     
+    // تحديد اسم المرسل للرسائل الصادرة فقط
+    let senderHtml = '';
+    if (isOutgoing) {
+        let senderName = '';
+        if (message.metadata && message.metadata.senderInfo) {
+            senderName = message.metadata.senderInfo.username || message.metadata.senderInfo.full_name;
+        } else if (message.sentByUsername) {
+            senderName = message.sentByUsername;
+        } else if (message.sentBy) {
+            // محاولة استخدام معرف المرسل
+            const senderId = typeof message.sentBy === 'string' ? message.sentBy : 
+                           (message.sentBy.toString ? message.sentBy.toString() : '');
+            
+            if (senderId === 'system') {
+                senderName = 'النظام';
+            } else if (window.currentUserId && senderId === window.currentUserId) {
+                senderName = window.currentUsername || 'أنت';
+            }
+        }
+        
+        // إذا لم نجد اسم المرسل، نستخدم اسم المستخدم الحالي
+        if (!senderName && window.currentUsername) {
+            senderName = window.currentUsername;
+        }
+        
+        if (senderName) {
+            senderHtml = `<div class="message-sender">${senderName}</div>`;
+        }
+    }
+    
     // محتوى الرسالة الأساسي
     let messageContent = `<div class="message-text">${message.content}</div>`;
     
@@ -416,6 +446,7 @@ function getMessageTemplate(message) {
     return `
     <div class="${messageClass}" data-message-id="${message._id}" data-external-id="${message.externalMessageId || ''}">
         <div class="message-container">
+            ${senderHtml}
             ${messageContent}
             <div class="message-meta">
                 <span class="message-time">${formattedTime}</span>
