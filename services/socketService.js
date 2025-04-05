@@ -173,52 +173,71 @@ async function notifyNewMessage(conversationId, message) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
-  // إضافة معلومات المرسل إذا كانت الرسالة صادرة
+  // --- التأكد من إضافة معلومات المرسل للرسائل الصادرة --- 
   if (message && message.direction === 'outgoing' && message.sentBy) {
-    try {
-      const User = require('../models/User');
-      const senderId = message.sentBy.toString();
+    // تأكد من أن sentBy هو سلسلة نصية
+    const senderId = message.sentBy.toString(); 
+    
+    // تهيئة metadata إذا لم تكن موجودة
+    if (!message.metadata) {
+      message.metadata = {};
+    }
+    // تهيئة senderInfo إذا لم تكن موجودة
+    if (!message.metadata.senderInfo) {
+      message.metadata.senderInfo = {}; 
+    }
 
-      // معالجة حالة النظام
+    try {
+      // التحقق إذا كان النظام هو المرسل
       if (senderId === 'system') {
-        if (!message.metadata) message.metadata = {};
-        message.metadata.senderInfo = { username: 'النظام', full_name: 'النظام' };
+        message.metadata.senderInfo.username = 'النظام';
+        message.metadata.senderInfo.full_name = 'النظام';
         message.sentByUsername = 'النظام';
       } 
-      // استرجاع معلومات المستخدم المرسل
+      // التحقق إذا كان المستخدم الحالي هو المرسل (من الخادم)
       else {
+        const User = require('../models/User');
         const user = await User.findById(senderId);
         if (user) {
-          if (!message.metadata) message.metadata = {};
-          message.metadata.senderInfo = {
-            username: user.username,
-            full_name: user.full_name || user.username,
-            _id: user._id.toString()
-          };
+          message.metadata.senderInfo.username = user.username;
+          message.metadata.senderInfo.full_name = user.full_name || user.username;
+          message.metadata.senderInfo._id = user._id.toString();
           message.sentByUsername = user.username;
         } else {
-          // استخدام معرف المستخدم كاسم إذا لم يتم العثور على المستخدم
-          if (!message.metadata) message.metadata = {};
-          message.metadata.senderInfo = {
-            username: senderId,
-            full_name: senderId,
-            _id: senderId
-          };
+          // في حالة عدم العثور على المستخدم، استخدم المعرف
+          message.metadata.senderInfo.username = senderId;
+          message.metadata.senderInfo.full_name = senderId;
+          message.metadata.senderInfo._id = senderId;
           message.sentByUsername = senderId;
+          logger.warn('socketService', 'لم يتم العثور على معلومات المستخدم للمرسل الصادر', { conversationId, senderId });
         }
       }
     } catch (error) {
-      logger.error('socketService', 'خطأ في استرجاع معلومات المرسل', { 
+      logger.error('socketService', 'خطأ في استرجاع معلومات المرسل لإشعار Socket.IO', { 
         conversationId, 
         senderId: message.sentBy.toString(),
         error: error.message
       });
+      // محاولة استخدام قيمة افتراضية في حالة الخطأ
+      if (!message.sentByUsername) message.sentByUsername = senderId; 
+      if (!message.metadata.senderInfo.username) message.metadata.senderInfo.username = senderId;
     }
-  }
+  } 
+  // --- نهاية التأكد من معلومات المرسل ---
+  
+  // --- تسجيل تشخيصي قبل الإرسال ---
+  logger.info('socketService', 'إرسال new-message عبر Socket.IO', { 
+    conversationId, 
+    messageId: message._id, 
+    direction: message.direction, 
+    sentBy: message.sentBy,
+    hasSenderInfo: !!(message.metadata && message.metadata.senderInfo && message.metadata.senderInfo.username),
+    sentByUsername: message.sentByUsername
+  });
+  // ------------------------------
   
   // إرسال التحديث إلى جميع المستخدمين في غرفة المحادثة
   io.to(`conversation-${conversationId}`).emit('new-message', message);
-  logger.info('socketService', 'تم إرسال تحديث برسالة جديدة', { conversationId });
 }
 
 /**

@@ -303,8 +303,8 @@ function getMessageTemplate(message) {
                       window.getStatusText(message.status) : 
                       message.status;
     
-    // تحديد اسم المرسل
-    let senderHtml = '';
+    // تحديد اسم المرسل **فقط** للرسائل الصادرة
+    let senderHtml = ''; // يبدأ فارغًا
     if (isOutgoing) {
         let senderName = '';
         const senderIdString = message.sentBy ? message.sentBy.toString() : '';
@@ -333,9 +333,9 @@ function getMessageTemplate(message) {
             }
         }
 
-        // 4. اسم افتراضي إذا لم يتم العثور على اسم
+        // اسم افتراضي إذا لم يتم العثور على اسم (للرسائل الصادرة فقط)
         if (!senderName) {
-            senderName = 'مستخدم'; // أو اتركها فارغة إذا كنت تفضل عدم عرض أي شيء
+            senderName = 'مستخدم'; // أو اتركه فارغًا إذا كنت تفضل عدم عرض أي شيء
         }
 
         // تسجيل معلومات التشخيص إذا كان وضع التصحيح مفعل
@@ -349,16 +349,26 @@ function getMessageTemplate(message) {
             });
         }
 
-        // إضافة اسم المرسل إلى قالب الرسالة
-        senderHtml = `<div class="message-sender">${senderName}</div>`;
+        // إضافة اسم المرسل إلى قالب الرسالة فقط إذا وجدنا اسمًا
+        if (senderName) {
+             senderHtml = `<div class="message-sender">${senderName}</div>`;
+        } else {
+             senderHtml = `<div class="message-sender">مجهول</div>`; // أو اتركه فارغاً ''
+        }
     }
-    
+    // إذا كانت الرسالة واردة (incoming), فإن senderHtml سيبقى فارغًا بشكل افتراضي
+
     // محتوى الرسالة الأساسي
     let messageContent = `<div class="message-text">${message.content}</div>`;
     
     // إضافة عناصر الوسائط إذا كان هناك
     if (message.mediaType && message.mediaUrl) {
-        messageContent += getMediaContent(message);
+        // تأكد من وجود دالة getMediaContent وتعريفها بشكل صحيح
+        if (typeof getMediaContent === 'function') {
+            messageContent += getMediaContent(message);
+        } else {
+            console.warn('الدالة getMediaContent غير معرفة.');
+        }
     }
     
     // إنشاء قالب الرسالة
