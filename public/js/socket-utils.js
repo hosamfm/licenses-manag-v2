@@ -20,26 +20,22 @@ function isSocketConnected() {
 function emitSocketEvent(event, data, important = true) {
     // التحقق من وجود اتصال جاهز
     if (isSocketConnected()) {
-        console.log(`إرسال حدث "${event}" عبر Socket.io:`, data);
         window.socketConnection.emit(event, data);
         return true;
     } 
     // تخزين العملية للتنفيذ لاحقًا إذا كانت مهمة
     else if (important) {
-        console.log(`تخزين حدث "${event}" للتنفيذ لاحقًا:`, data);
         
         if (!Array.isArray(window.pendingSocketOperations)) {
             window.pendingSocketOperations = [];
         }
         
         window.pendingSocketOperations.push((socket) => {
-            console.log(`تنفيذ حدث "${event}" معلق:`, data);
             socket.emit(event, data);
         });
         
         return true;
     } else {
-        console.warn(`فشل إرسال حدث "${event}": اتصال Socket.io غير متاح`);
         return false;
     }
 }
