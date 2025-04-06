@@ -40,6 +40,85 @@
         return status || 'غير معروف';
     }
   }
+
+  // إضافة كود مراقبة الرسائل لتتبع ظهورها في الشاشة
+  document.addEventListener('DOMContentLoaded', function() {
+    // تهيئة متغيرات لتخزين الرسائل التي تمت قراءتها
+    window.readMessages = new Set();
+    
+    // تهيئة دالة تحديث حالة قراءة الرسالة
+    window.updateMessageReadStatus = function(messageId, externalId) {
+      // التحقق من أنها رسالة لم يتم تسجيل قراءتها من قبل
+      if (messageId && !window.readMessages.has(messageId)) {
+        // إضافة الرسالة إلى قائمة الرسائل المقروءة
+        window.readMessages.add(messageId);
+        
+        // إرسال طلب لتحديث حالة القراءة في قاعدة البيانات
+        fetch('/api/messages/update-read-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messageId: messageId,
+            externalId: externalId,
+            conversationId: "<%= conversation._id %>",
+            readBy: {
+              userId: window.currentUserId,
+              username: window.currentUsername,
+              readAt: new Date().toISOString()
+            }
+          })
+        }).then(response => {
+          if (!response.ok) {
+            console.error('فشل تحديث حالة القراءة للرسالة:', messageId);
+          }
+        }).catch(error => {
+          console.error('خطأ في إرسال طلب تحديث حالة القراءة:', error);
+        });
+      }
+    };
+    
+    // تهيئة Intersection Observer لمراقبة الرسائل
+    const setupMessageObserver = function() {
+      if (window.messageObserver) {
+        window.messageObserver.disconnect();
+      }
+      
+      // إنشاء مراقب جديد
+      window.messageObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const messageElement = entry.target;
+            const messageId = messageElement.dataset.messageId;
+            const externalId = messageElement.dataset.externalId;
+            const direction = messageElement.classList.contains('incoming') ? 'incoming' : '';
+            const status = messageElement.dataset.status;
+            
+            // تحديث حالة القراءة فقط للرسائل الواردة التي لم يتم قراءتها بعد
+            if (direction === 'incoming' && status !== 'read') {
+              window.updateMessageReadStatus(messageId, externalId);
+            }
+          }
+        });
+      }, {
+        root: document.querySelector('#messageContainer'),
+        rootMargin: '0px',
+        threshold: 0.5 // يجب أن يكون 50% من الرسالة مرئيًا
+      });
+      
+      // مراقبة جميع الرسائل الواردة
+      document.querySelectorAll('.message.incoming').forEach(message => {
+        window.messageObserver.observe(message);
+      });
+    };
+    
+    // استدعاء دالة إعداد المراقب عند تحميل الصفحة
+    setupMessageObserver();
+    
+    // إعادة تهيئة المراقب عند تحديث الرسائل
+    document.addEventListener('messages-updated', setupMessageObserver);
+  });
 </script>
 
 <div class="card shadow-sm border-0">
@@ -187,6 +266,16 @@
                       <i class="fas fa-trash-alt"></i>
                     </button>
                     <% } %>
+                    
+                    <!-- إضافة زر لعرض المستخدمين الذين قرأوا الرسالة للرسائل الصادرة -->
+                    <% if (message.direction === 'outgoing') { %>
+                    <button type="button" class="btn btn-sm text-muted message-action-btn read-by-btn" 
+                            data-message-id="<%= message._id %>" 
+                            data-external-id="<%= message.externalMessageId || '' %>" 
+                            title="من قرأ هذه الرسالة" onclick="window.showReadByUsers('<%= message._id %>')">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                    <% } %>
                   </div>
                 <% } %>
               </div>
@@ -276,6 +365,31 @@
         </div>
       </div>
     </div>
+    
+    <!-- إضافة نافذة منبثقة لعرض المستخدمين الذين قرأوا الرسالة -->
+    <div id="readByUsersModal" class="modal fade" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">قائمة القراء</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+          </div>
+          <div class="modal-body" id="readByUsersContent">
+            <!-- سيتم إضافة قائمة المستخدمين ديناميكياً -->
+            <div class="text-center p-3 loading-spinner">
+              <i class="fas fa-spinner fa-spin"></i> جاري التحميل...
+            </div>
+            <ul class="list-group read-by-list" style="display: none;"></ul>
+            <div class="alert alert-info mt-3 no-readers" style="display: none;">
+              <i class="fas fa-info-circle me-1"></i> لم يقرأ أحد هذه الرسالة بعد.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          </div>
+        </div>
+      </div>
+    </div>
   <% } else { %>
     <div class="alert alert-secondary mt-3">
       <i class="fas fa-lock me-1"></i>
@@ -323,12 +437,67 @@
             if (window.setupAudioPlayers) {
               window.setupAudioPlayers();
             }
+            
+            // إعادة تفعيل مراقب الرسائل المرئية
+            document.dispatchEvent(new CustomEvent('messages-updated'));
           },
           error: function() {
             $button.prop('disabled', false).html('حدث خطأ أثناء التحميل. حاول مرة أخرى.');
           }
         });
       });
+      
+      // تعريف دالة عرض قائمة القراء
+      window.showReadByUsers = function(messageId) {
+        const modal = $('#readByUsersModal');
+        const contentArea = $('#readByUsersContent');
+        const loadingSpinner = contentArea.find('.loading-spinner');
+        const readByList = contentArea.find('.read-by-list');
+        const noReadersAlert = contentArea.find('.no-readers');
+        
+        // إعادة تعيين المحتوى
+        readByList.html('').hide();
+        noReadersAlert.hide();
+        loadingSpinner.show();
+        
+        // عرض النافذة
+        modal.modal('show');
+        
+        // طلب قائمة القراء
+        fetch(`/api/messages/${messageId}/read-by`)
+          .then(response => response.json())
+          .then(data => {
+            loadingSpinner.hide();
+            
+            if (data.success && data.readers && data.readers.length > 0) {
+              // عرض قائمة القراء
+              data.readers.forEach(reader => {
+                const readTime = new Date(reader.readAt).toLocaleString('ar-LY');
+                readByList.append(`
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      <i class="fas fa-user me-2"></i> ${reader.username || 'مستخدم غير معروف'}
+                    </div>
+                    <span class="badge bg-secondary">${readTime}</span>
+                  </li>
+                `);
+              });
+              readByList.show();
+            } else {
+              // عرض رسالة لا يوجد قراء
+              noReadersAlert.show();
+            }
+          })
+          .catch(error => {
+            loadingSpinner.hide();
+            contentArea.html(`
+              <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-1"></i> حدث خطأ أثناء تحميل البيانات.
+              </div>
+            `);
+            console.error('خطأ في جلب قائمة القراء:', error);
+          });
+      };
     });
   </script>
 
@@ -344,5 +513,35 @@
 
 .clear-both {
   clear: both;
+}
+
+/* أنماط إضافية للرسائل والقراء */
+.message-actions {
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.message-container-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+/* لضمان ظهور الرسائل بالترتيب الصحيح (أحدث رسالة في الأسفل) */
+#messageContainer {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+/* تنسيق لقائمة القراء */
+.read-by-list {
+  max-height: 300px;
+  overflow-y: auto;
 }
 </style>
