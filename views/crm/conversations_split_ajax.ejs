@@ -322,6 +322,25 @@
         }
       });
       
+      // الاستماع لأحداث تحديث قراءة الرسائل
+      window.socketConnection.on('messages-read-update', function(data) {
+        // تحقق من وجود معرف المحادثة والتأكد من أنه يطابق المحادثة الحالية
+        if (!data.conversationId || data.conversationId !== currentConversationId) {
+          return;
+        }
+        
+        // تحديث حالة الرسائل المقروءة في الواجهة
+        if (data.messages && Array.isArray(data.messages)) {
+          data.messages.forEach(msg => {
+            if (msg.messageId) {
+              window.updateMessageStatus(msg.messageId, 'read');
+            } else if (msg.externalId) {
+              window.updateMessageStatus(msg.externalId, 'read');
+            }
+          });
+        }
+      });
+      
       // الاستماع لأحداث الردود الجديدة
       window.socketConnection.on('message-reply', function(data) {
         // التحقق من وجود البيانات المطلوبة
@@ -390,16 +409,13 @@
       // معالج حدث للملاحظات الداخلية
       window.socketConnection.on('internal-note', function(data) {
         
-        // --- التحقق أولاً من وجود البيانات الأساسية --- 
-        if (!data || !data.conversationId || !data._id) {
-          console.error('Received incomplete internal note data via socket:', data);
-          return; // الخروج إذا كانت البيانات غير كاملة
-        }
-
         // التحقق من أن الملاحظة تنتمي إلى المحادثة الحالية
         if (data.conversationId === currentConversationId) {
           // إضافة الملاحظة الداخلية إلى واجهة المستخدم
-          window.addNoteToUI(data); 
+          window.addNoteToUI(data.note);
+          
+          // تشغيل صوت الإشعار للملاحظات الجديدة
+          window.playNotificationSound();
           
           // تحديث قائمة المحادثات
           refreshConversationsList();
@@ -594,13 +610,15 @@
             if (msgContainer) {
               msgContainer.scrollTop = msgContainer.scrollHeight;
             }
+            
+            // إعداد مراقب الرسائل غير المقروءة
+            if (window.setupMessageReadObserver) {
+              window.setupMessageReadObserver();
+            }
           }, 100);
 
           // تعيين المستمعين للتفاعلات مع الرسائل بعد تحميل المحادثة
           window.attachConversationEventListeners && window.attachConversationEventListeners();
-
-          // <<<--- استدعاء المراقب هنا ---<<<
-          initializeReadObserver(); // استدعاء تهيئة المراقب بعد تحميل المحتوى
         })
         .catch(err => {
           detailsContainer.innerHTML = `
@@ -948,43 +966,14 @@
         }
       });
       
-      // تفويض الأحداث لأزرار الإغلاق وإعادة الفتح وأزرار الرسائل
+      // تفويض الأحداث لأزرار الإغلاق وإعادة الفتح
       const detailsContainer = document.getElementById('conversationDetailsContainer');
       if (detailsContainer) {
         detailsContainer.addEventListener('click', function(event) {
-          const targetButton = event.target.closest('button'); // ابحث عن أقرب زر تم النقر عليه
-
-          if (!targetButton) return; // لم يتم النقر على زر
-
-          // معالجة زر التفاعل
-          if (targetButton.classList.contains('reaction-btn')) {
-            const messageElement = targetButton.closest('.message');
-            if (messageElement) {
-              const messageId = messageElement.dataset.messageId;
-              const externalId = messageElement.dataset.externalId || '';
-              // استدعاء الدالة الموجودة، تمرير الزر نفسه كـ 'this'
-              window.showReactionPicker(messageId, externalId, targetButton); 
-            }
-          }
-          // معالجة زر الرد
-          else if (targetButton.classList.contains('reply-btn')) {
-            const messageElement = targetButton.closest('.message');
-            if (messageElement) {
-              const messageId = targetButton.dataset.messageId; 
-              const externalId = targetButton.dataset.externalId || '';
-              // استدعاء الدالة الموجودة، تمرير عنصر الرسالة
-              window.showReplyForm(messageId, externalId, messageElement); 
-            }
-          }
-          // معالجة زر الحذف
-          else if (targetButton.classList.contains('delete-btn')) {
-            const messageId = targetButton.dataset.messageId;
-            const externalId = targetButton.dataset.externalId || '';
-            window.confirmDeleteMessage(messageId, externalId); // استدعاء الدالة الموجودة
-          }
+          
           // معالجة زر الإغلاق
-          else if (targetButton.classList.contains('close-conversation-btn')) {
-            const conversationId = targetButton.dataset.conversationId;
+          if (event.target.matches('.close-conversation-btn')) {
+            const conversationId = event.target.dataset.conversationId;
             Swal.fire({
               title: 'إغلاق المحادثة',
               text: 'يرجى إدخال سبب إغلاق المحادثة (اختياري)',
@@ -1019,9 +1008,10 @@
               }
             });
           }
+
           // معالجة زر إعادة الفتح
-          else if (targetButton.classList.contains('reopen-conversation-btn')) {
-            const conversationId = targetButton.dataset.conversationId;
+          if (event.target.matches('.reopen-conversation-btn')) {
+            const conversationId = event.target.dataset.conversationId;
             Swal.fire({
               title: 'إعادة فتح المحادثة',
               text: 'هل أنت متأكد؟',
@@ -1052,89 +1042,9 @@
               }
             });
           }
-
         });
       }
 
-      let readObserver = null;
-
-      function initializeReadObserver(containerSelector = '#messageContainer') {
-        const messageContainer = document.querySelector(containerSelector);
-        if (!messageContainer) {
-          console.warn('Message container not found for Intersection Observer.');
-          return;
-        }
-
-        // قطع اتصال المراقب القديم إذا كان موجودًا
-        if (readObserver) {
-          readObserver.disconnect();
-        }
-
-        const observerOptions = {
-          root: messageContainer, // مراقبة التمرير داخل حاوية الرسائل
-          rootMargin: '0px',
-          threshold: 0.6 // تعتبر الرسالة مرئية إذا كان 60% منها ظاهرًا
-        };
-
-        readObserver = new IntersectionObserver((entries, observer) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const messageElement = entry.target;
-
-              // التحقق من أنها رسالة واردة ولم يتم تتبعها من قبل
-              if (messageElement.classList.contains('incoming') && !messageElement.dataset.readTracked) {
-                const messageId = messageElement.dataset.messageId;
-
-                if (messageId) {
-                  // تعليم الرسالة بأنه تم بدء تتبعها لمنع طلبات متكررة
-                  messageElement.dataset.readTracked = 'true';
-
-                  // إرسال طلب لتحديث الحالة في الخادم - تصحيح المسار بإضافة البادئة /crm
-                  fetch(`/crm/messages/${messageId}/mark-read`, { // مسار معدل مع إضافة بادئة
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'X-Requested-With': 'XMLHttpRequest'
-                      // قد تحتاج لإضافة headers أخرى للمصادقة إذا لزم الأمر
-                    }
-                  })
-                  .then(response => response.json())
-                  .then(data => {
-                    if (data.success) {
-                      console.log(`Message ${messageId} marked as read.`);
-                      // (اختياري) تحديث واجهة الرسالة نفسها (إزالة مؤشر غير مقروء)
-                       const unreadIndicator = messageElement.querySelector('.unread-indicator');
-                       if (unreadIndicator) {
-                          unreadIndicator.remove();
-                       }
-                    } else {
-                       console.error(`Failed to mark message ${messageId} as read:`, data.error);
-                       // إعادة السماح بتتبع الرسالة إذا فشل الطلب
-                       messageElement.dataset.readTracked = '';
-                    }
-                  })
-                  .catch(error => {
-                     console.error(`Error marking message ${messageId} as read:`, error);
-                     // إعادة السماح بتتبع الرسالة إذا فشل الطلب
-                     messageElement.dataset.readTracked = '';
-                  });
-
-                  // التوقف عن مراقبة هذه الرسالة بعد رؤيتها ومعالجتها
-                  observer.unobserve(messageElement);
-                }
-              }
-            }
-          });
-        }, observerOptions);
-
-        // بدء مراقبة جميع الرسائل الواردة الحالية التي ليس لديها data-read-tracked
-        const incomingMessages = messageContainer.querySelectorAll('.message.incoming:not([data-read-tracked="true"])');
-        incomingMessages.forEach(msg => readObserver.observe(msg));
-
-         console.log(`Intersection Observer initialized for ${incomingMessages.length} incoming messages.`);
-      }
-
-      // >>> إعادة تعريف الدالة المفقودة <<<
       // تحديث قائمة المحادثات فقط
       window.refreshConversationsList = function() {
         // استدعاء API للحصول على تحديث للقائمة
@@ -1160,7 +1070,7 @@
           if (!conversationList) return;
           
           // حفظ المحادثة المحددة حالياً
-          const currentlyActiveId = window.currentConversationId; // استخدام المتغير العام
+          const currentlyActiveId = currentConversationId;
           
           // حذف جميع المحادثات الحالية
           conversationList.innerHTML = '';
@@ -1218,7 +1128,7 @@
               this.classList.add('active');
               
               // تحميل تفاصيل المحادثة
-              window.loadConversationDetails(conv._id);
+              loadConversationDetails(conv._id);
             });
             
             // إضافة العنصر إلى القائمة
@@ -1236,7 +1146,6 @@
           console.error('خطأ في تحديث قائمة المحادثات:', err);
         });
       };
-
     });
   </script>
 </body>

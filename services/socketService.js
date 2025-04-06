@@ -136,6 +136,35 @@ function initialize(server) {
       logger.info('socketService', 'انقطع الاتصال', { socketId: socket.id });
     });
 
+    // استقبال إشعار بتحديث حالة الرسائل إلى "مقروءة"
+    socket.on('mark-messages-read', async (data) => {
+      if (!data || !data.conversationId || !data.messages || !Array.isArray(data.messages)) {
+        return logger.warn('socketService', 'بيانات غير صالحة لتحديث حالة القراءة', { data });
+      }
+      
+      try {
+        // استدعاء وظيفة تحديث حالة القراءة
+        await updateMessagesReadStatus(data.conversationId, data.messages, data.timestamp || new Date());
+        
+        // إشعار المستخدمين الآخرين بتحديث حالة الرسائل
+        socket.to(`conversation-${data.conversationId}`).emit('messages-read-update', {
+          conversationId: data.conversationId,
+          messages: data.messages,
+          timestamp: data.timestamp || new Date()
+        });
+        
+        logger.info('socketService', 'تم استلام طلب تحديث حالة القراءة للرسائل', { 
+          conversationId: data.conversationId,
+          messagesCount: data.messages.length
+        });
+      } catch (error) {
+        logger.error('socketService', 'خطأ في تحديث حالة قراءة الرسائل', { 
+          error: error.message,
+          conversationId: data.conversationId
+        });
+      }
+    });
+
     // استقبال إشعار برسالة جديدة من العميل وإعادة بثه لبقية المستخدمين
     // ملاحظة هامة: هذا المعالج للإشعارات فقط وليس للإرسال الفعلي للرسائل الجديدة
     // الإرسال الفعلي للرسائل يتم عبر طلب HTTP إلى /crm/conversations/:conversationId/reply
@@ -404,6 +433,112 @@ function notifyMessageReaction(conversationId, externalId, reaction) {
     });
 }
 
+/**
+ * تحديث حالة الرسائل في قاعدة البيانات إلى "مقروءة"
+ * @param {String} conversationId - معرف المحادثة
+ * @param {Array} messages - مصفوفة من معرفات الرسائل
+ * @param {Date} timestamp - طابع زمني للقراءة
+ */
+async function updateMessagesReadStatus(conversationId, messages, timestamp) {
+  try {
+    // استيراد نموذج الرسائل
+    const WhatsAppMessage = require('../models/WhatsappMessageModel');
+    
+    if (!messages || !messages.length) {
+      return;
+    }
+    
+    // إنشاء مصفوفة من الشروط - تحديث بناءً على المعرف الداخلي أو الخارجي
+    const conditions = messages.map(msg => {
+      let condition = { conversationId: conversationId, direction: 'incoming' };
+      
+      // إضافة شرط المعرف الداخلي إذا وجد
+      if (msg.messageId) {
+        condition._id = msg.messageId;
+      }
+      // إضافة شرط المعرف الخارجي إذا وجد
+      else if (msg.externalId) {
+        condition.externalMessageId = msg.externalId;
+      }
+      
+      return condition;
+    });
+    
+    // تنفيذ تحديث متعدد لكل الرسائل المحددة
+    const bulkOps = conditions.map(condition => ({
+      updateOne: {
+        filter: condition,
+        update: { 
+          $set: { 
+            status: 'read',
+            readAt: timestamp
+          } 
+        }
+      }
+    }));
+    
+    if (bulkOps.length > 0) {
+      const result = await WhatsAppMessage.bulkWrite(bulkOps);
+      
+      // تحديث عدد الرسائل غير المقروءة في المحادثة
+      await updateConversationUnreadCount(conversationId);
+      
+      logger.info('socketService', 'تم تحديث حالة الرسائل إلى مقروءة', { 
+        conversationId,
+        messagesCount: messages.length,
+        modifiedCount: result.modifiedCount
+      });
+      
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    logger.error('socketService', 'خطأ في تحديث حالة الرسائل إلى مقروءة', { 
+      error: error.message,
+      conversationId,
+      stack: error.stack 
+    });
+    throw error;
+  }
+}
+
+/**
+ * تحديث عدد الرسائل غير المقروءة في المحادثة
+ * @param {String} conversationId - معرف المحادثة
+ */
+async function updateConversationUnreadCount(conversationId) {
+  try {
+    // استيراد نماذج قاعدة البيانات
+    const WhatsAppMessage = require('../models/WhatsappMessageModel');
+    const Conversation = require('../models/Conversation');
+    
+    // حساب عدد الرسائل غير المقروءة
+    const unreadCount = await WhatsAppMessage.countDocuments({
+      conversationId,
+      direction: 'incoming',
+      status: { $ne: 'read' }
+    });
+    
+    // تحديث المحادثة مع العدد الجديد
+    await Conversation.findByIdAndUpdate(conversationId, { unreadCount });
+    
+    // إرسال تحديث إلى واجهة المستخدم
+    notifyConversationUpdate(conversationId, { 
+      _id: conversationId,
+      unreadCount 
+    });
+    
+    return unreadCount;
+  } catch (error) {
+    logger.error('socketService', 'خطأ في تحديث عدد الرسائل غير المقروءة', { 
+      error: error.message,
+      conversationId
+    });
+    return null;
+  }
+}
+
 module.exports = {
   initialize,
   notifyNewMessage,
@@ -413,5 +548,7 @@ module.exports = {
   notifyUser,
   broadcastNotification,
   emitToRoom,
-  notifyMessageExternalIdUpdate
+  notifyMessageExternalIdUpdate,
+  updateMessagesReadStatus,
+  updateConversationUnreadCount
 };

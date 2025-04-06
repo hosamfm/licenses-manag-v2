@@ -916,14 +916,12 @@ exports.getConversationDetailsAjax = async (req, res) => {
     
     if (messages && messages.length > 0) {
       // تحديث حالة الرسائل الواردة إلى "مقروءة"
-      /* // تعطيل التحديث الجماعي - سيتم التعامل معه عبر Intersection Observer
       if (page === 1) { // فقط نعلم بأن الرسائل مقروءة عند تحميل الصفحة الأولى
         await WhatsappMessage.updateMany(
           { conversationId, direction: 'incoming', status: { $ne: 'read' } },
           { $set: { status: 'read' } }
         );
       }
-      */ // نهاية التعطيل
       
       // استخدام خدمة الوسائط لإضافة معلومات الوسائط للرسائل
       messages = await mediaService.processMessagesWithMedia(messages);

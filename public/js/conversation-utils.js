@@ -1609,3 +1609,97 @@ window.uploadMedia = function() {
   // إرسال البيانات
   xhr.send(formData);
 };
+
+/**
+ * وظيفة لإعداد مراقب رؤية الرسائل غير المقروءة
+ * تستخدم تقنية Intersection Observer لتتبع متى يرى المستخدم الرسائل
+ */
+window.setupMessageReadObserver = function() {
+  // إذا كان المراقب موجوداً بالفعل، قم بإلغائه أولاً
+  if (window.messageReadObserver) {
+    window.messageReadObserver.disconnect();
+  }
+  
+  // إنشاء مجموعة لتتبع الرسائل التي شوهدت خلال الدورة الحالية
+  const viewedMessages = new Set();
+  
+  // إنشاء Intersection Observer جديد
+  window.messageReadObserver = new IntersectionObserver((entries) => {
+    // تحديد الرسائل التي ظهرت في نطاق الرؤية
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const messageElement = entry.target;
+        const messageId = messageElement.getAttribute('data-message-id');
+        const externalId = messageElement.getAttribute('data-external-id');
+        const status = messageElement.getAttribute('data-status');
+        
+        // إضافة الرسالة إلى مجموعة الرسائل المشاهدة
+        if (messageId && status !== 'read') {
+          viewedMessages.add({
+            messageId: messageId,
+            externalId: externalId || null
+          });
+        }
+      }
+    });
+    
+    // إذا كانت هناك رسائل مشاهدة جديدة، قم بتحديث حالتها بعد تأخير قصير
+    if (viewedMessages.size > 0) {
+      setTimeout(() => {
+        if (viewedMessages.size > 0) {
+          window.markMessagesAsRead(Array.from(viewedMessages));
+          viewedMessages.clear();
+        }
+      }, 1500); // تأخير 1.5 ثانية للتأكد من أن المستخدم قد رأى الرسائل فعلاً
+    }
+  }, { 
+    threshold: 0.5, // يجب أن يكون 50% من الرسالة مرئية على الأقل
+    rootMargin: '0px' // لا هوامش إضافية
+  });
+  
+  // مراقبة جميع الرسائل الواردة غير المقروءة
+  const unreadMessages = document.querySelectorAll('.message.incoming[data-status="sent"], .message.incoming[data-status="delivered"], .message.incoming[data-status="received"]');
+  unreadMessages.forEach(msg => {
+    window.messageReadObserver.observe(msg);
+  });
+  
+  console.log(`تمت إضافة ${unreadMessages.length} رسالة إلى مراقب القراءة`);
+};
+
+/**
+ * وظيفة لتحديث حالة الرسائل إلى "مقروءة"
+ * @param {Array} messages مصفوفة من معرفات الرسائل التي تمت قراءتها
+ */
+window.markMessagesAsRead = function(messages) {
+  if (!messages || !messages.length || !window.currentConversationId) {
+    return;
+  }
+  
+  console.log(`إرسال تحديث حالة القراءة لـ ${messages.length} رسالة`);
+  
+  // إرسال معلومات القراءة إلى الخادم عبر Socket.IO
+  if (window.socketConnection && window.socketConnected) {
+    window.socketConnection.emit('mark-messages-read', {
+      conversationId: window.currentConversationId,
+      messages: messages,
+      timestamp: new Date().toISOString()
+    });
+    
+    // تحديث حالة الرسائل في واجهة المستخدم فوراً
+    messages.forEach(msg => {
+      if (msg.messageId) {
+        const messageElement = document.querySelector(`.message[data-message-id="${msg.messageId}"]`);
+        if (messageElement) {
+          messageElement.setAttribute('data-status', 'read');
+        }
+      } else if (msg.externalId) {
+        const messageElement = document.querySelector(`.message[data-external-id="${msg.externalId}"]`);
+        if (messageElement) {
+          messageElement.setAttribute('data-status', 'read');
+        }
+      }
+    });
+  } else {
+    console.warn('لا يمكن تحديث حالة القراءة: Socket.IO غير متصل');
+  }
+};
