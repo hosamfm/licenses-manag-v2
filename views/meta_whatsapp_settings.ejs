@@ -152,9 +152,17 @@
                   <% } %>
                   <div class="mt-2 small">
                     <i class="fas fa-info-circle"></i>
-                    هذه هي حالة الاتصال للإعداد النشط حالياً. 
+                    <% if (settings && settings.name) { %>
+                      الإعداد الافتراضي في حالة عدم تحديد رقم هاتف هو <strong><%= settings.name %></strong>.
+                    <% } %>
                     <% if (allSettings && allSettings.length > 1) { %>
-                      <strong>يوجد <%= allSettings.filter(s => s.isActive).length %> إعداد نشط من أصل <%= allSettings.length %></strong>
+                      <br>
+                      <span class="text-success">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>يوجد <%= allSettings.filter(s => s.isActive).length %> إعداد نشط من أصل <%= allSettings.length %></strong>
+                      </span>
+                      <br>
+                      <small>ملاحظة: يمكنك استخدام جميع الإعدادات النشطة في نفس الوقت، عند استخدام واتساب سيتم اختيار الإعداد الافتراضي ما لم تحدد إعداداً آخر.</small>
                     <% } %>
                   </div>
                 </div>
@@ -839,7 +847,7 @@
         fetch(`/admin/meta-whatsapp-settings/check-connection/${currentSettingId}`)
           .then(response => response.json())
           .then(data => {
-            if (data.success) {
+            if (data && data.connectionStatus) {
               const status = data.connectionStatus;
               let statusHTML = '';
               
@@ -877,10 +885,11 @@
               
               modalBody.innerHTML = statusHTML;
             } else {
+              // التعامل مع حالة عدم وجود data.connectionStatus
               modalBody.innerHTML = `
                 <div class="alert alert-danger">
                   <i class="fas fa-exclamation-triangle me-2"></i>
-                  حدث خطأ أثناء فحص الاتصال: ${data.message || 'خطأ غير معروف'}
+                  <strong>خطأ في البيانات المستلمة:</strong> ${data && data.message ? data.message : 'لم يتم استلام بيانات صالحة من الخادم'}
                 </div>
               `;
             }
@@ -894,10 +903,21 @@
           })
           .catch(error => {
             console.error('خطأ:', error);
+            // تحسين معالجة الخطأ للتأكد من عدم محاولة الوصول لخصائص غير موجودة
+            let errorMessage = 'خطأ غير معروف أثناء الاتصال';
+            
+            if (error) {
+              if (error.message) {
+                errorMessage = error.message;
+              } else if (typeof error === 'string') {
+                errorMessage = error;
+              }
+            }
+            
             modalBody.innerHTML = `
               <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                حدث خطأ أثناء فحص الاتصال: ${error.message || 'خطأ غير معروف'}
+                <strong>حدث خطأ أثناء فحص الاتصال:</strong> ${errorMessage}
               </div>
             `;
             

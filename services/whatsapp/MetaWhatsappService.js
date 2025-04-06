@@ -30,11 +30,17 @@ class MetaWhatsappService {
             // تسجيل عدد الإعدادات النشطة
             logger.info('MetaWhatsappService', 'تم تهيئة خدمة واتساب الرسمي', {
                 activeSettingsCount: this.allSettings.length,
-                hasActiveSettings: !!this.settings
+                hasActiveSettings: !!this.settings,
+                activeSettings: this.allSettings.map(s => ({
+                    id: s._id,
+                    name: s.name,
+                    phoneNumberId: s.config.phoneNumberId
+                })),
+                defaultSettingName: this.settings ? this.settings.name : null
             });
             
             this.initialized = true;
-            return this.settings.isConfigured();
+            return this.settings && this.settings.isConfigured();
         } catch (error) {
             logger.error('MetaWhatsappService', 'خطأ في تهيئة خدمة واتساب الرسمي', error);
             return false;
@@ -56,6 +62,20 @@ class MetaWhatsappService {
     }
 
     /**
+     * الحصول على جميع إعدادات واتساب النشطة
+     * @returns {Array} قائمة بجميع إعدادات واتساب النشطة
+     */
+    async getAllActiveSettings() {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+        
+        // تحديث الإعدادات النشطة مباشرة من قاعدة البيانات
+        this.allSettings = await MetaWhatsappSettings.getAllActiveSettings();
+        return this.allSettings;
+    }
+
+    /**
      * الحصول على الإعدادات حسب معرف رقم الهاتف
      * @param {string} phoneNumberId معرف رقم الهاتف
      * @returns {object} إعدادات واتساب لرقم الهاتف المحدد
@@ -63,6 +83,18 @@ class MetaWhatsappService {
     async getSettingsByPhoneNumberId(phoneNumberId) {
         if (!this.initialized) {
             await this.initialize();
+        }
+        
+        // خطأ القيمة الخالية - إرجاع الإعدادات الافتراضية إذا كانت القيمة null
+        if (phoneNumberId === null || phoneNumberId === undefined) {
+            if (!this.settings) {
+                throw new Error('لا توجد إعدادات واتساب نشطة متاحة');
+            }
+            logger.info('MetaWhatsappService', 'تم استخدام الإعدادات الافتراضية بسبب عدم تحديد معرف رقم هاتف', { 
+                defaultSettingName: this.settings.name, 
+                defaultPhoneNumberId: this.settings.config.phoneNumberId 
+            });
+            return this.settings;
         }
         
         // البحث في الإعدادات المخزنة أولاً
