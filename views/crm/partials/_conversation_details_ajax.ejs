@@ -42,7 +42,7 @@
   }
   
   // تسجيل مشاهدة الرسالة
-  function markMessageAsRead(messageId, externalMessageId) {
+  window.markMessageAsRead = function(messageId, externalMessageId) {
     // استخدام الـ Socket لإرسال إخطار قراءة الرسالة
     if (window.socket && messageId) {
       const actualMessageId = externalMessageId || messageId;
@@ -55,7 +55,7 @@
   }
   
   // جلب قائمة قراء الرسالة
-  function getMessageReaders(messageId, externalMessageId) {
+  window.getMessageReaders = function(messageId, externalMessageId) {
     return new Promise((resolve, reject) => {
       const actualMessageId = externalMessageId || messageId;
       $.ajax({
@@ -73,14 +73,14 @@
   }
   
   // عرض قائمة القراء
-  function showMessageReaders(messageId, externalMessageId, buttonElement) {
+  window.showMessageReaders = function(messageId, externalMessageId, buttonElement) {
     const $button = $(buttonElement);
     const $loadingIcon = $('<i class="fas fa-spinner fa-spin"></i>');
     
     // عرض أيقونة التحميل
     $button.html($loadingIcon);
     
-    getMessageReaders(messageId, externalMessageId)
+    window.getMessageReaders(messageId, externalMessageId)
       .then(readers => {
         // إعادة الأيقونة الأصلية
         $button.html('<i class="fas fa-eye"></i>');
@@ -265,15 +265,13 @@
                 <!-- أزرار التفاعل مع الرسالة (باستثناء الملاحظات الداخلية) -->
                 <% if (message.direction !== 'internal') { %>
                   <div class="message-actions">
-                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" 
-                            onclick="window.showReactionPicker('<%= message._id %>', '<%= message.externalMessageId || '' %>', this);">
+                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
                       <i class="far fa-smile"></i>
                     </button>
                     <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="رد" 
-                            onclick="window.showReplyForm('<%= message._id %>', '<%= message.externalMessageId || '' %>', this.closest('.message'));">
+                            title="رد">
                       <i class="fas fa-reply"></i>
                     </button>
                     
@@ -282,8 +280,7 @@
                     <button type="button" class="btn btn-sm text-muted message-action-btn readers-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="قائمة القراء" 
-                            onclick="showMessageReaders('<%= message._id %>', '<%= message.externalMessageId || '' %>', this);">
+                            title="قائمة القراء">
                       <i class="fas fa-eye"></i>
                     </button>
                     <% } %>
@@ -292,8 +289,7 @@
                     <button type="button" class="btn btn-sm text-muted message-action-btn delete-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="حذف" 
-                            onclick="window.confirmDeleteMessage('<%= message._id %>', '<%= message.externalMessageId || '' %>');">
+                            title="حذف">
                       <i class="fas fa-trash-alt"></i>
                     </button>
                     <% } %>
@@ -396,6 +392,44 @@
   <!-- جافاسكريبت لعمل التصفح بالصفحات وتتبع ظهور الرسائل -->
   <script>
     $(document).ready(function() {
+      // تأكد من وجود اتصال سوكيت
+      if (typeof window.socket === 'undefined' && typeof io !== 'undefined') {
+        window.socket = io();
+        console.log('تم تهيئة اتصال Socket.io');
+        
+        // توصيل بغرفة المحادثة الحالية
+        const conversationId = $('#conversationId').val();
+        if (conversationId) {
+          window.socket.emit('join', { room: `conversation-${conversationId}` });
+          console.log('تم الانضمام إلى غرفة المحادثة:', conversationId);
+        }
+      }
+      
+      // ربط أحداث النقر بدلاً من استخدام onclick
+      $(document).on('click', '.reaction-btn', function() {
+        const messageId = $(this).closest('.message').data('message-id');
+        const externalId = $(this).closest('.message').data('external-id') || '';
+        window.showReactionPicker(messageId, externalId, this);
+      });
+      
+      $(document).on('click', '.reply-btn', function() {
+        const messageId = $(this).data('message-id');
+        const externalId = $(this).data('external-id') || '';
+        window.showReplyForm(messageId, externalId, $(this).closest('.message'));
+      });
+      
+      $(document).on('click', '.readers-btn', function() {
+        const messageId = $(this).data('message-id');
+        const externalId = $(this).data('external-id') || '';
+        window.showMessageReaders(messageId, externalId, this);
+      });
+      
+      $(document).on('click', '.delete-btn', function() {
+        const messageId = $(this).data('message-id');
+        const externalId = $(this).data('external-id') || '';
+        window.confirmDeleteMessage(messageId, externalId);
+      });
+      
       // استدعاء للصفحة التالية من الرسائل
       $('.load-more-messages').click(function() {
         const $button = $(this);
@@ -457,7 +491,7 @@
               
               // تسجيل مشاهدة الرسائل الواردة فقط ولمرة واحدة
               if (direction === 'incoming' && !isObserved) {
-                markMessageAsRead(messageId, externalId);
+                window.markMessageAsRead(messageId, externalId);
                 $message.data('observed', true);
               }
               
