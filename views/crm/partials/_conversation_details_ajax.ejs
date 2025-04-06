@@ -57,13 +57,13 @@
       </h5>
       <div class="conversation-actions">
         <% if (conversation.status !== 'closed') { %>
-          <button class="btn btn-danger close-conversation-btn" 
+          <button class="btn btn-danger close-conversation-btn"
                   data-conversation-id="<%= conversation._id %>" 
                   title="إغلاق المحادثة">
             <i class="fas fa-lock me-1"></i> إغلاق
           </button>
         <% } else { %>
-          <button class="btn btn-success reopen-conversation-btn" 
+          <button class="btn btn-success reopen-conversation-btn"
                   data-conversation-id="<%= conversation._id %>" 
                   title="إعادة فتح المحادثة">
             <i class="fas fa-lock-open me-1"></i> إعادة فتح
@@ -83,10 +83,14 @@
       <div class="message-container-wrapper">
         <% if (messages && messages.length) { %>
             <% messages.forEach(function(message) { %>
-              <div class="message <%= message.direction %>" 
+              <div class="message <%= message.direction %> <%= (message.direction === 'incoming' && message.status !== 'read') ? 'unread-visual' : '' %>"
                   data-message-id="<%= message._id %>" 
                   data-status="<%= message.status || 'sent' %>"
                   <%= message.externalMessageId ? `data-external-id="${message.externalMessageId}"` : '' %>>
+                
+                <% if (message.direction === 'incoming' && message.status !== 'read') { %>
+                  <span class="unread-indicator" title="غير مقروءة" style="position: absolute; top: 5px; left: 5px; width: 8px; height: 8px; background-color: dodgerblue; border-radius: 50%; z-index: 1;"></span>
+                <% } %>
                 
                 <% if (message.replyToMessageId) { 
                   // البحث عن الرسالة المرد عليها
@@ -166,24 +170,24 @@
                     <% }); %>
                   </div>
                 <% } %>
-                
+
                 <!-- أزرار التفاعل مع الرسالة (باستثناء الملاحظات الداخلية) -->
                 <% if (message.direction !== 'internal') { %>
                   <div class="message-actions">
-                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('<%= message._id %>', '<%= message.externalMessageId || '' %>', this)">
+                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل">
                       <i class="far fa-smile"></i>
                     </button>
                     <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="رد" onclick="window.showReplyForm('<%= message._id %>', '<%= message.externalMessageId || '' %>', this.closest('.message'))">
+                            title="رد">
                       <i class="fas fa-reply"></i>
                     </button>
                     <% if (message.direction === 'outgoing') { %>
                     <button type="button" class="btn btn-sm text-muted message-action-btn delete-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="حذف" onclick="window.confirmDeleteMessage('<%= message._id %>', '<%= message.externalMessageId || '' %>')">
+                            title="حذف">
                       <i class="fas fa-trash-alt"></i>
                     </button>
                     <% } %>

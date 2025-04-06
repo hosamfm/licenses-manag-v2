@@ -595,6 +595,9 @@
 
           // تعيين المستمعين للتفاعلات مع الرسائل بعد تحميل المحادثة
           window.attachConversationEventListeners && window.attachConversationEventListeners();
+
+          // <<<--- استدعاء المراقب هنا ---<<<
+          initializeReadObserver(); // استدعاء تهيئة المراقب بعد تحميل المحتوى
         })
         .catch(err => {
           detailsContainer.innerHTML = `
@@ -942,14 +945,43 @@
         }
       });
       
-      // تفويض الأحداث لأزرار الإغلاق وإعادة الفتح
+      // تفويض الأحداث لأزرار الإغلاق وإعادة الفتح وأزرار الرسائل
       const detailsContainer = document.getElementById('conversationDetailsContainer');
       if (detailsContainer) {
         detailsContainer.addEventListener('click', function(event) {
-          
+          const targetButton = event.target.closest('button'); // ابحث عن أقرب زر تم النقر عليه
+
+          if (!targetButton) return; // لم يتم النقر على زر
+
+          // معالجة زر التفاعل
+          if (targetButton.classList.contains('reaction-btn')) {
+            const messageElement = targetButton.closest('.message');
+            if (messageElement) {
+              const messageId = messageElement.dataset.messageId;
+              const externalId = messageElement.dataset.externalId || '';
+              // استدعاء الدالة الموجودة، تمرير الزر نفسه كـ 'this'
+              window.showReactionPicker(messageId, externalId, targetButton); 
+            }
+          }
+          // معالجة زر الرد
+          else if (targetButton.classList.contains('reply-btn')) {
+            const messageElement = targetButton.closest('.message');
+            if (messageElement) {
+              const messageId = targetButton.dataset.messageId; 
+              const externalId = targetButton.dataset.externalId || '';
+              // استدعاء الدالة الموجودة، تمرير عنصر الرسالة
+              window.showReplyForm(messageId, externalId, messageElement); 
+            }
+          }
+          // معالجة زر الحذف
+          else if (targetButton.classList.contains('delete-btn')) {
+            const messageId = targetButton.dataset.messageId;
+            const externalId = targetButton.dataset.externalId || '';
+            window.confirmDeleteMessage(messageId, externalId); // استدعاء الدالة الموجودة
+          }
           // معالجة زر الإغلاق
-          if (event.target.matches('.close-conversation-btn')) {
-            const conversationId = event.target.dataset.conversationId;
+          else if (targetButton.classList.contains('close-conversation-btn')) {
+            const conversationId = targetButton.dataset.conversationId;
             Swal.fire({
               title: 'إغلاق المحادثة',
               text: 'يرجى إدخال سبب إغلاق المحادثة (اختياري)',
@@ -984,10 +1016,9 @@
               }
             });
           }
-
           // معالجة زر إعادة الفتح
-          if (event.target.matches('.reopen-conversation-btn')) {
-            const conversationId = event.target.dataset.conversationId;
+          else if (targetButton.classList.contains('reopen-conversation-btn')) {
+            const conversationId = targetButton.dataset.conversationId;
             Swal.fire({
               title: 'إعادة فتح المحادثة',
               text: 'هل أنت متأكد؟',
@@ -1018,110 +1049,87 @@
               }
             });
           }
+
         });
       }
 
-      // تحديث قائمة المحادثات فقط
-      window.refreshConversationsList = function() {
-        // استدعاء API للحصول على تحديث للقائمة
-        fetch('/crm/conversations/ajax/list', {
-          method: 'GET',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        })
-        .then(response => {
-          if (!response.ok) throw new Error('HTTP error ' + response.status);
-          return response.json();
-        })
-        .then(data => {
-          if (!data.success || !data.conversations) {
-            console.error('خطأ في تنسيق البيانات المستلمة:', data);
-            return;
-          }
-          
-          // الحصول على حاوية قائمة المحادثات
-          const conversationList = document.getElementById('conversationList');
-          if (!conversationList) return;
-          
-          // حفظ المحادثة المحددة حالياً
-          const currentlyActiveId = currentConversationId;
-          
-          // حذف جميع المحادثات الحالية
-          conversationList.innerHTML = '';
-          
-          // إضافة المحادثات الجديدة
-          data.conversations.forEach(function(conv) {
-            // بناء عنصر المحادثة
-            const itemElement = document.createElement('button');
-            itemElement.type = 'button';
-            itemElement.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conv.unreadCount > 0 ? 'has-unread' : ''} ${currentlyActiveId === conv._id ? 'active' : ''}`;
-            itemElement.setAttribute('data-conversation-id', conv._id);
-            
-            // بناء HTML الداخلي للعنصر
-            itemElement.innerHTML = `
-              <div class="d-flex justify-content-between align-items-center w-100">
-                <div class="conversation-info">
-                  <div class="conversation-name">
-                    <i class="${conv.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary'} me-2"></i>
-                    <span>${conv.customerName || conv.phoneNumber}</span>
-                  </div>
-                  <div class="conversation-preview">
-                    ${conv.lastMessage ? `
-                      <small class="${conv.unreadCount > 0 ? 'fw-bold' : 'text-muted'}">
-                        ${conv.lastMessage.direction === 'incoming' ? '<i class="fas fa-reply-all text-muted me-1 fa-flip-horizontal"></i>' : '<i class="fas fa-reply text-muted me-1"></i>'}
-                        ${conv.lastMessage.content
-                           ? conv.lastMessage.content.substring(0, 30) + (conv.lastMessage.content.length > 30 ? '...' : '')
-                           : (conv.lastMessage.mediaType ? 'محتوى وسائط' : 'رسالة')}
-                      </small>
-                    ` : `
-                      <small class="text-muted"><i class="fas fa-info-circle me-1"></i> محادثة جديدة</small>
-                    `}
-                  </div>
-                </div>
-                <div class="conversation-meta text-end">
-                  ${conv.unreadCount > 0 ? `<span class="badge bg-danger rounded-pill conversation-badge mb-1">${conv.unreadCount}</span>` : ''}
-                  <div class="conversation-time small">
-                    ${new Date(conv.lastMessageAt || conv.updatedAt).toLocaleString('ar-LY', {hour: '2-digit', minute: '2-digit'})}
-                  </div>
-                  ${conv.status === 'closed' ? `<span class="status-indicator closed" title="محادثة مغلقة"><i class="fas fa-lock"></i></span>` 
-                    : conv.status === 'assigned' ? `<span class="status-indicator assigned" title="محادثة مسندة"><i class="fas fa-user-check"></i></span>`
-                    : `<span class="status-indicator open" title="محادثة مفتوحة"><i class="fas fa-door-open"></i></span>`}
-                </div>
-              </div>
-            `;
-            
-            // إضافة معالج الحدث للنقر
-            itemElement.addEventListener('click', function() {
-              // إزالة التنشيط من جميع العناصر
-              const items = conversationList.querySelectorAll('.conversation-item');
-              items.forEach(item => {
-                item.classList.remove('active');
-              });
-              
-              // تنشيط هذا العنصر
-              this.classList.add('active');
-              
-              // تحميل تفاصيل المحادثة
-              loadConversationDetails(conv._id);
-            });
-            
-            // إضافة العنصر إلى القائمة
-            conversationList.appendChild(itemElement);
+      let readObserver = null;
+
+      function initializeReadObserver(containerSelector = '#messageContainer') {
+        const messageContainer = document.querySelector(containerSelector);
+        if (!messageContainer) {
+          console.warn('Message container not found for Intersection Observer.');
+          return;
+        }
+
+        // قطع اتصال المراقب القديم إذا كان موجودًا
+        if (readObserver) {
+          readObserver.disconnect();
+        }
+
+        const observerOptions = {
+          root: messageContainer, // مراقبة التمرير داخل حاوية الرسائل
+          rootMargin: '0px',
+          threshold: 0.6 // تعتبر الرسالة مرئية إذا كان 60% منها ظاهرًا
+        };
+
+        readObserver = new IntersectionObserver((entries, observer) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              const messageElement = entry.target;
+
+              // التحقق من أنها رسالة واردة ولم يتم تتبعها من قبل
+              if (messageElement.classList.contains('incoming') && !messageElement.dataset.readTracked) {
+                const messageId = messageElement.dataset.messageId;
+
+                if (messageId) {
+                  // تعليم الرسالة بأنه تم بدء تتبعها لمنع طلبات متكررة
+                  messageElement.dataset.readTracked = 'true';
+
+                  // إرسال طلب لتحديث الحالة في الخادم
+                  fetch(`/messages/${messageId}/mark-read`, { // تأكد من أن المسار صحيح
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-Requested-With': 'XMLHttpRequest'
+                      // قد تحتاج لإضافة headers أخرى للمصادقة إذا لزم الأمر
+                    }
+                  })
+                  .then(response => response.json())
+                  .then(data => {
+                    if (data.success) {
+                      console.log(`Message ${messageId} marked as read.`);
+                      // (اختياري) تحديث واجهة الرسالة نفسها (إزالة مؤشر غير مقروء)
+                       const unreadIndicator = messageElement.querySelector('.unread-indicator');
+                       if (unreadIndicator) {
+                          unreadIndicator.remove();
+                       }
+                    } else {
+                       console.error(`Failed to mark message ${messageId} as read:`, data.error);
+                       // إعادة السماح بتتبع الرسالة إذا فشل الطلب
+                       messageElement.dataset.readTracked = '';
+                    }
+                  })
+                  .catch(error => {
+                     console.error(`Error marking message ${messageId} as read:`, error);
+                     // إعادة السماح بتتبع الرسالة إذا فشل الطلب
+                     messageElement.dataset.readTracked = '';
+                  });
+
+                  // التوقف عن مراقبة هذه الرسالة بعد رؤيتها ومعالجتها
+                  observer.unobserve(messageElement);
+                }
+              }
+            }
           });
-          
-          // إعادة تطبيق الفلتر والبحث الحالي
-          const activeFilter = document.querySelector('.conversation-filters button.active');
-          const searchInput = document.getElementById('conversationSearchInput');
-          if (activeFilter && searchInput) {
-            filterConversations(activeFilter.dataset.filter, searchInput.value);
-          }
-        })
-        .catch(err => {
-          console.error('خطأ في تحديث قائمة المحادثات:', err);
-        });
-      };
+        }, observerOptions);
+
+        // بدء مراقبة جميع الرسائل الواردة الحالية التي ليس لديها data-read-tracked
+        const incomingMessages = messageContainer.querySelectorAll('.message.incoming:not([data-read-tracked="true"])');
+        incomingMessages.forEach(msg => readObserver.observe(msg));
+
+         console.log(`Intersection Observer initialized for ${incomingMessages.length} incoming messages.`);
+      }
     });
   </script>
 </body>

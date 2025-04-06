@@ -11,6 +11,9 @@ const WhatsappSettings = require('../models/WhatsappSettings');
 const MetaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const phoneFormatService = require('../services/phoneFormatService');
+const WhatsappMessage = require('../models/WhatsappMessageModel');
+const socketService = require('../services/socketService');
+const Conversation = require('../models/Conversation');
 
 /*----------------------------------------------------------
   تهيئة خدمات الرسائل (SMS وواتساب)
@@ -943,5 +946,80 @@ exports.getClientMessages = async (req, res) => {
       stack: error.stack
     });
     return res.status(500).json({ success: false, message: 'حدث خطأ أثناء معالجة الطلب' });
+  }
+};
+
+/**
+ * تحديث حالة رسالة واردة إلى مقروءة وتسجيل وقت القراءة
+ */
+exports.markMessageAsRead = async (req, res) => {
+  const { messageId } = req.params;
+  const userId = req.user?._id; // المستخدم الحالي الذي يقرأ الرسالة
+
+  try {
+    const message = await WhatsappMessage.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ success: false, error: 'الرسالة غير موجودة' });
+    }
+
+    // التحقق من أنها رسالة واردة وليست مقروءة بالفعل
+    if (message.direction === 'incoming' && message.status !== 'read') {
+      const oldStatus = message.status;
+      message.status = 'read';
+      message.readAt = new Date(); // تسجيل وقت القراءة
+
+      await message.save();
+
+      logger.info('messageController', 'تم تحديث الرسالة كمقروءة', { messageId, userId, conversationId: message.conversationId });
+
+      // تحديث عدد الرسائل غير المقروءة للمحادثة وإرسال إشعار لتحديث القائمة
+      const conversationId = message.conversationId.toString();
+      const unreadCount = await WhatsappMessage.countDocuments({
+        conversationId: message.conversationId,
+        direction: 'incoming',
+        status: { $ne: 'read' }
+      });
+
+      // استخدام دالة الإشعار الموجودة لتحديث قائمة المحادثات
+      // ملاحظة: قد يحتاج هذا إلى تحسين بجلب البيانات المطلوبة فقط
+      const conversation = await Conversation.findById(conversationId).lean(); // lean() للحصول على كائن بسيط
+      const lastMessageDoc = await WhatsappMessage.findOne({ conversationId: message.conversationId }).sort({ timestamp: -1 }).lean();
+
+      if (conversation) {
+        socketService.notifyConversationUpdate(conversationId, {
+          _id: conversation._id,
+          status: conversation.status, // قد لا تتغير الحالة هنا، لكن نمررها
+          lastMessageAt: conversation.lastMessageAt,
+          unreadCount: unreadCount, // العدد المحدث
+          // آخر رسالة لتحديث الواجهة بشكل صحيح
+          lastMessage: lastMessageDoc ? {
+             content: lastMessageDoc.content,
+             direction: lastMessageDoc.direction,
+             mediaType: lastMessageDoc.mediaType
+          } : null,
+          customerName: conversation.customerName,
+          phoneNumber: conversation.phoneNumber,
+          assignedTo: conversation.assignedTo,
+          channel: conversation.channelId ? (await require('../models/WhatsAppChannel').findById(conversation.channelId))?.channelType || 'whatsapp' : 'whatsapp' // Assuming channel info is needed
+
+        });
+       logger.info('messageController', 'تم إرسال إشعار بتحديث عدد غير المقروء', { conversationId, unreadCount });
+      } else {
+         logger.warn('messageController', 'لم يتم العثور على المحادثة لإرسال إشعار تحديث القائمة', { conversationId });
+      }
+
+      return res.json({ success: true, message: 'تم تحديث الرسالة كمقروءة', oldStatus, newStatus: 'read', readAt: message.readAt });
+    } else if (message.status === 'read') {
+      // الرسالة مقروءة بالفعل، لا حاجة للتحديث
+      return res.json({ success: true, message: 'الرسالة مقروءة بالفعل' });
+    } else {
+      // رسالة صادرة أو داخلية، لا يتم تطبيق هذا الإجراء عليها
+      return res.status(400).json({ success: false, error: 'لا يمكن تطبيق هذا الإجراء على هذه الرسالة' });
+    }
+
+  } catch (error) {
+    logger.error('messageController', 'خطأ في تحديث الرسالة كمقروءة', { messageId, userId, error: error.message, stack: error.stack });
+    return res.status(500).json({ success: false, error: 'حدث خطأ أثناء تحديث الرسالة' });
   }
 };

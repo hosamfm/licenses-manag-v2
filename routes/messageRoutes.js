@@ -6,6 +6,9 @@ const { isAuthenticated } = require('../middleware/authMiddleware');
 // مسار لإرسال رسالة باستخدام مفتاح API - متاح للعملاء
 router.get('/api/send-message', messageController.sendMessage);
 
+// مسار جديد لتحديث رسالة كمقروءة
+router.post('/:messageId/mark-read', isAuthenticated, messageController.markMessageAsRead);
+
 // مسار للتحقق من الرصيد باستخدام مفتاح API - متاح للعملاء
 router.get('/api/check-balance', messageController.checkBalance);
 
