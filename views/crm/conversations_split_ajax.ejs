@@ -390,13 +390,16 @@
       // معالج حدث للملاحظات الداخلية
       window.socketConnection.on('internal-note', function(data) {
         
+        // --- التحقق أولاً من وجود البيانات الأساسية --- 
+        if (!data || !data.conversationId || !data._id) {
+          console.error('Received incomplete internal note data via socket:', data);
+          return; // الخروج إذا كانت البيانات غير كاملة
+        }
+
         // التحقق من أن الملاحظة تنتمي إلى المحادثة الحالية
         if (data.conversationId === currentConversationId) {
           // إضافة الملاحظة الداخلية إلى واجهة المستخدم
-          window.addNoteToUI(data.note);
-          
-          // تشغيل صوت الإشعار للملاحظات الجديدة
-          window.playNotificationSound();
+          window.addNoteToUI(data); 
           
           // تحديث قائمة المحادثات
           refreshConversationsList();
@@ -1086,8 +1089,8 @@
                   // تعليم الرسالة بأنه تم بدء تتبعها لمنع طلبات متكررة
                   messageElement.dataset.readTracked = 'true';
 
-                  // إرسال طلب لتحديث الحالة في الخادم
-                  fetch(`/messages/${messageId}/mark-read`, { // تأكد من أن المسار صحيح
+                  // إرسال طلب لتحديث الحالة في الخادم - تصحيح المسار بإضافة البادئة /crm
+                  fetch(`/crm/messages/${messageId}/mark-read`, { // مسار معدل مع إضافة بادئة
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
