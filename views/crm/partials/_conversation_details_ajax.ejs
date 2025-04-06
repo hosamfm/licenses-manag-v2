@@ -48,15 +48,29 @@
       const actualMessageId = externalMessageId || messageId;
       console.log('تسجيل قراءة الرسالة:', actualMessageId);
       
-      window.socket.emit('message_read', {
-        messageId: actualMessageId,
-        userId: window.currentUserId,
-        username: window.currentUsername
-      });
-      
-      return true;
+      // إضافة فحص لتجنب محاولة إرسال القيمة "undefined"
+      if (actualMessageId) {
+        window.socket.emit('message_read', {
+          messageId: actualMessageId,
+          userId: window.currentUserId,
+          username: window.currentUsername
+        });
+        
+        console.log('تم إرسال طلب قراءة للرسالة:', {
+          messageId: actualMessageId,
+          userId: window.currentUserId,
+          username: window.currentUsername
+        });
+        
+        return true;
+      } else {
+        console.error('معرف الرسالة غير صالح:', { messageId, externalMessageId });
+      }
     } else {
-      console.error('Socket.io غير متاح أو لم يتم تمرير معرف الرسالة');
+      console.error('Socket.io غير متاح أو لم يتم تمرير معرف الرسالة', {
+        socketAvailable: !!window.socket,
+        messageIdProvided: !!messageId
+      });
       return false;
     }
   }
@@ -87,52 +101,76 @@
     // عرض أيقونة التحميل
     $button.html($loadingIcon);
     
+    // البحث عن البيانات المخزنة مسبقاً
+    const $message = $button.closest('.message');
+    const cachedReaders = $message.data('readers');
+    
+    // استخدام البيانات المخزنة إذا كانت متوفرة
+    if (cachedReaders && Array.isArray(cachedReaders) && cachedReaders.length > 0) {
+      console.log('استخدام قائمة القراء المخزنة:', cachedReaders);
+      displayReadersList(cachedReaders);
+      return;
+    }
+    
+    // إذا لم تكن البيانات متوفرة، جلبها من الخادم
     window.getMessageReaders(messageId, externalMessageId)
       .then(readers => {
         // إعادة الأيقونة الأصلية
         $button.html('<i class="fas fa-eye"></i>');
         
-        // تحضير محتوى قائمة القراء
-        let readersList = '';
-        if (readers && readers.length > 0) {
-          readersList = '<ul class="list-group">';
-          readers.forEach(reader => {
-            // تنسيق تاريخ القراءة
-            const readTime = reader.readAt ? formatTime(reader.readAt) : 'تاريخ غير معروف';
-            readersList += `<li class="list-group-item d-flex justify-content-between align-items-center">
-              <span>${reader.username || 'مستخدم غير معروف'}</span>
-              <small class="text-muted">${readTime}</small>
-            </li>`;
-          });
-          readersList += '</ul>';
-        } else {
-          readersList = '<div class="text-center p-3">لم يقرأ أحد هذه الرسالة بعد</div>';
-        }
+        // تخزين القراء للمرات القادمة
+        $message.data('readers', readers);
         
-        // عرض النافذة المنبثقة مع قائمة القراء
-        const $popover = $button.popover({
-          title: 'قرأ هذه الرسالة',
-          content: readersList,
-          html: true,
-          placement: 'left',
-          trigger: 'manual',
-          template: '<div class="popover readers-popover" role="tooltip"><div class="arrow"></div><h3 class="popover-header"></h3><div class="popover-body"></div></div>'
-        });
-        
-        $button.popover('show');
-        
-        // إغلاق القائمة عند النقر في أي مكان آخر
-        $(document).one('click', function(e) {
-          if (!$(e.target).is($button) && $(e.target).closest('.popover').length === 0) {
-            $button.popover('hide');
-          }
-        });
+        // عرض قائمة القراء
+        displayReadersList(readers);
       })
       .catch(error => {
         // إعادة الأيقونة الأصلية عند حدوث خطأ
         $button.html('<i class="fas fa-eye"></i>');
         console.error('فشل في عرض قائمة القراء:', error);
       });
+    
+    // دالة مساعدة لعرض قائمة القراء
+    function displayReadersList(readers) {
+      // إعادة الأيقونة الأصلية
+      $button.html('<i class="fas fa-eye"></i>');
+      
+      // تحضير محتوى قائمة القراء
+      let readersList = '';
+      if (readers && readers.length > 0) {
+        readersList = '<ul class="list-group">';
+        readers.forEach(reader => {
+          // تنسيق تاريخ القراءة
+          const readTime = reader.readAt ? formatTime(reader.readAt) : 'تاريخ غير معروف';
+          readersList += `<li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>${reader.username || 'مستخدم غير معروف'}</span>
+            <small class="text-muted">${readTime}</small>
+          </li>`;
+        });
+        readersList += '</ul>';
+      } else {
+        readersList = '<div class="text-center p-3">لم يقرأ أحد هذه الرسالة بعد</div>';
+      }
+      
+      // عرض النافذة المنبثقة مع قائمة القراء
+      const $popover = $button.popover({
+        title: 'قرأ هذه الرسالة',
+        content: readersList,
+        html: true,
+        placement: 'left',
+        trigger: 'manual',
+        template: '<div class="popover readers-popover" role="tooltip"><div class="arrow"></div><h3 class="popover-header"></h3><div class="popover-body"></div></div>'
+      });
+      
+      $button.popover('show');
+      
+      // إغلاق القائمة عند النقر في أي مكان آخر
+      $(document).one('click', function(e) {
+        if (!$(e.target).is($button) && $(e.target).closest('.popover').length === 0) {
+          $button.popover('hide');
+        }
+      });
+    }
   }
 </script>
 
@@ -514,51 +552,79 @@
       function setupMessageObservers() {
         console.log('بدء تفعيل مراقبة ظهور الرسائل');
         
-        // إنشاء كائن مراقب التقاطع
-        const messageObserver = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const $message = $(entry.target);
-              const messageId = $message.data('message-id');
-              const externalId = $message.data('external-id');
-              const direction = $message.hasClass('incoming') ? 'incoming' : 'outgoing';
-              const isObserved = $message.data('observed') === true;
-              
-              // تسجيل مشاهدة الرسائل الواردة فقط ولمرة واحدة
-              if (direction === 'incoming' && !isObserved) {
-                console.log('رسالة واردة ظهرت في نطاق الرؤية:', messageId || externalId);
+        // التأكد من دعم المتصفح لـ IntersectionObserver
+        if (!('IntersectionObserver' in window)) {
+          console.error('المتصفح لا يدعم IntersectionObserver، تعذر تفعيل مراقبة ظهور الرسائل');
+          return null;
+        }
+        
+        try {
+          // إنشاء كائن مراقب التقاطع
+          const messageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+              if (entry.isIntersecting) {
+                const $message = $(entry.target);
+                const messageId = $message.data('message-id');
+                const externalId = $message.data('external-id');
+                const direction = $message.hasClass('incoming') ? 'incoming' : 'outgoing';
+                const isObserved = $message.data('observed') === true;
                 
-                const success = window.markMessageAsRead(messageId, externalId);
-                if (success) {
-                  $message.data('observed', true);
-                  console.log('تم تسجيل قراءة الرسالة بنجاح');
+                console.log('رسالة ظهرت في نطاق الرؤية:', {
+                  messageId,
+                  externalId,
+                  direction,
+                  isObserved
+                });
+                
+                // تسجيل مشاهدة الرسائل الواردة فقط ولمرة واحدة
+                if (direction === 'incoming' && !isObserved) {
+                  console.log('محاولة تسجيل قراءة رسالة واردة:', messageId || externalId);
+                  
+                  const success = window.markMessageAsRead(messageId, externalId);
+                  if (success) {
+                    $message.data('observed', true);
+                    console.log('تم تسجيل قراءة الرسالة بنجاح');
+                    
+                    // إضافة سمة مرئية للإشارة إلى أن الرسالة تمت قراءتها
+                    $message.attr('data-read-by-current-user', 'true');
+                  } else {
+                    console.error('فشل تسجيل قراءة الرسالة');
+                  }
+                }
+                
+                // إيقاف مراقبة الرسالة بعد معالجتها (للرسائل الواردة فقط)
+                if (direction === 'incoming') {
+                  messageObserver.unobserve(entry.target);
+                  console.log('تم إيقاف مراقبة الرسالة بعد معالجتها:', messageId || externalId);
                 }
               }
-              
-              // إيقاف مراقبة الرسالة بعد معالجتها (للرسائل الواردة فقط)
-              if (direction === 'incoming') {
-                messageObserver.unobserve(entry.target);
-                console.log('تم إيقاف مراقبة الرسالة بعد معالجتها');
-              }
-            }
+            });
+          }, {
+            // تحديد نسبة الظهور المطلوبة لتسجيل المشاهدة (80% تكفي لتسجيل المشاهدة)
+            threshold: 0.8,
+            // التأكد من أن الرسائل تظهر في نافذة العرض
+            root: document.getElementById('messageContainer')
           });
-        }, {
-          // تحديد نسبة الظهور المطلوبة لتسجيل المشاهدة (80% تكفي لتسجيل المشاهدة)
-          threshold: 0.8,
-          // التأكد من أن الرسائل تظهر في نافذة العرض
-          root: document.getElementById('messageContainer')
-        });
-        
-        // تفعيل المراقبة على جميع الرسائل الواردة
-        const incomingMessages = $('.message.incoming:not([data-observed="true"])');
-        console.log('عدد الرسائل الواردة التي سيتم مراقبتها:', incomingMessages.length);
-        
-        incomingMessages.each(function() {
-          messageObserver.observe(this);
-          console.log('تمت إضافة مراقبة للرسالة:', $(this).data('message-id') || $(this).data('external-id'));
-        });
-        
-        return messageObserver;
+          
+          // تفعيل المراقبة على جميع الرسائل الواردة
+          const incomingMessages = $('.message.incoming:not([data-observed="true"])');
+          console.log('عدد الرسائل الواردة التي سيتم مراقبتها:', incomingMessages.length);
+          
+          if (incomingMessages.length === 0) {
+            console.log('لا توجد رسائل واردة للمراقبة');
+          }
+          
+          incomingMessages.each(function() {
+            messageObserver.observe(this);
+            const msgId = $(this).data('message-id') || $(this).data('external-id');
+            console.log('تمت إضافة مراقبة للرسالة:', msgId);
+          });
+          
+          return messageObserver;
+        } catch (error) {
+          console.error('خطأ في إعداد مراقب التقاطع:', error);
+          return null;
+        }
       }
       
       // تحديد سلوك التمرير - عرض أحدث الرسائل في الأسفل
@@ -593,6 +659,7 @@
           const messageId = data.messageId;
           const readerCount = data.readerCount || 0;
           const recentReader = data.recentReader || 'مستخدم';
+          const readers = data.readers || [];
           
           // البحث عن الرسالة بمعرفها الرئيسي أو المعرف الخارجي
           const $message = $(`[data-message-id="${messageId}"], [data-external-id="${messageId}"]`);
@@ -613,13 +680,25 @@
             
             // تحديث العدد ونص التلميح
             $readerCount.text(`(${readerCount})`);
-            $readerCount.attr('title', `قرأها ${readerCount} مستخدم/ين`);
+            
+            // إنشاء نص تلميح مفصل مع أسماء القراء
+            let tooltip = 'قرأها: ';
+            if (readers.length > 0) {
+              const readerNames = readers.map(reader => reader.username).join('، ');
+              tooltip += readerNames;
+            } else {
+              tooltip += readerCount + ' مستخدم/ين';
+            }
+            $readerCount.attr('title', tooltip);
             
             // إضافة تأثير ظاهري للتحديث
             $readerCount.addClass('highlight-update');
             setTimeout(() => $readerCount.removeClass('highlight-update'), 2000);
             
             console.log('تم تحديث عدد القراء:', readerCount);
+            
+            // تحديث البيانات للاستخدام في قائمة القراء المنبثقة
+            $message.data('readers', readers);
           } else {
             console.warn('لم يتم العثور على الرسالة للتحديث:', messageId);
           }

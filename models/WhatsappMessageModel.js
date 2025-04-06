@@ -408,15 +408,12 @@ whatsappMessageSchema.statics.markAsReadByUser = async function(messageId, userI
     let query;
     if (messageId && messageId.length === 24 && /^[0-9a-fA-F]{24}$/.test(messageId)) {
       // المعرف يبدو كأنه ObjectId صالح
-      query = { 
-        $or: [
-          { externalMessageId: messageId },
-          { _id: messageId }
-        ]
-      };
+      query = { _id: messageId };
+      logger.info('البحث عن الرسالة باستخدام ObjectId', { messageId });
     } else if (messageId) {
       // المعرف ليس ObjectId - ابحث فقط باستخدام المعرف الخارجي
       query = { externalMessageId: messageId };
+      logger.info('البحث عن الرسالة باستخدام المعرف الخارجي', { externalMessageId: messageId });
     } else {
       logger.error('معرف الرسالة غير صالح', { messageId });
       return null;
@@ -430,6 +427,11 @@ whatsappMessageSchema.statics.markAsReadByUser = async function(messageId, userI
       return null;
     }
     
+    logger.info('تم العثور على الرسالة', { 
+      messageId: message._id.toString(),
+      externalMessageId: message.externalMessageId 
+    });
+    
     // إعداد معلومات القارئ
     const readerInfo = {
       userId: userInfo.userId,
@@ -437,23 +439,44 @@ whatsappMessageSchema.statics.markAsReadByUser = async function(messageId, userI
       readAt: new Date()
     };
     
-    // تحديث الرسالة مع معلومات القارئ
-    // استخدام $addToSet لضمان عدم تكرار نفس المستخدم
-    await this.updateOne(
-      { _id: message._id },
-      { 
-        $addToSet: { readBy: readerInfo },
-        $set: { 
-          status: 'read',
-          readAt: new Date() 
-        }
-      }
+    logger.info('معلومات القارئ:', readerInfo);
+    
+    // تحديث الرسالة مع معلومات القارئ - الطريقة المباشرة
+    message.status = 'read';
+    message.readAt = new Date();
+    
+    // إنشاء مصفوفة readBy إذا لم تكن موجودة
+    if (!message.readBy) {
+      message.readBy = [];
+    }
+    
+    // التحقق من عدم وجود نفس المستخدم في المصفوفة
+    const existingReaderIndex = message.readBy.findIndex(
+      reader => reader.userId && reader.userId.toString() === userInfo.userId.toString()
     );
+    
+    if (existingReaderIndex === -1) {
+      // إضافة القارئ إلى المصفوفة إذا لم يكن موجوداً
+      message.readBy.push(readerInfo);
+      logger.info('تمت إضافة القارئ إلى مصفوفة readBy', { 
+        readByLength: message.readBy.length 
+      });
+    } else {
+      // تحديث وقت القراءة إذا كان المستخدم موجوداً بالفعل
+      message.readBy[existingReaderIndex].readAt = new Date();
+      logger.info('تم تحديث وقت القراءة للقارئ الموجود', { 
+        readerIndex: existingReaderIndex 
+      });
+    }
+    
+    // حفظ التغييرات
+    await message.save();
     
     logger.info('تم تحديث حالة قراءة الرسالة بنجاح', { 
       messageId: message._id.toString(), 
       reader: userInfo.username,
-      externalMessageId: message.externalMessageId
+      externalMessageId: message.externalMessageId,
+      readByCount: message.readBy.length
     });
     
     // جلب الرسالة المحدثة

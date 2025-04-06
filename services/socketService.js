@@ -123,6 +123,13 @@ function initialize(server) {
       // معالجة حدث قراءة الرسالة
       socket.on('message_read', async (data) => {
         try {
+          logger.info('socketService', 'استلام حدث قراءة رسالة', { 
+            messageId: data.messageId,
+            userId: data.userId || socket.userId,
+            username: data.username || socket.username,
+            socketId: socket.id
+          });
+          
           // التأكد من وجود بيانات المستخدم
           if (!socket.userId && !data.userId) {
             logger.warn('socketService', 'محاولة تسجيل قراءة رسالة بدون معرف مستخدم', { 
@@ -152,16 +159,31 @@ function initialize(server) {
           if (message) {
             // إذا نجح التحديث، أبلغ جميع المتصلين بغرفة المحادثة
             const readerCount = message.readBy ? message.readBy.length : 0;
+            const conversationId = message.conversationId.toString();
             
-            io.to(`conversation-${message.conversationId}`).emit('message_read_update', {
-              messageId: data.messageId,
+            logger.info('socketService', 'تم تحديث حالة قراءة الرسالة بنجاح', { 
+              messageId: data.messageId, 
               readerCount,
-              recentReader: username
+              conversationId
             });
             
-            logger.info('socketService', 'تم تحديث حالة قراءة الرسالة وإرسال إشعار', { 
+            const updateData = {
+              messageId: data.messageId,
+              readerCount,
+              recentReader: username,
+              readers: message.readBy || []
+            };
+            
+            io.to(`conversation-${conversationId}`).emit('message_read_update', updateData);
+            
+            logger.info('socketService', 'تم إرسال إشعار بتحديث قراءة الرسالة للمتصلين', { 
               messageId: data.messageId, 
+              room: `conversation-${conversationId}`,
               readerCount 
+            });
+          } else {
+            logger.error('socketService', 'فشل تحديث حالة قراءة الرسالة في قاعدة البيانات', {
+              messageId: data.messageId
             });
           }
         } catch (error) {
