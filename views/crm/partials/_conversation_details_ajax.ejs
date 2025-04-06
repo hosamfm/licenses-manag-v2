@@ -43,34 +43,51 @@
   
   // تسجيل مشاهدة الرسالة
   window.markMessageAsRead = function(messageId, externalMessageId) {
-    // استخدام الـ Socket لإرسال إخطار قراءة الرسالة
-    if (window.socket && messageId) {
+    try {
+      // التحقق من وجود البيانات اللازمة
+      if (!messageId && !externalMessageId) {
+        console.error('معرف الرسالة غير صالح - مطلوب messageId أو externalMessageId');
+        return false;
+      }
+      
+      if (!window.socket) {
+        console.error('اتصال Socket.io غير متاح');
+        return false;
+      }
+      
+      if (!window.currentUserId) {
+        console.error('معرف المستخدم غير متاح');
+        // محاولة الحصول على معرف المستخدم من الصفحة
+        window.currentUserId = $('#currentUserId').val() || $('input[name="userId"]').val() || 'unknown';
+        window.currentUsername = $('#currentUserName').val() || $('input[name="username"]').val() || 'مستخدم غير معروف';
+      }
+
       const actualMessageId = externalMessageId || messageId;
       console.log('تسجيل قراءة الرسالة:', actualMessageId);
       
-      // إضافة فحص لتجنب محاولة إرسال القيمة "undefined"
-      if (actualMessageId) {
-        window.socket.emit('message_read', {
-          messageId: actualMessageId,
-          userId: window.currentUserId,
-          username: window.currentUsername
-        });
-        
-        console.log('تم إرسال طلب قراءة للرسالة:', {
-          messageId: actualMessageId,
-          userId: window.currentUserId,
-          username: window.currentUsername
-        });
-        
-        return true;
-      } else {
-        console.error('معرف الرسالة غير صالح:', { messageId, externalMessageId });
-      }
-    } else {
-      console.error('Socket.io غير متاح أو لم يتم تمرير معرف الرسالة', {
-        socketAvailable: !!window.socket,
-        messageIdProvided: !!messageId
+      // استخدام الـ Socket لإرسال إخطار قراءة الرسالة
+      const data = {
+        messageId: actualMessageId,
+        userId: window.currentUserId,
+        username: window.currentUsername,
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('إرسال بيانات قراءة الرسالة:', data);
+      
+      // استخدام كائن منفصل لتحسين التسجيل
+      window.socket.emit('message_read', data);
+      
+      // تسجيل في وحدة التحكم للتشخيص
+      console.log('تم إرسال طلب قراءة للرسالة بنجاح:', {
+        messageId: actualMessageId,
+        userId: window.currentUserId,
+        username: window.currentUsername
       });
+      
+      return true;
+    } catch (error) {
+      console.error('خطأ في تسجيل قراءة الرسالة:', error);
       return false;
     }
   }
@@ -454,6 +471,9 @@
               window.socket.emit('join', { room: `conversation-${conversationId}` });
               console.log('تم الانضمام إلى غرفة المحادثة:', conversationId);
             }
+            
+            // تنفيذ مراقبة الرسائل بعد الاتصال بالسوكت مباشرة
+            setupMessageObservers();
           });
           
           window.socket.on('disconnect', function() {
@@ -474,6 +494,9 @@
         if (conversationId) {
           window.socket.emit('join', { room: `conversation-${conversationId}` });
         }
+        
+        // تنفيذ مراقبة الرسائل بشكل مباشر لأن السوكت متصل بالفعل
+        setupMessageObservers();
       }
       
       // ربط أحداث النقر بدلاً من استخدام onclick
@@ -559,7 +582,40 @@
         }
         
         try {
-          // إنشاء كائن مراقب التقاطع
+          // فحص رسائل الدخول
+          const incomingMessages = $('.message.incoming:not([data-observed="true"])');
+          console.log('عدد الرسائل الواردة المتاحة للمراقبة:', incomingMessages.length);
+          
+          // إذا لم تكن هناك رسائل، لا داعي للاستمرار
+          if (incomingMessages.length === 0) {
+            console.log('لا توجد رسائل واردة للمراقبة');
+            return null;
+          }
+          
+          // طريقة أبسط: تسجيل قراءة جميع الرسائل الواردة التي تظهر حاليًا مباشرة
+          incomingMessages.each(function() {
+            const $message = $(this);
+            const messageId = $message.data('message-id');
+            const externalId = $message.data('external-id');
+            
+            if (!$message.data('observed')) {
+              console.log('إرسال تسجيل قراءة مباشر للرسالة:', messageId || externalId);
+              
+              // تسجيل القراءة مباشرة
+              const success = window.markMessageAsRead(messageId, externalId);
+              
+              if (success) {
+                $message.data('observed', true);
+                $message.attr('data-observed', 'true');
+                $message.attr('data-read-by-current-user', 'true');
+                console.log('تم تسجيل قراءة الرسالة بنجاح:', messageId || externalId);
+              } else {
+                console.error('فشل تسجيل قراءة الرسالة:', messageId || externalId);
+              }
+            }
+          });
+          
+          // إعداد المراقب للرسائل الجديدة مستقبلاً
           const messageObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
               if (entry.isIntersecting) {
@@ -569,7 +625,7 @@
                 const direction = $message.hasClass('incoming') ? 'incoming' : 'outgoing';
                 const isObserved = $message.data('observed') === true;
                 
-                console.log('رسالة ظهرت في نطاق الرؤية:', {
+                console.log('رسالة جديدة ظهرت في نطاق الرؤية:', {
                   messageId,
                   externalId,
                   direction,
@@ -578,17 +634,16 @@
                 
                 // تسجيل مشاهدة الرسائل الواردة فقط ولمرة واحدة
                 if (direction === 'incoming' && !isObserved) {
-                  console.log('محاولة تسجيل قراءة رسالة واردة:', messageId || externalId);
+                  console.log('محاولة تسجيل قراءة رسالة واردة جديدة:', messageId || externalId);
                   
                   const success = window.markMessageAsRead(messageId, externalId);
                   if (success) {
                     $message.data('observed', true);
-                    console.log('تم تسجيل قراءة الرسالة بنجاح');
-                    
-                    // إضافة سمة مرئية للإشارة إلى أن الرسالة تمت قراءتها
+                    $message.attr('data-observed', 'true');
                     $message.attr('data-read-by-current-user', 'true');
+                    console.log('تم تسجيل قراءة الرسالة الجديدة بنجاح');
                   } else {
-                    console.error('فشل تسجيل قراءة الرسالة');
+                    console.error('فشل تسجيل قراءة الرسالة الجديدة');
                   }
                 }
                 
@@ -602,22 +657,17 @@
           }, {
             // تحديد نسبة الظهور المطلوبة لتسجيل المشاهدة (80% تكفي لتسجيل المشاهدة)
             threshold: 0.8,
-            // التأكد من أن الرسائل تظهر في نافذة العرض
-            root: document.getElementById('messageContainer')
+            // جعل الجذر هو نافذة العرض بدلاً من حاوية الرسائل لضمان الكشف الصحيح
+            root: null
           });
           
-          // تفعيل المراقبة على جميع الرسائل الواردة
-          const incomingMessages = $('.message.incoming:not([data-observed="true"])');
-          console.log('عدد الرسائل الواردة التي سيتم مراقبتها:', incomingMessages.length);
-          
-          if (incomingMessages.length === 0) {
-            console.log('لا توجد رسائل واردة للمراقبة');
-          }
-          
-          incomingMessages.each(function() {
-            messageObserver.observe(this);
-            const msgId = $(this).data('message-id') || $(this).data('external-id');
-            console.log('تمت إضافة مراقبة للرسالة:', msgId);
+          // تفعيل المراقبة على جميع الرسائل الواردة غير المسجلة لاستقبال الرسائل الجديدة مستقبلاً
+          $('.message.incoming').each(function() {
+            if (!$(this).data('observed')) {
+              messageObserver.observe(this);
+              const msgId = $(this).data('message-id') || $(this).data('external-id');
+              console.log('تمت إضافة مراقبة للرسائل الجديدة:', msgId);
+            }
           });
           
           return messageObserver;
