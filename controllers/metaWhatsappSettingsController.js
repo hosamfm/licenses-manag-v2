@@ -416,6 +416,13 @@ exports.checkSettingConnection = async (req, res) => {
                 const phoneInfo = await tempService.getPhoneNumberInfo(setting.config.phoneNumberId);
                 connectionStatus.success = true;
                 connectionStatus.phoneNumber = phoneInfo.display_phone_number || phoneInfo.id;
+                
+                // إضافة بيانات الاستجابة من واتساب لعرضها في واجهة المستخدم
+                return res.json({
+                    success: true,
+                    connectionStatus: connectionStatus,
+                    responseData: phoneInfo // إضافة بيانات الاستجابة كاملة
+                });
             } catch (error) {
                 connectionStatus.error = error.message;
                 // إذا كان الخطأ 401، نضيف رسالة أكثر وضوحًا
@@ -424,17 +431,21 @@ exports.checkSettingConnection = async (req, res) => {
                 }
                 // استخدام سلسلة نصية عادية لتجنب مشاكل القالب الحرفي
                 logger.error('metaWhatsappSettingsController', 'خطأ في الاتصال بواتساب الرسمي للإعداد ' + setting.name, error);
+                
+                // إرجاع استجابة الخطأ
+                return res.json({
+                    success: true,
+                    connectionStatus: connectionStatus
+                });
             }
         } else {
             connectionStatus.error = 'الإعداد غير مكتمل أو غير موجود';
+            
+            return res.json({
+                success: true,
+                connectionStatus: connectionStatus
+            });
         }
-        
-        res.json({
-            success: connectionStatus.success,
-            error: connectionStatus.error,
-            phoneNumber: connectionStatus.phoneNumber,
-            settingName: connectionStatus.settingName
-        });
     } catch (error) {
         logger.error('metaWhatsappSettingsController', 'خطأ في فحص حالة اتصال إعداد واتساب', error);
         res.status(500).json({
