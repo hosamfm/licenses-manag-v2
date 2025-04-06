@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<%- include('partials/_head.ejs') %>
+<body>
+<%- include('partials/_header.ejs') %>
+
+<div class="container">
+    <div class="page-header">
+        <h2 class="almarai-bold">إضافة عميل جديد لخدمة الرسائل</h2>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <form id="createClientForm">
+                        <div class="mb-3">
+                            <label for="name" class="form-label almarai-bold">اسم العميل *</label>
+                            <input type="text" class="form-control almarai-regular" id="name" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="email" class="form-label almarai-bold">البريد الإلكتروني *</label>
+                            <input type="email" class="form-control almarai-regular" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="phone" class="form-label almarai-bold">رقم الهاتف *</label>
+                            <input type="text" class="form-control almarai-regular" id="phone" name="phone" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="company" class="form-label almarai-bold">اسم الشركة</label>
+                            <input type="text" class="form-control almarai-regular" id="company" name="company">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label almarai-bold">إعدادات كود الدولة الافتراضي</label>
+                            <div class="card p-3 bg-light">
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <label for="country-select" class="form-label">اختر الدولة</label>
+                                        <select class="form-select almarai-regular" id="country-select" name="countrySelect">
+                                            <!-- الدول العربية -->
+                                            <optgroup label="الدول العربية">
+                                                <option value="DZ|213|الجزائر">الجزائر (+213)</option>
+                                                <option value="BH|973|البحرين">البحرين (+973)</option>
+                                                <option value="KM|269|جزر القمر">جزر القمر (+269)</option>
+                                                <option value="DJ|253|جيبوتي">جيبوتي (+253)</option>
+                                                <option value="EG|20|مصر">مصر (+20)</option>
+                                                <option value="IQ|964|العراق">العراق (+964)</option>
+                                                <option value="JO|962|الأردن">الأردن (+962)</option>
+                                                <option value="KW|965|الكويت">الكويت (+965)</option>
+                                                <option value="LB|961|لبنان">لبنان (+961)</option>
+                                                <option value="LY|218|ليبيا" selected>ليبيا (+218)</option>
+                                                <option value="MR|222|موريتانيا">موريتانيا (+222)</option>
+                                                <option value="MA|212|المغرب">المغرب (+212)</option>
+                                                <option value="OM|968|سلطنة عمان">سلطنة عمان (+968)</option>
+                                                <option value="PS|970|فلسطين">فلسطين (+970)</option>
+                                                <option value="QA|974|قطر">قطر (+974)</option>
+                                                <option value="SA|966|السعودية">السعودية (+966)</option>
+                                                <option value="SO|252|الصومال">الصومال (+252)</option>
+                                                <option value="SD|249|السودان">السودان (+249)</option>
+                                                <option value="SY|963|سوريا">سوريا (+963)</option>
+                                                <option value="TN|216|تونس">تونس (+216)</option>
+                                                <option value="AE|971|الإمارات">الإمارات (+971)</option>
+                                                <option value="YE|967|اليمن">اليمن (+967)</option>
+                                            </optgroup>
+                                            <!-- دول أخرى -->
+                                            <optgroup label="دول أخرى">
+                                                <option value="TR|90|تركيا">تركيا (+90)</option>
+                                                <option value="SE|46|السويد">السويد (+46)</option>
+                                                <option value="DE|49|ألمانيا">ألمانيا (+49)</option>
+                                            </optgroup>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row d-none">
+                                    <div class="col-md-4">
+                                        <input type="hidden" id="countryCode" name="defaultCountry.code" value="218">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="hidden" id="countryAlpha2" name="defaultCountry.alpha2" value="LY">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <input type="hidden" id="countryName" name="defaultCountry.name" value="ليبيا">
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    سيتم استخدام رمز الدولة المحدد عند تنسيق أرقام الهواتف لهذا العميل
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="dailyLimit" class="form-label almarai-bold">الحد اليومي للرسائل</label>
+                                <input type="number" class="form-control almarai-regular" id="dailyLimit" name="dailyLimit" value="100" min="1">
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="monthlyLimit" class="form-label almarai-bold">الحد الشهري للرسائل</label>
+                                <input type="number" class="form-control almarai-regular" id="monthlyLimit" name="monthlyLimit" value="3000" min="1">
+                            </div>
+                        </div>
+                        <% } %>
+                        
+                        <div class="mb-3">
+                            <label class="form-label almarai-bold">طرق الإرسال المتاحة للعميل</label>
+                            <div class="d-flex gap-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="smsChannel" name="messagingChannels.sms" checked>
+                                    <label class="form-check-label almarai-regular" for="smsChannel">
+                                        <i class="fas fa-sms me-1"></i> رسائل SMS
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="whatsappChannel" name="messagingChannels.whatsapp">
+                                    <label class="form-check-label almarai-regular" for="whatsappChannel">
+                                        <i class="fab fa-whatsapp me-1"></i> رسائل واتساب
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="metaWhatsappChannel" name="messagingChannels.metaWhatsapp">
+                                    <label class="form-check-label almarai-regular" for="metaWhatsappChannel">
+                                        <i class="fab fa-whatsapp me-1"></i> واتساب ميتا الرسمي
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="metaWhatsappTemplateSettings" class="mb-3 card p-3 bg-light" style="display: none;">
+                            <h5 class="almarai-bold mb-3">إعدادات نماذج واتساب ميتا</h5>
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <label for="metaWhatsappTemplateName" class="form-label">اسم النموذج</label>
+                                    <input type="text" class="form-control almarai-regular" id="metaWhatsappTemplateName" name="metaWhatsappTemplateName" value="siraj">
+                                    <small class="form-text text-muted">اسم النموذج المعتمد في حساب Meta WhatsApp</small>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <label for="metaWhatsappTemplateLanguage" class="form-label">لغة النموذج</label>
+                                    <select class="form-select almarai-regular" id="metaWhatsappTemplateLanguage" name="metaWhatsappTemplateLanguage">
+                                        <option value="ar" selected>العربية</option>
+                                        <option value="en">الإنجليزية</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3 preferred-channel-container" style="display: none;">
+                            <label for="preferredChannel" class="form-label almarai-bold">القناة المفضلة للإرسال</label>
+                            <select class="form-select almarai-regular" id="preferredChannel" name="preferredChannel">
+                                <option value="none" selected>بلا (افتراضي)</option>
+                                <option value="sms" class="sms-option" style="display: none;">رسائل SMS</option>
+                                <option value="whatsapp" class="whatsapp-option" style="display: none;">رسائل واتساب</option>
+                                <option value="metaWhatsapp" class="metaWhatsapp-option" style="display: none;">واتساب ميتا الرسمي</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                حدد القناة المفضلة للإرسال في حال تفعيل أكثر من قناة
+                            </small>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            سيتم إنشاء مفتاح API تلقائياً عند إنشاء حساب العميل
+                        </div>
+                        
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg almarai-bold">
+                                <i class="fas fa-plus-circle me-2"></i> إنشاء عميل جديد
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لمفاتيح API -->
+<div class="modal fade" id="newClientKeysModal" tabindex="-1" aria-labelledby="newClientKeysModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title almarai-bold" id="newClientKeysModalLabel">مفاتيح API للعميل الجديد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i> تنبيه: احفظ هذا المفتاح في مكان آمن.
+                </div>
+                
+                <div class="mb-3">
+                    <label for="client-api-key" class="form-label almarai-bold">مفتاح API:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control almarai-regular" id="client-api-key" readonly>
+                        <button class="btn btn-outline-secondary" type="button" id="copyApiKeyBtn">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary almarai-regular" id="addAnotherClientBtn">إضافة عميل آخر</button>
+                <button type="button" class="btn btn-success almarai-regular" id="goToClientsListBtn">العودة إلى قائمة العملاء</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/_footer.ejs') %>
+
+<script src="/js/create_sem_client.js"></script>
+</body>
+</html>

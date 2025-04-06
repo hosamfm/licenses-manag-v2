@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ar">
+<%- include('partials/_head.ejs') %>
+<body>
+<%- include('partials/_header.ejs') %>
+
+<main role="main" class="container mt-4">
+    <div class="text-center">
+        <h2 class="almarai-bold">طلب ترخيص قارئ الأسعار</h2>
+    </div>
+    <form id="priceReaderForm" action="/request-price-reader-license" method="POST" class="form-container mt-4 almarai-regular">
+        <div class="mb-3">
+            <label for="licenseeName" class="form-label almarai-bold">اسم المرخص له</label>
+            <input type="text" class="form-control almarai-regular" id="licenseeName" name="licenseeName" required autocomplete="off">
+        </div>
+        <div class="mb-3">
+            <label for="deviceCode" class="form-label almarai-bold">كود الجهاز</label>
+            <input type="number" class="form-control almarai-regular" id="deviceCode" name="deviceCode" required>
+        </div>
+        <button type="submit" id="submitButton" class="btn btn-success btn-lg almarai-bold">إرسال الطلب</button>
+    </form>
+</main>
+
+<%- include('partials/_footer.ejs') %>
+
+<script>
+    document.getElementById('priceReaderForm').addEventListener('submit', function() {
+        // تعطيل زر الإرسال لمنع النقرات المتعددة
+        document.getElementById('submitButton').disabled = true;
+        document.getElementById('submitButton').innerText = 'جارٍ معالجة الطلب...'; // تغيير النص ليوضح أن الطلب قيد المعالجة
+    });
+</script>
+</body>
+</html>

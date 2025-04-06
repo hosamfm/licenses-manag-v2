@@ -1,0 +1,49 @@
+<% if (message.mediaType === 'image') { %>
+  <div class="media-container">
+    <img src="/whatsapp/media/content/<%= message._id %>" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
+    <div class="media-overlay">
+      <i class="fas fa-external-link-alt"></i>
+    </div>
+  </div>
+<% } else if (message.mediaType === 'video') { %>
+  <div class="media-container">
+    <video controls class="media-video">
+      <source src="/whatsapp/media/content/<%= message._id %>" type="video/mp4">
+      المتصفح لا يدعم عرض الفيديو
+    </video>
+  </div>
+<% } else if (message.mediaType === 'audio') { %>
+  <div class="media-container">
+    <audio controls class="media-audio">
+      <source src="/whatsapp/media/content/<%= message._id %>" type="audio/ogg">
+      المتصفح لا يدعم تشغيل الملفات الصوتية
+    </audio>
+  </div>
+<% } else if (message.mediaType === 'document') { %>
+  <div class="document-container">
+    <div class="document-icon">
+      <i class="fas fa-file-alt"></i>
+    </div>
+    <div class="document-info">
+      <div class="document-name"><%= message.fileName || 'مستند' %></div>
+      <div class="document-size"><%= message.fileSize ? (Math.round(message.fileSize / 1024) + ' كيلوبايت') : '' %></div>
+    </div>
+    <a href="/whatsapp/media/content/<%= message._id %>" target="_blank" class="document-download">
+      <i class="fas fa-download"></i>
+    </a>
+  </div>
+<% } else if (message.mediaType === 'sticker') { %>
+  <div class="media-container">
+    <img src="/whatsapp/media/content/<%= message._id %>" class="media-sticker" alt="ملصق">
+  </div>
+<% } else if (message.mediaType === 'location') { %>
+  <div class="location-container">
+    <div class="location-icon">
+      <i class="fas fa-map-marker-alt"></i>
+    </div>
+    <div class="location-info">
+      <div class="location-name">موقع جغرافي</div>
+      <div class="location-coordinates"><%= message.content || 'إحداثيات غير متوفرة' %></div>
+    </div>
+  </div>
+<% } %> 

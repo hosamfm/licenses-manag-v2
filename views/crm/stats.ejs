@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('../partials/_head') %>
+  <title>الإحصائيات - إدارة العملاء</title>
+  
+  <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
+  <link rel="stylesheet" href="/css/crm.css">
+</head>
+<body>
+  <%- include('../partials/_header') %>
+  
+  <div class="crm-container">
+    <!-- القائمة الجانبية - استخدام القالب الجزئي الموحد -->
+    <%- include('../partials/_crm_sidebar') %>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="crm-content">
+      <% if (flashMessages && flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <% if (flashMessages && flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="page-title">لوحة الإحصائيات</h1>
+        <div>
+          <button class="btn btn-outline-primary" id="refreshStats">
+            <i class="fas fa-sync-alt me-1"></i> تحديث
+          </button>
+        </div>
+      </div>
+      
+      <!-- الإحصائيات الأساسية -->
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="card mb-3 h-100 shadow-sm">
+            <div class="card-body bg-primary text-white rounded">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="card-title mb-0">إجمالي المحادثات</h6>
+                  <div class="fs-2 fw-bold mt-2"><%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.total : 0 %></div>
+                </div>
+                <div>
+                  <i class="fas fa-comments fa-2x opacity-75"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="card mb-3 h-100 shadow-sm">
+            <div class="card-body bg-info text-white rounded">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="card-title mb-0">محادثات مفتوحة</h6>
+                  <div class="fs-2 fw-bold mt-2"><%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.open : 0 %></div>
+                </div>
+                <div>
+                  <i class="fas fa-door-open fa-2x opacity-75"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="card mb-3 h-100 shadow-sm">
+            <div class="card-body bg-warning text-dark rounded">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="card-title mb-0">محادثات مسندة</h6>
+                  <div class="fs-2 fw-bold mt-2"><%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.assigned : 0 %></div>
+                </div>
+                <div>
+                  <i class="fas fa-user-check fa-2x opacity-75"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="card mb-3 h-100 shadow-sm">
+            <div class="card-body bg-success text-white rounded">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="card-title mb-0">محادثات مغلقة</h6>
+                  <div class="fs-2 fw-bold mt-2"><%= typeof stats !== 'undefined' && stats.conversations ? stats.conversations.closed : 0 %></div>
+                </div>
+                <div>
+                  <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- إحصائيات تفصيلية -->
+      <div class="row">
+        <div class="col-md-6">
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="fas fa-chart-pie me-2"></i>
+              حالة المحادثات
+            </div>
+            <div class="card-body">
+              <div class="chart-container">
+                <canvas id="conversationStatusChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-6">
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="fas fa-chart-line me-2"></i>
+              نشاط المحادثات (آخر 7 أيام)
+            </div>
+            <div class="card-body">
+              <div class="chart-container">
+                <canvas id="conversationActivityChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- المخططات البيانية -->
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-white">
+              <h5 class="mb-0">توزيع حالات المحادثات</h5>
+            </div>
+            <div class="card-body">
+              <div style="height: 250px;">
+                <canvas id="conversationStatusChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-white">
+              <h5 class="mb-0">أداء الفريق</h5>
+            </div>
+            <div class="card-body">
+              <div style="height: 250px;">
+                <canvas id="teamPerformanceChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- أفضل الموظفين -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">أداء فريق الدعم</h5>
+          <div>
+            <select class="form-select form-select-sm" id="timeRangeFilter" style="width: auto; display: inline-block;">
+              <option value="today">اليوم</option>
+              <option value="week" selected>هذا الأسبوع</option>
+              <option value="month">هذا الشهر</option>
+              <option value="year">هذا العام</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>اسم الموظف</th>
+                  <th>محادثات مسندة</th>
+                  <th>محادثات مغلقة</th>
+                  <th>متوسط وقت الرد</th>
+                  <th>نسبة الرضا</th>
+                </tr>
+              </thead>
+              <tbody id="agent-stats-body">
+                <!-- سيتم تحميل البيانات بواسطة JavaScript -->
+                <tr>
+                  <td colspan="5" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">جاري التحميل...</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row mt-4">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">أداء الفريق</h5>
+              <canvas id="teamPerformanceChart" width="400" height="300"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">وقت الاستجابة</h5>
+              <canvas id="responseTimeChart" width="400" height="300"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <%- include('../partials/_footer') %>
+  
+  <!-- تحضير البيانات قبل استخدامها في الرسوم البيانية -->
+  <script>
+    // تعريف متغيرات البيانات بشكل مباشر وتحويلها لأرقام
+    window.openCount = parseInt('<%= typeof stats !== "undefined" && stats.conversations ? stats.conversations.open : 0 %>');
+    window.assignedCount = parseInt('<%= typeof stats !== "undefined" && stats.conversations ? stats.conversations.assigned : 0 %>');
+    window.closedCount = parseInt('<%= typeof stats !== "undefined" && stats.conversations ? stats.conversations.closed : 0 %>');
+  </script>
+  
+  <!-- إضافة مكتبة Chart.js للرسوم البيانية -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- تنفيذ كود الرسوم البيانية -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      
+      // رسم بياني دائري لحالة المحادثات
+      const statusCtx = document.getElementById('conversationStatusChart').getContext('2d');
+      const statusChart = new Chart(statusCtx, {
+        type: 'pie',
+        data: {
+          labels: ['مفتوحة', 'مسندة', 'مغلقة'],
+          datasets: [{
+            data: [window.openCount, window.assignedCount, window.closedCount],
+            backgroundColor: [
+              'rgba(23, 162, 184, 0.8)',
+              'rgba(255, 193, 7, 0.8)',
+              'rgba(108, 117, 125, 0.8)'
+            ],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+      
+      // بيانات وهمية للرسم البياني الخطي (للعرض فقط)
+      // في التنفيذ الفعلي، ستأتي هذه البيانات من الخادم
+      const activityLabels = [];
+      const today = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        activityLabels.push(date.toLocaleDateString('ar-LY', { month: 'short', day: 'numeric' }));
+      }
+      
+      const activityCtx = document.getElementById('conversationActivityChart').getContext('2d');
+      const activityChart = new Chart(activityCtx, {
+        type: 'line',
+        data: {
+          labels: activityLabels,
+          datasets: [
+            {
+              label: 'محادثات جديدة',
+              data: [5, 8, 12, 8, 10, 6, 9],
+              borderColor: 'rgba(23, 162, 184, 1)',
+              backgroundColor: 'rgba(23, 162, 184, 0.1)',
+              fill: true,
+              tension: 0.4
+            },
+            {
+              label: 'محادثات مغلقة',
+              data: [3, 5, 8, 4, 7, 5, 6],
+              borderColor: 'rgba(108, 117, 125, 1)',
+              backgroundColor: 'rgba(108, 117, 125, 0.1)',
+              fill: true,
+              tension: 0.4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+      
+      // أداء الفريق
+      const teamPerformanceCtx = document.getElementById('teamPerformanceChart').getContext('2d');
+      const teamPerformanceChart = new Chart(teamPerformanceCtx, {
+        type: 'bar',
+        data: {
+          labels: ['أحمد', 'محمد', 'فاطمة', 'خالد', 'سارة'],
+          datasets: [{
+            label: 'المحادثات المحلولة',
+            data: [25, 18, 30, 15, 22],
+            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+
+      // وقت الاستجابة
+      const responseTimeCtx = document.getElementById('responseTimeChart').getContext('2d');
+      const responseTimeChart = new Chart(responseTimeCtx, {
+        type: 'line',
+        data: {
+          labels: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو'],
+          datasets: [{
+            label: 'متوسط وقت الاستجابة (دقائق)',
+            data: [25, 22, 18, 15, 12, 10],
+            fill: false,
+            borderColor: 'rgba(255, 99, 132, 1)',
+            tension: 0.1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    });
+  </script>
+  
+  <!-- إضافة سكريبت لتحميل بيانات المستخدمين الحقيقية -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      loadAgentStats();
+      
+      // تحميل إحصائيات الموظفين عند تغيير الفترة الزمنية
+      document.getElementById('timeRangeFilter').addEventListener('change', function() {
+        loadAgentStats();
+      });
+    });
+    
+    async function loadAgentStats() {
+      const timeRange = document.getElementById('timeRangeFilter').value;
+      const tableBody = document.getElementById('agent-stats-body');
+      
+      try {
+        // جلب قائمة المستخدمين الذين لديهم حق الوصول إلى المحادثات
+        const usersResponse = await fetch('/api/users/support', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!usersResponse.ok) {
+          throw new Error('فشل في جلب المستخدمين');
+        }
+        
+        const usersData = await usersResponse.json();
+        
+        if (!usersData.success || !usersData.users || !Array.isArray(usersData.users)) {
+          throw new Error('تنسيق البيانات غير صحيح');
+        }
+        
+        // تفريغ الجدول وإضافة مؤشر التحميل
+        tableBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="text-center py-4">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+              </div>
+            </td>
+          </tr>
+        `;
+        
+        // جلب إحصائيات كل مستخدم
+        const users = usersData.users;
+        const statsPromises = users.map(user => 
+          fetch(`/api/users/${user._id}/stats?timeRange=${timeRange}`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          })
+          .then(response => {
+            if (!response.ok) {
+              return { success: false, stats: null };
+            }
+            return response.json();
+          })
+          .then(data => {
+            return {
+              user,
+              stats: data.success ? data.stats : {
+                assignedCount: 0,
+                closedCount: 0,
+                averageResponseTime: 0,
+                satisfactionRate: 0
+              }
+            };
+          })
+        );
+        
+        const usersWithStats = await Promise.all(statsPromises);
+        
+        // إنشاء صفوف الجدول
+        if (usersWithStats.length > 0) {
+          tableBody.innerHTML = '';
+          
+          usersWithStats.forEach(item => {
+            const { user, stats } = item;
+            const satisfactionRate = stats.satisfactionRate || 0;
+            
+            // استخدام الحقول الصحيحة للمستخدم (full_name أو username بدلاً من name)
+            const userName = user.full_name || user.username || 'مستخدم بدون اسم';
+            const avatarInitial = userName.charAt(0);
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>
+                <div class="d-flex align-items-center">
+                  <div class="avatar-circle bg-primary text-white me-2">
+                    ${avatarInitial}
+                  </div>
+                  <span>${userName}</span>
+                </div>
+              </td>
+              <td>${stats.assignedCount || 0}</td>
+              <td>${stats.closedCount || 0}</td>
+              <td>${stats.averageResponseTime || 0} دقائق</td>
+              <td>
+                <div class="d-flex align-items-center">
+                  <div class="progress flex-grow-1" style="height: 8px;">
+                    <div class="progress-bar bg-success" 
+                        role="progressbar" 
+                        aria-valuenow="${satisfactionRate}" 
+                        aria-valuemin="0" 
+                        aria-valuemax="100"
+                        style="width: ${satisfactionRate}%;">
+                    </div>
+                  </div>
+                  <span class="ms-2">${satisfactionRate}%</span>
+                </div>
+              </td>
+            `;
+            
+            tableBody.appendChild(row);
+          });
+        } else {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="5" class="text-center py-4">لا توجد بيانات متاحة للموظفين</td>
+            </tr>
+          `;
+        }
+      } catch (error) {
+        console.error('Error loading agent stats:', error);
+        tableBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="text-center py-4 text-danger">
+              حدث خطأ أثناء تحميل البيانات: ${error.message}
+            </td>
+          </tr>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>

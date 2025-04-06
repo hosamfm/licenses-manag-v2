@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/_head.ejs') %>
+<body>
+<%- include('partials/_header.ejs') %>
+<main role="main" class="container mt-4">
+    <div class="alert alert-success" role="alert">
+        <h4 class="alert-heading">Success!</h4>
+        <p>تم تقديم طلب الترخيص بنجاح! سوف تصلك رسالة بالترخيص قريبًا.</p>
+        <hr>
+        <div class="d-flex justify-content-between">
+            <a href="/licenses/create-license-request" class="btn btn-primary">إضافة طلب جديد</a>
+            <a href="/licenses/manage" class="btn btn-info">إدارة الطلبات السابقة</a>
+        </div>
+    </div>
+</main>
+<%- include('partials/_footer.ejs') %>
+<script src="/js/main.js"></script>
+</body>
+</html>

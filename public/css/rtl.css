@@ -1,0 +1,14 @@
+body {
+    direction: rtl;
+    text-align: right;
+}
+
+/* Additional RTL styles if needed */
+.navbar .navbar-nav .nav-link {
+    margin-right: 0;
+    margin-left: 0rem;
+}
+
+.navbar .navbar-nav .nav-item:last-child .nav-link {
+    margin-left: 0;
+}

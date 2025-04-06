@@ -1,0 +1,33 @@
+<div class="internal-note-header">
+  <i class="fas fa-sticky-note me-1"></i>
+  <strong>ملاحظة داخلية</strong>
+  <% 
+    let senderName = 'مستخدم غير معروف';
+    if (note.metadata && note.metadata.senderInfo) {
+      senderName = note.metadata.senderInfo.full_name || note.metadata.senderInfo.username || senderName;
+    }
+  %>
+  <span class="from-user ms-2 text-muted">- <%= senderName %></span>
+</div>
+<div class="internal-note-content">
+  <% 
+    let noteContent = note.content;
+    if (note.mentions && note.mentions.length > 0) {
+      note.mentions.forEach(mention => {
+        const username = mention.username;
+        const mentionRegex = new RegExp(`@${username}\\b`, 'g');
+        const mentionFullName = mention.user && mention.user.full_name ? mention.user.full_name : username;
+        noteContent = noteContent.replace(
+          mentionRegex,
+          `<span class="user-mention" data-user-id="${mention.user && mention.user._id ? mention.user._id : ''}" title="${mentionFullName}">@${username}</span>`
+        );
+      });
+    }
+  %>
+  <%- noteContent.replace(/\n/g, '<br>') %>
+</div>
+<div class="message-meta">
+  <span class="message-time" title="<%= new Date(note.timestamp || note.createdAt).toLocaleString() %>">
+    <%= new Date(note.timestamp || note.createdAt).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
+  </span>
+</div> 

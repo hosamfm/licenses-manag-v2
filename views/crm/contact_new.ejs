@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('../partials/_head') %>
+  <title>إضافة جهة اتصال جديدة - إدارة العملاء</title>
+  <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
+  <link rel="stylesheet" href="/css/crm.css">
+</head>
+<body>
+  <%- include('../partials/_header') %>
+  
+  <div class="crm-container">
+    <!-- القائمة الجانبية - استخدام القالب الجزئي الموحد -->
+    <%- include('../partials/_crm_sidebar') %>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="crm-content">
+      <% if (flashMessages && flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <% if (flashMessages && flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <!-- صفحة إنشاء جهة اتصال جديدة -->
+      <h1 class="page-title">
+        <i class="fas fa-user-plus me-2"></i>
+        إضافة جهة اتصال جديدة
+      </h1>
+
+      <div class="card">
+        <div class="card-body">
+          <form action="/crm/contacts<%= typeof startConversation !== 'undefined' && startConversation ? '?startConversation=true' : '' %>" method="POST">
+            <!-- بيانات جهة الاتصال -->
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label for="name" class="form-label">الاسم <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="name" name="name" required>
+              </div>
+              
+              <div class="col-md-6">
+                <label for="phoneNumber" class="form-label">رقم الهاتف <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text">+</span>
+                  <input type="text" class="form-control" id="phoneNumber" name="phoneNumber" dir="ltr" 
+                        value="<%= phoneNumber && phoneNumber.startsWith('+') ? phoneNumber.substring(1) : phoneNumber %>" required>
+                </div>
+                <small class="text-muted">أدخل الرقم بدون "+" (سيتم إضافته تلقائياً)</small>
+              </div>
+            </div>
+            
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label for="email" class="form-label">البريد الإلكتروني</label>
+                <input type="email" class="form-control" id="email" name="email">
+              </div>
+              
+              <div class="col-md-6">
+                <label for="company" class="form-label">الشركة</label>
+                <input type="text" class="form-control" id="company" name="company">
+              </div>
+            </div>
+            
+            <div class="mb-3">
+              <label for="notes" class="form-label">ملاحظات</label>
+              <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+            </div>
+            
+            <!-- أزرار الإجراءات -->
+            <div class="d-flex justify-content-between">
+              <a href="/crm/contacts" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-right me-1"></i>
+                العودة للقائمة
+              </a>
+              
+              <div>
+                <button type="reset" class="btn btn-outline-secondary me-2">
+                  <i class="fas fa-eraser me-1"></i>
+                  مسح
+                </button>
+                
+                <button type="submit" class="btn btn-primary">
+                  <i class="fas fa-save me-1"></i>
+                  حفظ جهة الاتصال
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <script>
+        // التحقق من صحة رقم الهاتف قبل إرسال النموذج
+        document.addEventListener('DOMContentLoaded', function() {
+          const form = document.querySelector('form');
+          const phoneInput = document.getElementById('phoneNumber');
+          
+          form.addEventListener('submit', function(e) {
+            // إزالة أي مسافات أو حروف غير رقمية (باستثناء +)
+            let phoneValue = phoneInput.value.trim();
+            
+            // إذا كان الرقم يبدأ بـ + نزيله لأن الواجهة تضيفه تلقائياً
+            if (phoneValue.startsWith('+')) {
+              phoneValue = phoneValue.substring(1);
+            }
+            
+            // تنظيف الرقم من أي أحرف غير رقمية
+            phoneValue = phoneValue.replace(/[^0-9]/g, '');
+            
+            // التأكد من أن الرقم يحتوي على أرقام فقط
+            if (!/^\d+$/.test(phoneValue)) {
+              alert('يرجى إدخال رقم هاتف صحيح');
+              e.preventDefault();
+              return false;
+            }
+            
+            // تعيين قيمة الرقم بعد التنظيف
+            phoneInput.value = phoneValue;
+          });
+        });
+      </script>
+    </div>
+  </div>
+  
+  <%- include('../partials/_footer') %>
+</body>
+</html>

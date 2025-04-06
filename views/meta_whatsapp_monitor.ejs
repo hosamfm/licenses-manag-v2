@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <%- include('partials/_head') %>
+  <title>مراقبة Webhook واتساب الرسمي</title>
+</head>
+<body class="hold-transition sidebar-mini">
+<div class="wrapper">
+
+  <%- include('partials/_header') %>
+  <%- include('partials/_footerBar') %>
+
+  <!-- صفحة مراقبة webhook ميتا واتساب -->
+  <div class="content-wrapper">
+    <div class="content-header">
+      <div class="container-fluid">
+        <div class="row mb-2">
+          <div class="col-sm-6">
+            <h1 class="m-0">مراقبة Webhook واتساب الرسمي</h1>
+          </div>
+          <div class="col-sm-6">
+            <ol class="breadcrumb float-sm-left">
+              <li class="breadcrumb-item"><a href="/admin/dashboard">الرئيسية</a></li>
+              <li class="breadcrumb-item"><a href="/admin/meta-whatsapp-settings">إعدادات واتساب الرسمي</a></li>
+              <li class="breadcrumb-item active">مراقبة Webhook</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <div class="content">
+    <div class="container-fluid">
+      <!-- رسائل النظام -->
+      <% if (flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+      <% } %>
+      
+      <% if (flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+      <% } %>
+
+      <!-- بطاقات الإحصائيات -->
+      <div class="row">
+        <!-- إجمالي webhook -->
+        <div class="col-lg-3 col-6">
+          <div class="small-box bg-info">
+            <div class="inner">
+              <h3><%= totalLogs %></h3>
+              <p>إجمالي Webhook</p>
+            </div>
+            <div class="icon">
+              <i class="fas fa-exchange-alt"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- رسائل واردة -->
+        <div class="col-lg-3 col-6">
+          <div class="small-box bg-success">
+            <div class="inner">
+              <h3><%= messageCount %></h3>
+              <p>رسائل واردة</p>
+            </div>
+            <div class="icon">
+              <i class="fas fa-envelope"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- تحديثات الحالة -->
+        <div class="col-lg-3 col-6">
+          <div class="small-box bg-warning">
+            <div class="inner">
+              <h3><%= statusCount %></h3>
+              <p>تحديثات الحالة</p>
+            </div>
+            <div class="icon">
+              <i class="fas fa-sync-alt"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- غير معروف -->
+        <div class="col-lg-3 col-6">
+          <div class="small-box bg-danger">
+            <div class="inner">
+              <h3><%= unknownCount %></h3>
+              <p>غير معروف</p>
+            </div>
+            <div class="icon">
+              <i class="fas fa-question"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- زر تحديث البيانات -->
+      <div class="row mb-3">
+        <div class="col-12">
+          <button class="btn btn-primary" id="refresh-logs">
+            <i class="fas fa-sync"></i> تحديث البيانات
+          </button>
+          
+          <form action="/admin/meta-whatsapp-monitor/clear-old" method="POST" class="d-inline">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('هل أنت متأكد من حذف السجلات القديمة (أكثر من 30 يوم)؟')">
+              <i class="fas fa-trash"></i> حذف السجلات القديمة
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- جدول سجلات webhook -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">أحدث سجلات Webhook</h3>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+              <thead>
+                <tr>
+                  <th>التاريخ والوقت</th>
+                  <th>النوع</th>
+                  <th>معرّف الطلب</th>
+                  <th>الطريقة</th>
+                  <th>التفاصيل</th>
+                </tr>
+              </thead>
+              <tbody id="logs-table-body">
+                <% latestLogs.forEach(log => { %>
+                  <tr>
+                    <td><%= new Date(log.timestamp).toLocaleString('ar-SA') %></td>
+                    <td>
+                      <% if (log.type === 'message') { %>
+                        <span class="badge badge-success">رسالة</span>
+                      <% } else if (log.type === 'status') { %>
+                        <span class="badge badge-warning">حالة</span>
+                      <% } else { %>
+                        <span class="badge badge-danger">غير معروف</span>
+                      <% } %>
+                    </td>
+                    <td><%= log.requestId %></td>
+                    <td><%= log.method %></td>
+                    <td>
+                      <a href="/admin/meta-whatsapp-monitor/log/<%= log._id %>" class="btn btn-sm btn-info">
+                        <i class="fas fa-eye"></i> عرض التفاصيل
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- مودال عرض التفاصيل -->
+<div class="modal fade" id="logDetailsModal" tabindex="-1" role="dialog" aria-labelledby="logDetailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="logDetailsModalLabel">تفاصيل سجل Webhook</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="logDetailsBody">
+        <!-- سيتم تحميل التفاصيل هنا عبر AJAX -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">إغلاق</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/_footer') %>
+
+<script>
+  $(document).ready(function() {
+    // دالة تحديث الجدول
+    function refreshLogs() {
+      $.ajax({
+        url: '/api/meta-whatsapp/logs/latest',
+        method: 'GET',
+        data: { limit: 50 },
+        success: function(response) {
+          if (response.success && response.logs) {
+            // تفريغ الجدول
+            $('#logs-table-body').empty();
+            
+            // إضافة الصفوف الجديدة
+            response.logs.forEach(function(log) {
+              let typeHtml = '';
+              if (log.type === 'message') {
+                typeHtml = '<span class="badge badge-success">رسالة</span>';
+              } else if (log.type === 'status') {
+                typeHtml = '<span class="badge badge-warning">حالة</span>';
+              } else {
+                typeHtml = '<span class="badge badge-danger">غير معروف</span>';
+              }
+              
+              const date = new Date(log.timestamp).toLocaleString('ar-SA');
+              
+              const html = `
+                <tr>
+                  <td>${date}</td>
+                  <td>${typeHtml}</td>
+                  <td>${log.requestId}</td>
+                  <td>${log.method}</td>
+                  <td>
+                    <a href="/admin/meta-whatsapp-monitor/log/${log._id}" class="btn btn-sm btn-info">
+                      <i class="fas fa-eye"></i> عرض التفاصيل
+                    </a>
+                  </td>
+                </tr>
+              `;
+              
+              $('#logs-table-body').append(html);
+            });
+          }
+        },
+        error: function(error) {
+          console.error('خطأ في تحديث السجلات:', error);
+        }
+      });
+    }
+    
+    // حدث النقر على زر التحديث
+    $('#refresh-logs').click(function() {
+      refreshLogs();
+    });
+    
+    // تحديث تلقائي كل 30 ثانية
+    setInterval(refreshLogs, 30000);
+  });
+</script>

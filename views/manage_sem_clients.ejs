@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<%- include('partials/_head.ejs') %>
+<link rel="stylesheet" href="/css/manage_licenses.css">
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        z-index: 100;
+        position: relative;
+    }
+    
+    .page-header .btn {
+        z-index: 100;
+    }
+</style>
+<body>
+<%- include('partials/_header.ejs') %>
+
+<div class="container">
+    <div class="page-header">
+        <h2 class="almarai-bold">إدارة عملاء خدمة الرسائل</h2>
+        <a href="/sem-clients/create" class="btn btn-primary almarai-regular">
+            <i class="fas fa-plus ml-1"></i> إضافة عميل جديد
+        </a>
+    </div>
+
+    <div class="summary-section mb-3">
+        <div class="summary-card">
+            <p>إجمالي العملاء: <span id="totalClients">0</span></p>
+        </div>
+        <div class="summary-card">
+            <p>العملاء النشطين: <span id="activeClients">0</span></p>
+        </div>
+        <div class="summary-card">
+            <p>العملاء المعلقين: <span id="suspendedClients">0</span></p>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="filter-section mb-3">
+            <div class="search-group">
+                <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                    <select id="filterUserName" class="form-select almarai-regular" style="max-width: 200px;">
+                        <option value="">اختر المستخدم</option>
+                    </select>
+                <% } %>
+                <input type="text" name="searchQuery" id="searchQuery" class="form-control almarai-regular" placeholder="بحث عن عميل" style="max-width: 300px;">
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-bordered align-middle">
+                <thead class="table-primary">
+                    <tr>
+                        <th class="text-center text-white almarai-bold">رقم</th>
+                        <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                            <th class="text-center text-white almarai-bold">منشئ الحساب</th>
+                        <% } %>
+                        <th class="text-center text-white almarai-bold">اسم العميل</th>
+                        <th class="text-center text-white almarai-bold">رقم الهاتف</th>
+                        <th class="text-center text-white almarai-bold">الشركة</th>
+                        <th class="text-center text-white almarai-bold">الحالة</th>
+                        <th class="text-center text-white almarai-bold">الرصيد</th>
+                        <th class="text-center text-white almarai-bold">الرسائل المرسلة</th>
+                        <th class="text-center text-white almarai-bold">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="clientsTableBody">
+                    <!-- سيتم تحميل البيانات ديناميكيًا -->
+                </tbody>
+            </table>
+            
+            <div id="paginationControls" class="pagination-container mt-3">
+                <!-- أزرار التنقل بين الصفحات -->
+            </div>
+            
+            <div id="noDataMessage" class="no-data-message" style="display: none;">
+                <p class="text-center almarai-bold">لا توجد بيانات لعرضها</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لعرض تفاصيل العميل -->
+<div class="modal fade" id="clientDetailsModal" tabindex="-1" aria-labelledby="clientDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="clientDetailsModalLabel">تفاصيل العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modal-client-id">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الاسم:</strong>
+                                <span id="modal-client-name"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>البريد الإلكتروني:</strong>
+                                <span id="modal-client-email"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>رقم الهاتف:</strong>
+                                <span id="modal-client-phone"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الشركة:</strong>
+                                <span id="modal-client-company"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الرصيد:</strong>
+                                <span id="modal-client-balance"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>مفتاح API:</strong>
+                                <div class="api-key-container">
+                                    <span id="modal-client-api-key"></span>
+                                    <button id="copyApiKeyBtn" class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الحد اليومي:</strong>
+                                <span id="modal-client-daily-limit"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="detail-item">
+                                <strong>الحد الشهري:</strong>
+                                <span id="modal-client-monthly-limit"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <div class="detail-item">
+                                <strong>قنوات الإرسال:</strong>
+                                <div id="modal-client-channels" class="mt-2">
+                                    <span id="modal-client-sms-channel" class="badge bg-secondary me-2" style="display: none;">
+                                        <i class="fas fa-sms me-1"></i> رسائل SMS
+                                    </span>
+                                    <span id="modal-client-whatsapp-channel" class="badge bg-success me-2" style="display: none;">
+                                        <i class="fab fa-whatsapp me-1"></i> رسائل واتساب
+                                    </span>
+                                    <span id="modal-client-metawhatsapp-channel" class="badge bg-primary me-2" style="display: none;">
+                                        <i class="fab fa-whatsapp me-1"></i> واتساب ميتا الرسمي
+                                    </span>
+                                    <span id="modal-client-no-channels" class="text-danger" style="display: none;">
+                                        لا توجد قنوات إرسال مفعلة
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <div class="detail-item">
+                                <strong>القناة المفضلة للإرسال:</strong>
+                                <span id="modal-client-preferred-channel"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <button id="regenerateApiKeysBtn" class="btn btn-warning almarai-regular">
+                                إعادة توليد مفتاح API
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h5 class="almarai-bold">إحصائيات الرسائل</h5>
+                            <div class="message-stats">
+                                <div class="stats-container" id="messageStatsContainer">
+                                    <!-- سيتم تحميل الإحصائيات ديناميكيًا -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary almarai-regular" id="editClientBtn">تعديل</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لتعديل تفاصيل العميل -->
+<div class="modal fade" id="editClientModal" tabindex="-1" aria-labelledby="editClientModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editClientModalLabel">تعديل بيانات العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editClientForm">
+                    <input type="hidden" id="edit-client-id">
+                    <div class="mb-3">
+                        <label for="edit-client-name" class="form-label">الاسم</label>
+                        <input type="text" class="form-control almarai-regular" id="edit-client-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-client-email" class="form-label">البريد الإلكتروني</label>
+                        <input type="email" class="form-control almarai-regular" id="edit-client-email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-client-phone" class="form-label">رقم الهاتف</label>
+                        <input type="text" class="form-control almarai-regular" id="edit-client-phone" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-client-company" class="form-label">الشركة</label>
+                        <input type="text" class="form-control almarai-regular" id="edit-client-company">
+                    </div>
+                    
+                    <!-- إضافة قسم إعدادات كود الدولة الافتراضي -->
+                    <div class="mb-4">
+                        <label class="form-label almarai-bold">إعدادات كود الدولة الافتراضي</label>
+                        <div class="card p-3 bg-light">
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label for="edit-country-select" class="form-label">اختر الدولة</label>
+                                    <select class="form-select almarai-regular" id="edit-country-select">
+                                        <!-- الدول العربية -->
+                                        <optgroup label="الدول العربية">
+                                            <option value="DZ|213|الجزائر">الجزائر (+213)</option>
+                                            <option value="BH|973|البحرين">البحرين (+973)</option>
+                                            <option value="KM|269|جزر القمر">جزر القمر (+269)</option>
+                                            <option value="DJ|253|جيبوتي">جيبوتي (+253)</option>
+                                            <option value="EG|20|مصر">مصر (+20)</option>
+                                            <option value="IQ|964|العراق">العراق (+964)</option>
+                                            <option value="JO|962|الأردن">الأردن (+962)</option>
+                                            <option value="KW|965|الكويت">الكويت (+965)</option>
+                                            <option value="LB|961|لبنان">لبنان (+961)</option>
+                                            <option value="LY|218|ليبيا">ليبيا (+218)</option>
+                                            <option value="MR|222|موريتانيا">موريتانيا (+222)</option>
+                                            <option value="MA|212|المغرب">المغرب (+212)</option>
+                                            <option value="OM|968|سلطنة عمان">سلطنة عمان (+968)</option>
+                                            <option value="PS|970|فلسطين">فلسطين (+970)</option>
+                                            <option value="QA|974|قطر">قطر (+974)</option>
+                                            <option value="SA|966|السعودية">السعودية (+966)</option>
+                                            <option value="SO|252|الصومال">الصومال (+252)</option>
+                                            <option value="SD|249|السودان">السودان (+249)</option>
+                                            <option value="SY|963|سوريا">سوريا (+963)</option>
+                                            <option value="TN|216|تونس">تونس (+216)</option>
+                                            <option value="AE|971|الإمارات">الإمارات (+971)</option>
+                                            <option value="YE|967|اليمن">اليمن (+967)</option>
+                                        </optgroup>
+                                        <!-- دول أخرى -->
+                                        <optgroup label="دول أخرى">
+                                            <option value="TR|90|تركيا">تركيا (+90)</option>
+                                            <option value="SE|46|السويد">السويد (+46)</option>
+                                            <option value="DE|49|ألمانيا">ألمانيا (+49)</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row d-none">
+                                <div class="col-md-4">
+                                    <input type="hidden" id="edit-country-code" value="218">
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="hidden" id="edit-country-alpha2" value="LY">
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="hidden" id="edit-country-name" value="ليبيا">
+                                </div>
+                            </div>
+                            <div class="alert alert-info mb-0">
+                                <i class="fas fa-info-circle me-2"></i>
+                                سيتم استخدام رمز الدولة المحدد عند تنسيق أرقام الهواتف لهذا العميل
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">طرق الإرسال المتاحة للعميل</label>
+                        <div class="d-flex gap-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit-sms-channel" name="edit-messagingChannels-sms">
+                                <label class="form-check-label almarai-regular" for="edit-sms-channel">
+                                    <i class="fas fa-sms me-1"></i> رسائل SMS
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit-whatsapp-channel" name="edit-messagingChannels-whatsapp">
+                                <label class="form-check-label almarai-regular" for="edit-whatsapp-channel">
+                                    <i class="fab fa-whatsapp me-1"></i> رسائل واتساب
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit-metawhatsapp-channel" name="edit-messagingChannels-metawhatsapp">
+                                <label class="form-check-label almarai-regular" for="edit-metawhatsapp-channel">
+                                    <i class="fab fa-whatsapp me-1"></i> واتساب ميتا الرسمي
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="edit-metawhatsapp-template-settings" class="mb-3 card p-3 bg-light" style="display: none;">
+                        <h5 class="almarai-bold mb-3">إعدادات نماذج واتساب ميتا</h5>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label for="edit-metawhatsapp-template-name" class="form-label">اسم النموذج</label>
+                                <input type="text" class="form-control almarai-regular" id="edit-metawhatsapp-template-name" name="edit-metawhatsapp-template-name" value="siraj">
+                                <small class="form-text text-muted">اسم النموذج المعتمد في حساب Meta WhatsApp</small>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label for="edit-metawhatsapp-template-language" class="form-label">لغة النموذج</label>
+                                <select class="form-select almarai-regular" id="edit-metawhatsapp-template-language" name="edit-metawhatsapp-template-language">
+                                    <option value="ar" selected>العربية</option>
+                                    <option value="en">الإنجليزية</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3 edit-preferred-channel-container" style="display: none;">
+                        <label for="edit-preferred-channel" class="form-label">القناة المفضلة للإرسال</label>
+                        <select class="form-select almarai-regular" id="edit-preferred-channel">
+                            <option value="none" selected>بلا (افتراضي)</option>
+                            <option value="sms" class="edit-sms-option" style="display: none;">رسائل SMS</option>
+                            <option value="whatsapp" class="edit-whatsapp-option" style="display: none;">رسائل واتساب</option>
+                            <option value="metawhatsapp" class="edit-metawhatsapp-option" style="display: none;">واتساب ميتا الرسمي</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            حدد القناة المفضلة للإرسال في حال تفعيل أكثر من قناة
+                        </small>
+                    </div>
+                    
+                    <% if (['admin', 'supervisor'].includes(session.userRole)) { %>
+                        <div class="mb-3">
+                            <label for="edit-client-status" class="form-label">الحالة</label>
+                            <select class="form-select almarai-regular" id="edit-client-status">
+                                <option value="active">نشط</option>
+                                <option value="inactive">غير نشط</option>
+                                <option value="suspended">معلق</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-client-daily-limit" class="form-label">الحد اليومي للرسائل</label>
+                            <input type="number" class="form-control almarai-regular" id="edit-client-daily-limit" min="1">
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-client-monthly-limit" class="form-label">الحد الشهري للرسائل</label>
+                            <input type="number" class="form-control almarai-regular" id="edit-client-monthly-limit" min="1">
+                        </div>
+                    <% } %>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary almarai-regular" id="saveClientBtn">حفظ التغييرات</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة تأكيد الحذف -->
+<div class="modal fade" id="deleteClientModal" tabindex="-1" aria-labelledby="deleteClientModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteClientModalLabel">تأكيد الحذف</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p>هل أنت متأكد من رغبتك في حذف هذا العميل؟</p>
+                <p class="text-danger">هذا الإجراء لا يمكن التراجع عنه.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-danger almarai-regular" id="confirmDeleteBtn">تأكيد الحذف</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لتأكيد إعادة توليد مفاتيح API -->
+<div class="modal fade" id="regenerateKeysModal" tabindex="-1" aria-labelledby="regenerateKeysModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="regenerateKeysModalLabel">تأكيد إعادة توليد المفاتيح</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p>هل أنت متأكد من رغبتك في إعادة توليد مفاتيح API؟</p>
+                <p class="text-warning">سيتم إبطال المفاتيح القديمة ولن تعمل أي طلبات API تستخدمها. يجب على العميل تحديث المفاتيح في تطبيقه.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-warning almarai-regular" id="confirmRegenerateKeysBtn">تأكيد إعادة التوليد</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة منبثقة لعرض المفاتيح الجديدة -->
+<div class="modal fade" id="newKeysModal" tabindex="-1" aria-labelledby="newKeysModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newKeysModalLabel">مفتاح API الجديد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>تنبيه: </strong>احفظ هذا المفتاح في مكان آمن.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">مفتاح API الجديد:</label>
+                    <div class="api-key-container">
+                        <input type="text" class="form-control almarai-regular" id="new-api-key" readonly>
+                        <button id="copyNewApiKeyBtn" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary almarai-regular" data-bs-dismiss="modal">تم</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/_footer.ejs') %>
+
+<script src="/js/manage_sem_clients.js"></script>
+</body>
+</html>

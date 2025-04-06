@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('../partials/_head') %>
+  <title>لوحة التحكم - إدارة العملاء</title>
+  <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
+  <link rel="stylesheet" href="/css/crm.css">
+</head>
+<body>
+  <%- include('../partials/_header') %>
+  
+  <div class="crm-container">
+    <!-- القائمة الجانبية - استخدام القالب الجزئي الموحد -->
+    <%- include('../partials/_crm_sidebar') %>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="crm-content">
+      <% if (flashMessages && flashMessages.error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= flashMessages.error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <% if (flashMessages && flashMessages.success) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= flashMessages.success %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      
+      <!-- هنا محتوى صفحة لوحة التحكم -->
+      <!-- لوحة التحكم الرئيسية لنظام CRM -->
+      <h1 class="page-title">
+        <i class="fas fa-tachometer-alt me-2"></i>
+        لوحة التحكم
+      </h1>
+
+      <!-- إحصائيات سريعة -->
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="crm-stats-card bg-primary-gradient">
+            <i class="fas fa-comments"></i>
+            <div class="stat-value"><%= stats.conversations.total %></div>
+            <div class="stat-label">إجمالي المحادثات</div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="crm-stats-card bg-success-gradient">
+            <i class="fas fa-address-book"></i>
+            <div class="stat-value"><%= stats.contacts %></div>
+            <div class="stat-label">جهات الاتصال</div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="crm-stats-card bg-info-gradient">
+            <i class="fas fa-envelope-open"></i>
+            <div class="stat-value"><%= stats.conversations.open %></div>
+            <div class="stat-label">محادثات مفتوحة</div>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <div class="crm-stats-card bg-warning-gradient">
+            <i class="fas fa-user-check"></i>
+            <div class="stat-value"><%= stats.conversations.assigned %></div>
+            <div class="stat-label">محادثات مسندة</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <!-- أحدث جهات الاتصال -->
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="card-title mb-0">
+                <i class="fas fa-address-book me-2"></i>
+                أحدث جهات الاتصال
+              </h5>
+              <a href="/crm/contacts" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+            </div>
+            <div class="card-body p-0">
+              <% if (latestContacts && latestContacts.length > 0) { %>
+                <ul class="list-group list-group-flush">
+                  <% latestContacts.forEach(function(contact) { %>
+                    <li class="list-group-item">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                          <a href="/crm/contacts/<%= contact._id %>" class="text-decoration-none">
+                            <strong><%= contact.name %></strong>
+                          </a>
+                          <br>
+                          <small class="text-muted"><%= contact.phoneNumber %></small>
+                        </div>
+                        <div>
+                          <a href="/crm/contacts/<%= contact._id %>" class="btn btn-sm btn-outline-secondary me-1">
+                            <i class="far fa-eye"></i>
+                          </a>
+                          <a href="/crm/conversations/start?contactId=<%= contact._id %>" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-comment-dots"></i>
+                          </a>
+                        </div>
+                      </div>
+                    </li>
+                  <% }); %>
+                </ul>
+              <% } else { %>
+                <div class="text-center p-4 text-muted">
+                  <i class="fas fa-users mb-3" style="font-size: 2rem; opacity: 0.3;"></i>
+                  <p>لا توجد جهات اتصال بعد</p>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+        
+        <!-- أحدث المحادثات -->
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="card-title mb-0">
+                <i class="fas fa-comments me-2"></i>
+                أحدث المحادثات
+              </h5>
+              <a href="/crm/conversations" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+            </div>
+            <div class="card-body p-0">
+              <% if (latestConversations && latestConversations.length > 0) { %>
+                <ul class="list-group list-group-flush">
+                  <% latestConversations.forEach(function(conversation) { %>
+                    <li class="list-group-item">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                          <a href="/crm/conversations/<%= conversation._id %>" class="text-decoration-none">
+                            <strong><%= conversation.customerName || conversation.phoneNumber %></strong>
+                          </a>
+                          <br>
+                          <small class="text-muted">
+                            <span class="status-badge status-<%= conversation.status %>">
+                              <% if (conversation.status === 'open') { %>مفتوحة<% } %>
+                              <% if (conversation.status === 'assigned') { %>مسندة<% } %>
+                              <% if (conversation.status === 'closed') { %>مغلقة<% } %>
+                            </span>
+                            <% if (conversation.assignedTo) { %>
+                              <span class="ms-2">
+                                <i class="fas fa-user-tag me-1"></i>
+                                <%= conversation.assignedTo.full_name || conversation.assignedTo.username %>
+                              </span>
+                            <% } %>
+                          </small>
+                        </div>
+                        <div>
+                          <a href="/crm/conversations/<%= conversation._id %>" class="btn btn-sm btn-outline-primary">
+                            <i class="far fa-eye"></i>
+                          </a>
+                        </div>
+                      </div>
+                    </li>
+                  <% }); %>
+                </ul>
+              <% } else { %>
+                <div class="text-center p-4 text-muted">
+                  <i class="fas fa-comment-dots mb-3" style="font-size: 2rem; opacity: 0.3;"></i>
+                  <p>لا توجد محادثات بعد</p>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mt-4">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header">
+              إجراءات سريعة
+            </div>
+            <div class="card-body">
+              <div class="row justify-content-center text-center">
+                <div class="col-md-4">
+                  <a href="/crm/contacts/new" class="btn btn-lg btn-outline-primary w-100 mb-2">
+                    <i class="fas fa-user-plus"></i>
+                  </a>
+                  <div>إضافة جهة اتصال</div>
+                </div>
+                <div class="col-md-4">
+                  <button class="btn btn-lg btn-outline-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#startConversationModal">
+                    <i class="fas fa-comment-dots"></i>
+                  </button>
+                  <div>بدء محادثة جديدة</div>
+                </div>
+                <div class="col-md-4">
+                  <a href="/crm/conversations/my" class="btn btn-lg btn-outline-info w-100 mb-2">
+                    <i class="fas fa-tasks"></i>
+                  </a>
+                  <div>محادثاتي</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <%- include('../partials/_footer') %>
+</body>
+</html>

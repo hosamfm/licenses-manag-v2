@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('partials/_head') %>
+  <title>إعدادات واتساب الرسمي (Meta API)</title>
+  <style>
+    .container {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    .card {
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.125);
+    }
+    .card-header {
+      background-color: rgba(0, 0, 0, 0.03);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+      padding: 0.75rem 1.25rem;
+    }
+    .card-title {
+      margin-bottom: 0;
+      color: #333;
+    }
+    .status-badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: inline-block;
+    }
+    .status-active {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status-inactive {
+      background-color: #e2e3e5;
+      color: #383d41;
+    }
+    .info-box {
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+      border: 1px solid #dee2e6;
+    }
+    .info-box-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+    .info-success {
+      background-color: #f8f9fa;
+      border-right: 4px solid #28a745;
+    }
+    .info-warning {
+      background-color: #f8f9fa;
+      border-right: 4px solid #ffc107;
+    }
+    .info-danger {
+      background-color: #f8f9fa;
+      border-right: 4px solid #dc3545;
+    }
+    .info-primary {
+      background-color: #f8f9fa;
+      border-right: 4px solid #007bff;
+    }
+    .settings-table th, .settings-table td {
+      vertical-align: middle;
+    }
+    .code-block {
+      background-color: #f8f9fa;
+      padding: 0.5rem;
+      border-radius: 4px;
+      font-family: monospace;
+      border: 1px solid #eee;
+      word-break: break-all;
+    }
+    .modal-lg {
+      max-width: 800px;
+    }
+    .tab-content {
+      padding: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/_header') %>
+  <div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h3">إدارة إعدادات واتساب الرسمي</h1>
+      <div>
+        <a href="/settings" class="btn btn-secondary">
+          <i class="fas fa-arrow-right"></i> العودة للإعدادات
+        </a>
+        <a href="/admin/meta-whatsapp-monitor" class="btn btn-info">
+          <i class="fas fa-eye"></i> مراقبة webhook
+        </a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSettingsModal">
+          <i class="fas fa-plus me-1"></i> إضافة إعداد جديد
+        </button>
+      </div>
+    </div>
+    
+    <% if (flashMessages.error) { %>
+      <div class="alert alert-danger"><%= flashMessages.error %></div>
+    <% } %>
+    <% if (flashMessages.success) { %>
+      <div class="alert alert-success"><%= flashMessages.success %></div>
+    <% } %>
+
+    <!-- بطاقة معلومات الاتصال -->
+    <div class="row">
+      <div class="col-12">
+        <div class="card mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title">
+              <i class="fas fa-info-circle me-2"></i> معلومات هامة
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <!-- معلومات الاتصال -->
+              <div class="col-md-4">
+                <div class="info-box <%= connectionStatus.success ? 'info-success' : 'info-danger' %>">
+                  <div class="info-box-title">
+                    <i class="fas fa-plug me-2"></i> حالة الاتصال
+                    <% if (settings && settings.name) { %>
+                      <span class="badge bg-secondary ms-2"><%= settings.name %></span>
+                    <% } %>
+                  </div>
+                  <% if (connectionStatus.success) { %>
+                    <p class="mb-0">
+                      <span class="status-badge status-active">متصل</span>
+                      <% if (connectionStatus.phoneNumber) { %>
+                        <br>
+                        <small class="text-muted mt-2">رقم الهاتف: <%= connectionStatus.phoneNumber %></small>
+                      <% } %>
+                    </p>
+                  <% } else { %>
+                    <p class="mb-0">
+                      <span class="status-badge status-inactive">غير متصل</span>
+                      <% if (connectionStatus.error) { %>
+                        <br>
+                        <small class="text-muted mt-2"><%= connectionStatus.error %></small>
+                      <% } %>
+                    </p>
+                  <% } %>
+                  <div class="mt-2 small">
+                    <i class="fas fa-info-circle"></i>
+                    هذه هي حالة الاتصال للإعداد النشط حالياً. 
+                    <% if (allSettings && allSettings.length > 1) { %>
+                      <strong>يوجد <%= allSettings.filter(s => s.isActive).length %> إعداد نشط من أصل <%= allSettings.length %></strong>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- عنوان Webhook -->
+              <div class="col-md-4">
+                <div class="info-box info-primary">
+                  <div class="info-box-title">
+                    <i class="fas fa-link me-2"></i> عنوان Webhook
+                  </div>
+                  <div class="code-block mb-2" id="webhook-url"><%= webhookUrl || 'غير محدد' %></div>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard()">
+                    <i class="fas fa-copy me-1"></i> نسخ العنوان
+                  </button>
+                  <div class="mt-2 small">
+                    <i class="fas fa-info-circle"></i>
+                    عنوان Webhook موحد لجميع إعدادات واتساب.
+                  </div>
+                </div>
+              </div>
+              
+              <!-- توكن التحقق -->
+              <div class="col-md-4">
+                <div class="info-box info-primary">
+                  <div class="info-box-title">
+                    <i class="fas fa-key me-2"></i> توكن التحقق
+                    <% if (settings && settings.name) { %>
+                      <span class="badge bg-secondary ms-2"><%= settings.name %></span>
+                    <% } %>
+                  </div>
+                  <div class="input-group mb-2">
+                    <input type="text" class="form-control form-control-sm" id="verify-token" value="<%= settings.config.verifyToken %>" readonly>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="togglePasswordVisibility('verify-token')">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                  <button class="btn btn-sm btn-outline-primary" id="generate-token-btn">
+                    <i class="fas fa-sync me-1"></i> توليد توكن جديد
+                  </button>
+                  <div class="mt-2 small">
+                    <i class="fas fa-info-circle"></i>
+                    هذا هو توكن التحقق للإعداد النشط حالياً.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- جدول إعدادات واتساب الرسمي -->
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title">
+          <i class="fab fa-whatsapp me-2"></i> إعدادات واتساب الرسمي
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered settings-table">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>الاسم</th>
+                <th>رقم الهاتف</th>
+                <th>حساب الأعمال</th>
+                <th>الحالة</th>
+                <th>آخر تحديث</th>
+                <th>العمليات</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (allSettings && allSettings.length > 0) { %>
+                <% allSettings.forEach((setting, index) => { %>
+                  <tr>
+                    <td><%= index + 1 %></td>
+                    <td><%= setting.name || 'غير محدد' %></td>
+                    <td><code><%= setting.config.phoneNumberId || 'غير محدد' %></code></td>
+                    <td><small><%= setting.config.businessAccountId || 'غير محدد' %></small></td>
+                    <td>
+                      <% if (setting.isActive) { %>
+                        <span class="status-badge status-active">نشط</span>
+                      <% } else { %>
+                        <span class="status-badge status-inactive">غير نشط</span>
+                      <% } %>
+                    </td>
+                    <td><small><%= new Date(setting.updatedAt).toLocaleString('ar-SA') %></small></td>
+                    <td>
+                      <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-primary check-connection-btn"
+                                data-id="<%= setting._id %>"
+                                data-name="<%= setting.name || 'غير محدد' %>"
+                                data-bs-toggle="modal" data-bs-target="#checkConnectionModal">
+                          <i class="fas fa-plug"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-info edit-setting-btn"
+                                data-id="<%= setting._id %>"
+                                data-bs-toggle="modal" data-bs-target="#editSettingsModal">
+                          <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger delete-setting-btn"
+                                data-id="<%= setting._id %>"
+                                data-phone="<%= setting.config.phoneNumberId %>"
+                                data-bs-toggle="modal" data-bs-target="#deleteSettingsModal">
+                          <i class="fas fa-trash-alt"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr>
+                  <td colspan="7" class="text-center py-3">
+                    <div class="alert alert-warning mb-0">
+                      لا توجد إعدادات واتساب متاحة. قم بإضافة إعداد جديد باستخدام زر "إضافة إعداد جديد"
+                    </div>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+        <% if (allSettings && allSettings.length > 0) { %>
+          <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle me-2"></i>
+            تستطيع إدارة إعدادات واتساب الرسمي من خلال الأزرار في عمود "العمليات". يمكنك إضافة إعدادات متعددة لأرقام واتساب مختلفة.
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال إضافة إعداد جديد -->
+  <div class="modal fade" id="addSettingsModal" tabindex="-1" aria-labelledby="addSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addSettingsModalLabel">
+            <i class="fas fa-plus-circle me-2"></i> إضافة إعداد واتساب رسمي جديد
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+        </div>
+        <form id="addSettingsForm" action="/admin/meta-whatsapp-settings/add" method="POST">
+          <div class="modal-body">
+            <!-- علامات التبويب -->
+            <ul class="nav nav-tabs" id="addSettingsTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="add-basic-tab" data-bs-toggle="tab" data-bs-target="#add-basic-pane" 
+                  type="button" role="tab" aria-controls="add-basic-pane" aria-selected="true">
+                  <i class="fas fa-info-circle me-1"></i> المعلومات الأساسية
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="add-api-tab" data-bs-toggle="tab" data-bs-target="#add-api-pane" 
+                  type="button" role="tab" aria-controls="add-api-pane" aria-selected="false">
+                  <i class="fas fa-key me-1"></i> بيانات واجهة البرمجة
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="add-webhook-tab" data-bs-toggle="tab" data-bs-target="#add-webhook-pane" 
+                  type="button" role="tab" aria-controls="add-webhook-pane" aria-selected="false">
+                  <i class="fas fa-link me-1"></i> إعدادات Webhook
+                </button>
+              </li>
+            </ul>
+            
+            <!-- محتوى علامات التبويب -->
+            <div class="tab-content" id="addSettingsTabContent">
+              <!-- علامة تبويب المعلومات الأساسية -->
+              <div class="tab-pane fade show active" id="add-basic-pane" role="tabpanel" aria-labelledby="add-basic-tab">
+                <div class="mb-3">
+                  <label for="new_name" class="form-label">اسم الإعداد <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="new_name" name="name" required>
+                  <div class="form-text">اسم توضيحي للتمييز بين إعدادات واتساب (مثال: واتساب المبيعات، واتساب خدمة العملاء)</div>
+                </div>
+                
+                <div class="mb-3 form-check">
+                  <input type="checkbox" class="form-check-input" id="new_is_active" name="is_active" checked>
+                  <label class="form-check-label" for="new_is_active">تفعيل هذا الإعداد</label>
+                </div>
+                
+                <div class="alert alert-info">
+                  <i class="fas fa-info-circle me-2"></i>
+                  هذه المعلومات تستخدم للتمييز بين الإعدادات المختلفة. انتقل إلى التبويب التالي لإكمال إدخال بيانات واجهة برمجة واتساب.
+                </div>
+              </div>
+              
+              <!-- علامة تبويب بيانات واجهة البرمجة -->
+              <div class="tab-pane fade" id="add-api-pane" role="tabpanel" aria-labelledby="add-api-tab">
+                <!-- معلومات تطبيق Meta -->
+                <h6 class="mb-3 text-primary">
+                  <i class="fab fa-facebook me-2"></i> معلومات تطبيق Meta
+                </h6>
+                
+                <div class="mb-3">
+                  <label for="new_app_id" class="form-label">معرف التطبيق (App ID) <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="new_app_id" name="app_id" required>
+                  <div class="form-text">المعرف الفريد لتطبيق Meta الخاص بك</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="new_app_secret" class="form-label">سر التطبيق (App Secret) <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <input type="password" class="form-control" id="new_app_secret" name="app_secret" required>
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('new_app_secret')">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">مفتاح سري خاص بتطبيق Meta الخاص بك</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="new_access_token" class="form-label">توكن الوصول (Access Token) <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <input type="password" class="form-control" id="new_access_token" name="access_token" required>
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('new_access_token')">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">توكن الوصول طويل الأمد لواجهة برمجة Meta</div>
+                </div>
+                
+                <!-- معلومات واتساب -->
+                <h6 class="mb-3 mt-4 text-primary">
+                  <i class="fab fa-whatsapp me-2"></i> معلومات حساب واتساب
+                </h6>
+                
+                <div class="mb-3">
+                  <label for="new_phone_number_id" class="form-label">معرف رقم الهاتف (Phone Number ID) <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="new_phone_number_id" name="phone_number_id" required>
+                  <div class="form-text">المعرف الفريد لرقم هاتف واتساب الخاص بك (من لوحة تحكم Meta)</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="new_business_account_id" class="form-label">معرف حساب الأعمال (Business Account ID) <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="new_business_account_id" name="business_account_id" required>
+                  <div class="form-text">المعرف الفريد لحساب واتساب التجاري الخاص بك (من لوحة تحكم Meta)</div>
+                </div>
+              </div>
+              
+              <!-- علامة تبويب إعدادات Webhook -->
+              <div class="tab-pane fade" id="add-webhook-pane" role="tabpanel" aria-labelledby="add-webhook-tab">
+                <div class="alert alert-warning mb-3">
+                  <i class="fas fa-exclamation-triangle me-2"></i>
+                  <strong>هام:</strong> 
+                  إعدادات Webhook ضرورية لاستقبال الرسائل. يجب إعدادها في لوحة تحكم Meta باستخدام عنوان الـ Webhook وتوكن التحقق المعروضين في هذه الصفحة.
+                </div>
+                
+                <div class="mb-3">
+                  <label for="new_verify_token" class="form-label">توكن التحقق (Verify Token)</label>
+                  <div class="input-group">
+                    <input type="text" class="form-control" id="new_verify_token" name="verify_token" placeholder="سيتم توليده تلقائياً">
+                    <button class="btn btn-outline-secondary generate-token-btn" type="button" data-target="new_verify_token">
+                      <i class="fas fa-sync"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">توكن خاص بالتحقق من صحة الـ webhook، سيتم توليده تلقائياً إذا تركت الحقل فارغاً. استخدم هذا التوكن عند إعداد Webhook في لوحة تحكم Meta.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-plus-circle me-1"></i> إضافة إعداد جديد
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال تعديل الإعدادات -->
+  <div class="modal fade" id="editSettingsModal" tabindex="-1" aria-labelledby="editSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editSettingsModalLabel">
+            <i class="fas fa-edit me-2"></i> تعديل إعداد واتساب الرسمي
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+        </div>
+        <form id="editSettingsForm" action="/admin/meta-whatsapp-settings/update" method="POST">
+          <input type="hidden" id="edit_id" name="id">
+          <div class="modal-body">
+            <!-- علامات التبويب -->
+            <ul class="nav nav-tabs" id="editSettingsTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="edit-basic-tab" data-bs-toggle="tab" data-bs-target="#edit-basic-pane" 
+                  type="button" role="tab" aria-controls="edit-basic-pane" aria-selected="true">
+                  <i class="fas fa-info-circle me-1"></i> المعلومات الأساسية
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="edit-api-tab" data-bs-toggle="tab" data-bs-target="#edit-api-pane" 
+                  type="button" role="tab" aria-controls="edit-api-pane" aria-selected="false">
+                  <i class="fas fa-key me-1"></i> بيانات واجهة البرمجة
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="edit-webhook-tab" data-bs-toggle="tab" data-bs-target="#edit-webhook-pane" 
+                  type="button" role="tab" aria-controls="edit-webhook-pane" aria-selected="false">
+                  <i class="fas fa-link me-1"></i> إعدادات Webhook
+                </button>
+              </li>
+            </ul>
+            
+            <!-- محتوى علامات التبويب -->
+            <div class="tab-content" id="editSettingsTabContent">
+              <!-- علامة تبويب المعلومات الأساسية -->
+              <div class="tab-pane fade show active" id="edit-basic-pane" role="tabpanel" aria-labelledby="edit-basic-tab">
+                <div class="mb-3">
+                  <label for="edit_name" class="form-label">اسم الإعداد <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="edit_name" name="name" required>
+                  <div class="form-text">اسم توضيحي للتمييز بين إعدادات واتساب (مثال: واتساب المبيعات، واتساب خدمة العملاء)</div>
+                </div>
+                
+                <div class="mb-3 form-check">
+                  <input type="checkbox" class="form-check-input" id="edit_is_active" name="is_active">
+                  <label class="form-check-label" for="edit_is_active">تفعيل هذا الإعداد</label>
+                </div>
+                
+                <div class="alert alert-info">
+                  <i class="fas fa-info-circle me-2"></i>
+                  هذه المعلومات تستخدم للتمييز بين الإعدادات المختلفة وتفعيلها أو تعطيلها.
+                </div>
+              </div>
+              
+              <!-- علامة تبويب بيانات واجهة البرمجة -->
+              <div class="tab-pane fade" id="edit-api-pane" role="tabpanel" aria-labelledby="edit-api-tab">
+                <!-- معلومات تطبيق Meta -->
+                <h6 class="mb-3 text-primary">
+                  <i class="fab fa-facebook me-2"></i> معلومات تطبيق Meta
+                </h6>
+                
+                <div class="mb-3">
+                  <label for="edit_app_id" class="form-label">معرف التطبيق (App ID) <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="edit_app_id" name="app_id" required>
+                  <div class="form-text">المعرف الفريد لتطبيق Meta الخاص بك</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="edit_app_secret" class="form-label">سر التطبيق (App Secret)</label>
+                  <div class="input-group">
+                    <input type="password" class="form-control" id="edit_app_secret" name="app_secret" placeholder="اترك فارغاً إذا لم ترغب في تغييره">
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('edit_app_secret')">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">اترك هذا الحقل فارغاً إذا لم ترغب في تغيير سر التطبيق الحالي</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="edit_access_token" class="form-label">توكن الوصول (Access Token)</label>
+                  <div class="input-group">
+                    <input type="password" class="form-control" id="edit_access_token" name="access_token" placeholder="اترك فارغاً إذا لم ترغب في تغييره">
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('edit_access_token')">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">اترك هذا الحقل فارغاً إذا لم ترغب في تغيير توكن الوصول الحالي</div>
+                </div>
+                
+                <!-- معلومات واتساب -->
+                <h6 class="mb-3 mt-4 text-primary">
+                  <i class="fab fa-whatsapp me-2"></i> معلومات حساب واتساب
+                </h6>
+                
+                <div class="mb-3">
+                  <label for="edit_phone_number_id" class="form-label">معرف رقم الهاتف (Phone Number ID) <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="edit_phone_number_id" name="phone_number_id" required>
+                  <div class="form-text">المعرف الفريد لرقم هاتف واتساب الخاص بك (من لوحة تحكم Meta)</div>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="edit_business_account_id" class="form-label">معرف حساب الأعمال (Business Account ID) <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="edit_business_account_id" name="business_account_id" required>
+                  <div class="form-text">المعرف الفريد لحساب واتساب التجاري الخاص بك (من لوحة تحكم Meta)</div>
+                </div>
+              </div>
+              
+              <!-- علامة تبويب إعدادات Webhook -->
+              <div class="tab-pane fade" id="edit-webhook-pane" role="tabpanel" aria-labelledby="edit-webhook-tab">
+                <div class="alert alert-warning mb-3">
+                  <i class="fas fa-exclamation-triangle me-2"></i>
+                  <strong>هام:</strong> 
+                  تحديث توكن التحقق سيتطلب منك تحديثه أيضاً في لوحة تحكم Meta لضمان استمرار عمل الـ Webhook.
+                </div>
+                
+                <div class="mb-3">
+                  <label for="edit_verify_token" class="form-label">توكن التحقق (Verify Token)</label>
+                  <div class="input-group">
+                    <input type="text" class="form-control" id="edit_verify_token" name="verify_token">
+                    <button class="btn btn-outline-secondary generate-token-btn" type="button" data-target="edit_verify_token">
+                      <i class="fas fa-sync"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">توكن خاص بالتحقق من صحة الـ webhook. اترك فارغاً إذا لم ترغب في تغييره.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save me-1"></i> حفظ التغييرات
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال حذف الإعدادات -->
+  <div class="modal fade" id="deleteSettingsModal" tabindex="-1" aria-labelledby="deleteSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title" id="deleteSettingsModalLabel">
+            <i class="fas fa-trash-alt me-2"></i> حذف إعداد واتساب الرسمي
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>تحذير:</strong> سيؤدي حذف هذا الإعداد إلى توقف قنوات واتساب المرتبطة به عن العمل.
+          </div>
+          
+          <div class="mb-3">
+            <p>هل أنت متأكد من رغبتك في حذف هذا الإعداد؟</p>
+            <div class="card bg-light p-3 mt-3">
+              <div class="mb-2">
+                <strong>الاسم:</strong> <span id="delete-setting-name"></span>
+              </div>
+              <div class="mb-0">
+                <strong>رقم الهاتف:</strong> <span id="delete-phone-number"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <form id="deleteSettingsForm" action="/admin/meta-whatsapp-settings/delete" method="POST">
+          <input type="hidden" id="delete_id" name="id">
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="submit" class="btn btn-danger">
+              <i class="fas fa-trash-alt me-1"></i> تأكيد الحذف
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال فحص الاتصال -->
+  <div class="modal fade" id="checkConnectionModal" tabindex="-1" aria-labelledby="checkConnectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="checkConnectionModalLabel">
+            <i class="fas fa-plug me-2"></i> فحص الاتصال
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            سيتم فحص الاتصال بإعداد واتساب الرسمي المحدد.
+          </div>
+          <div class="mb-3">
+            <p>هل أنت متأكد من رغبتك في فحص الاتصال؟</p>
+            <div class="card bg-light p-3 mt-3">
+              <div class="mb-2">
+                <strong>الاسم:</strong> <span id="check-setting-name"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+          <button type="button" class="btn btn-primary" id="check-connection-btn">
+            <i class="fas fa-plug me-1"></i> فحص الاتصال
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // وظيفة لإظهار/إخفاء كلمات المرور
+    function togglePasswordVisibility(inputId) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+      } else {
+        input.type = 'password';
+      }
+    }
+    
+    // وظيفة نسخ عنوان Webhook
+    function copyToClipboard() {
+      const webhookUrl = document.getElementById('webhook-url');
+      
+      // إنشاء عنصر input مؤقت
+      const tempInput = document.createElement('input');
+      tempInput.value = webhookUrl.textContent;
+      document.body.appendChild(tempInput);
+      
+      // تحديد وتكرار النص
+      tempInput.select();
+      document.execCommand('copy');
+      
+      // إزالة العنصر المؤقت
+      document.body.removeChild(tempInput);
+      
+      // إظهار رسالة للمستخدم
+      const originalText = document.querySelector('[onclick="copyToClipboard()"]').innerHTML;
+      const button = document.querySelector('[onclick="copyToClipboard()"]');
+      button.innerHTML = '<i class="fas fa-check me-1"></i> تم النسخ';
+      
+      setTimeout(() => {
+        button.innerHTML = originalText;
+      }, 2000);
+    }
+    
+    // عند تحميل المستند
+    document.addEventListener('DOMContentLoaded', function() {
+      // التأكد من وجود زر الإضافة وربطه بالمودال
+      const addButton = document.querySelector('button[data-bs-toggle="modal"][data-bs-target="#addSettingsModal"]');
+      if (!addButton) {
+        console.warn('زر إضافة إعداد واتساب غير موجود في الصفحة');
+      }
+    });
+  </script>
+  
+  <!-- إضافة مكتبة Bootstrap -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script>
+    // إعادة تعريف كود فتح مودال الإضافة بعد تحميل مكتبة Bootstrap
+    document.addEventListener('DOMContentLoaded', function() {
+      // التأكد من وجود زر الإضافة وربطه بالمودال
+      const addButton = document.querySelector('button[data-bs-toggle="modal"][data-bs-target="#addSettingsModal"]');
+      if (!addButton) {
+        console.warn('زر إضافة إعداد واتساب غير موجود في الصفحة');
+      }
+    });
+  </script>
+  
+  <script>
+    // التأكد من وجود زر الإضافة وربطه بالمودال
+    const addButton = document.querySelector('button[data-bs-toggle="modal"][data-bs-target="#addSettingsModal"]');
+    if (!addButton) {
+      console.warn('زر إضافة إعداد واتساب غير موجود في الصفحة');
+    }
+    
+    // توليد توكن تحقق جديد
+    const generateTokenBtns = document.querySelectorAll('.generate-token-btn');
+    generateTokenBtns.forEach(btn => {
+      btn.addEventListener('click', function() {
+        const targetInputId = this.getAttribute('data-target');
+        const targetInput = document.getElementById(targetInputId);
+        
+        // توليد توكن عشوائي بطول 32 حرف
+        const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let token = '';
+        for (let i = 0; i < 32; i++) {
+          token += characters.charAt(Math.floor(Math.random() * characters.length));
+        }
+        
+        targetInput.value = token;
+        
+        // إظهار رسالة نجاح
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        btn.classList.add('btn-success');
+        btn.classList.remove('btn-outline-secondary');
+        
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.classList.remove('btn-success');
+          btn.classList.add('btn-outline-secondary');
+        }, 2000);
+      });
+    });
+    
+    // إعداد أزرار تعديل الإعدادات
+    const editButtons = document.querySelectorAll('.edit-setting-btn');
+    editButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const settingId = this.getAttribute('data-id');
+        
+        // طلب بيانات الإعداد من الخادم
+        fetch(`/admin/meta-whatsapp-settings/get/${settingId}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              const setting = data.setting;
+              
+              // تعبئة النموذج ببيانات الإعداد
+              document.getElementById('edit_id').value = setting._id;
+              document.getElementById('edit_name').value = setting.name || '';
+              document.getElementById('edit_is_active').checked = setting.isActive;
+              document.getElementById('edit_app_id').value = setting.config.appId || '';
+              // عدم تعبئة كلمات المرور والرموز
+              document.getElementById('edit_app_secret').value = '';
+              document.getElementById('edit_access_token').value = '';
+              document.getElementById('edit_phone_number_id').value = setting.config.phoneNumberId || '';
+              document.getElementById('edit_business_account_id').value = setting.config.businessAccountId || '';
+              document.getElementById('edit_verify_token').value = setting.config.verifyToken || '';
+            } else {
+              showAlert('حدث خطأ أثناء تحميل بيانات الإعداد!', 'danger');
+            }
+          })
+          .catch(error => {
+            console.error('خطأ:', error);
+            showAlert('حدث خطأ أثناء تحميل بيانات الإعداد!', 'danger');
+          });
+      });
+    });
+    
+    // إعداد أزرار حذف الإعدادات
+    const deleteButtons = document.querySelectorAll('.delete-setting-btn');
+    deleteButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const settingId = this.getAttribute('data-id');
+        const phoneNumber = this.getAttribute('data-phone');
+        const settingName = this.closest('tr').querySelector('td:nth-child(2)').textContent;
+        
+        document.getElementById('delete_id').value = settingId;
+        document.getElementById('delete-setting-name').textContent = settingName;
+        document.getElementById('delete-phone-number').textContent = phoneNumber;
+      });
+    });
+    
+    // إعداد أزرار فحص الاتصال
+    const checkConnectionButtons = document.querySelectorAll('.check-connection-btn');
+    let currentSettingId = null;
+    
+    checkConnectionButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        currentSettingId = this.getAttribute('data-id');
+        const settingName = this.getAttribute('data-name');
+        
+        const checkSettingNameEl = document.getElementById('check-setting-name');
+        if (checkSettingNameEl) {
+          checkSettingNameEl.textContent = settingName;
+        }
+      });
+    });
+    
+    // زر فحص الاتصال في المودال
+    const checkConnectionBtn = document.getElementById('check-connection-btn');
+    if (checkConnectionBtn) {
+      checkConnectionBtn.addEventListener('click', function() {
+        if (!currentSettingId) {
+          showAlert('لم يتم تحديد إعداد للفحص!', 'danger');
+          return;
+        }
+        
+        // تغيير حالة الزر
+        const originalHTML = checkConnectionBtn.innerHTML;
+        checkConnectionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الفحص...';
+        checkConnectionBtn.disabled = true;
+        
+        // تحديث محتوى المودال وإضافة مؤشر التحميل
+        const modalBody = document.querySelector('#checkConnectionModal .modal-body');
+        const originalContent = modalBody.innerHTML;
+        
+        modalBody.innerHTML = `
+          <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">جارٍ التحميل...</span>
+            </div>
+            <p class="mt-3">جارٍ فحص الاتصال بإعداد واتساب الرسمي...</p>
+          </div>
+        `;
+        
+        // طلب فحص الاتصال
+        fetch(`/admin/meta-whatsapp-settings/check-connection/${currentSettingId}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              const status = data.connectionStatus;
+              let statusHTML = '';
+              
+              if (status.success) {
+                statusHTML = `
+                  <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>تم الاتصال بنجاح!</strong>
+                  </div>
+                  <div class="card bg-light p-3 mt-3">
+                    <div class="mb-2">
+                      <strong>اسم الإعداد:</strong> ${status.settingName || 'غير محدد'}
+                    </div>
+                    <div class="mb-0">
+                      <strong>رقم الهاتف:</strong> ${status.phoneNumber || 'غير متاح'}
+                    </div>
+                  </div>
+                `;
+              } else {
+                statusHTML = `
+                  <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>فشل الاتصال!</strong>
+                  </div>
+                  <div class="card bg-light p-3 mt-3">
+                    <div class="mb-2">
+                      <strong>اسم الإعداد:</strong> ${status.settingName || 'غير محدد'}
+                    </div>
+                    <div class="mb-0">
+                      <strong>سبب الخطأ:</strong> ${status.error || 'خطأ غير معروف'}
+                    </div>
+                  </div>
+                `;
+              }
+              
+              modalBody.innerHTML = statusHTML;
+            } else {
+              modalBody.innerHTML = `
+                <div class="alert alert-danger">
+                  <i class="fas fa-exclamation-triangle me-2"></i>
+                  حدث خطأ أثناء فحص الاتصال: ${data.message || 'خطأ غير معروف'}
+                </div>
+              `;
+            }
+            
+            // تغيير نص وحالة الزر
+            checkConnectionBtn.innerHTML = originalHTML;
+            checkConnectionBtn.disabled = false;
+            checkConnectionBtn.innerText = 'إغلاق';
+            checkConnectionBtn.className = 'btn btn-secondary';
+            checkConnectionBtn.setAttribute('data-bs-dismiss', 'modal');
+          })
+          .catch(error => {
+            console.error('خطأ:', error);
+            modalBody.innerHTML = `
+              <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                حدث خطأ أثناء فحص الاتصال: ${error.message || 'خطأ غير معروف'}
+              </div>
+            `;
+            
+            // تغيير نص وحالة الزر
+            checkConnectionBtn.innerHTML = originalHTML;
+            checkConnectionBtn.disabled = false;
+          });
+      });
+    }
+    
+    // وظيفة لعرض التنبيهات
+    function showAlert(message, type = 'info') {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+      alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
+      `;
+      
+      // إضافة التنبيه إلى الصفحة
+      const container = document.querySelector('.container');
+      container.insertBefore(alertDiv, container.firstChild);
+      
+      // إزالة التنبيه بعد 5 ثوانٍ
+      setTimeout(() => {
+        alertDiv.classList.remove('show');
+        setTimeout(() => {
+          alertDiv.remove();
+        }, 500);
+      }, 5000);
+    }
+    
+    // تفعيل علامات التبويب (Tabs) في المودال
+    const addSettingsTabs = document.querySelectorAll('#addSettingsTabs .nav-link');
+    addSettingsTabs.forEach(tab => {
+      tab.addEventListener('click', function(event) {
+        event.preventDefault();
+        const target = this.getAttribute('data-bs-target');
+        
+        // إزالة الكلاس 'active' و 'show' من جميع العلامات والمحتويات
+        document.querySelectorAll('#addSettingsTabs .nav-link').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#addSettingsTabContent .tab-pane').forEach(p => {
+          p.classList.remove('active', 'show');
+        });
+        
+        // إضافة الكلاس 'active' و 'show' للعلامة والمحتوى المستهدف
+        this.classList.add('active');
+        document.querySelector(target).classList.add('active', 'show');
+      });
+    });
+    
+    // تفعيل علامات التبويب (Tabs) في مودال التعديل
+    const editSettingsTabs = document.querySelectorAll('#editSettingsTabs .nav-link');
+    editSettingsTabs.forEach(tab => {
+      tab.addEventListener('click', function(event) {
+        event.preventDefault();
+        const target = this.getAttribute('data-bs-target');
+        
+        // إزالة الكلاس 'active' و 'show' من جميع العلامات والمحتويات
+        document.querySelectorAll('#editSettingsTabs .nav-link').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#editSettingsTabContent .tab-pane').forEach(p => {
+          p.classList.remove('active', 'show');
+        });
+        
+        // إضافة الكلاس 'active' و 'show' للعلامة والمحتوى المستهدف
+        this.classList.add('active');
+        document.querySelector(target).classList.add('active', 'show');
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<% if (flashMessages.success && flashMessages.success.length > 0) { %>
+  <% flashMessages.success.forEach(function(message) { %>
+    <div class="alert alert-success" role="alert">
+      <%= message %>
+    </div>
+  <% }); %>
+<% } %>
+<% if (flashMessages.error && flashMessages.error.length > 0) { %>
+  <% flashMessages.error.forEach(function(message) { %>
+    <div class="alert alert-danger" role="alert">
+      <%= message %>
+    </div>
+  <% }); %>
+<% } %>

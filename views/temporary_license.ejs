@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ar">
+<%- include('partials/_head.ejs') %>
+<body>
+<%- include('partials/_header.ejs') %>
+<main role="main" class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <h2 class="h4 mb-0 almarai-bold">طلب ترخيص مؤقت</h2>
+        </div>
+        <div class="card-body">
+            <form id="temporaryLicenseForm" action="/licenses/temporary-license" method="POST" class="form-container almarai-regular">
+                <input type="hidden" name="requestType" value="Temporary License">
+                
+                <!-- كود التسجيل -->
+                <div class="mb-4">
+                    <label for="registrationCode" class="form-label almarai-bold">كود التسجيل</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control almarai-regular" id="registrationCode" name="registrationCode" required
+                               placeholder="مثال: XT1234567890123456"
+                               pattern="^[XR][T][A-Z0-9]{16}$"
+                               title="يجب أن يبدأ الكود بحرف X أو R متبوعاً بحرف T وأن يكون طوله 18 حرفاً">
+                        <span class="input-group-text" id="registrationCodeStatus">
+                            <i class="fas fa-spinner fa-spin d-none"></i>
+                            <i class="fas fa-check text-success d-none"></i>
+                            <i class="fas fa-times text-danger d-none"></i>
+                        </span>
+                    </div>
+                    <div class="alert alert-danger mt-2 d-none" id="registrationCodeError"></div>
+                    <div class="alert alert-warning mt-2 d-none" id="registrationCodeTemporaryError"></div>
+                    <div class="alert alert-success mt-2 d-none" id="registrationCodeSuccess"></div>
+                    <small class="text-muted">أدخل كود التسجيل المؤقت الخاص بك للتحقق من صلاحيته</small>
+                </div>
+
+                <!-- اسم المرخص له -->
+                <div class="mb-4">
+                    <label for="licenseeName" class="form-label almarai-bold">اسم المرخص له</label>
+                    <input type="text" class="form-control almarai-regular" id="licenseeName" name="licenseeName" required>
+                </div>
+
+                <!-- السبب -->
+                <div class="mb-4">
+                    <label for="reason" class="form-label almarai-bold">السبب</label>
+                    <textarea class="form-control almarai-regular" id="reason" name="reason" rows="3" required></textarea>
+                </div>
+
+                <!-- تاريخ انتهاء الصلاحية -->
+                <div class="mb-4">
+                    <label for="expirationDate" class="form-label almarai-bold">تاريخ انتهاء الصلاحية</label>
+                    <input type="date" class="form-control almarai-regular" id="expirationDate" name="expirationDate" required>
+                </div>
+
+                <!-- اختيار الميزات -->
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <button type="button" class="btn btn-primary almarai-bold" data-bs-toggle="modal" data-bs-target="#featuresModal">
+                            <i class="fas fa-list-check me-2"></i>اختيار الميزات
+                        </button>
+                        <div class="text-muted almarai-regular">
+                            <small>المجموع: <span id="totalPrice">0</span> دينار</small>
+                        </div>
+                    </div>
+                    <div id="selectedFeatures" class="list-group list-group-flush"></div>
+                    
+                    <!-- عرض كود الميزات والسعر -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label class="form-label almarai-bold">كود الميزات</label>
+                            <input type="text" class="form-control almarai-regular" id="featuresCodeDisplay" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label almarai-bold">سعر الطلب</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control almarai-regular" id="requestPriceDisplay" readonly>
+                                <span class="input-group-text almarai-regular">دينار</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <input type="hidden" id="featuresCode" name="featuresCode" required>
+                <input type="hidden" id="requestPrice" name="requestPrice" value="0">
+
+                <!-- زر الإرسال -->
+                <div class="text-end">
+                    <button type="submit" id="submitBtn" class="btn btn-success btn-lg almarai-bold" disabled>
+                        <i class="fas fa-paper-plane me-2"></i>إرسال الطلب
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</main>
+
+<!-- Modal -->
+<div class="modal fade" id="featuresModal" tabindex="-1" aria-labelledby="featuresModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title almarai-bold" id="featuresModalLabel">
+                    <i class="fas fa-list-check me-2"></i>اختيار الميزات
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control almarai-regular" id="featureSearch" placeholder="ابحث عن الميزات...">
+                </div>
+                <div class="row g-3" id="featuresContainer">
+                    <% features.forEach(function(feature) { %>
+                    <div class="col-md-6 feature-item" data-feature-name="<%= feature.name.toLowerCase() %>">
+                        <div class="card h-100 feature-card" data-feature-id="<%= feature.value %>" onclick="toggleFeature(this)">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input d-none" id="feature<%= feature.value %>" 
+                                           name="features" value="<%= feature.value %>" 
+                                           data-name="<%= feature.name %>" data-price="<%= feature.price %>">
+                                    <label class="form-check-label w-100" for="feature<%= feature.value %>">
+                                        <h5 class="card-title mb-2"><%= feature.name %></h5>
+                                        <p class="card-text text-muted mb-0"><%= feature.description %></p>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <% }); %>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary almarai-regular" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/_footer.ejs') %>
+<script src="/js/formUtils.js"></script>
+<script src="/js/main.js"></script>
+<script src="/js/licenseForm.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const temporaryLicenseForm = document.getElementById('temporaryLicenseForm');
+        const registrationCodeInput = document.getElementById('registrationCode');
+        const registrationCodeStatus = document.getElementById('registrationCodeStatus');
+        const registrationCodeError = document.getElementById('registrationCodeError');
+        const registrationCodeTemporaryError = document.getElementById('registrationCodeTemporaryError');
+        const registrationCodeSuccess = document.getElementById('registrationCodeSuccess');
+        const submitBtn = document.getElementById('submitBtn');
+        let isSubmitting = false;
+
+        function hideAllMessages() {
+            registrationCodeError.classList.add('d-none');
+            registrationCodeTemporaryError.classList.add('d-none');
+            registrationCodeSuccess.classList.add('d-none');
+            const spinner = registrationCodeStatus.querySelector('.fa-spinner');
+            const checkIcon = registrationCodeStatus.querySelector('.fa-check');
+            const timesIcon = registrationCodeStatus.querySelector('.fa-times');
+            spinner.classList.add('d-none');
+            checkIcon.classList.add('d-none');
+            timesIcon.classList.add('d-none');
+        }
+
+        function showMessage(element, message, icon) {
+            element.textContent = message;
+            element.classList.remove('d-none');
+            if (icon) {
+                icon.classList.remove('d-none');
+            }
+        }
+
+        function validateRegistrationCode() {
+            const registrationCode = registrationCodeInput.value.trim().toUpperCase();
+            registrationCodeInput.value = registrationCode;
+
+            const checkIcon = registrationCodeStatus.querySelector('.fa-check');
+            const timesIcon = registrationCodeStatus.querySelector('.fa-times');
+            const spinner = registrationCodeStatus.querySelector('.fa-spinner');
+
+            hideAllMessages();
+
+            // التحقق من تنسيق كود التسجيل
+            const isValidFormat = /^[XR][T][A-Z0-9]{16}$/.test(registrationCode);
+            if (!isValidFormat) {
+                showMessage(registrationCodeError, 'تنسيق كود التسجيل غير صحيح. يجب أن يبدأ بحرف XT أو RT متبوعاً بحرف T وأن يكون طوله 18 حرفاً.', timesIcon);
+                submitBtn.disabled = true;
+                return;
+            }
+
+            // إظهار مؤشر التحميل
+            spinner.classList.remove('d-none');
+
+            // التحقق من وجود الكود في قاعدة البيانات
+            window.checkRegistrationCode(registrationCode, 'Temporary License')
+                .then(result => {
+                    hideAllMessages();
+                    
+                    if (result.error) {
+                        showMessage(registrationCodeError, result.message || 'حدث خطأ أثناء التحقق من الكود', timesIcon);
+                        submitBtn.disabled = true;
+                    } else if (result.exists) {
+                        // إذا كان الكود موجوداً، نعرض رسالة تحذير لكن نسمح بإرسال الطلب
+                        showMessage(registrationCodeTemporaryError, 'تم طلب ترخيص مؤقت سابقا لهذا الجهاز ويمكنك إعادة طلبه', null);
+                        submitBtn.disabled = false;
+                        
+                        // جلب تفاصيل الترخيص السابق لملء اسم المرخص له
+                        fetch(`/licenses/license-details?registrationCode=${registrationCode}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.licenseeName) {
+                                    document.getElementById('licenseeName').value = data.licenseeName;
+                                }
+                            })
+                            .catch(error => console.error('Error fetching license details:', error));
+                    } else {
+                        showMessage(registrationCodeSuccess, 'كود التسجيل صالح للاستخدام', checkIcon);
+                        submitBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    hideAllMessages();
+                    showMessage(registrationCodeError, 'حدث خطأ أثناء التحقق من الكود', timesIcon);
+                    submitBtn.disabled = true;
+                });
+        }
+
+        registrationCodeInput.addEventListener('input', function() {
+            this.value = this.value.toUpperCase();
+            if (this.value.length >= 18) {
+                validateRegistrationCode();
+            } else {
+                hideAllMessages();
+                submitBtn.disabled = true;
+            }
+        });
+
+        registrationCodeInput.addEventListener('blur', function() {
+            if (this.value.trim()) {
+                validateRegistrationCode();
+            }
+        });
+
+        temporaryLicenseForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            if (isSubmitting) {
+                return;
+            }
+
+            isSubmitting = true;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري المعالجة...';
+
+            try {
+                const formData = new FormData(this);
+                const response = await fetch(this.action, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData))
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    window.location.href = result.redirectUrl || '/licenses/success';
+                } else {
+                    console.error('Error submitting form:', result.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>إرسال الطلب';
+                }
+            } catch (error) {
+                console.error('Error submitting form:', error);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>إرسال الطلب';
+            } finally {
+                isSubmitting = false;
+            }
+        });
+
+        // تهيئة البحث في الميزات
+        const featureSearch = document.getElementById('featureSearch');
+        const featureItems = document.querySelectorAll('.feature-item');
+
+        featureSearch.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            featureItems.forEach(item => {
+                const featureName = item.dataset.featureName;
+                if (featureName.includes(searchTerm)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+
+        // تهيئة تاريخ انتهاء الصلاحية
+        const expirationDateInput = document.getElementById('expirationDate');
+        const today = new Date();
+        const minDate = today.toISOString().split('T')[0];
+        expirationDateInput.min = minDate;
+
+        // دالة تبديل الميزات
+        window.toggleFeature = function(card) {
+            const featureId = card.dataset.featureId;
+            const checkbox = document.querySelector(`#feature${featureId}`);
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                updateCardSelection(card, checkbox.checked);
+                updateSelectedFeatures();
+            }
+        };
+
+        function updateCardSelection(card, isSelected) {
+            if (isSelected) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+        }
+
+        function updateSelectedFeatures() {
+            const selectedFeaturesContainer = document.getElementById('selectedFeatures');
+            const featureCodeInput = document.getElementById('featuresCode');
+            const featuresCodeDisplay = document.getElementById('featuresCodeDisplay');
+            let featureCode = 0;
+            selectedFeaturesContainer.innerHTML = '';
+
+            const checkboxes = document.querySelectorAll('input[name="features"]:checked');
+            checkboxes.forEach(checkbox => {
+                const featureValue = parseInt(checkbox.value);
+                featureCode |= (1 << featureValue);
+
+                const featureName = checkbox.dataset.name;
+                const featurePrice = parseFloat(checkbox.dataset.price || 0);
+                
+                const listItem = document.createElement('div');
+                listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+                listItem.innerHTML = `
+                    <span>${featureName}</span>
+                    <span class="badge bg-primary rounded-pill">${featurePrice.toFixed(2)} دينار</span>
+                `;
+                selectedFeaturesContainer.appendChild(listItem);
+            });
+
+            // تحديث كود الميزات في الحقل المخفي
+            featureCodeInput.value = featureCode;
+            
+            // تحديث كود الميزات في حقل العرض
+            if (featuresCodeDisplay) {
+                featuresCodeDisplay.value = featureCode;
+            }
+
+            // تحديث السعر الإجمالي
+            updateTotalPrice();
+        }
+
+        function updateTotalPrice() {
+            const checkboxes = document.querySelectorAll('input[name="features"]:checked');
+            const requestPriceInput = document.getElementById('requestPrice');
+            const requestPriceDisplay = document.getElementById('requestPriceDisplay');
+            const totalPriceSpan = document.getElementById('totalPrice');
+            
+            // السعر الثابت للترخيص المؤقت
+            const fixedPrice = 100;
+            
+            // تحديث السعر في الحقل المخفي
+            requestPriceInput.value = fixedPrice.toFixed(2);
+            
+            // تحديث السعر في حقل العرض
+            if (requestPriceDisplay) {
+                requestPriceDisplay.value = fixedPrice.toFixed(2);
+            }
+            
+            // تحديث نص السعر الإجمالي
+            if (totalPriceSpan) {
+                totalPriceSpan.textContent = fixedPrice.toFixed(2);
+            }
+        }
+
+        // تهيئة السعر عند تحميل الصفحة
+        updateTotalPrice();
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ar">
+<%- include('partials/_head.ejs') %>
+<body class="rtl">
+<%- include('partials/_header.ejs') %>
+
+<div class="container-fluid mt-4 mb-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0 fs-4">إدارة المستخدمين</h2>
+                    <!-- إضافة مستخدم جديد -->
+                    <% if (session.userRole === 'admin' || session.userRole === 'supervisor'|| session.userRole === 'supplier') { %>
+                        <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                            <i class="bi bi-person-plus"></i> إضافة مستخدم جديد
+                        </button>
+                    <% } %>
+                </div>
+                
+                <div class="card-body">
+                    <!-- رسالة تأكيد -->
+                    <div id="confirmationMessage" class="alert alert-success" style="display: none;">تم تسجيل المستخدم بنجاح.</div>
+                    
+                    <!-- حقل البحث وفلترة -->
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" id="searchInput" placeholder="ابحث في المستخدمين...">
+                            </div>
+                        </div>
+                        <div class="col-md-4 mt-2 mt-md-0">
+                            <select class="form-select" id="roleFilter">
+                                <option value="all">جميع الأدوار</option>
+                                <option value="no_permissions">بدون صلاحيات</option>
+                                <option value="representative">مندوب</option>
+                                <option value="supervisor">وكيل</option>
+                                <option value="admin">مسؤول</option>
+                                <option value="supplier">مورد</option>
+                            </select>
+                        </div>
+                    </div>
+                
+                    <!-- علامات التبويب للتصنيف -->
+                    <ul class="nav nav-tabs mb-3" id="userTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="all-users-tab" data-bs-toggle="tab" data-bs-target="#all-users" type="button" role="tab" aria-controls="all-users" aria-selected="true">
+                                جميع المستخدمين
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="with-permissions-tab" data-bs-toggle="tab" data-bs-target="#with-permissions" type="button" role="tab" aria-controls="with-permissions" aria-selected="false">
+                                مستخدمون بصلاحيات
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="no-permissions-tab" data-bs-toggle="tab" data-bs-target="#no-permissions" type="button" role="tab" aria-controls="no-permissions" aria-selected="false">
+                                مستخدمون بدون صلاحيات
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <!-- محتوى علامات التبويب -->
+                    <div class="tab-content" id="userTabsContent">
+                        <div class="tab-pane fade show active" id="all-users" role="tabpanel" aria-labelledby="all-users-tab">
+                            <!-- جدول إدارة المستخدمين -->
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered" id="usersTable">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>اسم المستخدم</th>
+                                            <th>الاسم الكامل</th>
+                                            <th>رقم الهاتف</th>
+                                            <th>اسم الشركة</th>
+                                            <th>حالة الحساب</th>
+                                            <th>دور المستخدم</th>
+                                            <th>رقم التعريف في تيليجرام</th>
+                                            <th>المشرف/المورد</th>
+                                            <th>إجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% if (users && users.length > 0) { %>
+                                            <% users.forEach(function(user) { %>
+                                                <tr>
+                                                    <td><%= user.username %></td>
+                                                    <td><%= user.full_name %></td>
+                                                    <td><%= user.phone_number %></td>
+                                                    <td><%= user.company_name || '-' %></td>
+                                                    <td>
+                                                        <% if (user.account_status === 'active') { %>
+                                                            <span class="badge bg-success">نشط</span>
+                                                        <% } else { %>
+                                                            <span class="badge bg-secondary">غير نشط</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td>
+                                                        <% if (user.user_role === 'no_permissions') { %>
+                                                            <span class="badge bg-light text-dark">بدون صلاحيات</span>
+                                                        <% } else if (user.user_role === 'representative') { %>
+                                                            <span class="badge bg-warning">مندوب</span>
+                                                        <% } else if (user.user_role === 'supervisor') { %>
+                                                            <span class="badge bg-primary">وكيل</span>
+                                                        <% } else if (user.user_role === 'admin') { %>
+                                                            <span class="badge bg-danger">مسؤول</span>
+                                                        <% } else if (user.user_role === 'supplier') { %>
+                                                            <span class="badge bg-success">مورد</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td><%= user.telegram_chat_id || '-' %></td>
+                                                    <td>
+                                                        <% if (user.user_role === 'representative') { %>
+                                                            <%= user.supervisor ? user.supervisor.full_name : '-' %>
+                                                        <% } else { %>
+                                                            -
+                                                        <% } %>
+                                                    </td>
+                                                    <td>
+                                                        <div class="dropdown">
+                                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="dropdownActions<%= user._id %>" data-bs-toggle="dropdown" aria-expanded="false">
+                                                                الإجراءات
+                                                            </button>
+                                                            <ul class="dropdown-menu" aria-labelledby="dropdownActions<%= user._id %>">
+                                                                <!-- تعديل المستخدم - متاح للمسؤولين، المشرفين، والموردين -->
+                                                                <% if (session.userRole === 'admin' || 
+                                                                       (user.supervisor && user.supervisor.toString() === session.userId)) { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="/licenses/admin/user-management/edit/<%= user._id %>">
+                                                                            <i class="bi bi-pencil-square"></i> تعديل البيانات
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- تغيير كلمة المرور - متاح للمسؤولين، المشرفين، والموردين -->
+                                                                <% if (session.userRole === 'admin' || 
+                                                                       (user.supervisor && user.supervisor.toString() === session.userId)) { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal" data-user-id="<%= user._id %>">
+                                                                            <i class="bi bi-key"></i> تغيير كلمة المرور
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- تحديث معرف الدردشة - متاح للمسؤولين فقط -->
+                                                                <% if (session.userRole === 'admin') { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#updateChatIdModal" data-user-id="<%= user._id %>" data-telegram-chat-id="<%= user.telegram_chat_id %>">
+                                                                            <i class="bi bi-chat"></i> تحديث معرف الدردشة
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- حذف المستخدم - متاح للمسؤولين فقط -->
+                                                                <% if (session.userRole === 'admin') { %>
+                                                                    <li>
+                                                                        <hr class="dropdown-divider">
+                                                                    </li>
+                                                                    <li>
+                                                                        <form action="/licenses/admin/user-management/delete" method="POST" class="delete-form">
+                                                                            <input type="hidden" name="userId" value="<%= user._id %>">
+                                                                            <button type="button" class="dropdown-item text-danger delete-button">
+                                                                                <i class="bi bi-trash"></i> حذف المستخدم
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                <% } %>
+                                                            </ul>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <% }); %>
+                                        <% } else { %>
+                                            <tr>
+                                                <td colspan="9">لا يوجد مستخدمين.</td>
+                                            </tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="with-permissions" role="tabpanel" aria-labelledby="with-permissions-tab">
+                            <!-- جدول المستخدمين الذين لديهم صلاحيات -->
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered" id="usersWithPermissionsTable">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>اسم المستخدم</th>
+                                            <th>الاسم الكامل</th>
+                                            <th>رقم الهاتف</th>
+                                            <th>اسم الشركة</th>
+                                            <th>حالة الحساب</th>
+                                            <th>دور المستخدم</th>
+                                            <th>رقم التعريف في تيليجرام</th>
+                                            <th>المشرف/المورد</th>
+                                            <th>إجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% if (usersWithPermissions && usersWithPermissions.length > 0) { %>
+                                            <% usersWithPermissions.forEach(function(user) { %>
+                                                <tr>
+                                                    <td><%= user.username %></td>
+                                                    <td><%= user.full_name %></td>
+                                                    <td><%= user.phone_number %></td>
+                                                    <td><%= user.company_name || '-' %></td>
+                                                    <td>
+                                                        <% if (user.account_status === 'active') { %>
+                                                            <span class="badge bg-success">نشط</span>
+                                                        <% } else { %>
+                                                            <span class="badge bg-secondary">غير نشط</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td>
+                                                        <% if (user.user_role === 'no_permissions') { %>
+                                                            <span class="badge bg-light text-dark">بدون صلاحيات</span>
+                                                        <% } else if (user.user_role === 'representative') { %>
+                                                            <span class="badge bg-warning">مندوب</span>
+                                                        <% } else if (user.user_role === 'supervisor') { %>
+                                                            <span class="badge bg-primary">وكيل</span>
+                                                        <% } else if (user.user_role === 'admin') { %>
+                                                            <span class="badge bg-danger">مسؤول</span>
+                                                        <% } else if (user.user_role === 'supplier') { %>
+                                                            <span class="badge bg-success">مورد</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td><%= user.telegram_chat_id || '-' %></td>
+                                                    <td>
+                                                        <% if (user.user_role === 'representative') { %>
+                                                            <%= user.supervisor ? user.supervisor.full_name : '-' %>
+                                                        <% } else { %>
+                                                            -
+                                                        <% } %>
+                                                    </td>
+                                                    <td>
+                                                        <div class="dropdown">
+                                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="dropdownActions<%= user._id %>" data-bs-toggle="dropdown" aria-expanded="false">
+                                                                الإجراءات
+                                                            </button>
+                                                            <ul class="dropdown-menu" aria-labelledby="dropdownActions<%= user._id %>">
+                                                                <!-- تعديل المستخدم - متاح للمسؤولين، المشرفين، والموردين -->
+                                                                <% if (session.userRole === 'admin' || 
+                                                                       (user.supervisor && user.supervisor.toString() === session.userId)) { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="/licenses/admin/user-management/edit/<%= user._id %>">
+                                                                            <i class="bi bi-pencil-square"></i> تعديل البيانات
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- تغيير كلمة المرور - متاح للمسؤولين، المشرفين، والموردين -->
+                                                                <% if (session.userRole === 'admin' || 
+                                                                       (user.supervisor && user.supervisor.toString() === session.userId)) { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal" data-user-id="<%= user._id %>">
+                                                                            <i class="bi bi-key"></i> تغيير كلمة المرور
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- تحديث معرف الدردشة - متاح للمسؤولين فقط -->
+                                                                <% if (session.userRole === 'admin') { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#updateChatIdModal" data-user-id="<%= user._id %>" data-telegram-chat-id="<%= user.telegram_chat_id %>">
+                                                                            <i class="bi bi-chat"></i> تحديث معرف الدردشة
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- حذف المستخدم - متاح للمسؤولين فقط -->
+                                                                <% if (session.userRole === 'admin') { %>
+                                                                    <li>
+                                                                        <hr class="dropdown-divider">
+                                                                    </li>
+                                                                    <li>
+                                                                        <form action="/licenses/admin/user-management/delete" method="POST" class="delete-form">
+                                                                            <input type="hidden" name="userId" value="<%= user._id %>">
+                                                                            <button type="button" class="dropdown-item text-danger delete-button">
+                                                                                <i class="bi bi-trash"></i> حذف المستخدم
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                <% } %>
+                                                            </ul>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <% }); %>
+                                        <% } else { %>
+                                            <tr>
+                                                <td colspan="9">لا يوجد مستخدمين.</td>
+                                            </tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="no-permissions" role="tabpanel" aria-labelledby="no-permissions-tab">
+                            <!-- جدول المستخدمين الذين ليس لديهم صلاحيات -->
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered" id="usersWithoutPermissionsTable">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>اسم المستخدم</th>
+                                            <th>الاسم الكامل</th>
+                                            <th>رقم الهاتف</th>
+                                            <th>اسم الشركة</th>
+                                            <th>حالة الحساب</th>
+                                            <th>دور المستخدم</th>
+                                            <th>رقم التعريف في تيليجرام</th>
+                                            <th>المشرف/المورد</th>
+                                            <th>إجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% if (usersWithoutPermissions && usersWithoutPermissions.length > 0) { %>
+                                            <% usersWithoutPermissions.forEach(function(user) { %>
+                                                <tr>
+                                                    <td><%= user.username %></td>
+                                                    <td><%= user.full_name %></td>
+                                                    <td><%= user.phone_number %></td>
+                                                    <td><%= user.company_name || '-' %></td>
+                                                    <td>
+                                                        <% if (user.account_status === 'active') { %>
+                                                            <span class="badge bg-success">نشط</span>
+                                                        <% } else { %>
+                                                            <span class="badge bg-secondary">غير نشط</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td>
+                                                        <% if (user.user_role === 'no_permissions') { %>
+                                                            <span class="badge bg-light text-dark">بدون صلاحيات</span>
+                                                        <% } else if (user.user_role === 'representative') { %>
+                                                            <span class="badge bg-warning">مندوب</span>
+                                                        <% } else if (user.user_role === 'supervisor') { %>
+                                                            <span class="badge bg-primary">وكيل</span>
+                                                        <% } else if (user.user_role === 'admin') { %>
+                                                            <span class="badge bg-danger">مسؤول</span>
+                                                        <% } else if (user.user_role === 'supplier') { %>
+                                                            <span class="badge bg-success">مورد</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td><%= user.telegram_chat_id || '-' %></td>
+                                                    <td>
+                                                        <% if (user.user_role === 'representative') { %>
+                                                            <%= user.supervisor ? user.supervisor.full_name : '-' %>
+                                                        <% } else { %>
+                                                            -
+                                                        <% } %>
+                                                    </td>
+                                                    <td>
+                                                        <div class="dropdown">
+                                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="dropdownActions<%= user._id %>" data-bs-toggle="dropdown" aria-expanded="false">
+                                                                الإجراءات
+                                                            </button>
+                                                            <ul class="dropdown-menu" aria-labelledby="dropdownActions<%= user._id %>">
+                                                                <!-- تعديل المستخدم - متاح للمسؤولين، المشرفين، والموردين -->
+                                                                <% if (session.userRole === 'admin' || 
+                                                                       (user.supervisor && user.supervisor.toString() === session.userId)) { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="/licenses/admin/user-management/edit/<%= user._id %>">
+                                                                            <i class="bi bi-pencil-square"></i> تعديل البيانات
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- تغيير كلمة المرور - متاح للمسؤولين، المشرفين، والموردين -->
+                                                                <% if (session.userRole === 'admin' || 
+                                                                       (user.supervisor && user.supervisor.toString() === session.userId)) { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal" data-user-id="<%= user._id %>">
+                                                                            <i class="bi bi-key"></i> تغيير كلمة المرور
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- تحديث معرف الدردشة - متاح للمسؤولين فقط -->
+                                                                <% if (session.userRole === 'admin') { %>
+                                                                    <li>
+                                                                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#updateChatIdModal" data-user-id="<%= user._id %>" data-telegram-chat-id="<%= user.telegram_chat_id %>">
+                                                                            <i class="bi bi-chat"></i> تحديث معرف الدردشة
+                                                                        </a>
+                                                                    </li>
+                                                                <% } %>
+                                                                
+                                                                <!-- حذف المستخدم - متاح للمسؤولين فقط -->
+                                                                <% if (session.userRole === 'admin') { %>
+                                                                    <li>
+                                                                        <hr class="dropdown-divider">
+                                                                    </li>
+                                                                    <li>
+                                                                        <form action="/licenses/admin/user-management/delete" method="POST" class="delete-form">
+                                                                            <input type="hidden" name="userId" value="<%= user._id %>">
+                                                                            <button type="button" class="dropdown-item text-danger delete-button">
+                                                                                <i class="bi bi-trash"></i> حذف المستخدم
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                <% } %>
+                                                            </ul>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <% }); %>
+                                        <% } else { %>
+                                            <tr>
+                                                <td colspan="9">لا يوجد مستخدمين.</td>
+                                            </tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addUserModalLabel">إضافة مستخدم جديد</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="addUserForm" action="/auth/admin/register" method="POST">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="username" class="form-label">اسم المستخدم</label>
+            <input type="text" class="form-control" id="username" name="username" required oninput="this.value = this.value.toLowerCase()"> <!-- تحويل الأحرف الكبيرة إلى صغيرة -->
+          </div>
+          <div class="mb-3">
+            <label for="fullName" class="form-label">الاسم الكامل</label>
+            <input type="text" class="form-control" id="fullName" name="fullName" required>
+          </div>
+          <div class="mb-3">
+            <label for="phoneNumber" class="form-label">رقم الهاتف</label>
+            <input type="text" class="form-control" id="phoneNumber" name="phoneNumber" required>
+          </div>
+          <div class="mb-3">
+            <label for="companyName" class="form-label">اسم الشركة</label>
+            <input type="text" class="form-control" id="companyName" name="companyName" required>
+          </div>
+          <% if (session.userRole === 'admin') { %>
+            <div class="mb-3">
+              <label for="userRole" class="form-label">دور المستخدم</label>
+              <select class="form-select" id="userRole" name="userRole" required>
+                <option value="no_permissions">بدون صلاحيات</option>
+                <option value="representative">مندوب</option>
+                <option value="supervisor">وكيل</option>
+                <option value="admin">مسؤول</option>
+                <option value="supplier">مورد</option>
+              </select>
+            </div>
+          <% } else { %>
+            <input type="hidden" name="userRole" value="representative">
+          <% } %>
+          <div class="mb-3">
+            <label for="password" class="form-label">كلمة المرور</label>
+            <input type="password" class="form-control" id="password" name="password" required>
+          </div>
+          <div class="mb-3">
+            <label for="confirmPassword" class="form-label">تأكيد كلمة المرور</label>
+            <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          <button type="submit" class="btn btn-success">إضافة المستخدم</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Update Chat ID Modal -->
+<div class="modal fade" id="updateChatIdModal" tabindex="-1" aria-labelledby="updateChatIdModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateChatIdModalLabel">تحديث معرف الدردشة في تيليجرام</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form action="/licenses/admin/user-management/update-telegram-chat-id" method="POST">
+        <div class="modal-body">
+          <input type="hidden" name="userId" id="updateChatIdUserId">
+          <div class="mb-3">
+            <label for="updateTelegramChatId" class="form-label">رقم التعريف في تيليجرام</label>
+            <input type="text" class="form-control" id="updateTelegramChatId" name="telegramChatId" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          <button type="submit" class="btn btn-secondary">تحديث</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="changePasswordModalLabel">تغيير كلمة المرور</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form action="/licenses/admin/user-management/change-password" method="POST">
+        <div class="modal-body">
+          <input type="hidden" name="userId" id="changePasswordUserId">
+          <div class="mb-3">
+            <label for="newPassword" class="form-label">كلمة المرور الجديدة</label>
+            <input type="password" class="form-control" id="newPassword" name="newPassword" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+          <button type="submit" class="btn btn-warning">تغيير كلمة المرور</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/_footer.ejs') %>
+<script>
+  // Pass data to Update Chat ID Modal
+  var updateChatIdModal = document.getElementById('updateChatIdModal');
+  updateChatIdModal.addEventListener('show.bs.modal', function (event) {
+    var button = event.relatedTarget;
+    var userId = button.getAttribute('data-user-id');
+    var telegramChatId = button.getAttribute('data-telegram-chat-id');
+    var modalUserId = updateChatIdModal.querySelector('#updateChatIdUserId');
+    var modalTelegramChatId = updateChatIdModal.querySelector('#updateTelegramChatId');
+    modalUserId.value = userId;
+    modalTelegramChatId.value = telegramChatId;
+  });
+
+  // Pass data to Change Password Modal
+  var changePasswordModal = document.getElementById('changePasswordModal');
+  changePasswordModal.addEventListener('show.bs.modal', function (event) {
+    var button = event.relatedTarget;
+    var userId = button.getAttribute('data-user-id');
+    var modalUserId = changePasswordModal.querySelector('#changePasswordUserId');
+    modalUserId.value = userId;
+  });
+
+  // Confirmation for delete action
+  document.querySelectorAll('.delete-button').forEach(function(button) {
+    button.addEventListener('click', function() {
+      if (confirm('هل أنت متأكد من أنك تريد حذف هذا المستخدم؟')) {
+        this.closest('form').submit();
+      }
+    });
+  });
+
+  // Handle Add User form submission
+  document.getElementById('addUserForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    var form = this;
+    fetch(form.action, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(new FormData(form))
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(err => { throw err; });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.success) {
+        // عرض رسالة تأكيد
+        document.getElementById('confirmationMessage').style.display = 'block';
+        // إخفاء النافذة المنبثقة
+        var addUserModal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+        addUserModal.hide();
+        // إعادة تعيين النموذج
+        form.reset();
+        // تحديث الصفحة بعد 1 ثانية لعرض المستخدم الجديد
+        setTimeout(() => {
+          location.reload();
+        }, 1000);
+      } else {
+        alert('Error adding user: ' + data.error);
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Error adding user: ' + error.error);
+    });
+  });
+
+  // البحث في جدول المستخدمين - النسخة المحسنة
+  function filterTable(tableId, searchValue, roleValue) {
+    const table = document.querySelector(tableId);
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(function(row) {
+      const username = row.children[0].textContent.toLowerCase();
+      const fullName = row.children[1].textContent.toLowerCase();
+      const phoneNumber = row.children[2].textContent.toLowerCase();
+      const companyName = row.children[3].textContent.toLowerCase();
+      const userRole = row.children[5].textContent.toLowerCase();
+      
+      const matchesSearch = 
+        username.includes(searchValue) || 
+        fullName.includes(searchValue) || 
+        phoneNumber.includes(searchValue) || 
+        companyName.includes(searchValue);
+      
+      const matchesRole = roleValue === 'all' || userRole === roleValue;
+      
+      if (matchesSearch && matchesRole) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+  
+  // البحث والفلترة للجداول
+  document.getElementById('searchInput').addEventListener('input', function() {
+    const searchValue = this.value.toLowerCase();
+    const roleValue = document.getElementById('roleFilter').value;
+    
+    filterTable('#usersTable', searchValue, roleValue);
+    filterTable('#usersWithPermissionsTable', searchValue, roleValue);
+    filterTable('#usersWithoutPermissionsTable', searchValue, roleValue);
+  });
+  
+  // فلترة حسب الدور
+  document.getElementById('roleFilter').addEventListener('change', function() {
+    const searchValue = document.getElementById('searchInput').value.toLowerCase();
+    const roleValue = this.value;
+    
+    filterTable('#usersTable', searchValue, roleValue);
+    filterTable('#usersWithPermissionsTable', searchValue, roleValue);
+    filterTable('#usersWithoutPermissionsTable', searchValue, roleValue);
+  });
+  
+  // تلوين صفوف الجدول حسب الصلاحيات
+  function colorizeUserRows() {
+    const tables = [
+      '#usersTable', 
+      '#usersWithPermissionsTable', 
+      '#usersWithoutPermissionsTable'
+    ];
+    
+    tables.forEach(tableId => {
+      const rows = document.querySelectorAll(`${tableId} tbody tr`);
+      rows.forEach(row => {
+        const userRole = row.children[5]?.textContent.trim();
+        
+        if (userRole === 'admin') {
+          row.classList.add('table-danger');  // لون أحمر للمسؤولين
+        } else if (userRole === 'supervisor') {
+          row.classList.add('table-primary');  // لون أزرق للوكلاء
+        } else if (userRole === 'supplier') {
+          row.classList.add('table-success');  // لون أخضر للموردين
+        } else if (userRole === 'representative') {
+          row.classList.add('table-warning');  // لون أصفر للمندوبين
+        } else if (userRole === 'no_permissions') {
+          row.classList.add('table-light');  // لون رمادي للمستخدمين بدون صلاحيات
+        }
+      });
+    });
+  }
+  
+  // تشغيل الوظائف عند تحميل الصفحة
+  document.addEventListener('DOMContentLoaded', function() {
+    colorizeUserRows();
+  });
+</script>
+</body>
+</html>

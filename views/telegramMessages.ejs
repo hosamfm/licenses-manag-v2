@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ar">
+<%- include('partials/_head.ejs') %>
+<body>
+<%- include('partials/_header.ejs') %>
+<main role="main" class="container mt-4 d-flex justify-content-center">
+    <div class="row w-100" style="max-width: 1200px;">
+        <!-- قسم جهات الاتصال -->
+        <div class="col-md-4">
+            <div class="contact-list bg-light p-3 rounded">
+                <h4>جهات الاتصال</h4>
+                <ul class="list-group" id="contactList">
+                    <% let uniqueContacts = new Map(); %>
+                    <% messages.forEach(message => { %>
+                        <% if (!uniqueContacts.has(message.chatId) || uniqueContacts.get(message.chatId).timestamp < message.timestamp) { %>
+                            <% if (message.direction === 'received' || !message.direction) { %>
+                                <% uniqueContacts.set(message.chatId, message); %>
+                            <% } %>
+                        <% } %>
+                    <% }) %>
+                    <% Array.from(uniqueContacts.values()).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).forEach(message => { %>
+                        <li class="list-group-item contact-item" data-chat-id="<%= message.chatId %>">
+                            <strong><%= message.username || message.firstName || message.lastName || 'مستخدم غير معروف' %></strong>
+                        </li>
+                    <% }) %>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- قسم المحادثة -->
+        <div class="col-md-8">
+            <div class="chat-box bg-light p-3 rounded">
+                <h4>المحادثة</h4>
+                <div class="chat-messages" id="chatMessages">
+                    <!-- سيتم عرض الرسائل هنا -->
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+<%- include('partials/_footer.ejs') %>
+
+<style>
+    .contact-list {
+        border-right: 1px solid #ccc;
+        padding-right: 10px;
+        height: 80vh;
+        overflow-y: auto;
+    }
+    .chat-box {
+        height: 80vh;
+        display: flex;
+        flex-direction: column;
+        border-left: 1px solid #ccc;
+        padding-left: 10px;
+    }
+    .chat-messages {
+        flex-grow: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column-reverse;
+        border: 1px solid #ccc;
+        padding: 10px;
+        background-color: #f9f9f9;
+    }
+    .chat-message {
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 15px;
+        max-width: 70%;
+    }
+    .chat-message.sent {
+        background-color: #e0f7fa;
+        align-self: flex-end;
+    }
+    .chat-message.received {
+        background-color: #f1f8e9;
+        align-self: flex-start;
+    }
+    .contact-item {
+        cursor: pointer;
+    }
+    .contact-item.active {
+        background-color: #007bff;
+        color: white;
+    }
+</style>
+
+<script type="application/json" id="messagesData">
+<%- JSON.stringify(messages).replace(/</g, '\\u003c').replace(/&/g, '\\u0026') %>
+</script>
+<script>
+    const userId = "<%= session.userId %>";
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const contactItems = document.querySelectorAll('.contact-item');
+        const chatMessagesDiv = document.getElementById('chatMessages');
+        const messages = JSON.parse(document.getElementById('messagesData').textContent);
+
+        // Function to fetch messages for a specific chat ID
+        function fetchMessages(chatId) {
+            const filteredMessages = messages.filter(message => message.chatId === parseInt(chatId));
+            displayMessages(filteredMessages);
+        }
+
+        // Function to display messages in the chat box
+        function displayMessages(messages) {
+            chatMessagesDiv.innerHTML = '';
+            messages.forEach(message => {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('chat-message');
+                if (message.direction === 'sent') {
+                    messageDiv.classList.add('sent');
+                    messageDiv.innerHTML = `
+                        <strong>نظام إدارة التراخيص:</strong>
+                        <p>${message.message.replace(/\n/g, '<br>')}</p>
+                        <small>${new Date(message.timestamp).toLocaleString()}</small>
+                    `;
+                } else {
+                    messageDiv.classList.add('received');
+                    messageDiv.innerHTML = `
+                        <strong>${message.username || message.firstName || message.lastName || 'مستخدم غير معروف'}:</strong>
+                        <p>${message.message.replace(/\n/g, '<br>')}</p>
+                        <small>${new Date(message.timestamp).toLocaleString()}</small>
+                    `;
+                }
+                chatMessagesDiv.appendChild(messageDiv);
+            });
+        }
+
+        // Event listener for contact item clicks
+        contactItems.forEach(item => {
+            item.addEventListener('click', function() {
+                contactItems.forEach(ci => ci.classList.remove('active'));
+                this.classList.add('active');
+                const chatId = this.dataset.chatId;
+                fetchMessages(chatId);
+            });
+        });
+
+        // Display the latest chat by default
+        if (contactItems.length > 0) {
+            contactItems[0].click();
+        }
+    });
+</script>
+</body>
+</html>

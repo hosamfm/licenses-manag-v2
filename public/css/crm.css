@@ -1,0 +1,313 @@
+/**
+ * أنماط خاصة بنظام إدارة العملاء (CRM)
+ */
+
+/* تخطيط CRM الأساسي */
+.crm-container {
+  display: flex;
+  min-height: calc(100vh - 60px);
+  background-color: #f8fafc; /* خلفية فاتحة مماثلة لخلفية المحادثة */
+}
+
+/* القائمة الجانبية - وضع الشاشة العادي */
+.crm-sidebar {
+  width: 260px; /* زيادة العرض قليلاً */
+  background-color: #ffffff; /* خلفية بيضاء نقية */
+  border-left: 1px solid #e2e8f0; /* حدود أخف */
+  padding: 20px 0;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.03); /* ظل خفيف للفصل */
+  z-index: 10; /* ضمان ظهور القائمة فوق المحتوى */
+}
+
+.crm-content {
+  flex: 1;
+  padding: 20px;
+  background-color: #f8fafc; /* تغيير للتناسق مع خلفية حاوية الرسائل */
+}
+
+.crm-sidebar-nav {
+  list-style: none;
+  padding: 0 10px; /* إضافة هامش داخلي */
+  margin: 0;
+}
+
+.crm-sidebar-nav li {
+  margin-bottom: 8px; /* زيادة المساحة بين العناصر */
+}
+
+.crm-sidebar-nav a {
+  display: block;
+  padding: 10px 20px; /* زيادة التباطن */
+  color: #475569; /* لون نص أدكن قليلاً */
+  text-decoration: none;
+  border-radius: 8px; /* تدوير أكبر للزوايا */
+  transition: all 0.3s ease; /* تحسين تأثير الانتقال */
+  font-weight: 500; /* خط أقوى قليلاً */
+}
+
+.crm-sidebar-nav a:hover {
+  background-color: rgba(37, 99, 235, 0.08); /* لون متناسق مع الأزرار */
+  color: #2563eb; /* لون أزرق متناسق مع الأزرار */
+  transform: translateX(-3px); /* تأثير الإزاحة عند مرور المؤشر */
+}
+
+.crm-sidebar-nav a.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb); /* تدرج متناسق مع الرسائل */
+  color: white;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3); /* ظل خفيف لتحسين المظهر */
+}
+
+.crm-sidebar-nav a i {
+  margin-left: 10px;
+  transition: transform 0.2s ease; /* تأثير انتقالي للأيقونة */
+}
+
+.crm-sidebar-nav a:hover i {
+  transform: translateX(-3px); /* تحريك الأيقونة عند مرور المؤشر */
+}
+
+/* تصميم البطاقات المشتركة */
+.crm-content .card {
+  border: none;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease;
+  overflow: hidden;
+}
+
+.crm-content .card:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.crm-content .card-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem 1.25rem;
+}
+
+.crm-content .card-body {
+  padding: 1.25rem;
+  background-color: #ffffff;
+}
+
+/* تصميم الأزرار المشتركة */
+.crm-content .btn {
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.crm-content .btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-color: transparent;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
+}
+
+.crm-content .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.4);
+}
+
+/* تصميم التنبيهات */
+.crm-content .alert {
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 1rem 1.25rem;
+}
+
+/* تصميم شريط التنقل السريع */
+.crm-content .breadcrumb {
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+}
+
+.crm-content .breadcrumb-item a {
+  color: #2563eb;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.crm-content .breadcrumb-item a:hover {
+  color: #1e40af;
+}
+
+.crm-content .breadcrumb-item.active {
+  color: #64748b;
+}
+
+/* تصميم الجداول */
+.crm-content .table {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.crm-content .table thead {
+  background-color: #f8fafc;
+}
+
+.crm-content .table th {
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 16px;
+}
+
+.crm-content .table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.crm-content .table tbody tr:hover {
+  background-color: #f1f5f9;
+}
+
+/* تصميم المدخلات والنماذج */
+.crm-content .form-control {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  transition: all 0.3s ease;
+}
+
+.crm-content .form-control:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.crm-content .form-label {
+  color: #475569;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+/* تصميم المدخلات المعطلة */
+.crm-content .form-control:disabled {
+  background-color: #f8fafc;
+  opacity: 0.7;
+}
+
+/* تصميم نافذة الحوار */
+.modal-content {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.modal-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1.25rem;
+  background-color: #ffffff;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-footer {
+  border-top: 1px solid #e2e8f0;
+  padding: 1.25rem;
+  background-color: #f8fafc;
+}
+
+/* ----- وضع الموبايل ----- */
+@media (max-width: 991.98px) {
+  .crm-container {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .crm-sidebar {
+    width: 100%;
+    height: auto;
+    border-left: none;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 1rem;
+    padding: 0;
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    background-color: #ffffff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* تحويل القائمة إلى أفقية في الموبايل */
+  .crm-sidebar-nav {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    padding: 0.75rem;
+    margin: 0;
+    width: 100%;
+  }
+  
+  .crm-sidebar-nav li {
+    margin-bottom: 0;
+    margin-left: 0.75rem;
+    white-space: nowrap;
+  }
+  
+  /* تحسين أسلوب العناصر في الموبايل */
+  .crm-sidebar-nav a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    min-width: 5rem;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+    color: #475569;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+  }
+  
+  .crm-sidebar-nav a i {
+    font-size: 1.3rem;
+    margin-bottom: 0.4rem;
+    margin-left: 0;
+  }
+  
+  .crm-sidebar-nav a.active {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border-color: #2563eb;
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.4);
+  }
+  
+  .crm-sidebar-nav a:hover {
+    background-color: #eef2ff;
+    transform: translateY(-3px);
+  }
+  
+  .crm-sidebar-nav a.active:hover {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  }
+  
+  /* تخطيط المحتوى في الموبايل */
+  .crm-content > .row {
+    flex-direction: column;
+  }
+  
+  /* تحسين الهامش بين العناصر في الموبايل */
+  .crm-content {
+    padding: 15px;
+  }
+  
+  .crm-content .card,
+  .crm-content .alert,
+  .crm-content .breadcrumb {
+    margin-bottom: 1rem;
+  }
+}

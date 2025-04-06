@@ -1,0 +1,117 @@
+[
+  {
+    "name": "Cost Centers",
+    "value": 1,
+    "price": 0.0
+  },
+  {
+    "name": "Representative Management",
+    "value": 2,
+    "price": 0.0
+  },
+  {
+    "name": "Fixed Assets Management",
+    "value": 3,
+    "price": 0.0
+  },
+  {
+    "name": "Order Management",
+    "value": 4,
+    "price": 0.0
+  },
+  {
+    "name": "Manufacturing System",
+    "value": 5,
+    "price": 0.0
+  },
+  {
+    "name": "Point of Sale",
+    "value": 6,
+    "price": 0.0
+  },
+  {
+    "name": "Price Quotations",
+    "value": 7,
+    "price": 0.0
+  },
+  {
+    "name": "Cloud Synchronization Service",
+    "value": 8,
+    "price": 0.0
+  },
+  {
+    "name": "Maintenance and Technical Support Centers Management",
+    "value": 9,
+    "price": 0.0
+  },
+  {
+    "name": "Attendance",
+    "value": 10,
+    "price": 0.0
+  },
+  {
+    "name": "Salaries and Advances",
+    "value": 11,
+    "price": 0.0
+  },
+  {
+    "name": "Branch Management",
+    "value": 12,
+    "price": 0.0
+  },
+  {
+    "name": "Accounting",
+    "value": 13,
+    "price": 0.0
+  },
+  {
+    "name": "Inventory and Billing Management",
+    "value": 14,
+    "price": 0.0
+  },
+  {
+    "name": "Multi-Currency",
+    "value": 15,
+    "price": 0.0
+  },
+  {
+    "name": "Multi-Warehouse",
+    "value": 16,
+    "price": 0.0
+  },
+  {
+    "name": "Cheque Management",
+    "value": 17,
+    "price": 0.0
+  },
+  {
+    "name": "Installment Management",
+    "value": 18,
+    "price": 0.0
+  },
+  {
+    "name": "Invoice Integration",
+    "value": 19,
+    "price": 0.0
+  },
+  {
+    "name": "Inactive",
+    "value": 20,
+    "price": 0.0
+  },
+  {
+    "name": "Restaurant Management",
+    "value": 21,
+    "price": 0.0
+  },
+  {
+    "name": "Electronic Archive",
+    "value": 22,
+    "price": 0.0
+  },
+  {
+    "name": "Inactive",
+    "value": 25,
+    "price": 0.0
+  }
+]

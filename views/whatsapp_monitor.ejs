@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <%- include('partials/_head') %>
+  <title>مراقبة رسائل الواتس أب</title>
+  <style>
+    .container {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    .section-title {
+      border-bottom: 2px solid #f0f0f0;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    .stats-card {
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      background-color: #f8f9fa;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    .stat-box {
+      text-align: center;
+      padding: 15px;
+      border-radius: 8px;
+      background-color: white;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    .stat-box h3 {
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .stat-box p {
+      margin-bottom: 0;
+      color: #6c757d;
+      font-size: 14px;
+    }
+    .status-badge {
+      padding: 5px 10px;
+      border-radius: 15px;
+      font-size: 12px;
+    }
+    .pending {
+      background-color: #ffc107;
+      color: #212529;
+    }
+    .sent {
+      background-color: #17a2b8;
+      color: white;
+    }
+    .delivered {
+      background-color: #28a745;
+      color: white;
+    }
+    .failed {
+      background-color: #dc3545;
+      color: white;
+    }
+    .message-table {
+      font-size: 14px;
+    }
+    .truncate {
+      max-width: 200px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+    }
+    .action-btns {
+      display: flex;
+    }
+    .action-btns a {
+      margin-left: 5px;
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/_header') %>
+  <div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1>مراقبة رسائل الواتس أب</h1>
+      <div>
+        <a href="/admin/whatsapp-settings" class="btn btn-secondary">
+          <i class="fas fa-cog"></i> إعدادات الواتس أب
+        </a>
+        <a href="/settings" class="btn btn-secondary">
+          <i class="fas fa-arrow-right"></i> العودة لإعدادات النظام
+        </a>
+      </div>
+    </div>
+    
+    <% if (flashMessages.error) { %>
+      <div class="alert alert-danger"><%= flashMessages.error %></div>
+    <% } %>
+    <% if (flashMessages.success) { %>
+      <div class="alert alert-success"><%= flashMessages.success %></div>
+    <% } %>
+
+    <!-- إحصائيات الرسائل -->
+    <div class="section-title">
+      <h3>إحصائيات الرسائل</h3>
+    </div>
+    
+    <div class="row stats-card">
+      <!-- إجمالي الرسائل -->
+      <div class="col-md-4">
+        <div class="stat-box">
+          <h3 class="text-primary"><%= messageStats.total %></h3>
+          <p>إجمالي الرسائل</p>
+        </div>
+      </div>
+      
+      <!-- رصيد الحساب -->
+      <div class="col-md-4">
+        <div class="stat-box">
+          <% if (accountBalance.success) { %>
+            <h3 class="<%= accountBalance.balance > 10 ? 'text-success' : 'text-warning' %>">
+              <%= accountBalance.balance %>
+            </h3>
+            <p>رصيد الحساب</p>
+          <% } else { %>
+            <h3 class="text-danger">غير متاح</h3>
+            <p>رصيد الحساب</p>
+          <% } %>
+        </div>
+      </div>
+      
+      <!-- تحديث الرسائل المعلقة -->
+      <div class="col-md-4">
+        <div class="stat-box d-flex flex-column justify-content-center align-items-center h-100">
+          <% if (messageStats.pending > 0) { %>
+            <form action="/admin/whatsapp-settings/update-pending" method="POST">
+              <button type="submit" class="btn btn-warning">
+                <i class="fas fa-sync"></i> تحديث الرسائل المعلقة (<%= messageStats.pending %>)
+              </button>
+            </form>
+          <% } else { %>
+            <p class="text-success mb-0"><i class="fas fa-check-circle"></i> لا توجد رسائل معلقة</p>
+          <% } %>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row mb-4">
+      <!-- إحصائيات حسب الحالة -->
+      <div class="col-md-12">
+        <div class="stats-card">
+          <div class="row">
+            <div class="col-md-3">
+              <div class="stat-box">
+                <h3 class="text-warning"><%= messageStats.pending %></h3>
+                <p>رسائل معلقة</p>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-box">
+                <h3 class="text-info"><%= messageStats.sent %></h3>
+                <p>رسائل مرسلة</p>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-box">
+                <h3 class="text-success"><%= messageStats.delivered %></h3>
+                <p>رسائل مستلمة</p>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-box">
+                <h3 class="text-danger"><%= messageStats.failed %></h3>
+                <p>رسائل فاشلة</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- آخر الرسائل -->
+    <div class="section-title">
+      <h3>آخر رسائل الواتس أب</h3>
+    </div>
+    
+    <div class="table-responsive">
+      <table class="table table-striped message-table">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>الرقم</th>
+            <th>الرسالة</th>
+            <th>الحالة</th>
+            <th>العميل</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (recentMessages && recentMessages.length > 0) { %>
+            <% recentMessages.forEach(message => { %>
+              <tr>
+                <td><%= message.createdAt.toLocaleDateString('ar-SA') %> <%= message.createdAt.toLocaleTimeString('ar-SA') %></td>
+                <td dir="ltr"><%= message.phoneNumber %></td>
+                <td>
+                  <span class="truncate" title="<%= message.message %>"><%= message.message %></span>
+                </td>
+                <td>
+                  <% if (message.status === 'pending') { %>
+                    <span class="status-badge pending">معلقة</span>
+                  <% } else if (message.status === 'sent') { %>
+                    <span class="status-badge sent">مرسلة</span>
+                  <% } else if (message.status === 'delivered') { %>
+                    <span class="status-badge delivered">مستلمة</span>
+                  <% } else if (message.status === 'failed') { %>
+                    <span class="status-badge failed" title="<%= message.errorMessage %>">فاشلة</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (message.clientId) { %>
+                    <%= message.clientId.name || 'غير معروف' %>
+                  <% } else { %>
+                    النظام
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="6" class="text-center">لا توجد رسائل واتس أب مرسلة حتى الآن</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <%- include('partials/_footer') %>
+</body>
+</html>
