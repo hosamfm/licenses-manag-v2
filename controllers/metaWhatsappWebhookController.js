@@ -552,6 +552,15 @@ exports.handleIncomingMessages = async (messages, meta) => {
             _id: updatedConversationForNotification._id,
             lastMessageAt: updatedConversationForNotification.lastMessageAt,
             status: updatedConversationForNotification.status,
+            // إضافة المزيد من الحقول لتحديث القائمة بشكل سليم
+            unreadCount: await WhatsappMessage.countDocuments({
+              conversationId: conversation._id,
+              direction: 'incoming',
+              status: { $ne: 'read' }
+            }),
+            lastMessage: messageWithMedia,
+            phoneNumber: updatedConversationForNotification.phoneNumber,
+            customerName: updatedConversationForNotification.customerName
           });
         }
       } catch (errMsg) {

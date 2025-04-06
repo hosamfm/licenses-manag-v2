@@ -233,14 +233,44 @@ async function notifyNewMessage(conversationId, message) {
  * ملاحظة: هذه الدالة للإشعارات فقط وليس لإرسال الرسالة نفسها
  * يتم استدعاء هذه الدالة من متحكم conversationController بعد حفظ الرسالة في قاعدة البيانات
  * @param {String} conversationId - معرف المحادثة
- * @param {Object} message - الرسالة الجديدة
+ * @param {Object} update - بيانات التحديث
  */
 async function notifyConversationUpdate(conversationId, update) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
+  
+  // التأكد من وجود البيانات الأساسية للتحديث
+  if (!update) {
+    update = {};
+  }
+  
+  // ضمان أن _id موجود دائماً
+  if (!update._id) {
+    update._id = conversationId;
+  }
+  
+  // إرسال التحديث إلى غرفة المحادثة
   io.to(`conversation-${conversationId}`).emit('conversation-update', update);
-  logger.info('socketService', 'تم إرسال إشعار بتحديث المحادثة', { conversationId });
+  
+  // إرسال التحديث لجميع المستخدمين - مهم لتحديث القائمة
+  // استخدام حدث منفصل مع المعلومات المطلوبة فقط
+  const updateForList = {
+    _id: update._id,
+    status: update.status,
+    lastMessageAt: update.lastMessageAt,
+    unreadCount: update.unreadCount,
+    lastMessage: update.lastMessage,
+    customerName: update.customerName,
+    phoneNumber: update.phoneNumber,
+    assignedTo: update.assignedTo
+  };
+  io.emit('conversation-list-update', updateForList);
+  
+  logger.info('socketService', 'تم إرسال إشعار بتحديث المحادثة', { 
+    conversationId,
+    updateFields: Object.keys(update).join(', ')
+  });
 }
 
 /**
