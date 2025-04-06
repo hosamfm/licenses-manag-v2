@@ -678,28 +678,6 @@ exports.replyToConversation = async (req, res) => {
       socketService.notifyNewMessage(conversationId, messageForNotification);
     }
 
-    // إشعار بتحديث المحادثة لتحديث قائمة المحادثات - إضافة
-    try {
-      const lastMessage = {
-        content: content.substring(0, 100),
-        timestamp: msg.timestamp,
-        direction: 'outgoing'
-      };
-      
-      socketService.notifyConversationUpdate(conversationId, {
-        _id: conversationId,
-        lastMessage,
-        updatedAt: new Date()
-      });
-      
-      logger.info('conversationController', 'تم إرسال إشعار بتحديث المحادثة لتحديث القائمة', {
-        conversationId,
-        messageId: msg._id
-      });
-    } catch (error) {
-      logger.warn('conversationController', 'خطأ في إرسال إشعار تحديث المحادثة', error);
-    }
-
     // إذا كان هناك مستخدم مسند غير المرسل
     if (conversation.assignedTo && req.user && conversation.assignedTo.toString() !== req.user._id.toString()) {
       socketService.notifyUser(conversation.assignedTo, 'new_message', {

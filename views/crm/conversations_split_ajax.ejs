@@ -161,9 +161,8 @@
   <!-- سكربت جافاسكربت لجلب التفاصيل بالـ AJAX -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // تعريف المتغيرات العالمية
-      window.currentConversationId = null;
-      window.previousConversationId = null;
+      // معرف المحادثة الحالية (إذا تم تحديدها)
+      let currentConversationId = null;
       
       // تكوين وتهيئة الويب سوكت
       window.socketConnection = io();
@@ -276,32 +275,16 @@
       
       // الاستماع لأحداث الرسائل الجديدة
       window.socketConnection.on('new-message', function(data) {
-        console.log('تم استلام رسالة جديدة عبر Socket.io:', {
-          conversationId: data.conversationId, 
-          content: data.content ? data.content.substring(0, 30) + '...' : '[وسائط]', 
-          direction: data.direction
-        });
-        
         // تشغيل صوت الإشعار للرسائل الواردة
         if (data.direction === 'incoming') {
           window.playNotificationSound();
         }
         
-        // تحديث قائمة المحادثات - استخدام إما الدالة العامة أو الدالة المحلية
-        console.log('بدء تحديث قائمة المحادثات بعد استلام رسالة جديدة...');
-        if (typeof window.updateConversationsList === 'function') {
-          console.log('استخدام window.updateConversationsList()');
-          window.updateConversationsList();
-        } else if (typeof window.refreshConversationsList === 'function') {
-          console.log('استخدام window.refreshConversationsList()');
-          window.refreshConversationsList();
-        } else {
-          console.log('استخدام الدالة المحلية refreshConversationsList()');
-          refreshConversationsList();
-        }
+        // تحديث قائمة المحادثات
+        refreshConversationsList();
         
         // إذا كانت الرسالة تخص المحادثة المفتوحة حالياً، أضفها للمحادثة
-        if (data.conversationId === window.currentConversationId) {
+        if (data.conversationId === currentConversationId) {
           window.addMessageToConversation(data);
         }
       });
@@ -309,7 +292,7 @@
       // الاستماع لأحداث تحديث حالة الرسائل
       window.socketConnection.on('message-status-update', function(data) {
         // تحقق من وجود معرف المحادثة والتأكد من أنه يطابق المحادثة الحالية
-        if (!data.conversationId || data.conversationId !== window.currentConversationId) {
+        if (!data.conversationId || data.conversationId !== currentConversationId) {
           return;
         }
         
@@ -333,7 +316,7 @@
         if (data.message && data.replyToId) {
           // إضافة معرف المحادثة للرسالة إذا لم يكن موجودًا
           if (!data.message.conversationId) {
-            data.message.conversationId = window.currentConversationId;
+            data.message.conversationId = currentConversationId;
           }
           
           // ضمان وجود replyToMessageId في الرسالة
@@ -342,7 +325,7 @@
           }
           
           // إضافة الرسالة للواجهة إذا كانت المحادثة الحالية
-          if (data.message.conversationId === window.currentConversationId) {
+          if (data.message.conversationId === currentConversationId) {
             window.addMessageToConversation(data.message);
           } else {
             // تحديث قائمة المحادثات فقط إذا كانت محادثة أخرى
@@ -350,7 +333,7 @@
           }
         } else {
           // السلوك القديم - إعادة تحميل المحادثة بالكامل كإجراء احتياطي
-          if (data.conversationId === window.currentConversationId) {
+          if (data.conversationId === currentConversationId) {
             refreshConversationDetails();
           } else {
             refreshConversationsList();
@@ -361,7 +344,7 @@
       // الاستماع لأحداث التفاعلات الجديدة
       window.socketConnection.on('message-reaction', function(data) {
         // التحقق من أن البيانات تخص المحادثة الحالية
-        if (!data.conversationId || data.conversationId !== window.currentConversationId) {
+        if (!data.conversationId || data.conversationId !== currentConversationId) {
           return;
         }
         
@@ -372,7 +355,7 @@
       // الاستماع لأحداث تحديث المعرف الخارجي للرسالة
       window.socketConnection.on('message-external-id-update', function(data) {
         // التحقق من أن البيانات تخص المحادثة الحالية
-        if (!data.conversationId || data.conversationId !== window.currentConversationId) {
+        if (!data.conversationId || data.conversationId !== currentConversationId) {
           return;
         }
         
@@ -391,7 +374,7 @@
       window.socketConnection.on('internal-note', function(data) {
         
         // التحقق من أن الملاحظة تنتمي إلى المحادثة الحالية
-        if (data.conversationId === window.currentConversationId) {
+        if (data.conversationId === currentConversationId) {
           // إضافة الملاحظة الداخلية إلى واجهة المستخدم
           window.addNoteToUI(data.note);
           
@@ -401,23 +384,6 @@
           // تحديث قائمة المحادثات لعرض آخر رسالة
           refreshConversationsList();
         }
-      });
-      
-      // مستمع جديد: معالج حدث قراءة الرسائل
-      window.socketConnection.on('message-read-by-user', function(data) {
-        // التحقق من أن البيانات تخص المحادثة الحالية
-        if (!data.conversationId || data.conversationId !== window.currentConversationId) {
-          return;
-        }
-        
-        // البحث عن عنصر الرسالة حسب المعرف
-        const messageElem = document.querySelector(`.message[data-message-id="${data.messageId}"]`);
-        if (!messageElem) {
-          return;
-        }
-        
-        // تحديث واجهة الرسالة لإظهار من قرأها
-        window.updateMessageReadByUsers(messageElem, data.user, data.timestamp);
       });
       
       // تحديث قائمة المحادثات بدون إعادة تحميل الصفحة
@@ -473,26 +439,16 @@
               
               // إعادة تعيين مستمعات الأحداث
               attachConversationItemsEvents();
-              
-              // تسجيل نجاح التحديث
-              console.log('تم تحديث قائمة المحادثات - ' + new Date().toLocaleTimeString());
             }
           }
         })
         .catch(error => {
-          console.error('خطأ في تحديث قائمة المحادثات:', error);
           // في حالة الخطأ 404، قد يكون المستخدم في الواجهة القديمة - نقوم بإعادة التوجيه إلى الواجهة الجديدة
           if (error.message.includes('404')) {
             window.location.href = '/crm/conversations/ajax';
           }
         });
       }
-      
-      // جعل الدالة متاحة عالمياً لاستخدامها من ملفات جافاسكريبت أخرى
-      window.refreshConversationsList = refreshConversationsList;
-      
-      // إضافة دالة بديلة للتوافق مع الكود الموجود
-      window.updateConversationsList = refreshConversationsList;
       
       // دالة لتعيين مستمعات أحداث لعناصر قائمة المحادثات
       function attachConversationItemsEvents() {
@@ -514,7 +470,7 @@
             if (!convId) return;
             
             // تحديث معرف المحادثة الحالية
-            window.currentConversationId = convId;
+            currentConversationId = convId;
             
             // إضافة المعرف إلى تاريخ المتصفح
             if (history.pushState) {
@@ -532,31 +488,78 @@
       function loadConversationDetails(conversationId, skipCache = false) {
         if (!conversationId) return;
         
-        // عرض مؤشر التحميل
         const detailsContainer = document.getElementById('conversationDetailsContainer');
+        if (!detailsContainer) return;
+        
+        // الانضمام إلى غرفة المحادثة عبر Socket.io للحصول على الإشعارات الفورية
+        if (typeof window.joinConversationRoom === 'function') {
+          // استخدام الوظيفة المساعدة الجديدة
+          window.joinConversationRoom(conversationId);
+        } else {
+          // الطريقة القديمة كاحتياط
+          if (window.socketConnection) {
+            // إذا كان الاتصال جاهزًا
+            if (window.socketConnected) {
+
+              window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
+              
+              // مغادرة الغرفة السابقة إذا وجدت
+              if (window.previousConversationId && window.previousConversationId !== conversationId) {
+                window.socketConnection.emit('leave', { room: `conversation-${window.previousConversationId}` });
+              }
+            } else {
+              // تخزين العملية للتنفيذ لاحقًا عند اكتمال الاتصال
+              if (!Array.isArray(window.pendingSocketOperations)) {
+                window.pendingSocketOperations = [];
+              }
+              
+              window.pendingSocketOperations.push((socket) => {
+                socket.emit('join', { room: `conversation-${conversationId}` });
+                
+                // مغادرة الغرفة السابقة إذا وجدت
+                if (window.previousConversationId && window.previousConversationId !== conversationId) {
+                  socket.emit('leave', { room: `conversation-${window.previousConversationId}` });
+                }
+              });
+            }
+            
+            // تحديث المعرف الحالي في المتغير العام للنافذة
+            window.currentConversationId = conversationId;
+            
+            // حفظ معرف المحادثة الحالية للمرة القادمة
+            window.previousConversationId = conversationId;
+          } else {
+          }
+        }
+        
+        // عرض مؤشر التحميل
         detailsContainer.innerHTML = `
-          <div class="loading-container p-5 text-center">
-            <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
-            <p class="mt-3">جاري تحميل المحادثة...</p>
+          <div class="text-center p-5">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+            <p class="mt-2">جاري تحميل المحادثة...</p>
           </div>
         `;
         
-        // تكوين رابط الطلب
+        // إنشاء رابط مع إضافة معلمة لتخطي الكاش عند الحاجة
         const url = new URL(`/crm/conversations/ajax/details/${conversationId}`, window.location.origin);
+        
+        // إضافة معلمة لتجاوز الكاش عند الحاجة
         if (skipCache) {
-          url.searchParams.append('nocache', Date.now());
+          url.searchParams.append('t', new Date().getTime());
         }
         
-        // إرسال طلب AJAX
+        // طلب التفاصيل من الخادم
         fetch(url.toString(), {
+          method: 'GET',
           headers: {
-            'X-Requested-With': 'XMLHttpRequest'
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cache-Control': skipCache ? 'no-cache, no-store, must-revalidate' : 'default'
           }
         })
         .then(response => {
-          if (!response.ok) {
-            throw new Error(`${response.status} ${response.statusText}`);
-          }
+          if (!response.ok) throw new Error('HTTP error ' + response.status);
           return response.text();
         })
         .then(html => {
@@ -564,50 +567,23 @@
           detailsContainer.innerHTML = html;
           
           // تحديث معرف المحادثة الحالية
-          window.currentConversationId = conversationId;
+          currentConversationId = conversationId;
           
-          // الانضمام لغرفة المحادثة (للإشعارات)
-          if (window.emitSocketEvent) {
-            window.emitSocketEvent('join', { room: `conversation-${conversationId}` });
-            if (window.previousConversationId) {
-              window.emitSocketEvent('leave', { room: `conversation-${window.previousConversationId}` });
+          // التمرير لأسفل آخر الرسائل
+          setTimeout(() => {
+            const msgContainer = document.getElementById('messageContainer');
+            if (msgContainer) {
+              msgContainer.scrollTop = msgContainer.scrollHeight;
             }
-            window.previousConversationId = conversationId;
-          } else if (window.socketConnection) {
-            window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
-            if (window.previousConversationId) {
-              window.socketConnection.emit('leave', { room: `conversation-${window.previousConversationId}` });
-            }
-            window.previousConversationId = conversationId;
-          }
-          
-          // تفعيل المستمعات
+          }, 100);
+
+          // تعيين المستمعين للتفاعلات مع الرسائل بعد تحميل المحادثة
           window.attachConversationEventListeners && window.attachConversationEventListeners();
-          
-          // تمرير للأسفل (آخر الرسائل)
-          const messageContainer = document.querySelector('.conversation-messages');
-          if (messageContainer) {
-            messageContainer.scrollTop = messageContainer.scrollHeight;
-          }
-          
-          // تحديث حالة المحادثة في القائمة
-          markConversationAsRead(conversationId);
-          
-          // تعليم الرسائل الواردة كمقروءة من قبل المستخدم الحالي
-          window.markIncomingMessagesAsRead && window.markIncomingMessagesAsRead();
-          
-          // تشغيل مشغلات الصوت إن وجدت
-          window.setupAudioPlayers && window.setupAudioPlayers();
         })
-        .catch(error => {
-          console.error('خطأ في تحميل تفاصيل المحادثة:', error);
+        .catch(err => {
           detailsContainer.innerHTML = `
-            <div class="error-container p-5 text-center">
-              <i class="fas fa-exclamation-circle fa-3x text-danger"></i>
-              <p class="mt-3">حدث خطأ أثناء تحميل المحادثة!</p>
-              <button class="btn btn-outline-primary mt-2" onclick="loadConversationDetails('${conversationId}', true)">
-                <i class="fas fa-sync-alt me-1"></i> إعادة المحاولة
-              </button>
+            <div class="alert alert-danger">
+              حدث خطأ أثناء جلب تفاصيل المحادثة: ${err.message}
             </div>
           `;
         });
@@ -615,17 +591,17 @@
 
       // تحديث تفاصيل المحادثة (إعادة تحميل)
       window.refreshConversationDetails = function() {
-        if (window.currentConversationId) {
-          loadConversationDetails(window.currentConversationId, true);
+        if (currentConversationId) {
+          loadConversationDetails(currentConversationId, true);
         }
       };
       
       // دالة لإضافة رسالة جديدة للمحادثة الحالية
       window.addMessageToConversation = function(messageData) {
-        if (!messageData || !window.currentConversationId) return;
+        if (!messageData || !currentConversationId) return;
         
         // التأكد من أن الرسالة تخص المحادثة الحالية
-        if (messageData.conversationId !== window.currentConversationId) return;
+        if (messageData.conversationId !== currentConversationId) return;
         
         // الحصول على حاوية الرسائل
         const messageContainer = document.getElementById('messageContainer');
@@ -890,86 +866,35 @@
         }
       };
       
-      // تهيئة الصفحة
+      // تهيئة الصفحة عند التحميل
       function initializePage() {
+        const conversationList = document.getElementById('conversationList');
+        if (!conversationList) return;
+        
         // تعيين مستمعات الأحداث للقائمة
         attachConversationItemsEvents();
         
-        // استخراج معرف المحادثة من الرابط
-        const urlParams = new URLSearchParams(window.location.search);
-        const selectedConversationId = urlParams.get('selected');
+        // محاولة استخراج معرف المحادثة من عنوان URL الحالي
+        const urlParts = window.location.pathname.split('/');
+        const convIdIndex = urlParts.indexOf('conversations') + 1;
         
-        // فحص وجود معرف محادثة في URL
-        if (selectedConversationId) {
-          // تحديث المتغير العالمي
-          window.currentConversationId = selectedConversationId;
+        if (convIdIndex > 0 && urlParts.length > convIdIndex && urlParts[convIdIndex] !== 'ajax') {
+          const convId = urlParts[convIdIndex];
           
-          // تحديث حالة التاريخ
-          if (history.pushState) {
-            const url = `/crm/conversations/${selectedConversationId}`;
-            history.pushState({ conversationId: selectedConversationId }, '', url);
+          // تحديد المحادثة نشطة في القائمة
+          const item = conversationList.querySelector(`[data-conversation-id="${convId}"]`);
+          if (item) {
+            item.classList.add('active');
+            currentConversationId = convId;
+            loadConversationDetails(convId);
           }
-          
-          // تحديث العنصر النشط في القائمة
-          const conversationItems = document.querySelectorAll('.conversation-item');
-          conversationItems.forEach(item => {
-            item.classList.remove('active');
-            if (item.getAttribute('data-conversation-id') === selectedConversationId) {
-              item.classList.add('active');
-            }
-          });
-          
-          // تحميل تفاصيل المحادثة
-          loadConversationDetails(selectedConversationId);
-        }
-      }
-      
-      // تعليم المحادثة كمقروءة في القائمة والخادم
-      function markConversationAsRead(conversationId) {
-        if (!conversationId) return;
-        
-        // تحديث واجهة المستخدم أولاً
-        const conversationItem = document.querySelector(`.conversation-item[data-conversation-id="${conversationId}"]`);
-        if (conversationItem) {
-          // إزالة فئة الرسائل غير المقروءة
-          conversationItem.classList.remove('has-unread');
-          
-          // إزالة شارة العدد إن وجدت
-          const badge = conversationItem.querySelector('.badge');
-          if (badge) {
-            badge.remove();
+        } else {
+          // إذا لم يتم تحديد محادثة، يمكن تحديد الأول في القائمة
+          const firstConv = conversationList.querySelector('.conversation-item');
+          if (firstConv) {
+            firstConv.click();
           }
         }
-        
-        // إرسال طلب إلى الخادم لتعليم المحادثة كمقروءة
-        fetch(`/crm/conversations/${conversationId}/mark-as-read`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        })
-        .then(response => {
-          if (!response.ok) {
-            console.warn('فشل تعليم المحادثة كمقروءة:', response.statusText);
-            return { success: false, error: response.statusText };
-          }
-          try {
-            return response.json();
-          } catch (e) {
-            // في حالة وجود مشكلة في تحليل JSON، نعيد كائن نجاح بسيط
-            return { success: true };
-          }
-        })
-        .then(data => {
-          if (data && data.success) {
-            console.log('تم تعليم المحادثة كمقروءة بنجاح');
-          }
-        })
-        .catch(error => {
-          console.error('خطأ في تعليم المحادثة كمقروءة:', error);
-          // نستمر في التطبيق حتى لو فشل الطلب لأن واجهة المستخدم تم تحديثها بالفعل
-        });
       }
       
       // تنفيذ عند تحميل الصفحة
@@ -979,8 +904,8 @@
       window.addEventListener('popstate', function(event) {
         if (event.state && event.state.conversationId) {
           // تحميل المحادثة المحددة
-          window.currentConversationId = event.state.conversationId;
-          loadConversationDetails(window.currentConversationId);
+          currentConversationId = event.state.conversationId;
+          loadConversationDetails(currentConversationId);
           
           // تحديث القائمة
           const conversationList = document.getElementById('conversationList');
@@ -988,7 +913,7 @@
             const items = conversationList.querySelectorAll('.conversation-item');
             items.forEach(item => {
               item.classList.remove('active');
-              if (item.getAttribute('data-conversation-id') === window.currentConversationId) {
+              if (item.getAttribute('data-conversation-id') === currentConversationId) {
                 item.classList.add('active');
               }
             });

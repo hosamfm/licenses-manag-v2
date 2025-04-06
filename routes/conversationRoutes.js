@@ -61,79 +61,14 @@ router.post('/:conversationId/reopen', ensureCanAccessConversations, conversatio
 router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
   try {
     const { conversationId } = req.params;
+    logger.info('conversationRoutes', 'تحديث حالة قراءة المحادثة', { 
+      conversationId, 
+      userId: req.user?._id 
+    });
     res.json({ success: true, message: 'تم تحديث حالة القراءة' });
   } catch (error) {
+    logger.error('conversationRoutes', 'خطأ في تحديث حالة قراءة المحادثة', error);
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء تحديث حالة قراءة المحادثة' });
-  }
-});
-
-// مسار تعليم رسالة محددة كمقروءة من قبل المستخدم الحالي
-router.post('/messages/:messageId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const userId = req.user?._id;
-
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'غير مصرح' });
-    }
-
-    const WhatsappMessage = require('../models/WhatsappMessageModel');
-    const message = await WhatsappMessage.markAsReadByUser(messageId, userId);
-
-    if (!message) {
-      return res.status(404).json({ success: false, error: 'الرسالة غير موجودة' });
-    }
-
-    const conversationId = message.conversationId;
-
-    if (conversationId) {
-      const socketService = require('../services/socketService');
-      const User = require('../models/User');
-      const user = await User.findById(userId, 'username full_name profile_image');
-      
-      socketService.notifyMessageReadByUser(conversationId.toString(), messageId, {
-        _id: userId,
-        username: user.username,
-        fullName: user.full_name || user.username
-      });
-    }
-
-    return res.json({ success: true, message: 'تم تعليم الرسالة كمقروءة' });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: 'حدث خطأ أثناء تعليم الرسالة كمقروءة' });
-  }
-});
-
-// مسار جلب قائمة المستخدمين الذين قرؤوا رسالة محددة
-router.get('/messages/:messageId/read-by', ensureCanAccessConversations, async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    
-    const WhatsappMessage = require('../models/WhatsappMessageModel');
-    const message = await WhatsappMessage.findById(messageId)
-      .populate('readBy.user', 'username full_name profile_image');
-    
-    if (!message) {
-      return res.status(404).json({ success: false, error: 'الرسالة غير موجودة' });
-    }
-    
-    const readByList = message.readBy?.map(item => ({
-      user: {
-        _id: item.user._id,
-        username: item.user.username,
-        fullName: item.user.full_name || item.user.username
-      },
-      timestamp: item.timestamp
-    })) || [];
-    
-    return res.json({ 
-      success: true, 
-      readBy: readByList,
-      total: readByList.length,
-      messageId
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: 'حدث خطأ أثناء جلب قائمة من قرؤوا الرسالة' });
   }
 });
 

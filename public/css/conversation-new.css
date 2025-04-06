@@ -1390,25 +1390,4 @@ body {
   font-size: 1.5rem;
   margin-left: 0.75rem;
   color: #ef4444;
-}
-
-/* إضافة أنماط قائمة المستخدمين الذين قرؤوا الرسائل */
-.read-by-users {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 5px;
-  padding-top: 5px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.read-by-user {
-  margin-right: 3px;
-}
-
-.avatar-xs {
-  width: 20px;
-  height: 20px;
-  border: 1px solid #fff;
-  border-radius: 50%;
 } 

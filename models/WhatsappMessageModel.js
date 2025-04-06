@@ -45,17 +45,6 @@ const whatsappMessageSchema = new mongoose.Schema({
   readAt: {
     type: Date
   },
-  // إضافة سجل المستخدمين الذين قرؤوا الرسالة
-  readBy: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    timestamp: {
-      type: Date,
-      default: Date.now
-    }
-  }],
   deliveredAt: {
     type: Date
   },
@@ -378,46 +367,6 @@ whatsappMessageSchema.statics.getMessageByExternalId = async function(externalMe
     return await this.findOne({ externalMessageId });
   } catch (error) {
     logger.error('خطأ في الحصول على الرسالة بواسطة المعرف الخارجي:', error);
-    throw error;
-  }
-};
-
-/**
- * تعليم الرسالة كمقروءة من قبل مستخدم
- * @param {string} messageId معرف الرسالة
- * @param {string} userId معرف المستخدم
- * @returns {Promise<Object>} الرسالة المحدثة
- */
-whatsappMessageSchema.statics.markAsReadByUser = async function(messageId, userId) {
-  try {
-    // البحث عن الرسالة
-    const message = await this.findById(messageId);
-    if (!message) {
-      logger.warn('whatsappMessage', 'محاولة تعليم رسالة غير موجودة كمقروءة', { messageId });
-      return null;
-    }
-    
-    // التحقق مما إذا كان المستخدم قد قرأ الرسالة مسبقًا
-    const alreadyRead = message.readBy && message.readBy.some(read => read.user.toString() === userId.toString());
-    if (!alreadyRead) {
-      // إضافة المستخدم إلى قائمة من قرؤوا الرسالة
-      if (!message.readBy) {
-        message.readBy = [];
-      }
-      
-      message.readBy.push({
-        user: userId,
-        timestamp: new Date()
-      });
-      
-      // حفظ التغييرات
-      await message.save();
-      logger.info('whatsappMessage', 'تم تعليم الرسالة كمقروءة', { messageId, userId });
-    }
-    
-    return message;
-  } catch (error) {
-    logger.error('whatsappMessage', 'خطأ في تعليم الرسالة كمقروءة', error);
     throw error;
   }
 };

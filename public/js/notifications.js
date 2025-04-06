@@ -347,20 +347,9 @@ function scrollToBottom(container) {
  * تحديث قائمة المحادثات
  */
 function updateConversationsList() {
-    // استخدم الدالة العامة refreshConversationsList إذا كانت متاحة
-    if (typeof window.refreshConversationsList === 'function') {
-        console.log('استخدام الدالة العامة لتحديث قائمة المحادثات');
-        return window.refreshConversationsList();
-    }
-    
     // التحقق مما إذا كانت قائمة المحادثات موجودة في الصفحة
     const conversationsList = document.querySelector('.conversations-list');
-    if (!conversationsList) {
-        console.warn('عنصر قائمة المحادثات غير موجود في الصفحة');
-        return;
-    }
-    
-    console.log('تحديث قائمة المحادثات من خلال دالة التحديث في notifications.js');
+    if (!conversationsList) return;
     
     // استعلام AJAX لتحديث قائمة المحادثات
     fetch('/crm/conversations/ajax/list')
@@ -368,8 +357,8 @@ function updateConversationsList() {
         .then(data => {
             if (data.success && data.conversations) {
                 // تحديث قائمة المحادثات
+                // هذا يعتمد على كيفية عرض المحادثات في التطبيق الخاص بك
                 updateConversationsUI(data.conversations);
-                console.log('تم تحديث قائمة المحادثات عبر AJAX - ' + new Date().toLocaleTimeString());
             }
         })
         .catch(error => {
