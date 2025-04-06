@@ -412,7 +412,8 @@ exports.checkSettingConnection = async (req, res) => {
                 tempService.settings = setting;
                 await tempService.initialize();
                 
-                const phoneInfo = await tempService.getPhoneNumberInfo();
+                // تمرير معرف رقم الهاتف الخاص بالإعداد الحالي للدالة
+                const phoneInfo = await tempService.getPhoneNumberInfo(setting.config.phoneNumberId);
                 connectionStatus.success = true;
                 connectionStatus.phoneNumber = phoneInfo.display_phone_number || phoneInfo.id;
             } catch (error) {
@@ -421,21 +422,24 @@ exports.checkSettingConnection = async (req, res) => {
                 if (error.response && error.response.status === 401) {
                     connectionStatus.error = 'توكن الوصول غير صالح أو منتهي الصلاحية. الرجاء التحقق من إعدادات واتساب الرسمي.';
                 }
-                logger.error('metaWhatsappSettingsController', `خطأ في الاتصال بواتساب الرسمي للإعداد ${setting.name}`, error);
+                // استخدام سلسلة نصية عادية لتجنب مشاكل القالب الحرفي
+                logger.error('metaWhatsappSettingsController', 'خطأ في الاتصال بواتساب الرسمي للإعداد ' + setting.name, error);
             }
         } else {
-            connectionStatus.error = 'الإعداد غير مكتمل. يرجى استكمال جميع الحقول المطلوبة.';
+            connectionStatus.error = 'الإعداد غير مكتمل أو غير موجود';
         }
         
-        return res.json({
-            success: true,
-            connectionStatus
+        res.json({
+            success: connectionStatus.success,
+            error: connectionStatus.error,
+            phoneNumber: connectionStatus.phoneNumber,
+            settingName: connectionStatus.settingName
         });
     } catch (error) {
         logger.error('metaWhatsappSettingsController', 'خطأ في فحص حالة اتصال إعداد واتساب', error);
-        return res.status(500).json({
+        res.status(500).json({
             success: false,
-            message: 'حدث خطأ أثناء فحص حالة الاتصال'
+            message: 'حدث خطأ أثناء معالجة الطلب'
         });
     }
 };

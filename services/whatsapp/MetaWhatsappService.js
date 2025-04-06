@@ -127,50 +127,64 @@ class MetaWhatsappService {
 
     /**
      * الحصول على معلومات رقم هاتف واتساب
-     * @param {string} phoneNumberId معرف رقم الهاتف (اختياري)
+     * @param {string} phoneNumberIdParam معرف رقم الهاتف (اختياري)
      * @returns {Promise<object>} معلومات رقم الهاتف
      */
-    async getPhoneNumberInfo(phoneNumberId = null) {
+    async getPhoneNumberInfo(phoneNumberIdParam = null) {
         if (!this.initialized) {
             await this.initialize();
         }
 
-        logger.info('MetaWhatsappService', 'جاري الحصول على رابط الوسائط', {
-            phoneNumberId
-        });
-
-        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        // تحديد الإعدادات المراد استخدامها
         let settingsToUse = this.settings;
-        
-        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
-        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
-            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+        if (phoneNumberIdParam && phoneNumberIdParam !== this.settings?.config?.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberIdParam);
             if (!settingsToUse) {
-                throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
+                throw new Error(`لم يتم العثور على إعدادات لرقم الهاتف المحدد: ${phoneNumberIdParam}`);
             }
+        } else if (!settingsToUse) {
+             // إذا كانت الإعدادات الافتراضية غير موجودة
+             throw new Error('لا توجد إعدادات واتساب نشطة متاحة.');
         }
 
+        // الحصول على معرف رقم الهاتف الفعلي من الإعدادات المختارة
+        const actualPhoneNumberId = settingsToUse.config?.phoneNumberId;
+
+        // التحقق من وجود معرف رقم هاتف صالح
+        if (!actualPhoneNumberId) {
+             logger.error('MetaWhatsappService', 'معرف رقم الهاتف غير موجود في الإعدادات المختارة', { settingsName: settingsToUse.name });
+             throw new Error('معرف رقم الهاتف غير موجود في الإعدادات المختارة.');
+        }
+
+
+        // تم تصحيح رسالة التسجيل واستخدام المعرف الفعلي
+        logger.info('MetaWhatsappService', 'جاري الحصول على معلومات رقم الهاتف', { 
+            phoneNumberId: actualPhoneNumberId 
+        });
+
         try {
-            // إنشاء طلب للحصول على معلومات الوسائط
-            const url = `${this.baseUrl}/${phoneNumberId}`;
+            // استخدام المعرف الفعلي من الإعدادات في بناء عنوان URL
+            const url = `${this.baseUrl}/${actualPhoneNumberId}`;
             const headers = {
                 'Authorization': `Bearer ${settingsToUse.config.accessToken}`
             };
             
-            // استخدام axios للحصول على معلومات الوسائط
+            // استخدام axios للحصول على معلومات رقم الهاتف (تم تصحيح التعليق)
             const axios = require('axios');
             const response = await axios.get(url, { headers });
             
-            logger.info('MetaWhatsappService', 'تم الحصول على معلومات الوسائط بنجاح', {
-                phoneNumberId,
+            // تم تصحيح رسالة التسجيل واستخدام المعرف الفعلي
+            logger.info('MetaWhatsappService', 'تم الحصول على معلومات رقم الهاتف بنجاح', { 
+                phoneNumberId: actualPhoneNumberId, 
                 responseData: response.data
             });
             
             return response.data;
         } catch (error) {
-            logger.error('MetaWhatsappService', 'خطأ في الحصول على معلومات الوسائط', {
+            // تم تصحيح رسالة التسجيل واستخدام المعرف الفعلي
+            logger.error('MetaWhatsappService', 'خطأ في الحصول على معلومات رقم الهاتف', { 
                 error: error.message,
-                phoneNumberId,
+                phoneNumberId: actualPhoneNumberId, // <-- تم استخدام المعرف الفعلي هنا
                 response: error.response?.data
             });
             throw error;
