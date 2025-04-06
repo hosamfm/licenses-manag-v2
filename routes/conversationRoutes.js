@@ -6,7 +6,7 @@ const router = express.Router();
 const conversationController = require('../controllers/conversationController');
 const { isAuthenticated, checkCanAccessConversations } = require('../middleware/authMiddleware');
 const logger = require('../services/loggerService');
-const WhatsappMessage = require('../models/whatsappMessage');
+const WhatsappMessage = require('../models/WhatsappMessageModel');
 const socketService = require('../services/socketService');
 
 // وسيط للتحقق من صلاحية الوصول للمحادثات
