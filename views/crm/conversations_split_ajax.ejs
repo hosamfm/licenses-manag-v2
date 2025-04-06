@@ -26,6 +26,9 @@
   <!-- استدعاء ملف المساعدة للمحادثات -->
   <script src="/js/conversation-utils.js"></script>
   
+  <!-- استدعاء ملف التحميل التزايدي للرسائل -->
+  <script src="/js/conversation-pagination.js"></script>
+  
 <!-- استدعاء ملف خدمة الإشعارات -->
   <script src="/js/notifications.js"></script>
   <script src="/js/socket-utils.js"></script>
@@ -300,6 +303,13 @@
         // إذا كانت الرسالة تخص المحادثة المفتوحة حالياً، أضفها للمحادثة
         if (data.conversationId === currentConversationId) {
           window.addMessageToConversation(data);
+          
+          // إعادة تهيئة مراقب الرسائل لتتبع الرسائل الجديدة
+          if (typeof window.setupMessageReadObserver === 'function') {
+            setTimeout(() => {
+              window.setupMessageReadObserver();
+            }, 100);
+          }
         }
         
         // تحديث قائمة المحادثات لعرض آخر رسالة وغيرها
@@ -619,6 +629,13 @@
 
           // تعيين المستمعين للتفاعلات مع الرسائل بعد تحميل المحادثة
           window.attachConversationEventListeners && window.attachConversationEventListeners();
+          
+          // تهيئة نظام تحميل الرسائل التزايدي
+          if (window.conversationPagination) {
+            window.conversationPagination.initialize({
+              conversationId: conversationId
+            });
+          }
         })
         .catch(err => {
           detailsContainer.innerHTML = `

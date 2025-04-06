@@ -1632,9 +1632,11 @@ window.setupMessageReadObserver = function() {
         const messageId = messageElement.getAttribute('data-message-id');
         const externalId = messageElement.getAttribute('data-external-id');
         const status = messageElement.getAttribute('data-status');
+        const direction = messageElement.classList.contains('incoming') ? 'incoming' : 'outgoing';
         
-        // إضافة الرسالة إلى مجموعة الرسائل المشاهدة
-        if (messageId && status !== 'read') {
+        // إضافة الرسالة إلى مجموعة الرسائل المشاهدة فقط إذا كانت واردة وليست مقروءة بالفعل
+        if (messageId && direction === 'incoming' && status !== 'read') {
+          console.log(`رسالة ظهرت في نطاق الرؤية: ${messageId} - الحالة: ${status}`);
           viewedMessages.add({
             messageId: messageId,
             externalId: externalId || null
@@ -1645,8 +1647,11 @@ window.setupMessageReadObserver = function() {
     
     // إذا كانت هناك رسائل مشاهدة جديدة، قم بتحديث حالتها بعد تأخير قصير
     if (viewedMessages.size > 0) {
+      console.log(`عدد الرسائل المشاهدة في الدورة الحالية: ${viewedMessages.size}`);
       setTimeout(() => {
         if (viewedMessages.size > 0) {
+          // تسجيل معلومات الرسائل التي سيتم تحديثها
+          console.log(`تحديث الرسائل المشاهدة إلى مقروءة: ${viewedMessages.size} رسالة`);
           window.markMessagesAsRead(Array.from(viewedMessages));
           viewedMessages.clear();
         }
@@ -1658,12 +1663,15 @@ window.setupMessageReadObserver = function() {
   });
   
   // مراقبة جميع الرسائل الواردة غير المقروءة
-  const unreadMessages = document.querySelectorAll('.message.incoming[data-status="sent"], .message.incoming[data-status="delivered"], .message.incoming[data-status="received"]');
+  const unreadMessages = document.querySelectorAll('.message.incoming:not([data-status="read"])');
+  let count = 0;
   unreadMessages.forEach(msg => {
     window.messageReadObserver.observe(msg);
+    count++;
   });
   
-  console.log(`تمت إضافة ${unreadMessages.length} رسالة إلى مراقب القراءة`);
+  console.log(`تمت إضافة ${count} رسالة إلى مراقب القراءة`);
+  return count;
 };
 
 /**
@@ -1677,6 +1685,23 @@ window.markMessagesAsRead = function(messages) {
   
   console.log(`إرسال تحديث حالة القراءة لـ ${messages.length} رسالة`);
   
+  // تحديث حالة الرسائل في واجهة المستخدم فوراً
+  messages.forEach(msg => {
+    let messageElement = null;
+    
+    if (msg.messageId) {
+      messageElement = document.querySelector(`.message[data-message-id="${msg.messageId}"]`);
+    } else if (msg.externalId) {
+      messageElement = document.querySelector(`.message[data-external-id="${msg.externalId}"]`);
+    }
+    
+    if (messageElement) {
+      // تغيير حالة الرسالة في واجهة المستخدم إلى "مقروءة"
+      messageElement.setAttribute('data-status', 'read');
+      console.log(`تم تحديث حالة الرسالة ${msg.messageId || msg.externalId} إلى مقروءة في واجهة المستخدم`);
+    }
+  });
+  
   // إرسال معلومات القراءة إلى الخادم عبر Socket.IO
   if (window.socketConnection && window.socketConnected) {
     window.socketConnection.emit('mark-messages-read', {
@@ -1685,21 +1710,247 @@ window.markMessagesAsRead = function(messages) {
       timestamp: new Date().toISOString()
     });
     
-    // تحديث حالة الرسائل في واجهة المستخدم فوراً
-    messages.forEach(msg => {
-      if (msg.messageId) {
-        const messageElement = document.querySelector(`.message[data-message-id="${msg.messageId}"]`);
-        if (messageElement) {
-          messageElement.setAttribute('data-status', 'read');
-        }
-      } else if (msg.externalId) {
-        const messageElement = document.querySelector(`.message[data-external-id="${msg.externalId}"]`);
-        if (messageElement) {
-          messageElement.setAttribute('data-status', 'read');
+    // تحديث عدد الرسائل غير المقروءة في القائمة (إذا وجدت)
+    const conversationItem = document.querySelector(`.conversation-item[data-conversation-id="${window.currentConversationId}"]`);
+    if (conversationItem) {
+      // تحديث الباج أو إزالته إذا كانت جميع الرسائل مقروءة
+      const unreadBadge = conversationItem.querySelector('.conversation-badge');
+      if (unreadBadge) {
+        const currentCount = parseInt(unreadBadge.textContent, 10);
+        if (!isNaN(currentCount) && currentCount > 0) {
+          // تقليل العدد بمقدار عدد الرسائل التي تمت قراءتها
+          const newCount = Math.max(0, currentCount - messages.length);
+          if (newCount > 0) {
+            unreadBadge.textContent = newCount;
+          } else {
+            // إزالة الباج إذا كان العدد صفراً
+            unreadBadge.remove();
+            // إزالة فئة "has-unread" من عنصر المحادثة
+            conversationItem.classList.remove('has-unread');
+          }
         }
       }
-    });
+    }
   } else {
     console.warn('لا يمكن تحديث حالة القراءة: Socket.IO غير متصل');
+  }
+};
+
+// دالة لإضافة رسالة جديدة للمحادثة الحالية
+window.addMessageToConversation = function(messageData) {
+  if (!messageData || !currentConversationId) return;
+  
+  // التأكد من أن الرسالة تخص المحادثة الحالية
+  if (messageData.conversationId !== currentConversationId) return;
+  
+  // الحصول على حاوية الرسائل
+  const messageContainer = document.getElementById('messageContainer');
+  if (!messageContainer) return;
+  
+  // التحقق من وجود الرسالة مسبقاً (لمنع إضافتها مرتين)
+  const messageExists = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
+  if (messageExists) {
+    return;
+  }
+  
+  // إنشاء HTML للرسالة مطابق تمامًا لبنية القالب في _conversation_details_ajax.ejs
+  let messageHTML = `
+    <div class="message ${messageData.direction}" 
+        data-message-id="${messageData._id}" 
+        data-status="${messageData.status || 'sent'}"
+        ${messageData.externalMessageId ? `data-external-id="${messageData.externalMessageId}"` : ''}>
+  `;
+  
+  // إضافة قسم الرد على رسالة (إذا كان موجودًا)
+  if (messageData.replyToMessageId) {
+    // البحث عن الرسالة المرد عليها
+    const repliedMsg = document.querySelector(`.message[data-external-id="${messageData.replyToMessageId}"], .message[data-message-id="${messageData.replyToMessageId}"]`);
+    
+    messageHTML += `
+      <div class="replied-message">
+        <div class="replied-content">
+          <i class="fas fa-reply"></i>
+          <span>${repliedMsg ? 
+            (repliedMsg.querySelector('.message-bubble').textContent.trim().substring(0, 50) + 
+             (repliedMsg.querySelector('.message-bubble').textContent.trim().length > 50 ? '...' : '')) : 
+            `رد على رسالة غير موجودة<small class="text-muted d-block">(المعرف: ${messageData.replyToMessageId.substring(0, 10)}...)</small>`}</span>
+        </div>
+      </div>
+    `;
+  }
+  
+  // إضافة فقاعة الرسالة مع دعم الوسائط
+  messageHTML += `
+    <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'} ${messageData.mediaType ? 'message-with-media' : ''}">
+      ${messageData.direction === 'outgoing' ? `
+      <!-- إضافة اسم المرسل فقط للرسائل الصادرة -->
+      <div class="message-sender">
+        ${messageData.metadata && messageData.metadata.senderInfo 
+          ? messageData.metadata.senderInfo.username || messageData.metadata.senderInfo.full_name || 'مجهول'
+          : messageData.sentByUsername || 'مجهول'}
+      </div>
+      ` : ''}
+      <div class="message-content">
+  `;
+  
+  // إضافة الوسائط حسب النوع
+  if (messageData.mediaType) {
+    if (messageData.mediaType === 'image') {
+      messageHTML += `
+        <div class="media-container">
+          <img src="/whatsapp/media/content/${messageData._id}" class="media-image" alt="صورة" onclick="window.openMediaPreview(this.src, 'image')">
+        </div>
+      `;
+    } else if (messageData.mediaType === 'video') {
+      messageHTML += `
+        <div class="media-container">
+          <video controls class="media-video">
+            <source src="/whatsapp/media/content/${messageData._id}" type="video/mp4">
+            المتصفح لا يدعم عرض الفيديو
+          </video>
+        </div>
+      `;
+    } else if (messageData.mediaType === 'audio') {
+      messageHTML += `
+        <div class="media-container">
+          <audio controls class="media-audio">
+            <source src="/whatsapp/media/content/${messageData._id}" type="audio/ogg">
+            المتصفح لا يدعم تشغيل الملفات الصوتية
+          </audio>
+        </div>
+      `;
+    } else if (messageData.mediaType === 'document') {
+      messageHTML += `
+        <div class="document-container">
+          <div class="document-icon">
+            <i class="fas fa-file-alt"></i>
+          </div>
+          <div class="document-info">
+            <div class="document-name">${messageData.fileName || 'مستند'}</div>
+            <div class="document-size">${messageData.fileSize ? (Math.round(messageData.fileSize / 1024) + ' كيلوبايت') : ''}</div>
+          </div>
+          <a href="/whatsapp/media/content/${messageData._id}" target="_blank" class="document-download">
+            <i class="fas fa-download"></i>
+          </a>
+        </div>
+      `;
+    } else if (messageData.mediaType === 'sticker') {
+      messageHTML += `
+        <div class="media-container">
+          <img src="/whatsapp/media/content/${messageData._id}" class="media-sticker" alt="ملصق">
+        </div>
+      `;
+    } else if (messageData.mediaType === 'location') {
+      messageHTML += `
+        <div class="location-container">
+          <div class="location-icon">
+            <i class="fas fa-map-marker-alt"></i>
+          </div>
+          <div class="location-info">
+            <div class="location-name">موقع جغرافي</div>
+            <div class="location-coordinates">${messageData.content || 'إحداثيات غير متوفرة'}</div>
+          </div>
+        </div>
+      `;
+    }
+  }
+  
+  // إضافة نص الرسالة (إذا كان موجودًا)
+  if (messageData.content && messageData.content.trim() !== '') {
+    messageHTML += `
+      <div class="message-text ${messageData.mediaType ? 'with-media' : ''}">
+        ${messageData.content}
+      </div>
+    `;
+  }
+  
+  // إضافة معلومات الوقت والحالة
+  messageHTML += `
+    <div class="message-meta">
+      <span class="message-time" title="${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString()}">
+        ${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' })}
+      </span>
+      
+      ${messageData.direction === 'outgoing' ? `
+        <span class="message-status" title="حالة الرسالة: ${messageData.status || 'sent'}">
+          ${messageData.status === 'sent' ? '<i class="fas fa-check text-secondary"></i>' : ''}
+          ${messageData.status === 'delivered' ? '<i class="fas fa-check-double text-secondary"></i>' : ''}
+          ${messageData.status === 'read' ? '<i class="fas fa-check-double text-primary"></i>' : ''}
+          ${messageData.status === 'failed' ? '<i class="fas fa-exclamation-circle text-danger"></i>' : ''}
+          ${(!messageData.status || messageData.status === 'sending') ? '<i class="fas fa-clock text-secondary"></i>' : ''}
+        </span>
+      ` : ''}
+    </div>
+  `;
+  
+  // إغلاق فقاعة الرسالة
+  messageHTML += `</div>`;
+  
+  // إضافة قسم التفاعلات (إذا وجدت)
+  if (messageData.reactions && messageData.reactions.length > 0) {
+    messageHTML += `
+      <div class="message-reactions">
+        ${messageData.reactions.map(reaction => `
+          <span class="reaction-emoji" title="تفاعل من ${reaction.sender}">
+            ${reaction.emoji}
+          </span>
+        `).join('')}
+      </div>
+    `;
+  }
+  
+  // إضافة قسم أزرار التفاعل مع الرسالة
+  messageHTML += `
+    <div class="message-actions">
+      <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" 
+              data-message-id="${messageData._id}"
+              data-external-id="${messageData.externalMessageId || ''}"
+              title="تفاعل">
+        <i class="far fa-smile"></i>
+      </button>
+      <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
+              data-message-id="${messageData._id}" 
+              data-external-id="${messageData.externalMessageId || ''}" 
+              title="رد">
+        <i class="fas fa-reply"></i>
+      </button>
+    </div>
+  `;
+  
+  // إغلاق عنصر الرسالة
+  messageHTML += `</div><div class="clear-both"></div>`;
+  
+  // إضافة الرسالة لحاوية الرسائل
+  messageContainer.insertAdjacentHTML('beforeend', messageHTML);
+  
+  // تمرير المحادثة لأسفل
+  messageContainer.scrollTop = messageContainer.scrollHeight;
+  
+  // تشغيل صوت الإشعار للرسائل الواردة
+  if (messageData.direction === 'incoming') {
+    window.playNotificationSound();
+  }
+  
+  // تعليق مستمعات الأحداث للرسالة الجديدة
+  const newMessage = messageContainer.querySelector(`.message[data-message-id="${messageData._id}"]`);
+  if (newMessage) {
+    window.setupMessageActions(newMessage);
+  }
+  
+  // إضافة الرسالة الواردة الجديدة إلى مراقب القراءة
+  if (messageData.direction === 'incoming' && messageData.status !== 'read' && window.messageReadObserver) {
+    // إضافة الرسالة لمراقب القراءة
+    console.log(`إضافة رسالة جديدة واردة عبر السوكت إلى مراقب القراءة: ${messageData._id}`);
+    window.messageReadObserver.observe(newMessage);
+    
+    // تشغيل وظيفة markMessagesAsRead بعد فترة قصيرة من الزمن للتأكد من رؤية الرسالة
+    setTimeout(() => {
+      if (newMessage && document.body.contains(newMessage)) {
+        window.markMessagesAsRead([{
+          messageId: messageData._id,
+          externalId: messageData.externalMessageId || null
+        }]);
+      }
+    }, 1500);
   }
 };

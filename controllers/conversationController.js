@@ -884,7 +884,7 @@ exports.getConversationDetailsAjax = async (req, res) => {
     const { conversationId } = req.params;
     // إضافة دعم للصفحات
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20; // عدد الرسائل في الصفحة الواحدة
+    const limit = parseInt(req.query.limit) || 10; // تقليل العدد الافتراضي إلى 10 رسائل
     const skip = (page - 1) * limit;
     
     let conversation;
@@ -915,6 +915,8 @@ exports.getConversationDetailsAjax = async (req, res) => {
     messages = messages.reverse();
     
     if (messages && messages.length > 0) {
+      /* 
+      // إزالة التحديث التلقائي للرسائل - نستبدله بنظام تتبع الرؤية في جانب العميل
       // تحديث حالة الرسائل الواردة إلى "مقروءة"
       if (page === 1) { // فقط نعلم بأن الرسائل مقروءة عند تحميل الصفحة الأولى
         await WhatsappMessage.updateMany(
@@ -922,6 +924,7 @@ exports.getConversationDetailsAjax = async (req, res) => {
           { $set: { status: 'read' } }
         );
       }
+      */
       
       // استخدام خدمة الوسائط لإضافة معلومات الوسائط للرسائل
       messages = await mediaService.processMessagesWithMedia(messages);

@@ -72,7 +72,10 @@
         <span class="badge bg-primary ms-2"><i class="fas fa-comments me-1"></i> <%= messages.length %> رسالة</span>
       </div>
     </div>
-    <div class="card-body p-0" id="messageContainer" style="max-height: 500px; overflow-y: auto;">
+    <div class="card-body p-0" id="messageContainer" style="max-height: 500px; overflow-y: auto;"
+         data-current-page="<%= pagination ? pagination.currentPage : 1 %>"
+         data-total-pages="<%= pagination ? pagination.totalPages : 0 %>"
+         data-total-messages="<%= pagination ? pagination.totalMessages : 0 %>">
       <% if (conversation.status === 'closed') { %>
         <div class="alert alert-info m-3 text-center">
           <i class="fas fa-info-circle me-1"></i> هذه المحادثة مغلقة.
@@ -81,6 +84,14 @@
         </div>
       <% } %>
       <div class="message-container-wrapper">
+        <!-- زر تحميل المزيد من الرسائل -->
+        <% if (pagination && pagination.totalPages > 1) { %>
+          <div class="text-center p-1 load-more-btn-container">
+            <button id="loadMoreMessagesBtn" class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-chevron-up"></i> تحميل المزيد من الرسائل
+            </button>
+          </div>
+        <% } %>
         <% if (messages && messages.length) { %>
             <% messages.forEach(function(message) { %>
               <div class="message <%= message.direction %>" 
@@ -170,20 +181,22 @@
                 <!-- أزرار التفاعل مع الرسالة (باستثناء الملاحظات الداخلية) -->
                 <% if (message.direction !== 'internal') { %>
                   <div class="message-actions">
-                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" onclick="window.showReactionPicker('<%= message._id %>', '<%= message.externalMessageId || '' %>', this)">
+                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" 
+                            data-message-id="<%= message._id %>"
+                            data-external-id="<%= message.externalMessageId || '' %>">
                       <i class="far fa-smile"></i>
                     </button>
                     <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="رد" onclick="window.showReplyForm('<%= message._id %>', '<%= message.externalMessageId || '' %>', this.closest('.message'))">
+                            title="رد">
                       <i class="fas fa-reply"></i>
                     </button>
                     <% if (message.direction === 'outgoing') { %>
                     <button type="button" class="btn btn-sm text-muted message-action-btn delete-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="حذف" onclick="window.confirmDeleteMessage('<%= message._id %>', '<%= message.externalMessageId || '' %>')">
+                            title="حذف">
                       <i class="fas fa-trash-alt"></i>
                     </button>
                     <% } %>
@@ -286,49 +299,12 @@
   <!-- جافاسكريبت لعمل التصفح بالصفحات -->
   <script>
     $(document).ready(function() {
-      // استدعاء للصفحة التالية من الرسائل
-      $('.load-more-messages').click(function() {
-        const $button = $(this);
-        const conversationId = $('.conversation-detail-wrapper').data('conversation-id');
-        const currentPage = parseInt($button.data('current-page'));
-        const nextPage = currentPage + 1;
-        
-        // تغيير حالة الزر
-        $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> جاري التحميل...');
-        
-        // طلب الصفحة التالية من الرسائل
-        $.ajax({
-          url: `/crm/conversations/ajax/details/${conversationId}?page=${nextPage}`,
-          type: 'GET',
-          success: function(response) {
-            // استخراج الرسائل الجديدة فقط من الاستجابة
-            const $newResponse = $(response);
-            const $newMessages = $newResponse.find('.message');
-            
-            // إضافة الرسائل الجديدة في بداية قائمة الرسائل (لأنها الأقدم)
-            $('#messageContainer').prepend($newMessages);
-            
-            // تحديث زر التحميل أو إخفائه إذا وصلنا لنهاية الرسائل
-            const hasMore = $newResponse.find('.load-more-messages').length > 0;
-            if (hasMore) {
-              $button
-                .prop('disabled', false)
-                .html(`تحميل المزيد من الرسائل (${nextPage}/${$button.data('total-pages')})`)
-                .data('current-page', nextPage);
-            } else {
-              $button.parent().remove(); // إزالة الزر إذا وصلنا للنهاية
-            }
-            
-            // تفعيل المشغلات للوسائط الجديدة
-            if (window.setupAudioPlayers) {
-              window.setupAudioPlayers();
-            }
-          },
-          error: function() {
-            $button.prop('disabled', false).html('حدث خطأ أثناء التحميل. حاول مرة أخرى.');
-          }
+      // تهيئة نظام تحميل الرسائل التزايدي
+      if (window.conversationPagination) {
+        window.conversationPagination.initialize({
+          conversationId: '<%= conversation._id %>'
         });
-      });
+      }
     });
   </script>
 
@@ -345,4 +321,87 @@
 .clear-both {
   clear: both;
 }
+
+/* أنماط خاصة بالتحميل التزايدي للرسائل */
+.load-more-btn-container {
+  margin: 5px 0;
+  padding: 5px;
+  position: sticky;
+  top: 0;
+  background-color: #f8f9fa;
+  border-radius: 0 0 5px 5px;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  z-index: 1;
+}
+
+#loadMoreMessagesBtn {
+  transition: all 0.3s ease;
+  margin: 0 auto;
+}
+
+#loadMoreMessagesBtn:hover {
+  background-color: #e9ecef;
+}
+
+#loadMoreMessagesBtn:active {
+  transform: translateY(1px);
+}
+
+#loadMoreMessagesBtn.loading {
+  opacity: 0.7;
+}
 </style>
+
+<!-- إضافة معالجات الأحداث للأزرار -->
+<script>
+  // عند تحميل الصفحة
+  document.addEventListener('DOMContentLoaded', function() {
+    // إضافة معالج حدث للأزرار
+    function setupButtonEventListeners() {
+      // أزرار التفاعل
+      document.querySelectorAll('.reaction-btn').forEach(function(button) {
+        button.addEventListener('click', function() {
+          const messageId = this.getAttribute('data-message-id');
+          const externalId = this.getAttribute('data-external-id');
+          window.showReactionPicker(messageId, externalId, this);
+        });
+      });
+      
+      // أزرار الرد
+      document.querySelectorAll('.reply-btn').forEach(function(button) {
+        button.addEventListener('click', function() {
+          const messageId = this.getAttribute('data-message-id');
+          const externalId = this.getAttribute('data-external-id');
+          window.showReplyForm(messageId, externalId, this.closest('.message'));
+        });
+      });
+      
+      // أزرار الحذف
+      document.querySelectorAll('.delete-btn').forEach(function(button) {
+        button.addEventListener('click', function() {
+          const messageId = this.getAttribute('data-message-id');
+          const externalId = this.getAttribute('data-external-id');
+          window.confirmDeleteMessage(messageId, externalId);
+        });
+      });
+    }
+    
+    // تنفيذ الربط فور تحميل الصفحة
+    setupButtonEventListeners();
+    
+    // إضافة مستمع للتحميل AJAX للمحادثات
+    window.addEventListener('messages-loaded', function() {
+      setupButtonEventListeners();
+    });
+    
+    // إذا كان هناك دالة قائمة بالفعل لربط أحداث المحادثة، قم بتعديلها
+    const originalAttachFunction = window.attachConversationEventListeners;
+    if (typeof originalAttachFunction === 'function') {
+      window.attachConversationEventListeners = function() {
+        originalAttachFunction.call(this);
+        setupButtonEventListeners();
+      };
+    }
+  });
+</script>
