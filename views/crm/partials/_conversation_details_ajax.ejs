@@ -46,11 +46,18 @@
     // استخدام الـ Socket لإرسال إخطار قراءة الرسالة
     if (window.socket && messageId) {
       const actualMessageId = externalMessageId || messageId;
+      console.log('تسجيل قراءة الرسالة:', actualMessageId);
+      
       window.socket.emit('message_read', {
         messageId: actualMessageId,
         userId: window.currentUserId,
         username: window.currentUsername
       });
+      
+      return true;
+    } else {
+      console.error('Socket.io غير متاح أو لم يتم تمرير معرف الرسالة');
+      return false;
     }
   }
   
@@ -394,14 +401,40 @@
     $(document).ready(function() {
       // تأكد من وجود اتصال سوكيت
       if (typeof window.socket === 'undefined' && typeof io !== 'undefined') {
-        window.socket = io();
-        console.log('تم تهيئة اتصال Socket.io');
+        try {
+          // تهيئة اتصال Socket.io
+          window.socket = io();
+          console.log('تم تهيئة اتصال Socket.io');
+          
+          // التحقق من اتصال Socket.io
+          window.socket.on('connect', function() {
+            console.log('تم الاتصال بالسيرفر عبر Socket.io، socketId:', window.socket.id);
+            
+            // توصيل بغرفة المحادثة الحالية
+            const conversationId = $('#conversationId').val();
+            if (conversationId) {
+              window.socket.emit('join', { room: `conversation-${conversationId}` });
+              console.log('تم الانضمام إلى غرفة المحادثة:', conversationId);
+            }
+          });
+          
+          window.socket.on('disconnect', function() {
+            console.warn('تم قطع الاتصال بالسيرفر عبر Socket.io');
+          });
+          
+          window.socket.on('connect_error', function(error) {
+            console.error('خطأ في الاتصال بالسيرفر عبر Socket.io:', error);
+          });
+        } catch (e) {
+          console.error('خطأ في تهيئة Socket.io:', e);
+        }
+      } else if (window.socket) {
+        console.log('Socket.io متصل بالفعل:', window.socket.id);
         
-        // توصيل بغرفة المحادثة الحالية
+        // إعادة الانضمام إلى غرفة المحادثة
         const conversationId = $('#conversationId').val();
         if (conversationId) {
           window.socket.emit('join', { room: `conversation-${conversationId}` });
-          console.log('تم الانضمام إلى غرفة المحادثة:', conversationId);
         }
       }
       
@@ -479,6 +512,8 @@
       
       // إعداد مراقب التقاطع (Intersection Observer) لتسجيل مشاهدة الرسائل
       function setupMessageObservers() {
+        console.log('بدء تفعيل مراقبة ظهور الرسائل');
+        
         // إنشاء كائن مراقب التقاطع
         const messageObserver = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
@@ -491,23 +526,39 @@
               
               // تسجيل مشاهدة الرسائل الواردة فقط ولمرة واحدة
               if (direction === 'incoming' && !isObserved) {
-                window.markMessageAsRead(messageId, externalId);
-                $message.data('observed', true);
+                console.log('رسالة واردة ظهرت في نطاق الرؤية:', messageId || externalId);
+                
+                const success = window.markMessageAsRead(messageId, externalId);
+                if (success) {
+                  $message.data('observed', true);
+                  console.log('تم تسجيل قراءة الرسالة بنجاح');
+                }
               }
               
-              // إيقاف مراقبة الرسالة بعد تسجيلها
-              messageObserver.unobserve(entry.target);
+              // إيقاف مراقبة الرسالة بعد معالجتها (للرسائل الواردة فقط)
+              if (direction === 'incoming') {
+                messageObserver.unobserve(entry.target);
+                console.log('تم إيقاف مراقبة الرسالة بعد معالجتها');
+              }
             }
           });
         }, {
-          // تحديد نسبة الظهور المطلوبة لتسجيل المشاهدة (100% تعني أن الرسالة يجب أن تظهر بالكامل)
-          threshold: 0.8
+          // تحديد نسبة الظهور المطلوبة لتسجيل المشاهدة (80% تكفي لتسجيل المشاهدة)
+          threshold: 0.8,
+          // التأكد من أن الرسائل تظهر في نافذة العرض
+          root: document.getElementById('messageContainer')
         });
         
         // تفعيل المراقبة على جميع الرسائل الواردة
-        $('.message.incoming').each(function() {
+        const incomingMessages = $('.message.incoming:not([data-observed="true"])');
+        console.log('عدد الرسائل الواردة التي سيتم مراقبتها:', incomingMessages.length);
+        
+        incomingMessages.each(function() {
           messageObserver.observe(this);
+          console.log('تمت إضافة مراقبة للرسالة:', $(this).data('message-id') || $(this).data('external-id'));
         });
+        
+        return messageObserver;
       }
       
       // تحديد سلوك التمرير - عرض أحدث الرسائل في الأسفل
@@ -536,22 +587,41 @@
         
         // استماع لتحديثات قراءة الرسائل
         window.socket.on('message_read_update', function(data) {
+          console.log('تم استلام تحديث قراءة رسالة:', data);
+          
           // تحديث واجهة المستخدم لإظهار أن الرسالة تمت قراءتها
           const messageId = data.messageId;
+          const readerCount = data.readerCount || 0;
+          const recentReader = data.recentReader || 'مستخدم';
+          
+          // البحث عن الرسالة بمعرفها الرئيسي أو المعرف الخارجي
           const $message = $(`[data-message-id="${messageId}"], [data-external-id="${messageId}"]`);
           
           if ($message.length > 0) {
-            // تحديث العدد إذا كان موجوداً
+            console.log('تم العثور على الرسالة للتحديث:', messageId);
+            
+            // تغيير حالة الرسالة
+            $message.attr('data-status', 'read');
+            
+            // تحديث عدد القراء
             let $readerCount = $message.find('.reader-count');
             if ($readerCount.length === 0) {
               // إنشاء عنصر جديد إذا لم يكن موجوداً
-              $readerCount = $('<span class="reader-count"></span>');
+              $readerCount = $('<span class="reader-count ms-2"></span>');
               $message.find('.message-meta').append($readerCount);
             }
             
-            // تحديث العدد استناداً إلى البيانات المستلمة
-            $readerCount.text(`(${data.readerCount || 1})`);
-            $readerCount.attr('title', `قرأها ${data.readerCount || 1} مستخدم/ين`);
+            // تحديث العدد ونص التلميح
+            $readerCount.text(`(${readerCount})`);
+            $readerCount.attr('title', `قرأها ${readerCount} مستخدم/ين`);
+            
+            // إضافة تأثير ظاهري للتحديث
+            $readerCount.addClass('highlight-update');
+            setTimeout(() => $readerCount.removeClass('highlight-update'), 2000);
+            
+            console.log('تم تحديث عدد القراء:', readerCount);
+          } else {
+            console.warn('لم يتم العثور على الرسالة للتحديث:', messageId);
           }
         });
       }
@@ -603,6 +673,17 @@
   font-size: 0.75rem;
   color: #6c757d;
   margin-left: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+/* تأثير عند تحديث قائمة القراء */
+.reader-count.highlight-update {
+  background-color: rgba(13, 110, 253, 0.2);
+  color: #0d6efd;
+  border-radius: 10px;
+  padding: 2px 5px;
+  font-weight: bold;
+  box-shadow: 0 0 5px rgba(13, 110, 253, 0.3);
 }
 
 .readers-popover {
@@ -612,6 +693,11 @@
 .readers-popover .list-group-item {
   padding: 0.5rem 0.75rem;
   font-size: 0.9rem;
+}
+
+/* تمييز الرسائل المقروءة */
+.message[data-status="read"] .message-bubble {
+  border-left: 3px solid #0d6efd;
 }
 
 .clear-both {

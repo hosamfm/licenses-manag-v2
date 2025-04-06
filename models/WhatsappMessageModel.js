@@ -391,9 +391,22 @@ whatsappMessageSchema.statics.getMessageByExternalId = async function(externalMe
  */
 whatsappMessageSchema.statics.markAsReadByUser = async function(messageId, userInfo) {
   try {
+    // التحقق من توفر معلومات المستخدم
+    if (!userInfo || !userInfo.userId) {
+      logger.error('لم يتم توفير معلومات المستخدم الكافية', { userInfo });
+      return null;
+    }
+
+    // تسجيل بيانات المدخلات للتشخيص
+    logger.info('بدء تحديث حالة قراءة الرسالة', { 
+      messageId, 
+      userId: userInfo.userId,
+      username: userInfo.username 
+    });
+
     // تحديد نوع المعرف (ObjectId أو معرف خارجي)
     let query;
-    if (messageId.length === 24 && /^[0-9a-fA-F]{24}$/.test(messageId)) {
+    if (messageId && messageId.length === 24 && /^[0-9a-fA-F]{24}$/.test(messageId)) {
       // المعرف يبدو كأنه ObjectId صالح
       query = { 
         $or: [
@@ -401,56 +414,53 @@ whatsappMessageSchema.statics.markAsReadByUser = async function(messageId, userI
           { _id: messageId }
         ]
       };
-    } else {
+    } else if (messageId) {
       // المعرف ليس ObjectId - ابحث فقط باستخدام المعرف الخارجي
       query = { externalMessageId: messageId };
+    } else {
+      logger.error('معرف الرسالة غير صالح', { messageId });
+      return null;
     }
     
     // البحث عن الرسالة
     const message = await this.findOne(query);
     
     if (!message) {
-      logger.error('لم يتم العثور على الرسالة للتحديث', { messageId });
+      logger.error('لم يتم العثور على الرسالة للتحديث', { messageId, query });
       return null;
     }
     
-    // التحقق إذا كان المستخدم قد قرأ الرسالة سابقاً
-    const hasRead = message.readBy && message.readBy.some(reader => 
-      reader.userId && reader.userId.toString() === userInfo.userId.toString()
+    // إعداد معلومات القارئ
+    const readerInfo = {
+      userId: userInfo.userId,
+      username: userInfo.username || 'مستخدم غير معروف',
+      readAt: new Date()
+    };
+    
+    // تحديث الرسالة مع معلومات القارئ
+    // استخدام $addToSet لضمان عدم تكرار نفس المستخدم
+    await this.updateOne(
+      { _id: message._id },
+      { 
+        $addToSet: { readBy: readerInfo },
+        $set: { 
+          status: 'read',
+          readAt: new Date() 
+        }
+      }
     );
     
-    if (!hasRead) {
-      // إضافة المستخدم إلى قائمة القراء
-      const readerInfo = {
-        userId: userInfo.userId,
-        username: userInfo.username,
-        readAt: new Date()
-      };
-      
-      // استخدام $addToSet لضمان عدم تكرار المستخدم في القائمة
-      await this.updateOne(
-        { _id: message._id },
-        { 
-          $addToSet: { readBy: readerInfo },
-          $set: { 
-            status: 'read',
-            readAt: new Date() 
-          }
-        }
-      );
-      
-      logger.info('تم تحديث حالة قراءة الرسالة', { 
-        messageId: message._id, 
-        externalMessageId: message.externalMessageId,
-        reader: userInfo.username
-      });
-    }
+    logger.info('تم تحديث حالة قراءة الرسالة بنجاح', { 
+      messageId: message._id.toString(), 
+      reader: userInfo.username,
+      externalMessageId: message.externalMessageId
+    });
     
-    // إعادة جلب الرسالة المحدثة
+    // جلب الرسالة المحدثة
     return await this.findById(message._id);
   } catch (error) {
     logger.error('خطأ في تحديث حالة قراءة الرسالة', error);
-    throw error;
+    return null;
   }
 };
 
