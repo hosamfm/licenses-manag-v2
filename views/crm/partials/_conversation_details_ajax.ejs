@@ -9,20 +9,6 @@
 
 <!-- دوال مساعدة محلية -->
 <script>
-  // دالة لتنسيق الوقت بشكل مقروء
-  function formatTime(timestamp) {
-    if (!timestamp) return '';
-    
-    const date = new Date(timestamp);
-    return date.toLocaleString('ar-LY', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  }
-  
   // دالة لعرض نص حالة الرسالة
   function getStatusText(status) {
     switch (status) {
@@ -42,64 +28,7 @@
   }
 </script>
 
-<!-- معالجة التاريخ في ملف جافاسكريبت منفصل -->
-<script>
-  // نضيف وظيفة لتحويل جميع عناصر التاريخ عند اكتمال تحميل الصفحة
-  document.addEventListener('DOMContentLoaded', function() {
-    formatAllMessageTimes();
-    
-    // تحديث أوقات الرسائل عندما يتم تحميل رسائل جديدة
-    window.addEventListener('messages-loaded', function() {
-      formatAllMessageTimes();
-    });
-  });
-  
-  // دالة لتنسيق جميع أوقات الرسائل
-  function formatAllMessageTimes() {
-    document.querySelectorAll('.message-time').forEach(function(timeElement) {
-      const timestamp = timeElement.getAttribute('data-timestamp');
-      if (timestamp) {
-        const messageDate = new Date(parseInt(timestamp));
-        const now = new Date();
-        
-        // تنسيق الوقت فقط
-        const timeStr = messageDate.toLocaleString('ar-LY', { 
-          hour: '2-digit', 
-          minute: '2-digit'
-        });
-        
-        // تنسيق التاريخ
-        const dateStr = messageDate.toLocaleString('ar-LY', { 
-          year: 'numeric',
-          month: 'numeric',
-          day: 'numeric'
-        });
-        
-        // حساب الفرق بالميلي ثانية
-        const diffMs = now - messageDate;
-        const diffHours = diffMs / (1000 * 60 * 60);
-        const diffDays = diffHours / 24;
-        
-        // تحديد تنسيق التاريخ حسب عمر الرسالة
-        let formattedDate;
-        
-        if (diffHours < 24) {
-          // رسائل اليوم - نعرض "اليوم" مع الوقت
-          formattedDate = `اليوم ${timeStr}`;
-        } else if (diffDays < 2) {
-          // رسائل الأمس - نعرض "الأمس" مع الوقت
-          formattedDate = `الأمس ${timeStr}`;
-        } else {
-          // رسائل قديمة - نعرض التاريخ كاملاً مع الوقت
-          formattedDate = `${dateStr} ${timeStr}`;
-        }
-        
-        // تحديث نص العنصر
-        timeElement.textContent = formattedDate;
-      }
-    });
-  }
-</script>
+<!-- تم نقل معالجة التواريخ إلى ملف date-formatter.js المستقل -->
 
 <div class="card shadow-sm border-0">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -205,7 +134,8 @@
                     
                     <div class="message-meta">
                       <span class="message-time" title="<%= new Date(message.timestamp || message.createdAt).toLocaleString() %>" 
-                            data-timestamp="<%= new Date(message.timestamp || message.createdAt).getTime() %>">
+                            data-timestamp="<%= new Date(message.timestamp || message.createdAt).getTime() %>"
+                            data-date="<%= new Date(message.timestamp || message.createdAt).toISOString().split('T')[0] %>">
                         <%= new Date(message.timestamp || message.createdAt).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
                       </span>
                       
@@ -394,6 +324,8 @@
   box-shadow: 0 2px 5px rgba(0,0,0,0.05);
   z-index: 1;
 }
+
+/* تم نقل أنماط تنسيق التواريخ إلى ملف date-formatter.js المستقل */
 
 #loadMoreMessagesBtn {
   transition: all 0.3s ease;

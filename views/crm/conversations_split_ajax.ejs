@@ -10,10 +10,16 @@
   <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
   <link rel="stylesheet" href="/css/crm.css">
   <link rel="stylesheet" href="/css/conversation-new.css">
+  
+  <!-- إضافة ملف معالجة التواريخ والأوقات -->
+  <script src="/js/date-formatter.js"></script>
+  
   <!-- إضافة مكتبة Socket.IO - مهم لوظائف المحادثات الفورية -->
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  
   <!-- استدعاء ملف مساعد التعليقات الداخلية -->
   <script src="/js/conversation-notes-utils.js"></script>
+  
   <!-- تعريف معلومات المستخدم كمتغيرات عامة -->
   <script>
     
@@ -636,6 +642,11 @@
               conversationId: conversationId
             });
           }
+          
+          // تنسيق التواريخ بعد تحميل المحادثة
+          if (typeof window.formatAllMessageTimes === 'function') {
+            setTimeout(window.formatAllMessageTimes, 500);
+          }
         })
         .catch(err => {
           detailsContainer.innerHTML = `
@@ -784,7 +795,9 @@
         // إضافة معلومات الوقت والحالة
         messageHTML += `
           <div class="message-meta">
-            <span class="message-time" title="${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString()}">
+            <span class="message-time" title="${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString()}"
+                  data-timestamp="${new Date(messageData.timestamp || messageData.createdAt || Date.now()).getTime()}"
+                  data-date="${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toISOString().split('T')[0]}">
               ${new Date(messageData.timestamp || messageData.createdAt || Date.now()).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' })}
             </span>
             
@@ -894,6 +907,8 @@
         const timestamp = new Date(note.timestamp || note.createdAt);
         const timeString = timestamp.toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' });
         const fullTimeString = timestamp.toLocaleString();
+        const timestampMs = timestamp.getTime();
+        const dateStr = timestamp.toISOString().split('T')[0];
 
         noteElement.innerHTML = `
           <div class="message-bubble internal-note-bubble">
@@ -906,7 +921,9 @@
               ${noteContent.replace(/\n/g, '<br>')}
             </div>
             <div class="message-meta">
-              <span class="message-time" title="${fullTimeString}">
+              <span class="message-time" title="${fullTimeString}" 
+                    data-timestamp="${timestampMs}"
+                    data-date="${dateStr}">
                 ${timeString}
               </span>
             </div>

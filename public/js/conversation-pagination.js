@@ -66,14 +66,6 @@
     
     // تحديث حالة زر التحميل
     updateLoadMoreButton();
-    
-    console.log('تم تهيئة نظام تحميل الرسائل القديمة:', {
-      conversationId: state.conversationId,
-      currentPage: state.currentPage,
-      totalPages: state.totalPages,
-      loadedAllMessages: state.loadedAllMessages,
-      fixedBatchSize: state.fixedBatchSize
-    });
   }
 
   /**
@@ -91,8 +83,6 @@
         state.messageIds.add(messageId);
       }
     });
-    
-    console.log(`تم جمع ${state.messageIds.size} معرف رسالة موجودة.`);
   }
 
   /**
@@ -159,8 +149,6 @@
     // حساب الصفحة التالية
     const nextPage = state.currentPage + 1;
     
-    console.log(`تحميل المزيد من الرسائل: الصفحة ${nextPage}، الحجم ${state.fixedBatchSize}`);
-    
     // إرسال طلب AJAX
     fetch(`/crm/conversations/ajax/details/${state.conversationId}?page=${nextPage}&limit=${state.fixedBatchSize}`, {
       method: 'GET',
@@ -184,7 +172,6 @@
       if (newMessages.length === 0) {
         // لا توجد رسائل جديدة
         state.loadedAllMessages = true;
-        console.log('لا توجد رسائل قديمة إضافية للتحميل');
       } else {
         // الحصول على حاوية الرسائل
         const messageContainer = document.getElementById(state.messageContainerId);
@@ -205,6 +192,27 @@
           // التحقق من عدم وجود الرسالة بالفعل (لتجنب التكرار)
           const messageId = message.getAttribute('data-message-id');
           if (messageId && !state.messageIds.has(messageId)) {
+            // التأكد من أن عنصر التاريخ يحتوي على سمة data-timestamp
+            const timeElement = message.querySelector('.message-time');
+            if (timeElement && !timeElement.hasAttribute('data-timestamp')) {
+              // محاولة استخراج التاريخ من title
+              const title = timeElement.getAttribute('title');
+              if (title) {
+                try {
+                  const timestamp = new Date(title).getTime();
+                  timeElement.setAttribute('data-timestamp', timestamp);
+                } catch(e) {}
+              }
+              // محاولة استخراج التاريخ من تاريخ العنصر
+              const dateAttr = timeElement.getAttribute('data-date');
+              if (dateAttr && !timeElement.hasAttribute('data-timestamp')) {
+                try {
+                  const timestamp = new Date(dateAttr).getTime();
+                  timeElement.setAttribute('data-timestamp', timestamp);
+                } catch(e) {}
+              }
+            }
+            
             messagesToAdd.push({
               element: message,
               timestamp: getMessageTimestamp(message),
@@ -238,8 +246,6 @@
         
         // تحديث حالة الصفحة
         state.currentPage = nextPage;
-        
-        console.log(`تم تحميل ${messagesToAdd.length} رسائل جديدة، الصفحة الحالية: ${state.currentPage}`);
       }
       
       // إضافة مستمعات الأحداث للرسائل الجديدة
@@ -267,6 +273,11 @@
         }
       });
       window.dispatchEvent(event);
+      
+      // تنسيق التواريخ بعد تحميل الرسائل مباشرة
+      if (typeof window.formatAllMessageTimes === 'function') {
+        setTimeout(window.formatAllMessageTimes, 200);
+      }
       
       // تعيين حالة التحميل
       state.loading = false;
