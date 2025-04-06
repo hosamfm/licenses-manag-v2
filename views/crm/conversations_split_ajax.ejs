@@ -384,7 +384,7 @@
       });
       
       // تحميل تفاصيل المحادثة
-      function loadConversationDetails(conversationId, skipCache = false) {
+      window.loadConversationDetails = function(conversationId, skipCache = false) {
         if (!conversationId) return;
         
         const detailsContainer = document.getElementById('conversationDetailsContainer');
