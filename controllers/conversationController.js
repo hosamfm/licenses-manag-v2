@@ -882,38 +882,65 @@ exports.listConversationsAjax = async (req, res) => {
 exports.getConversationDetailsAjax = async (req, res) => {
   try {
     const { conversationId } = req.params;
+    // إضافة دعم للصفحات
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = parseInt(req.query.limit) || 20; // عدد الرسائل في الصفحة الواحدة
     const skip = (page - 1) * limit;
-
-    // التحقق من صحة المعرف
-    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
-      return res.status(400).json({ success: false, message: 'معرف محادثة غير صالح' });
-    }
-
-    const conversation = await Conversation.findById(conversationId);
+    
+    let conversation;
+    let totalMessages;
+    let messages = [];
+    
+    // جلب بيانات المحادثة من قاعدة البيانات مباشرة
+    conversation = await Conversation.findById(conversationId)
+      .populate('channelId', 'name')
+      .populate('assignedTo', 'username full_name')
+      .lean();
+      
     if (!conversation) {
-      return res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
+      return res.status(404).send('<div class="alert alert-danger">المحادثة غير موجودة</div>');
     }
-
-    // استعلام لإجمالي عدد الرسائل (للصفحات)
-    const totalMessages = await WhatsappMessage.countDocuments({ conversationId });
-
-    // استعلام الرسائل مع الترتيب والتقييد
-    let messages = await WhatsappMessage.find({ conversationId })
-      .sort({ createdAt: -1 }) // ترتيب حسب الأحدث أولاً
+    
+    // جلب إجمالي عدد الرسائل للمحادثة (للصفحات)
+    totalMessages = await WhatsappMessage.countDocuments({ conversationId });
+    
+    // جلب الرسائل من قاعدة البيانات
+    messages = await WhatsappMessage.find({ conversationId })
+      .sort({ timestamp: -1 }) // ترتيب من الأحدث للأقدم
       .skip(skip)
       .limit(limit)
-      .lean(); // استخدام lean() لتحسين الأداء
-
-    // قلب الترتيب ليكون الأقدم أولاً في العرض
+      .lean();
+    
+    // قلب الترتيب مرة أخرى ليعود إلى الأقدم للأحدث للعرض
     messages = messages.reverse();
     
     if (messages && messages.length > 0) {
-      // ملاحظة: تم إزالة تحديث حالة الرسائل هنا لأنه سيتم تحديثها عند ظهورها فقط
+      // تحديث حالة الرسائل الواردة إلى "مقروءة"
+      if (page === 1) { // فقط نعلم بأن الرسائل مقروءة عند تحميل الصفحة الأولى
+        await WhatsappMessage.updateMany(
+          { conversationId, direction: 'incoming', status: { $ne: 'read' } },
+          { $set: { status: 'read' } }
+        );
+      }
       
       // استخدام خدمة الوسائط لإضافة معلومات الوسائط للرسائل
       messages = await mediaService.processMessagesWithMedia(messages);
+    }
+    
+    // في حالة عدم وجود رسائل
+    if (!messages || messages.length === 0) {
+      return res.render('crm/partials/_conversation_details_ajax', {
+        layout: false,
+        conversation,
+        messages: [],
+        user: req.user,
+        triggerMessagesLoaded: true,
+        pagination: {
+          currentPage: page,
+          totalPages: 0,
+          totalMessages: 0,
+        }
+      });
     }
     
     // حساب إجمالي عدد الصفحات

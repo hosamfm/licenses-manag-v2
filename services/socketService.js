@@ -278,8 +278,9 @@ async function notifyConversationUpdate(conversationId, update) {
  * @param {String} conversationId - معرف المحادثة
  * @param {String} externalId - المعرف الخارجي للرسالة
  * @param {String} status - الحالة الجديدة
+ * @param {Array} readBy - قائمة بالمستخدمين الذين قرأوا الرسالة (اختياري)
  */
-function notifyMessageStatusUpdate(conversationId, externalId, status) {
+function notifyMessageStatusUpdate(conversationId, externalId, status, readBy = []) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
@@ -294,7 +295,8 @@ function notifyMessageStatusUpdate(conversationId, externalId, status) {
   const data = { 
     externalId, 
     status, 
-    conversationId 
+    conversationId,
+    readBy
   };
 
   io.to(`conversation-${conversationId}`).emit('message-status-update', data);
@@ -303,7 +305,7 @@ function notifyMessageStatusUpdate(conversationId, externalId, status) {
     conversationId, 
     externalId, 
     status,
-    dataObject: JSON.stringify(data)
+    readersCount: readBy ? readBy.length : 0
   });
 }
 

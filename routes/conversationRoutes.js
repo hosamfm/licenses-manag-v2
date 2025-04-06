@@ -6,6 +6,8 @@ const router = express.Router();
 const conversationController = require('../controllers/conversationController');
 const { isAuthenticated, checkCanAccessConversations } = require('../middleware/authMiddleware');
 const logger = require('../services/loggerService');
+const WhatsappMessage = require('../models/whatsappMessage');
+const socketService = require('../services/socketService');
 
 // وسيط للتحقق من صلاحية الوصول للمحادثات
 const ensureCanAccessConversations = [isAuthenticated, checkCanAccessConversations];
@@ -61,11 +63,61 @@ router.post('/:conversationId/reopen', ensureCanAccessConversations, conversatio
 router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    logger.info('conversationRoutes', 'تحديث حالة قراءة المحادثة', { 
+    const { messageIds } = req.body; // استلام قائمة الرسائل المرئية حالياً
+    
+    logger.info('conversationRoutes', 'تحديث حالة قراءة الرسائل', { 
       conversationId, 
-      userId: req.user?._id 
+      userId: req.user?._id,
+      messageCount: messageIds?.length || 0
     });
-    res.json({ success: true, message: 'تم تحديث حالة القراءة' });
+    
+    // إذا لم يتم تقديم معرفات الرسائل، إرجاع خطأ
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'يجب تقديم قائمة معرفات الرسائل المراد وضع علامة قراءة عليها' 
+      });
+    }
+    
+    const results = [];
+    
+    // تحديث حالة قراءة كل رسالة واردة
+    for (const messageId of messageIds) {
+      // إضافة المستخدم الحالي كقارئ للرسالة
+      const updatedMessage = await WhatsappMessage.addMessageReader(
+        messageId, 
+        req.user, 
+        messageId.length > 20 ? '_id' : 'externalMessageId'
+      );
+      
+      if (updatedMessage) {
+        results.push({
+          messageId: updatedMessage._id,
+          externalMessageId: updatedMessage.externalMessageId,
+          readBy: updatedMessage.readBy.map(reader => ({ 
+            userId: reader.userId,
+            username: reader.username,
+            readAt: reader.readAt
+          }))
+        });
+        
+        // إرسال إشعار بتحديث حالة الرسالة عبر سوكيت
+        if (updatedMessage.externalMessageId) {
+          socketService.notifyMessageStatusUpdate(
+            conversationId,
+            updatedMessage.externalMessageId,
+            'read',
+            updatedMessage.readBy
+          );
+        }
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'تم تحديث حالة القراءة', 
+      updatedMessages: results
+    });
   } catch (error) {
     logger.error('conversationRoutes', 'خطأ في تحديث حالة قراءة المحادثة', error);
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء تحديث حالة قراءة المحادثة' });

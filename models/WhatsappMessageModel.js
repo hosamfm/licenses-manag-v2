@@ -48,6 +48,21 @@ const whatsappMessageSchema = new mongoose.Schema({
   deliveredAt: {
     type: Date
   },
+  // إضافة حقل لتخزين المستخدمين الذين قرأوا الرسالة
+  readBy: {
+    type: [{
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      username: String,
+      readAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    default: []
+  },
   sentBy: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User' 
@@ -201,6 +216,60 @@ whatsappMessageSchema.statics.updateMessageStatus = async function(externalMessa
     return message;
   } catch (error) {
     logger.error('خطأ في تحديث حالة الرسالة:', error);
+    throw error;
+  }
+};
+
+/**
+ * إضافة مستخدم إلى قائمة قراء الرسالة
+ * @param {string} messageId معرّف الرسالة
+ * @param {Object} user معلومات المستخدم القارئ
+ * @param {string} findByType نوع المعرف ('_id' أو 'externalMessageId')
+ * @returns {Promise<Object>} الرسالة المحدثة
+ */
+whatsappMessageSchema.statics.addMessageReader = async function(messageId, user, findByType = '_id') {
+  try {
+    // تحديد شرط البحث بناءً على نوع المعرف
+    const query = {};
+    query[findByType] = messageId;
+    
+    const message = await this.findOne(query);
+    
+    if (!message) {
+      logger.warn('الرسالة غير موجودة أثناء إضافة قارئ', { messageId, findByType });
+      return null;
+    }
+    
+    // التحقق مما إذا كان المستخدم قد قرأ الرسالة بالفعل
+    const existingReader = message.readBy.find(reader => 
+      reader.userId && user._id && reader.userId.toString() === user._id.toString()
+    );
+    
+    if (!existingReader) {
+      // إضافة المستخدم إلى قائمة القراء
+      message.readBy.push({
+        userId: user._id,
+        username: user.username || user.name || user.email || 'مستخدم',
+        readAt: new Date()
+      });
+      
+      // تأكد من أن حالة الرسالة 'مقروءة' إذا كانت واردة
+      if (message.direction === 'incoming' && message.status !== 'read') {
+        message.status = 'read';
+        message.readAt = new Date();
+      }
+      
+      await message.save();
+      logger.info('تمت إضافة قارئ جديد للرسالة', { 
+        messageId, 
+        userId: user._id.toString(),
+        username: user.username || user.name || 'غير معروف' 
+      });
+    }
+    
+    return message;
+  } catch (error) {
+    logger.error('خطأ في إضافة قارئ للرسالة:', error);
     throw error;
   }
 };
