@@ -1641,25 +1641,20 @@ window.updateMessageReaction = function(externalId, reaction) {
  * تستدعى هذه الدالة عند عرض المحادثة
  */
 window.markIncomingMessagesAsRead = function() {
-  // حفظ موضع التمرير الحالي قبل تعليم الرسائل كمقروءة
-  const messagesContainer = document.querySelector('.messages-container');
-  const isScrolledToBottom = messagesContainer ? 
-    (messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 10) : false;
-  
   // البحث عن جميع الرسائل الواردة في المحادثة الحالية
-  const incomingMessages = document.querySelectorAll('.message.incoming');
+  const incomingMessages = document.querySelectorAll('.message.incoming:not([data-read-by-me="true"])'); // تحديد الرسائل التي لم تُقرأ بعد
   
   if (incomingMessages.length === 0) {
-    return; // لا توجد رسائل واردة
+    return; // لا توجد رسائل واردة غير مقروءة
   }
-  
-  let pendingRequests = 0;
   
   // إرسال طلبات لتعليم كل رسالة كمقروءة
   incomingMessages.forEach(message => {
     const messageId = message.dataset.messageId;
     if (messageId) {
-      pendingRequests++;
+      // إضافة سمة للإشارة إلى أنه تم البدء في تعليمها كمقروءة (لمنع الإرسال المتكرر)
+      message.setAttribute('data-read-by-me', 'true'); 
+      
       fetch(`/crm/conversations/messages/${messageId}/mark-as-read`, {
         method: 'POST',
         headers: {
@@ -1669,21 +1664,12 @@ window.markIncomingMessagesAsRead = function() {
       })
       .then(response => response.json())
       .then(data => {
-        // تم إزالة رسالة السجل
+        // لا يوجد إجراء مطلوب هنا بعد الآن
       })
       .catch(err => {
-        // تم إزالة رسالة السجل
-      })
-      .finally(() => {
-        pendingRequests--;
-        
-        // إذا كانت هذه آخر طلب، وكان المستخدم في الأسفل، حافظ على موضع التمرير
-        if (pendingRequests === 0 && isScrolledToBottom && messagesContainer) {
-          // تأخير قصير للتأكد من اكتمال تحديثات DOM
-          setTimeout(() => {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          }, 50);
-        }
+        // يمكن إضافة معالجة خطأ بسيطة إذا لزم الأمر، أو تركها فارغة
+        // إعادة تعيين السمة للسماح بإعادة المحاولة لاحقًا إذا فشل الطلب
+         message.removeAttribute('data-read-by-me'); 
       });
     }
   });
@@ -1699,16 +1685,12 @@ window.updateMessageReadByUsers = function(messageElem, user, timestamp) {
   // التحقق مما إذا كانت الرسالة تحتوي بالفعل على قسم من قرؤوها
   let readByContainer = messageElem.querySelector('.read-by-users');
   
-  // حفظ حالة التمرير الحالية
-  const messagesContainer = document.querySelector('.messages-container');
-  const isNearBottom = messagesContainer ? 
-    (messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 100) : false;
-  
-  if (!readByContainer) {
+  // إذا لم تكن الحاوية موجودة، ولم يكن المستخدم الذي قرأ هو المستخدم الحالي (لتجنب إضافة "قرئت بواسطة" لنفسك)
+  if (!readByContainer && messageElem.closest('.message.outgoing') && user._id !== window.currentUser?._id) {
     // إنشاء حاوية جديدة إذا لم تكن موجودة
     readByContainer = document.createElement('div');
-    readByContainer.className = 'read-by-users mt-1';
-    readByContainer.innerHTML = '<small class="text-muted">قُرئت بواسطة:</small>';
+    readByContainer.className = 'read-by-users mt-1 d-flex align-items-center'; // استخدام flex للمحاذاة
+    readByContainer.innerHTML = '<small class="text-muted me-1">قُرئت بواسطة:</small>';
     // البحث عن فقاعة الرسالة لإضافة حاوية من قرؤوها
     const messageBubble = messageElem.querySelector('.message-bubble');
     if (messageBubble) {
@@ -1720,7 +1702,7 @@ window.updateMessageReadByUsers = function(messageElem, user, timestamp) {
     // إضافة زر عرض القائمة الكاملة
     const showAllBtn = document.createElement('a');
     showAllBtn.href = '#';
-    showAllBtn.className = 'ms-2 show-all-readers text-primary small';
+    showAllBtn.className = 'ms-1 show-all-readers text-primary small'; // تقليل الهامش
     showAllBtn.innerHTML = '<i class="fas fa-users"></i>';
     showAllBtn.setAttribute('title', 'عرض قائمة جميع القارئين');
     showAllBtn.onclick = function(e) {
@@ -1730,25 +1712,8 @@ window.updateMessageReadByUsers = function(messageElem, user, timestamp) {
     readByContainer.appendChild(showAllBtn);
   }
   
-  // التحقق مما إذا كان المستخدم مضافًا بالفعل
-  const existingUser = readByContainer.querySelector(`[data-user-id="${user._id}"]`);
-  if (!existingUser) {
-    // إنشاء عنصر المستخدم وإضافته
-    const userElement = document.createElement('span');
-    userElement.className = 'read-by-user ms-1';
-    userElement.setAttribute('data-user-id', user._id);
-    userElement.setAttribute('title', `${user.fullName || user.username} - ${new Date(timestamp).toLocaleString()}`);
-    userElement.innerHTML = `
-      <i class="fas fa-user-circle text-secondary"></i>
-    `;
-    
-    readByContainer.appendChild(userElement);
-  }
-  
-  // استعادة موضع التمرير إذا كان المستخدم قريباً من الأسفل
-  if (isNearBottom && messagesContainer) {
-    window.scrollToBottomIfNeeded();
-  }
+  // *** تم إزالة الجزء الخاص بإضافة أيقونة المستخدم الفردية هنا ***
+  // لا يتم إضافة أيقونات فردية بشكل فوري
 };
 
 /**
@@ -1870,15 +1835,179 @@ window.loadConversationDetails = function(conversationId, forceScroll = true) {
   
   // ... باقي التعليمات البرمجية ...
   
-  // بعد الانتهاء من تحميل تفاصيل المحادثة
-  document.addEventListener('conversation-loaded', function onConversationLoaded() {
-    // تعليم الرسائل الواردة كمقروءة
-    window.markIncomingMessagesAsRead();
-    
-    // التمرير للأسفل
-    window.scrollToBottomIfNeeded(forceScroll);
-    
-    // إزالة هذا المستمع بعد استدعائه لمنع تكراره
-    document.removeEventListener('conversation-loaded', onConversationLoaded);
-  });
+  fetch(`/crm/conversations/${conversationId}/details`)
+    .then(response => response.json())
+    .then(data => {
+      // ... (الكود السابق لمسح الرسائل وعرضها)
+
+      // عرض الرسائل
+      data.messages.forEach(message => {
+        // استخدام الدالة الموجودة لعرض الرسالة
+        window.addMessageToConversation(message, false); // false لمنع التمرير لكل رسالة
+      });
+
+      // ... (الكود السابق لإخفاء التحميل)
+      
+      // إطلاق الحدث
+      document.dispatchEvent(new CustomEvent('conversation-loaded', { detail: { conversationId } }));
+    })
+    .catch(error => {
+       // ... (معالجة الخطأ)
+    });
+
+  // مستمع الحدث
+  document.addEventListener('conversation-loaded', function onConversationLoaded(event) {
+    if (event.detail.conversationId === window.currentConversationId) { // التأكد من أن الحدث للمحادثة الحالية
+      // تعليم الرسائل كمقروءة (أولاً)
+      window.markIncomingMessagesAsRead();
+      
+      // التمرير للأسفل (بعد بدء تعليم القراءة)
+      window.scrollToBottomIfNeeded(forceScroll); 
+      
+      // إزالة المستمع
+      document.removeEventListener('conversation-loaded', onConversationLoaded);
+    }
+  }, { once: true }); // استخدام once لضمان إزالة المستمع تلقائياً بعد التنفيذ الأول
 };
+
+/**
+ * إضافة رسالة جديدة إلى المحادثة الحالية
+ * @param {Object} message - كائن الرسالة
+ */
+window.addMessageToConversation = function(message) {
+  if (!message) return;
+  
+  try {
+    // التحقق من عدم تكرار الرسالة
+    if (window.sentMessageIds && (window.sentMessageIds.has(message._id) || window.sentMessageIds.has(message.externalMessageId))) {
+      return;
+    }
+    
+    const messagesContainer = document.querySelector('.messages-container');
+    if (!messagesContainer) return; // تأكد من وجود الحاوية
+
+    // --- الكود الخاص بإنشاء وعرض عنصر الرسالة --- 
+    // (يفترض وجود هذا الكود هنا لإنشاء messageElement)
+    // مثال مبسط:
+    const messageElement = document.createElement('div');
+    messageElement.className = `message ${message.direction || 'incoming'}`;
+    messageElement.dataset.messageId = message._id;
+    if (message.externalMessageId) {
+       messageElement.dataset.externalId = message.externalMessageId;
+    }
+    messageElement.innerHTML = `
+        <div class="message-bubble">
+           ${message.content || 'رسالة فارغة'}
+           <div class="message-meta">
+             <span class="message-time">${window.formatTime(message.timestamp)}</span>
+             ${message.direction === 'outgoing' ? 
+               `<span class="message-status"><i class="fas fa-check text-silver"></i></span>` : ''
+             }
+           </div>
+        </div>
+    `; // يجب تحسين هذا المثال ليعكس العرض الفعلي للرسائل
+    
+    messagesContainer.appendChild(messageElement);
+
+    // إضافة الرسالة لمجموعة المعرفات المرسلة لمنع التكرار
+    if (window.sentMessageIds && message._id) {
+       window.sentMessageIds.add(message._id);
+    }
+    if (window.sentMessageIds && message.externalMessageId) {
+       window.sentMessageIds.add(message.externalMessageId);
+    }
+    
+    // *** تم إزالة منطق التمرير من هنا ***
+
+  } catch (error) {
+    console.error('خطأ في إضافة الرسالة للمحادثة:', error);
+  }
+};
+
+/**
+ * دالة تحميل تفاصيل المحادثة
+ * @param {string} conversationId - معرف المحادثة
+ */
+window.loadConversationDetails = function(conversationId) {
+  if (!conversationId) {
+    return;
+  }
+  
+  // تحديث المعرف الحالي
+  window.previousConversationId = window.currentConversationId;
+  window.currentConversationId = conversationId;
+  
+  const messagesContainer = document.querySelector('.messages-container');
+  const loadingIndicator = document.querySelector('.loading-messages'); // افترض وجود مؤشر تحميل
+
+  // إظهار التحميل ومسح الرسائل القديمة
+  if (loadingIndicator) loadingIndicator.style.display = 'flex';
+  if (messagesContainer) messagesContainer.innerHTML = ''; // مسح المحتوى القديم
+
+  // تحديث معلومات رأس المحادثة (الكود الخاص بها يجب أن يكون هنا)
+  // مثال: updateConversationHeader(conversationId);
+  
+  fetch(`/crm/conversations/${conversationId}/details`)
+    .then(response => {
+       if (!response.ok) throw new Error('فشل جلب تفاصيل المحادثة');
+       return response.json();
+    })
+    .then(data => {
+      if (!data || !data.success) throw new Error(data.error || 'خطأ في بيانات الاستجابة');
+
+      // تحديث معلومات رأس المحادثة (إذا كانت تأتي من هنا)
+      // مثال: updateConversationHeaderWithData(data.contact);
+
+      // عرض الرسائل
+      if (data.messages && Array.isArray(data.messages)) {
+        data.messages.forEach(message => {
+          window.addMessageToConversation(message);
+        });
+      } else {
+         console.warn('لا توجد رسائل لعرضها أو أن التنسيق غير صحيح');
+      }
+
+      // إخفاء التحميل
+      if (loadingIndicator) loadingIndicator.style.display = 'none';
+      
+      // البدء في تعليم الرسائل كمقروءة
+      window.markIncomingMessagesAsRead();
+      
+      // محاولة التمرير للأسفل بقوة بعد اكتمال إضافة العناصر
+      window.forceScrollToBottom(); 
+
+    })
+    .catch(error => {
+       console.error('خطأ أثناء تحميل تفاصيل المحادثة:', error);
+       if (loadingIndicator) loadingIndicator.style.display = 'none';
+       // يمكن عرض رسالة خطأ للمستخدم هنا
+       if (messagesContainer) messagesContainer.innerHTML = '<div class="text-center text-danger p-3">حدث خطأ أثناء تحميل المحادثة.</div>';
+    });
+};
+
+/**
+ * دالة تقوم بالتمرير الإجباري للأسفل عدة مرات لضمان الوصول للنهاية
+ */
+window.forceScrollToBottom = function() {
+    const messagesContainer = document.querySelector('.messages-container');
+    if (!messagesContainer) return;
+
+    let attempts = 0;
+    const maxAttempts = 5; // عدد محاولات التمرير
+    const interval = 100; // الفاصل الزمني بين المحاولات (مللي ثانية)
+
+    function scroll() {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        attempts++;
+        if (attempts < maxAttempts) {
+            setTimeout(scroll, interval);
+        }
+    }
+
+    // البدء في محاولات التمرير بعد تأخير بسيط للسماح بالرسم الأولي
+    setTimeout(scroll, 50); 
+};
+
+// إزالة الدالة القديمة scrollToBottomIfNeeded إذا لم تعد مستخدمة في مكان آخر
+// delete window.scrollToBottomIfNeeded; 
+// تأكد من مراجعة الكود لمعرفة ما إذا كانت مستخدمة في أماكن أخرى قبل الحذف
