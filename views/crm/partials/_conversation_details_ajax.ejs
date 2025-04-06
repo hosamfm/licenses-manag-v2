@@ -4,8 +4,47 @@
   // تعريف معلومات المستخدم كمتغيرات عامة
   window.currentUserId = "<%= typeof user !== 'undefined' && user ? user._id : 'system' %>";
   window.currentUsername = "<%= typeof user !== 'undefined' && user ? user.username : 'مستخدم النظام' %>";
-</script>
 
+  // دالة لفتح نافذة التعليق الداخلي وتهيئة المنشن
+  window.openInternalNoteModal = function() {
+    // تأكد من وجود النافذة المنبثقة
+    if (typeof window.initInternalNoteModal === 'function') {
+      window.initInternalNoteModal();
+    }
+    
+    // الحصول على معرف المحادثة الحالية وتعيينه في النافذة
+    const conversationId = window.currentConversationId || document.getElementById('conversationId').value;
+    
+    if (conversationId) {
+      // تعيين معرف المحادثة في الحقل الخفي
+      if (document.getElementById('conversationId')) {
+        document.getElementById('conversationId').value = conversationId;
+      }
+      
+      // فتح النافذة
+      const modal = new bootstrap.Modal(document.getElementById('internalNoteModal'));
+      modal.show();
+      
+      // يجب استدعاء fetchUsersForMention قبل تهيئة المنشن
+      if (typeof window.fetchUsersForMention === 'function') {
+        window.fetchUsersForMention().then(() => {
+          // بعد جلب المستخدمين، نقوم بتهيئة ميزة المنشن
+          if (typeof window.initializeMentionsInNoteField === 'function') {
+            setTimeout(() => {
+              window.initializeMentionsInNoteField();
+            }, 100);
+          }
+          
+          // التركيز في حقل الإدخال بعد فتح النافذة وتحميل البيانات
+          const noteField = document.getElementById('internalNoteContent');
+          if (noteField) {
+            noteField.focus();
+          }
+        });
+      }
+    }
+  }
+</script>
 
 <!-- دوال مساعدة محلية -->
 <script>
@@ -294,6 +333,9 @@
         </span>
         <div class="reply-form-actions">
           <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('replyMessage').value = ''">مسح</button>
+          <button type="button" class="btn btn-outline-secondary me-2 internal-note-btn" onclick="if(typeof window.openInternalNoteModal === 'function') window.openInternalNoteModal(); else alert('عذراً، ميزة التعليقات الداخلية غير متوفرة حالياً');">
+            <i class="fas fa-sticky-note me-1"></i> ملاحظة داخلية
+          </button>
           <button type="submit" class="btn btn-primary" id="sendButton">
             <i class="fas fa-paper-plane me-1"></i> إرسال
           </button>
@@ -350,6 +392,69 @@
 
 .clear-both {
   clear: both;
+}
+
+/* أنماط خاصة بزر التعليق الداخلي */
+.internal-note-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.internal-note-btn i {
+  margin-left: 5px;
+}
+
+/* أنماط خاصة بميزة المنشن للمستخدمين */
+.tribute-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: auto;
+  max-height: 300px;
+  max-width: 500px;
+  overflow: auto;
+  display: block;
+  z-index: 9999;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.15);
+  direction: rtl;
+}
+
+.tribute-container ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tribute-container li {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.tribute-container li:last-child {
+  border-bottom: none;
+}
+
+.tribute-container li.highlight,
+.tribute-container li:hover {
+  background: #f5f9ff;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+}
+
+.user-mention {
+  display: inline-block;
+  background-color: #e8f0fe;
+  border-radius: 3px;
+  padding: 0 3px;
+  color: #1a73e8;
+  font-weight: 500;
 }
 
 /* أنماط خاصة بالتحميل التزايدي للرسائل */

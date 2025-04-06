@@ -11,6 +11,10 @@
   <link rel="stylesheet" href="/css/crm.css">
   <link rel="stylesheet" href="/css/conversation-new.css">
   
+  <!-- إضافة مكتبة Tribute.js لدعم المنشن في التعليقات -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tributejs@5.1.3/dist/tribute.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/tributejs@5.1.3/dist/tribute.min.js"></script>
+  
   <!-- إضافة ملف معالجة التواريخ والأوقات -->
   <script src="/js/date-formatter.js"></script>
   
@@ -20,6 +24,7 @@
   <!-- استدعاء ملف مساعد التعليقات الداخلية -->
   <script src="/js/conversation-utils.js"></script>
   <script src="/js/conversation-assignment.js"></script>
+  <script src="/js/conversation-notes-utils.js"></script>
   
   <!-- تعريف معلومات المستخدم كمتغيرات عامة -->
   <script>
@@ -197,6 +202,68 @@
       
       // إضافة مستمع لحدث تحديث المحادثة
       window.socketConnection.on('conversation-update', function(data) {
+        // التعامل مع تغيير حالة المحادثة (فتح/إغلاق)
+        if (data && data.type === 'status' && data.status) {
+          // إذا كانت المحادثة المفتوحة حالياً
+          if (data._id === currentConversationId || data.conversationId === currentConversationId) {
+            // استخدام الوظيفة الجديدة لتحديث رأس المحادثة
+            if (typeof window.updateConversationHeader === 'function') {
+              window.updateConversationHeader(data);
+            }
+          }
+        }
+        
+        // التعامل مع تغيير حالة التعيين
+        else if (data && data.type === 'assigned') {
+          // إذا كانت المحادثة المحددة حالياً هي المحادثة التي تم تعيينها
+          if (data._id === currentConversationId || data.conversationId === currentConversationId) {
+            // استخدام الوظيفة الجديدة لتحديث رأس المحادثة بشكل كامل
+            if (typeof window.updateConversationHeader === 'function') {
+              window.updateConversationHeader(data);
+            } else {
+              // كود احتياطي في حالة عدم توفر الوظيفة الجديدة
+              // تحديث المعلومات في واجهة تفاصيل المحادثة
+              const assigneeInfo = document.getElementById('assigneeInfo');
+              const assignToMeBtn = document.getElementById('assignToMeBtn');
+              
+              if (assigneeInfo) {
+                if (data.assignee) {
+                  // عرض اسم المستخدم المعين
+                  const assigneeName = data.assignee.full_name || data.assignee.username || 'مستخدم';
+                  assigneeInfo.innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeName}`;
+                  
+                  // إخفاء زر "تعيين لي" إذا كان المستخدم الحالي هو المعين
+                  if (assignToMeBtn && data.assignee._id === window.currentUserId) {
+                    assignToMeBtn.style.display = 'none';
+                  } else if (assignToMeBtn) {
+                    assignToMeBtn.style.display = 'inline-block';
+                  }
+                } else {
+                  // إظهار "غير معين" في حالة إلغاء التعيين
+                  assigneeInfo.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> غير معين';
+                  
+                  // إظهار زر "تعيين لي"
+                  if (assignToMeBtn) {
+                    assignToMeBtn.style.display = 'inline-block';
+                  }
+                }
+              }
+              
+              // تحديث حالة المحادثة
+              const statusBadge = document.querySelector('.conversation-status-badge');
+              if (statusBadge) {
+                if (data.assignee) {
+                  statusBadge.className = 'badge bg-info ms-2 conversation-status-badge';
+                  statusBadge.innerHTML = '<i class="fas fa-user-check me-1"></i> مسندة';
+                } else {
+                  statusBadge.className = 'badge bg-success ms-2 conversation-status-badge';
+                  statusBadge.innerHTML = '<i class="fas fa-door-open me-1"></i> مفتوحة';
+                }
+              }
+            }
+          }
+        }
+        
         // تحديث قائمة المحادثات لعرض التغييرات الجديدة
         refreshConversationsList();
       });
@@ -206,6 +273,13 @@
         if (!updatedConversation || !updatedConversation._id) {
           // تخطي إذا لم تكن البيانات متوفرة
           return;
+        }
+        
+        // إذا كانت المحادثة المحدثة هي المحادثة المفتوحة حاليًا، قم بتحديث رأس المحادثة
+        if (currentConversationId === updatedConversation._id) {
+          if (typeof window.updateConversationHeader === 'function') {
+            window.updateConversationHeader(updatedConversation);
+          }
         }
         
         // تحديث عنصر المحادثة في القائمة، أو إضافته إذا لم يكن موجوداً
@@ -456,13 +530,25 @@
         let conversationItem = conversationList.querySelector(`.conversation-item[data-conversation-id="${conversation._id}"]`);
         const isCurrentlyActive = currentConversationId === conversation._id;
         
+        // إعداد بيانات المستخدم المعين (إذا وُجد)
+        let assigneeHtml = '';
+        if (conversation.assignee) {
+          const assigneeName = conversation.assignee.full_name || conversation.assignee.username || 'مستخدم';
+          assigneeHtml = `
+            <div class="conversation-assignee small text-primary mb-1">
+              <i class="fas fa-user-check me-1"></i> ${assigneeName}
+            </div>
+          `;
+        }
+        
         // إذا كان العنصر موجود، قم بتحديثه
         if (conversationItem) {
           // الاحتفاظ بحالة النشاط للعنصر
           const wasActive = conversationItem.classList.contains('active');
           
           // تحديث محتوى العنصر
-          conversationItem.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conversation.unreadCount > 0 ? 'has-unread' : ''} ${wasActive ? 'active' : ''}`;
+          conversationItem.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conversation.unreadCount > 0 ? 'has-unread' : ''} ${wasActive ? 'active' : ''} ${conversation.assignee ? 'assigned' : ''} ${conversation.assignee && conversation.assignee._id === window.currentUserId ? 'assigned-to-me' : ''}`;
+          conversationItem.setAttribute('data-status', conversation.status || 'open');
           
           // تحديث HTML الداخلي للعنصر
           conversationItem.innerHTML = `
@@ -472,6 +558,7 @@
                   <i class="${conversation.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary'} me-2"></i>
                   <span>${conversation.customerName || conversation.phoneNumber}</span>
                 </div>
+                ${assigneeHtml}
                 <div class="conversation-preview">
                   ${conversation.lastMessage ? `
                     <small class="${conversation.unreadCount > 0 ? 'fw-bold' : 'text-muted'}">
@@ -491,7 +578,7 @@
                   ${new Date(conversation.lastMessageAt || conversation.updatedAt).toLocaleString('ar-LY', {hour: '2-digit', minute: '2-digit'})}
                 </div>
                 ${conversation.status === 'closed' ? `<span class="status-indicator closed" title="محادثة مغلقة"><i class="fas fa-lock"></i></span>` 
-                  : conversation.status === 'assigned' ? `<span class="status-indicator assigned" title="محادثة مسندة"><i class="fas fa-user-check"></i></span>`
+                  : conversation.status === 'assigned' || conversation.assignee ? `<span class="status-indicator assigned" title="محادثة مسندة"><i class="fas fa-user-check"></i></span>`
                   : `<span class="status-indicator open" title="محادثة مفتوحة"><i class="fas fa-door-open"></i></span>`}
               </div>
             </div>
@@ -504,10 +591,53 @@
         } 
         // إذا لم يكن العنصر موجود، قم بإنشائه
         else {
-          // قد نحتاج لاستدعاء refreshConversationsList بدلاً من ذلك،
-          // حيث قد لا تكون كل المعلومات الضرورية متوفرة في الإشعار
-          refreshConversationsList();
-          return;
+          // إنشاء عنصر جديد
+          conversationItem = document.createElement('button');
+          conversationItem.type = 'button';
+          conversationItem.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conversation.unreadCount > 0 ? 'has-unread' : ''} ${isCurrentlyActive ? 'active' : ''} ${conversation.assignee ? 'assigned' : ''} ${conversation.assignee && conversation.assignee._id === window.currentUserId ? 'assigned-to-me' : ''}`;
+          conversationItem.setAttribute('data-conversation-id', conversation._id);
+          conversationItem.setAttribute('data-status', conversation.status || 'open');
+          
+          // إضافة المحتوى الداخلي
+          conversationItem.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center w-100">
+              <div class="conversation-info">
+                <div class="conversation-name">
+                  <i class="${conversation.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary'} me-2"></i>
+                  <span>${conversation.customerName || conversation.phoneNumber}</span>
+                </div>
+                ${assigneeHtml}
+                <div class="conversation-preview">
+                  ${conversation.lastMessage ? `
+                    <small class="${conversation.unreadCount > 0 ? 'fw-bold' : 'text-muted'}">
+                      ${conversation.lastMessage.direction === 'incoming' ? '<i class="fas fa-reply-all text-muted me-1 fa-flip-horizontal"></i>' : '<i class="fas fa-reply text-muted me-1"></i>'}
+                      ${conversation.lastMessage.content
+                         ? conversation.lastMessage.content.substring(0, 30) + (conversation.lastMessage.content.length > 30 ? '...' : '')
+                         : (conversation.lastMessage.mediaType ? 'محتوى وسائط' : 'رسالة')}
+                    </small>
+                  ` : `
+                    <small class="text-muted"><i class="fas fa-info-circle me-1"></i> محادثة جديدة</small>
+                  `}
+                </div>
+              </div>
+              <div class="conversation-meta text-end">
+                ${conversation.unreadCount > 0 ? `<span class="badge bg-danger rounded-pill conversation-badge mb-1">${conversation.unreadCount}</span>` : ''}
+                <div class="conversation-time small">
+                  ${new Date(conversation.lastMessageAt || conversation.updatedAt).toLocaleString('ar-LY', {hour: '2-digit', minute: '2-digit'})}
+                </div>
+                ${conversation.status === 'closed' ? `<span class="status-indicator closed" title="محادثة مغلقة"><i class="fas fa-lock"></i></span>` 
+                  : conversation.status === 'assigned' || conversation.assignee ? `<span class="status-indicator assigned" title="محادثة مسندة"><i class="fas fa-user-check"></i></span>`
+                  : `<span class="status-indicator open" title="محادثة مفتوحة"><i class="fas fa-door-open"></i></span>`}
+              </div>
+            </div>
+          `;
+          
+          // إضافة العنصر الجديد في بداية القائمة
+          if (conversationList.firstChild) {
+            conversationList.insertBefore(conversationItem, conversationList.firstChild);
+          } else {
+            conversationList.appendChild(conversationItem);
+          }
         }
         
         // إعادة تعيين مستمعات الأحداث

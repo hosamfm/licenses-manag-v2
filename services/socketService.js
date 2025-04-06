@@ -279,6 +279,46 @@ async function notifyConversationUpdate(conversationId, update) {
     update._id = conversationId;
   }
   
+  // إذا كان التحديث متعلق بتعيين المحادثة لمستخدم، وكانت بيانات المستخدم المعين غير كاملة
+  if (update.type === 'assigned' && update.assignedTo && !update.assignee) {
+    try {
+      // استرجاع معلومات المستخدم المعين من قاعدة البيانات
+      const User = require('../models/User');
+      const assignee = await User.findById(update.assignedTo).select('_id username full_name');
+      
+      if (assignee) {
+        // إضافة معلومات المستخدم المعين إلى التحديث
+        update.assignee = {
+          _id: assignee._id,
+          username: assignee.username,
+          full_name: assignee.full_name
+        };
+        
+        logger.info('socketService', 'تم إضافة معلومات المستخدم المعين إلى تحديث المحادثة', {
+          conversationId,
+          assigneeId: assignee._id,
+          assigneeName: assignee.full_name || assignee.username
+        });
+      }
+    } catch (error) {
+      logger.error('socketService', 'خطأ في استرجاع معلومات المستخدم المعين لتحديث المحادثة', {
+        conversationId,
+        assignedTo: update.assignedTo,
+        error: error.message
+      });
+    }
+  }
+  
+  // إذا كان التحديث متعلق بتغيير حالة المحادثة (مفتوحة/مغلقة) ولم يتم تحديد نوع التحديث
+  if (!update.type && update.status) {
+    // إضافة نوع التحديث للتعرف عليه من طرف المستقبل
+    update.type = 'status';
+    logger.info('socketService', 'تم إضافة نوع التحديث (status) لتغيير حالة المحادثة', {
+      conversationId,
+      status: update.status
+    });
+  }
+  
   // إرسال التحديث إلى غرفة المحادثة
   io.to(`conversation-${conversationId}`).emit('conversation-update', update);
   
@@ -292,12 +332,17 @@ async function notifyConversationUpdate(conversationId, update) {
     lastMessage: update.lastMessage,
     customerName: update.customerName,
     phoneNumber: update.phoneNumber,
-    assignedTo: update.assignedTo
+    assignedTo: update.assignedTo,
+    // إضافة معلومات المستخدم المعين إلى تحديث القائمة
+    assignee: update.assignee
   };
+  
+  // إرسال التحديث للجميع
   io.emit('conversation-list-update', updateForList);
   
   logger.info('socketService', 'تم إرسال إشعار بتحديث المحادثة', { 
     conversationId,
+    updateType: update.type || 'غير محدد',
     updateFields: Object.keys(update).join(', ')
   });
 }

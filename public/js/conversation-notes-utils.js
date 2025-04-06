@@ -3,12 +3,6 @@
  */
 
 (function() {
-  // تأكد من تحميل jQuery
-  if (typeof jQuery === 'undefined') {
-    // يجب تحميل jQuery أولاً قبل استخدام هذا الملف
-    return;
-  }
-
   // تعريف المتغيرات العالمية
   let replyingToMessage = null;
   let usersList = []; // قائمة المستخدمين للمنشن
@@ -16,16 +10,20 @@
   // جلب قائمة المستخدمين الذين يمكن منشنهم
   window.fetchUsersForMention = async function() {
     try {
-      const response = await fetch('/api/user/can-access-conversations');
+      // وضع الطلب في متغير منفصل
+      const apiUrl = '/api/user/can-access-conversations';
+      
+      const response = await fetch(apiUrl);
       const data = await response.json();
+      
       if (data.success) {
         usersList = data.users || [];
         return usersList;
       }
     } catch (error) {
-      // حدث خطأ في جلب قائمة المستخدمين
+      // خطأ صامت
     }
-    return [];
+    return usersList || [];
   };
 
   // إضافة تعليق داخلي للمحادثة
@@ -120,7 +118,6 @@
           }
         } else {
           // عرض خطأ عام
-          // حدث خطأ أثناء إضافة الملاحظة
           if (window.showToast) {
             window.showToast('حدث خطأ أثناء إضافة الملاحظة', 'error');
           } else {
@@ -160,25 +157,12 @@
     
     // إضافة معالج النقر
     noteButton.onclick = function() {
-      // الحصول على معرف المحادثة من النموذج
-      const replyForm = document.getElementById('replyForm');
-      if (!replyForm) return;
-      
-      // نستخدم معرف المحادثة من عنوان الطلب
-      const conversationId = window.location.pathname.split('/').pop();
-      
-      // تعيين معرف المحادثة في النافذة المنبثقة
-      document.getElementById('conversationId').value = conversationId;
-      
-      // تحميل قائمة المستخدمين للمنشن
-      window.fetchUsersForMention().then(() => {
-        // تعيين المنشن تلقائياً للحقل
-        window.initializeMentionsInNoteField();
-      });
-
-      // فتح النافذة المنبثقة
-      const modal = new bootstrap.Modal(document.getElementById('internalNoteModal'));
-      modal.show();
+      // التأكد من وجود دالة openInternalNoteModal العالمية
+      if (typeof window.openInternalNoteModal === 'function') {
+        window.openInternalNoteModal();
+      } else {
+        alert('عذراً، ميزة التعليقات الداخلية غير متوفرة حالياً');
+      }
     };
 
     // إدراج الزر قبل زر الإرسال (آخر زر)
@@ -190,39 +174,83 @@
   window.initializeMentionsInNoteField = function() {
     // التأكد من وجود مكتبة Tribute
     if (typeof Tribute === 'undefined') {
-      // يجب تحميل مكتبة Tribute.js لدعم المنشن
+      // محاولة تحميل المكتبة ديناميكياً
+      const tributeScript = document.createElement('script');
+      tributeScript.src = 'https://cdn.jsdelivr.net/npm/tributejs@5.1.3/dist/tribute.min.js';
+      tributeScript.onload = function() {
+        window.initializeMentionsInNoteField(); // إعادة استدعاء الوظيفة بعد تحميل المكتبة
+      };
+      document.head.appendChild(tributeScript);
+      return;
+    }
+
+    // التأكد من وجود حقل الملاحظة
+    const noteField = document.getElementById('internalNoteContent');
+    if (!noteField) {
       return;
     }
 
     // التأكد من وجود المستخدمين
     if (!usersList || usersList.length === 0) {
-      // قائمة المستخدمين فارغة، يتم تحميلها...
+      window.fetchUsersForMention().then(() => {
+        if (usersList && usersList.length > 0) {
+          window.initializeMentionsInNoteField(); // إعادة استدعاء الوظيفة بعد تحميل المستخدمين
+        }
+      });
       return;
     }
 
-    // إنشاء كائن المنشن
-    window.tributeInstance = new Tribute({
-      values: usersList.map(user => ({
-        key: user.username,
-        value: user.full_name,
-        id: user._id
-      })),
-      trigger: '@',
-      menuItemTemplate: function(item) {
-        return `<span class="mention-item">${item.original.value} (@${item.original.key})</span>`;
-      },
-      selectTemplate: function(item) {
-        return `@${item.original.key}`;
-      },
-      noMatchTemplate: function() {
-        return '<span style="display:none;"></span>';
-      },
-      lookup: 'value',
-      fillAttr: 'value'
-    });
+    // إزالة أي تهيئة سابقة لمنع التكرار
+    if (window.tributeInstance) {
+      try {
+        window.tributeInstance.detach(noteField);
+      } catch (e) {
+        // تجاهل الخطأ
+      }
+    }
 
-    // إضافة المنشن إلى حقل الملاحظة
-    window.tributeInstance.attach(document.getElementById('internalNoteContent'));
+    // تجهيز البيانات للمنشن
+    const usersForMention = usersList.map(user => ({
+      key: user.username || '',
+      value: user.full_name || user.username || 'مستخدم',
+      id: user._id || ''
+    })).filter(user => user.key); // تجاهل المستخدمين بدون اسم مستخدم
+
+    // إنشاء كائن المنشن
+    try {
+      window.tributeInstance = new Tribute({
+        values: usersForMention,
+        trigger: '@',
+        menuItemTemplate: function(item) {
+          return `<span class="mention-item">${item.original.value} (@${item.original.key})</span>`;
+        },
+        selectTemplate: function(item) {
+          return `@${item.original.key}`;
+        },
+        noMatchTemplate: function() {
+          return '<span style="display:none;"></span>';
+        },
+        lookup: 'value',
+        fillAttr: 'value',
+        requireLeadingSpace: false,
+        allowSpaces: true
+      });
+
+      // إضافة المنشن إلى حقل الملاحظة
+      window.tributeInstance.attach(noteField);
+      
+      // تعيين مستمع لاختبار المنشن
+      noteField.addEventListener('tribute-replaced', function(e) {
+        // تم اختيار مستخدم
+      });
+      
+      // إضافة فئة CSS للإشارة إلى أن المنشن قد تم تهيئته
+      noteField.classList.add('mention-initialized');
+      
+      return true;
+    } catch (error) {
+      return false;
+    }
   };
 
   // إضافة زر المنشن للمستخدمين
@@ -331,6 +359,48 @@
 
     // إضافة زر التعليق الداخلي
     window.addInternalNoteButton();
+    
+    // المزامنة مع وظيفة openInternalNoteModal الموجودة عالمياً
+    if (typeof window.openInternalNoteModal !== 'function') {
+      window.openInternalNoteModal = function() {
+        // تأكد من وجود النافذة المنبثقة
+        if (typeof window.initInternalNoteModal === 'function') {
+          window.initInternalNoteModal();
+        }
+        
+        // الحصول على معرف المحادثة الحالية وتعيينه في النافذة
+        const conversationId = window.currentConversationId || document.getElementById('conversationId').value;
+        
+        if (conversationId) {
+          // تعيين معرف المحادثة في الحقل الخفي
+          if (document.getElementById('conversationId')) {
+            document.getElementById('conversationId').value = conversationId;
+          }
+          
+          // فتح النافذة
+          const modal = new bootstrap.Modal(document.getElementById('internalNoteModal'));
+          modal.show();
+          
+          // يجب استدعاء fetchUsersForMention قبل تهيئة المنشن
+          if (typeof window.fetchUsersForMention === 'function') {
+            window.fetchUsersForMention().then(() => {
+              // بعد جلب المستخدمين، نقوم بتهيئة ميزة المنشن
+              if (typeof window.initializeMentionsInNoteField === 'function') {
+                setTimeout(() => {
+                  window.initializeMentionsInNoteField();
+                }, 100);
+              }
+              
+              // التركيز في حقل الإدخال بعد فتح النافذة وتحميل البيانات
+              const noteField = document.getElementById('internalNoteContent');
+              if (noteField) {
+                noteField.focus();
+              }
+            });
+          }
+        }
+      };
+    }
   };
 
   // تهيئة الوظائف عند تحميل المستند

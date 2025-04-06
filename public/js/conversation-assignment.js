@@ -107,23 +107,37 @@
           showConfirmButton: false
         });
         
-        // تحديث الواجهة - استخدام بيانات المستخدم من الاستجابة
-        const assigneeName = data.conversation.assignee ? 
-          (data.conversation.assignee.full_name || data.conversation.assignee.username) : 
-          window.currentUsername;
-        
-        document.getElementById('assigneeInfo').innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeName}`;
-        
-        // إخفاء زر "تعيين لي" بعد التعيين
-        if (document.getElementById('assignToMeBtn')) {
-          document.getElementById('assignToMeBtn').style.display = 'none';
-        }
-        
-        // تحديث حالة المحادثة
-        const statusBadge = document.querySelector('.conversation-status-badge');
-        if (statusBadge) {
-          statusBadge.className = 'badge bg-info ms-2 conversation-status-badge';
-          statusBadge.innerHTML = '<i class="fas fa-user-check me-1"></i> مسندة';
+        // تحديث الواجهة باستخدام الوظيفة الجديدة
+        if (typeof window.updateConversationHeader === 'function') {
+          window.updateConversationHeader({
+            _id: conversationId,
+            assignee: {
+              _id: window.currentUserId,
+              username: window.currentUsername,
+              full_name: data.conversation.assignee ? data.conversation.assignee.full_name : window.currentUsername
+            },
+            status: 'assigned'
+          });
+        } else {
+          // الكود القديم احتياطيًا
+          // تحديث الواجهة - استخدام بيانات المستخدم من الاستجابة
+          const assigneeName = data.conversation.assignee ? 
+            (data.conversation.assignee.full_name || data.conversation.assignee.username) : 
+            window.currentUsername;
+          
+          document.getElementById('assigneeInfo').innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeName}`;
+          
+          // إخفاء زر "تعيين لي" بعد التعيين
+          if (document.getElementById('assignToMeBtn')) {
+            document.getElementById('assignToMeBtn').style.display = 'none';
+          }
+          
+          // تحديث حالة المحادثة
+          const statusBadge = document.querySelector('.conversation-status-badge');
+          if (statusBadge) {
+            statusBadge.className = 'badge bg-info ms-2 conversation-status-badge';
+            statusBadge.innerHTML = '<i class="fas fa-user-check me-1"></i> مسندة';
+          }
         }
       } else {
         Swal.fire({
@@ -256,49 +270,67 @@
           showConfirmButton: false
         });
         
-        // تحديث التعيين في الواجهة - استخدام البيانات المعادة من الخادم
+        // تحديث التعيين في الواجهة
         if (userId) {
-          // استخدام البيانات من استجابة الخادم إذا كانت متوفرة
-          let assigneeName = 'غير معروف';
-          
-          if (data.conversation && data.conversation.assignee) {
-            assigneeName = data.conversation.assignee.full_name || 
-                          data.conversation.assignee.username || 
-                          'غير معروف';
+          // استخدام الوظيفة الجديدة لتحديث رأس المحادثة إذا كانت متوفرة
+          if (typeof window.updateConversationHeader === 'function' && data.conversation) {
+            window.updateConversationHeader({
+              _id: conversationId,
+              assignee: data.conversation.assignee,
+              status: 'assigned'
+            });
           } else {
-            // الطريقة القديمة كاحتياطي
-            const selectElem = document.getElementById('assigneeSelect');
-            const selectedOption = selectElem ? selectElem.options[selectElem.selectedIndex] : null;
-            assigneeName = selectedOption ? selectedOption.text : 'غير معروف';
-          }
-          
-          document.getElementById('assigneeInfo').innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeName}`;
-          
-          // إخفاء زر "تعيين لي"
-          if (document.getElementById('assignToMeBtn')) {
-            document.getElementById('assignToMeBtn').style.display = 'none';
-          }
-          
-          // تحديث حالة المحادثة إلى "مسندة"
-          const statusBadge = document.querySelector('.conversation-status-badge');
-          if (statusBadge) {
-            statusBadge.className = 'badge bg-info ms-2 conversation-status-badge';
-            statusBadge.innerHTML = '<i class="fas fa-user-check me-1"></i> مسندة';
+            // استخدام البيانات من استجابة الخادم إذا كانت متوفرة
+            let assigneeName = 'غير معروف';
+            
+            if (data.conversation && data.conversation.assignee) {
+              assigneeName = data.conversation.assignee.full_name || 
+                            data.conversation.assignee.username || 
+                            'غير معروف';
+            } else {
+              // الطريقة القديمة كاحتياطي
+              const selectElem = document.getElementById('assigneeSelect');
+              const selectedOption = selectElem ? selectElem.options[selectElem.selectedIndex] : null;
+              assigneeName = selectedOption ? selectedOption.text : 'غير معروف';
+            }
+            
+            document.getElementById('assigneeInfo').innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeName}`;
+            
+            // إخفاء زر "تعيين لي"
+            if (document.getElementById('assignToMeBtn')) {
+              document.getElementById('assignToMeBtn').style.display = 'none';
+            }
+            
+            // تحديث حالة المحادثة إلى "مسندة"
+            const statusBadge = document.querySelector('.conversation-status-badge');
+            if (statusBadge) {
+              statusBadge.className = 'badge bg-info ms-2 conversation-status-badge';
+              statusBadge.innerHTML = '<i class="fas fa-user-check me-1"></i> مسندة';
+            }
           }
         } else {
-          // تحديث المعلومات إلى "غير معين"
-          document.getElementById('assigneeInfo').innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> غير معين';
-          
-          // إظهار زر "تعيين لي"
-          if (document.getElementById('assignToMeBtn')) {
-            document.getElementById('assignToMeBtn').style.display = 'inline-block';
-          }
-          
-          // تحديث حالة المحادثة إلى "مفتوحة"
-          const statusBadge = document.querySelector('.conversation-status-badge');
-          if (statusBadge) {
-            statusBadge.className = 'badge bg-success ms-2 conversation-status-badge';
-            statusBadge.innerHTML = '<i class="fas fa-door-open me-1"></i> مفتوحة';
+          // إلغاء التعيين - استخدام الوظيفة الجديدة إذا كانت متوفرة
+          if (typeof window.updateConversationHeader === 'function') {
+            window.updateConversationHeader({
+              _id: conversationId,
+              assignee: null,
+              status: 'open'
+            });
+          } else {
+            // تحديث المعلومات إلى "غير معين"
+            document.getElementById('assigneeInfo').innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> غير معين';
+            
+            // إظهار زر "تعيين لي"
+            if (document.getElementById('assignToMeBtn')) {
+              document.getElementById('assignToMeBtn').style.display = 'inline-block';
+            }
+            
+            // تحديث حالة المحادثة إلى "مفتوحة"
+            const statusBadge = document.querySelector('.conversation-status-badge');
+            if (statusBadge) {
+              statusBadge.className = 'badge bg-success ms-2 conversation-status-badge';
+              statusBadge.innerHTML = '<i class="fas fa-door-open me-1"></i> مفتوحة';
+            }
           }
         }
       } else {
@@ -320,6 +352,130 @@
   }
 
   // === مستمعات الأحداث للسوكت ===
+
+  /**
+   * تحديث حالة التعيين في قائمة المحادثات
+   * @param {Object} data - بيانات تحديث المحادثة
+   */
+  function updateConversationListAssignment(data) {
+    if (!data || (!data._id && !data.conversationId)) return;
+    
+    const conversationId = data._id || data.conversationId;
+    const conversationItem = document.querySelector(`.conversation-item[data-conversation-id="${conversationId}"]`);
+    
+    if (!conversationItem) return;
+    
+    // تحديث حالة المحادثة (مفتوحة/مغلقة)
+    if (data.status === 'closed') {
+      // تحديث حالة المحادثة إلى مغلقة
+      conversationItem.setAttribute('data-status', 'closed');
+      
+      // تحديث مؤشر الحالة
+      const statusIndicator = conversationItem.querySelector('.status-indicator');
+      if (statusIndicator) {
+        statusIndicator.className = 'status-indicator closed';
+        statusIndicator.title = 'محادثة مغلقة';
+        statusIndicator.innerHTML = '<i class="fas fa-lock"></i>';
+      }
+    } 
+    else if (data.status === 'open') {
+      // تحديث حالة المحادثة إلى مفتوحة
+      conversationItem.setAttribute('data-status', 'open');
+      
+      // تحديث مؤشر الحالة
+      const statusIndicator = conversationItem.querySelector('.status-indicator');
+      if (statusIndicator) {
+        statusIndicator.className = 'status-indicator open';
+        statusIndicator.title = 'محادثة مفتوحة';
+        statusIndicator.innerHTML = '<i class="fas fa-door-open"></i>';
+      }
+    }
+    
+    // تحديث بيانات التعيين
+    if (data.assignee) {
+      // تحديث حالة التعيين في عنصر المحادثة
+      conversationItem.setAttribute('data-status', 'assigned');
+      
+      // تحديث مؤشر الحالة
+      const statusIndicator = conversationItem.querySelector('.status-indicator');
+      if (statusIndicator) {
+        statusIndicator.className = 'status-indicator assigned';
+        statusIndicator.title = 'محادثة مسندة';
+        statusIndicator.innerHTML = '<i class="fas fa-user-check"></i>';
+      }
+      
+      // إضافة اسم المسؤول - التحقق من وجود عنصر .conversation-assignee
+      let assigneeElem = conversationItem.querySelector('.conversation-assignee');
+      
+      // إذا لم يكن عنصر المسؤول موجودًا، أنشئه
+      if (!assigneeElem) {
+        // ابحث عن المكان المناسب لإضافته
+        const conversationMeta = conversationItem.querySelector('.conversation-meta');
+        const conversationInfo = conversationItem.querySelector('.conversation-info');
+        
+        if (conversationMeta) {
+          // إنشاء العنصر
+          assigneeElem = document.createElement('div');
+          assigneeElem.className = 'conversation-assignee small text-primary mb-1';
+          
+          // إضافته إلى بداية conversationMeta
+          conversationMeta.insertBefore(assigneeElem, conversationMeta.firstChild);
+        } else if (conversationInfo) {
+          // إنشاء العنصر
+          assigneeElem = document.createElement('div');
+          assigneeElem.className = 'conversation-assignee small text-primary';
+          
+          // إضافته إلى نهاية conversationInfo
+          conversationInfo.appendChild(assigneeElem);
+        }
+      }
+      
+      // تحديث محتوى عنصر المسؤول إذا وجد
+      if (assigneeElem) {
+        assigneeElem.innerHTML = `<i class="fas fa-user-check me-1"></i> ${data.assignee.full_name || data.assignee.username || 'مستخدم'}`;
+        assigneeElem.style.display = 'block';
+      }
+      
+      // إضافة فئة "assigned"
+      conversationItem.classList.add('assigned');
+      
+      // إذا كان المستخدم الحالي هو المعين، أضف فئة "assigned-to-me"
+      if (data.assignee._id === window.currentUserId) {
+        conversationItem.classList.add('assigned-to-me');
+      } else {
+        conversationItem.classList.remove('assigned-to-me');
+      }
+    } else {
+      // تحديث حالة المحادثة إلى مفتوحة (إذا لم تكن مغلقة)
+      if (data.status !== 'closed') {
+        conversationItem.setAttribute('data-status', 'open');
+        
+        // تحديث مؤشر الحالة
+        const statusIndicator = conversationItem.querySelector('.status-indicator');
+        if (statusIndicator) {
+          statusIndicator.className = 'status-indicator open';
+          statusIndicator.title = 'محادثة مفتوحة';
+          statusIndicator.innerHTML = '<i class="fas fa-door-open"></i>';
+        }
+      }
+      
+      // إزالة معلومات التعيين
+      const assigneeElem = conversationItem.querySelector('.conversation-assignee');
+      if (assigneeElem) {
+        assigneeElem.innerHTML = '';
+        assigneeElem.style.display = 'none';
+      }
+      
+      // إزالة فئات التعيين
+      conversationItem.classList.remove('assigned', 'assigned-to-me');
+    }
+    
+    // تحريك المحادثة المحدثة إلى أعلى القائمة
+    const conversationList = document.getElementById('conversationList');
+    if (conversationList && conversationList.firstChild && conversationList.firstChild !== conversationItem) {
+      conversationList.insertBefore(conversationItem, conversationList.firstChild);
+    }
+  }
 
   /**
    * إعداد معالجات أحداث المرتبطة بتعيين المحادثات
@@ -359,55 +515,43 @@
               }
             }
           }
+          
+          // تحديث حالة المحادثة في البطاقة الرئيسية
+          const statusBadge = document.querySelector('.conversation-status-badge');
+          if (statusBadge) {
+            if (data.assignee) {
+              statusBadge.className = 'badge bg-info ms-2 conversation-status-badge';
+              statusBadge.innerHTML = '<i class="fas fa-user-check me-1"></i> مسندة';
+            } else {
+              statusBadge.className = 'badge bg-success ms-2 conversation-status-badge';
+              statusBadge.innerHTML = '<i class="fas fa-door-open me-1"></i> مفتوحة';
+            }
+          }
         }
         
         // تحديث قائمة المحادثات
         updateConversationListAssignment(data);
       }
     });
-  };
-  
-  /**
-   * تحديث حالة التعيين في قائمة المحادثات
-   * @param {Object} data - بيانات تحديث المحادثة
-   */
-  function updateConversationListAssignment(data) {
-    if (!data || (!data._id && !data.conversationId)) return;
     
-    const conversationId = data._id || data.conversationId;
-    const conversationItem = document.querySelector(`.conversation-item[data-conversation-id="${conversationId}"]`);
-    
-    if (!conversationItem) return;
-    
-    // تحديث بيانات التعيين
-    if (data.assignee) {
-      // إضافة اسم المسؤول
-      const assigneeElem = conversationItem.querySelector('.conversation-assignee');
-      if (assigneeElem) {
-        assigneeElem.innerHTML = `<i class="fas fa-user-check me-1"></i> ${data.assignee.full_name || data.assignee.username || 'مستخدم'}`;
-        assigneeElem.style.display = 'block';
+    // الاستماع لأحداث تحديث قائمة المحادثات (حدث جديد خاص بالقائمة)
+    socket.on('conversation-list-update', function(updatedConversation) {
+      if (!updatedConversation || !updatedConversation._id) {
+        return;
       }
       
-      // إضافة فئة "assigned"
-      conversationItem.classList.add('assigned');
-      
-      // إذا كان المستخدم الحالي هو المعين، أضف فئة "assigned-to-me"
-      if (data.assignee._id === window.currentUserId) {
-        conversationItem.classList.add('assigned-to-me');
+      // قم بتحديث عنصر المحادثة في القائمة
+      if (typeof window.updateConversationInList === 'function') {
+        window.updateConversationInList(updatedConversation);
       } else {
-        conversationItem.classList.remove('assigned-to-me');
+        // استخدم آلية التحديث البديلة للتعيين
+        updateConversationListAssignment({
+          _id: updatedConversation._id,
+          assignee: updatedConversation.assignee,
+          status: updatedConversation.status
+        });
       }
-    } else {
-      // إزالة معلومات التعيين
-      const assigneeElem = conversationItem.querySelector('.conversation-assignee');
-      if (assigneeElem) {
-        assigneeElem.innerHTML = '';
-        assigneeElem.style.display = 'none';
-      }
-      
-      // إزالة فئات التعيين
-      conversationItem.classList.remove('assigned', 'assigned-to-me');
-    }
-  }
+    });
+  };
 
 })(window); 
