@@ -60,6 +60,46 @@
         <span class="badge bg-primary ms-2"><i class="fas fa-comments me-1"></i> <%= messages.length %> رسالة</span>
       </div>
     </div>
+    
+    <!-- بطاقة معلومات التعيين -->
+    <div class="conversation-assignment-info p-2 border-bottom">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="assignment-status d-flex align-items-center">
+          <span class="me-2 text-muted">المسؤول:</span>
+          <% if (conversation.assignedTo) { 
+            let assigneeUser = typeof conversation.assignedTo === 'object' ? conversation.assignedTo : null;
+            let assigneeName = assigneeUser ? (assigneeUser.full_name || assigneeUser.username) : 'غير معروف';
+          %>
+            <span class="badge bg-info" id="assigneeInfo">
+              <i class="fas fa-user-check me-1"></i> <%= assigneeName %>
+            </span>
+          <% } else { %>
+            <span class="badge bg-warning text-dark" id="assigneeInfo">
+              <i class="fas fa-exclamation-circle me-1"></i> غير معين
+            </span>
+          <% } %>
+        </div>
+        <div class="assignment-actions">
+          <% if (conversation.status !== 'closed') { %>
+            <% if (!conversation.assignedTo) { %>
+              <button type="button" class="btn btn-sm btn-outline-primary assign-to-me-btn"
+                      data-conversation-id="<%= conversation._id %>"
+                      onclick="window.assignConversationToMe('<%= conversation._id %>')"
+                      id="assignToMeBtn">
+                <i class="fas fa-user-plus me-1"></i> تعيين لي
+              </button>
+            <% } %>
+            <button type="button" class="btn btn-sm btn-outline-secondary change-assignment-btn"
+                    data-conversation-id="<%= conversation._id %>"
+                    onclick="window.showAssignmentModal('<%= conversation._id %>')"
+                    id="changeAssignmentBtn">
+              <i class="fas fa-exchange-alt me-1"></i> تغيير المسؤول
+            </button>
+          <% } %>
+        </div>
+      </div>
+    </div>
+
     <div class="card-body p-0" id="messageContainer" style="max-height: 500px; overflow-y: auto;"
          data-current-page="<%= pagination ? pagination.currentPage : 1 %>"
          data-total-pages="<%= pagination ? pagination.totalPages : 0 %>"
@@ -381,10 +421,18 @@
     
     // تنفيذ الربط فور تحميل الصفحة
     setupButtonEventListeners();
+    // تنفيذ ربط أزرار التعيين
+    if (typeof window.setupAssignmentButtons === 'function') {
+      window.setupAssignmentButtons();
+    }
     
     // إضافة مستمع للتحميل AJAX للمحادثات
     window.addEventListener('messages-loaded', function() {
       setupButtonEventListeners();
+      // تنفيذ ربط أزرار التعيين بعد تحميل الرسائل
+      if (typeof window.setupAssignmentButtons === 'function') {
+        window.setupAssignmentButtons();
+      }
     });
     
     // إذا كان هناك دالة قائمة بالفعل لربط أحداث المحادثة، قم بتعديلها
@@ -393,6 +441,10 @@
       window.attachConversationEventListeners = function() {
         originalAttachFunction.call(this);
         setupButtonEventListeners();
+        // تنفيذ ربط أزرار التعيين بعد ربط الأحداث الأخرى
+        if (typeof window.setupAssignmentButtons === 'function') {
+          window.setupAssignmentButtons();
+        }
       };
     }
   });

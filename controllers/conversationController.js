@@ -499,6 +499,36 @@ exports.replyToConversation = async (req, res) => {
       return res.redirect('/crm/conversations');
     }
 
+    // === بداية: إضافة منطق التعيين التلقائي ===
+    // التحقق مما إذا كانت المحادثة غير معينة والمستخدم لديه الصلاحية
+    if (senderInfo && senderInfo._id && 
+        (conversation.status !== 'assigned' || !conversation.assignedTo) && 
+        req.user && req.user.can_access_conversations) {
+      
+      // لا نقوم بالتعيين التلقائي إذا كانت المحادثة مغلقة
+      if (conversation.status !== 'closed') {
+        // تعيين المحادثة للمستخدم الحالي
+        conversation.assignedTo = req.user._id;
+        conversation.status = 'assigned';
+        
+        logger.info('conversationController', 'تم تعيين المحادثة تلقائياً للمستخدم الحالي بعد الرد', {
+          conversationId,
+          userId: req.user._id.toString(),
+          username: req.user.username
+        });
+        
+        // إرسال إشعار بالتعيين
+        socketService.notifyConversationUpdate(conversationId, {
+          type: 'assigned',
+          status: 'assigned',
+          assignedTo: req.user._id,
+          assignedBy: req.user._id,
+          autoAssigned: true
+        });
+      }
+    }
+    // === نهاية: إضافة منطق التعيين التلقائي ===
+
     // استخدام دالة createReplyMessage مباشرة إذا كان رداً على رسالة، وإلا createOutgoingMessage
     let msg;
     if (replyToMessageId) {
@@ -1109,5 +1139,213 @@ exports.reopenConversation = async (req, res) => {
   } catch (error) {
     logger.error('conversationController', 'خطأ في إعادة فتح المحادثة', { error, params: req.params });
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء إعادة فتح المحادثة' });
+  }
+};
+
+/**
+ * الحصول على قائمة المستخدمين المخولين للوصول إلى المحادثات
+ */
+exports.getConversationHandlers = async (req, res) => {
+  try {
+    // البحث عن جميع المستخدمين النشطين الذين يملكون صلاحية الوصول للمحادثات
+    const handlers = await User.find({
+      account_status: 'active',
+      can_access_conversations: true
+    })
+    .select('_id username full_name')
+    .sort({ full_name: 1 });
+    
+    return res.json({
+      success: true,
+      handlers: handlers.map(h => ({
+        _id: h._id,
+        username: h.username,
+        full_name: h.full_name || h.username
+      }))
+    });
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في جلب قائمة مستخدمي المحادثات', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'حدث خطأ أثناء جلب قائمة المستخدمين' 
+    });
+  }
+};
+
+/**
+ * API لتعيين المحادثة لمستخدم
+ */
+exports.assignConversationAPI = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+    
+    // التحقق من صلاحية المستخدم الحالي للعمليات على المحادثة
+    if (!req.user || !req.user.can_access_conversations) {
+      return res.status(403).json({
+        success: false,
+        error: 'لا تملك الصلاحيات اللازمة لتعيين المحادثات'
+      });
+    }
+
+    // التحقق من وجود المحادثة
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'المحادثة غير موجودة' 
+      });
+    }
+    
+    // متغير لتخزين بيانات المستخدم المعين
+    let assigneeData = null;
+    
+    // التعيين للمستخدم المحدد
+    if (userId) {
+      // التحقق من وجود المستخدم المعين
+      const assignee = await User.findOne({ 
+        _id: userId, 
+        can_access_conversations: true,
+        account_status: 'active'
+      });
+      
+      if (!assignee) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'المستخدم المحدد غير موجود أو لا يملك صلاحية الوصول للمحادثات' 
+        });
+      }
+      
+      // تخزين بيانات المستخدم المعين لاستخدامها لاحقاً
+      assigneeData = {
+        _id: assignee._id,
+        username: assignee.username,
+        full_name: assignee.full_name
+      };
+      
+      // تحديث معلومات التعيين
+      conversation.assignedTo = assignee._id;
+      conversation.status = 'assigned';
+    } else {
+      // إلغاء التعيين
+      conversation.assignedTo = null;
+      conversation.status = 'open';
+      assigneeData = null;
+    }
+    
+    // تحديث معلومات الوقت والمستخدم الذي قام بالتعيين
+    conversation.updatedAt = new Date();
+    await conversation.save();
+    
+    // إرسال إشعار بالتحديث
+    socketService.notifyConversationUpdate(conversationId, {
+      type: 'assigned',
+      status: conversation.status,
+      assignedTo: conversation.assignedTo,
+      assignedBy: req.user._id,
+      assignee: assigneeData // إضافة بيانات المستخدم المعين المفصلة
+    });
+    
+    // إرسال إشعار شخصي للمستخدم الذي تم تعيينه
+    if (userId) {
+      socketService.notifyUser(userId, 'conversation_assigned', {
+        conversationId,
+        assignedBy: req.user.full_name || req.user.username,
+        customerName: conversation.customerName,
+        phoneNumber: conversation.phoneNumber
+      });
+    }
+    
+    // إرسال الاستجابة
+    return res.json({
+      success: true,
+      message: userId ? 'تم تعيين المحادثة بنجاح' : 'تم إلغاء تعيين المحادثة بنجاح',
+      conversation: {
+        _id: conversation._id,
+        status: conversation.status,
+        assignedTo: conversation.assignedTo,
+        assignee: assigneeData // إضافة بيانات المستخدم المعين المفصلة للاستجابة
+      }
+    });
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في تعيين المحادثة عبر API', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'حدث خطأ أثناء محاولة تعيين المحادثة' 
+    });
+  }
+};
+
+/**
+ * تعيين المحادثة للمستخدم الحالي (تعيين سريع)
+ */
+exports.assignToMe = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    // التحقق من وجود مستخدم مسجل
+    if (!req.user || !req.user._id) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'يجب تسجيل الدخول أولاً' 
+      });
+    }
+    
+    // التحقق من صلاحية المستخدم
+    if (!req.user.can_access_conversations) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'لا تملك الصلاحيات اللازمة للوصول للمحادثات' 
+      });
+    }
+    
+    // التحقق من وجود المحادثة
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'المحادثة غير موجودة' 
+      });
+    }
+    
+    // تعيين المحادثة للمستخدم الحالي
+    conversation.assignedTo = req.user._id;
+    conversation.status = 'assigned';
+    conversation.updatedAt = new Date();
+    await conversation.save();
+    
+    // تجهيز بيانات المستخدم الحالي للإشعارات
+    const assigneeData = {
+      _id: req.user._id,
+      username: req.user.username,
+      full_name: req.user.full_name
+    };
+    
+    // إرسال إشعار بالتحديث
+    socketService.notifyConversationUpdate(conversationId, {
+      type: 'assigned',
+      status: conversation.status,
+      assignedTo: conversation.assignedTo,
+      assignedBy: req.user._id,
+      assignee: assigneeData // إضافة بيانات المستخدم الكاملة
+    });
+    
+    // إرسال الاستجابة
+    return res.json({
+      success: true,
+      message: 'تم تعيين المحادثة لك بنجاح',
+      conversation: {
+        _id: conversation._id,
+        status: conversation.status,
+        assignedTo: conversation.assignedTo,
+        assignee: assigneeData // إضافة بيانات المستخدم المعين المفصلة للاستجابة
+      }
+    });
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في تعيين المحادثة للمستخدم الحالي', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'حدث خطأ أثناء محاولة تعيين المحادثة' 
+    });
   }
 };

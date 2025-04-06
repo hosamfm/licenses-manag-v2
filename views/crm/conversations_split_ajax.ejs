@@ -18,7 +18,8 @@
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   
   <!-- استدعاء ملف مساعد التعليقات الداخلية -->
-  <script src="/js/conversation-notes-utils.js"></script>
+  <script src="/js/conversation-utils.js"></script>
+  <script src="/js/conversation-assignment.js"></script>
   
   <!-- تعريف معلومات المستخدم كمتغيرات عامة -->
   <script>
@@ -181,6 +182,11 @@
         // تعيين حالة الاتصال
         window.socketConnected = true;
         console.log('تم الاتصال بالسوكت بنجاح');
+        
+        // إعداد معالجات أحداث التعيين
+        if (typeof window.setupAssignmentListeners === 'function') {
+          window.setupAssignmentListeners(window.socketConnection);
+        }
       });
 
       window.socketConnection.on('disconnect', function() {

@@ -72,4 +72,15 @@ router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async
   }
 });
 
+// === إضافة مسارات التعيين الجديدة ===
+
+// مسار الحصول على قائمة المستخدمين المخولين للتعامل مع المحادثات
+router.get('/api/handlers', ensureCanAccessConversations, conversationController.getConversationHandlers);
+
+// مسار تعيين المحادثة (API)
+router.post('/:conversationId/api/assign', ensureCanAccessConversations, conversationController.assignConversationAPI);
+
+// مسار تعيين المحادثة للمستخدم الحالي
+router.post('/:conversationId/api/assign-to-me', ensureCanAccessConversations, conversationController.assignToMe);
+
 module.exports = router;
