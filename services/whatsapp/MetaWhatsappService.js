@@ -136,7 +136,7 @@ class MetaWhatsappService {
         }
 
         logger.info('MetaWhatsappService', 'جاري الحصول على رابط الوسائط', {
-            mediaId
+            phoneNumberId
         });
 
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
@@ -162,7 +162,7 @@ class MetaWhatsappService {
             const response = await axios.get(url, { headers });
             
             logger.info('MetaWhatsappService', 'تم الحصول على معلومات الوسائط بنجاح', {
-                mediaId,
+                phoneNumberId,
                 responseData: response.data
             });
             
@@ -170,7 +170,7 @@ class MetaWhatsappService {
         } catch (error) {
             logger.error('MetaWhatsappService', 'خطأ في الحصول على معلومات الوسائط', {
                 error: error.message,
-                mediaId,
+                phoneNumberId,
                 response: error.response?.data
             });
             throw error;
