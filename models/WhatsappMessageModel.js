@@ -48,21 +48,18 @@ const whatsappMessageSchema = new mongoose.Schema({
   deliveredAt: {
     type: Date
   },
-  // إضافة حقل لتخزين المستخدمين الذين قرأوا الرسالة
-  readBy: {
-    type: [{
-      userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-      },
-      username: String,
-      readAt: {
-        type: Date,
-        default: Date.now
-      }
-    }],
-    default: []
-  },
+  // إضافة حقل لتسجيل المستخدمين الذين قرأوا الرسالة
+  readBy: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    username: String,
+    readAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   sentBy: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User' 
@@ -216,60 +213,6 @@ whatsappMessageSchema.statics.updateMessageStatus = async function(externalMessa
     return message;
   } catch (error) {
     logger.error('خطأ في تحديث حالة الرسالة:', error);
-    throw error;
-  }
-};
-
-/**
- * إضافة مستخدم إلى قائمة قراء الرسالة
- * @param {string} messageId معرّف الرسالة
- * @param {Object} user معلومات المستخدم القارئ
- * @param {string} findByType نوع المعرف ('_id' أو 'externalMessageId')
- * @returns {Promise<Object>} الرسالة المحدثة
- */
-whatsappMessageSchema.statics.addMessageReader = async function(messageId, user, findByType = '_id') {
-  try {
-    // تحديد شرط البحث بناءً على نوع المعرف
-    const query = {};
-    query[findByType] = messageId;
-    
-    const message = await this.findOne(query);
-    
-    if (!message) {
-      logger.warn('الرسالة غير موجودة أثناء إضافة قارئ', { messageId, findByType });
-      return null;
-    }
-    
-    // التحقق مما إذا كان المستخدم قد قرأ الرسالة بالفعل
-    const existingReader = message.readBy.find(reader => 
-      reader.userId && user._id && reader.userId.toString() === user._id.toString()
-    );
-    
-    if (!existingReader) {
-      // إضافة المستخدم إلى قائمة القراء
-      message.readBy.push({
-        userId: user._id,
-        username: user.username || user.name || user.email || 'مستخدم',
-        readAt: new Date()
-      });
-      
-      // تأكد من أن حالة الرسالة 'مقروءة' إذا كانت واردة
-      if (message.direction === 'incoming' && message.status !== 'read') {
-        message.status = 'read';
-        message.readAt = new Date();
-      }
-      
-      await message.save();
-      logger.info('تمت إضافة قارئ جديد للرسالة', { 
-        messageId, 
-        userId: user._id.toString(),
-        username: user.username || user.name || 'غير معروف' 
-      });
-    }
-    
-    return message;
-  } catch (error) {
-    logger.error('خطأ في إضافة قارئ للرسالة:', error);
     throw error;
   }
 };
@@ -437,6 +380,111 @@ whatsappMessageSchema.statics.getMessageByExternalId = async function(externalMe
   } catch (error) {
     logger.error('خطأ في الحصول على الرسالة بواسطة المعرف الخارجي:', error);
     throw error;
+  }
+};
+
+/**
+ * تحديث حالة قراءة الرسالة وإضافة معلومات القارئ
+ * @param {string} messageId معرّف الرسالة (الداخلي أو الخارجي)
+ * @param {Object} userInfo معلومات المستخدم الذي قرأ الرسالة
+ * @returns {Object} الرسالة المحدثة
+ */
+whatsappMessageSchema.statics.markAsReadByUser = async function(messageId, userInfo) {
+  try {
+    // تحديد نوع المعرف (ObjectId أو معرف خارجي)
+    let query;
+    if (messageId.length === 24 && /^[0-9a-fA-F]{24}$/.test(messageId)) {
+      // المعرف يبدو كأنه ObjectId صالح
+      query = { 
+        $or: [
+          { externalMessageId: messageId },
+          { _id: messageId }
+        ]
+      };
+    } else {
+      // المعرف ليس ObjectId - ابحث فقط باستخدام المعرف الخارجي
+      query = { externalMessageId: messageId };
+    }
+    
+    // البحث عن الرسالة
+    const message = await this.findOne(query);
+    
+    if (!message) {
+      logger.error('لم يتم العثور على الرسالة للتحديث', { messageId });
+      return null;
+    }
+    
+    // التحقق إذا كان المستخدم قد قرأ الرسالة سابقاً
+    const hasRead = message.readBy && message.readBy.some(reader => 
+      reader.userId && reader.userId.toString() === userInfo.userId.toString()
+    );
+    
+    if (!hasRead) {
+      // إضافة المستخدم إلى قائمة القراء
+      const readerInfo = {
+        userId: userInfo.userId,
+        username: userInfo.username,
+        readAt: new Date()
+      };
+      
+      // استخدام $addToSet لضمان عدم تكرار المستخدم في القائمة
+      await this.updateOne(
+        { _id: message._id },
+        { 
+          $addToSet: { readBy: readerInfo },
+          $set: { 
+            status: 'read',
+            readAt: new Date() 
+          }
+        }
+      );
+      
+      logger.info('تم تحديث حالة قراءة الرسالة', { 
+        messageId: message._id, 
+        externalMessageId: message.externalMessageId,
+        reader: userInfo.username
+      });
+    }
+    
+    // إعادة جلب الرسالة المحدثة
+    return await this.findById(message._id);
+  } catch (error) {
+    logger.error('خطأ في تحديث حالة قراءة الرسالة', error);
+    throw error;
+  }
+};
+
+/**
+ * جلب قائمة المستخدمين الذين قرأوا الرسالة
+ * @param {string} messageId معرّف الرسالة
+ * @returns {Array} قائمة بالمستخدمين الذين قرأوا الرسالة
+ */
+whatsappMessageSchema.statics.getMessageReaders = async function(messageId) {
+  try {
+    // تحديد نوع المعرف (ObjectId أو معرف خارجي)
+    let query;
+    if (messageId.length === 24 && /^[0-9a-fA-F]{24}$/.test(messageId)) {
+      query = { 
+        $or: [
+          { externalMessageId: messageId },
+          { _id: messageId }
+        ]
+      };
+    } else {
+      query = { externalMessageId: messageId };
+    }
+    
+    // البحث عن الرسالة
+    const message = await this.findOne(query).lean();
+    
+    if (!message) {
+      return [];
+    }
+    
+    return message.readBy || [];
+  } catch (error) {
+    logger.error('خطأ في جلب قائمة قراء الرسالة', error);
+    return [];
   }
 };
 

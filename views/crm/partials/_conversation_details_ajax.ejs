@@ -40,6 +40,93 @@
         return status || 'غير معروف';
     }
   }
+  
+  // تسجيل مشاهدة الرسالة
+  function markMessageAsRead(messageId, externalMessageId) {
+    // استخدام الـ Socket لإرسال إخطار قراءة الرسالة
+    if (window.socket && messageId) {
+      const actualMessageId = externalMessageId || messageId;
+      window.socket.emit('message_read', {
+        messageId: actualMessageId,
+        userId: window.currentUserId,
+        username: window.currentUsername
+      });
+    }
+  }
+  
+  // جلب قائمة قراء الرسالة
+  function getMessageReaders(messageId, externalMessageId) {
+    return new Promise((resolve, reject) => {
+      const actualMessageId = externalMessageId || messageId;
+      $.ajax({
+        url: `/api/messages/${actualMessageId}/readers`,
+        method: 'GET',
+        success: function(response) {
+          resolve(response.readers || []);
+        },
+        error: function(error) {
+          console.error('فشل في جلب قائمة القراء:', error);
+          reject(error);
+        }
+      });
+    });
+  }
+  
+  // عرض قائمة القراء
+  function showMessageReaders(messageId, externalMessageId, buttonElement) {
+    const $button = $(buttonElement);
+    const $loadingIcon = $('<i class="fas fa-spinner fa-spin"></i>');
+    
+    // عرض أيقونة التحميل
+    $button.html($loadingIcon);
+    
+    getMessageReaders(messageId, externalMessageId)
+      .then(readers => {
+        // إعادة الأيقونة الأصلية
+        $button.html('<i class="fas fa-eye"></i>');
+        
+        // تحضير محتوى قائمة القراء
+        let readersList = '';
+        if (readers && readers.length > 0) {
+          readersList = '<ul class="list-group">';
+          readers.forEach(reader => {
+            // تنسيق تاريخ القراءة
+            const readTime = reader.readAt ? formatTime(reader.readAt) : 'تاريخ غير معروف';
+            readersList += `<li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>${reader.username || 'مستخدم غير معروف'}</span>
+              <small class="text-muted">${readTime}</small>
+            </li>`;
+          });
+          readersList += '</ul>';
+        } else {
+          readersList = '<div class="text-center p-3">لم يقرأ أحد هذه الرسالة بعد</div>';
+        }
+        
+        // عرض النافذة المنبثقة مع قائمة القراء
+        const $popover = $button.popover({
+          title: 'قرأ هذه الرسالة',
+          content: readersList,
+          html: true,
+          placement: 'left',
+          trigger: 'manual',
+          template: '<div class="popover readers-popover" role="tooltip"><div class="arrow"></div><h3 class="popover-header"></h3><div class="popover-body"></div></div>'
+        });
+        
+        $button.popover('show');
+        
+        // إغلاق القائمة عند النقر في أي مكان آخر
+        $(document).one('click', function(e) {
+          if (!$(e.target).is($button) && $(e.target).closest('.popover').length === 0) {
+            $button.popover('hide');
+          }
+        });
+      })
+      .catch(error => {
+        // إعادة الأيقونة الأصلية عند حدوث خطأ
+        $button.html('<i class="fas fa-eye"></i>');
+        console.error('فشل في عرض قائمة القراء:', error);
+      });
+  }
 </script>
 
 <div class="card shadow-sm border-0">
@@ -86,7 +173,7 @@
               <div class="message <%= message.direction %>" 
                   data-message-id="<%= message._id %>" 
                   data-status="<%= message.status || 'sent' %>"
-                  data-is-monitored="false"
+                  data-observed="false"
                   <%= message.externalMessageId ? `data-external-id="${message.externalMessageId}"` : '' %>>
                 
                 <% if (message.replyToMessageId) { 
@@ -154,6 +241,13 @@
                           <% } %>
                         </span>
                       <% } %>
+                      
+                      <!-- إضافة عدد القراء للرسائل الواردة -->
+                      <% if (message.direction === 'incoming' && message.readBy && message.readBy.length > 0) { %>
+                        <span class="reader-count" title="قرأها <%= message.readBy.length %> مستخدم/ين">
+                          (<%= message.readBy.length %>)
+                        </span>
+                      <% } %>
                     </div>
                   <% } %>
                 </div>
@@ -171,52 +265,37 @@
                 <!-- أزرار التفاعل مع الرسالة (باستثناء الملاحظات الداخلية) -->
                 <% if (message.direction !== 'internal') { %>
                   <div class="message-actions">
-                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" 
-                            title="تفاعل" 
-                            data-message-id="<%= message._id %>"
-                            data-external-id="<%= message.externalMessageId || '' %>">
+                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" 
+                            onclick="window.showReactionPicker('<%= message._id %>', '<%= message.externalMessageId || '' %>', this);">
                       <i class="far fa-smile"></i>
                     </button>
                     <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="رد">
+                            title="رد" 
+                            onclick="window.showReplyForm('<%= message._id %>', '<%= message.externalMessageId || '' %>', this.closest('.message'));">
                       <i class="fas fa-reply"></i>
                     </button>
-                    <% if (message.direction === 'outgoing') { %>
-                    <button type="button" class="btn btn-sm text-muted message-action-btn delete-btn" 
-                            data-message-id="<%= message._id %>" 
-                            data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="حذف">
-                      <i class="fas fa-trash-alt"></i>
-                    </button>
-                    <% } %>
+                    
+                    <!-- زر عرض قائمة القراء للرسائل الواردة فقط -->
                     <% if (message.direction === 'incoming') { %>
                     <button type="button" class="btn btn-sm text-muted message-action-btn readers-btn" 
                             data-message-id="<%= message._id %>" 
                             data-external-id="<%= message.externalMessageId || '' %>" 
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false"
-                            title="من قرأ الرسالة">
+                            title="قائمة القراء" 
+                            onclick="showMessageReaders('<%= message._id %>', '<%= message.externalMessageId || '' %>', this);">
                       <i class="fas fa-eye"></i>
                     </button>
-                    <ul class="dropdown-menu readers-list" aria-labelledby="readersDropdown">
-                      <li class="dropdown-header">قرأ هذه الرسالة</li>
-                      <% if (message.readBy && message.readBy.length > 0) { %>
-                        <% message.readBy.forEach(function(reader) { %>
-                          <li class="dropdown-item">
-                            <div class="reader-item">
-                              <span class="reader-name"><%= reader.username %></span>
-                              <span class="reader-time" title="<%= new Date(reader.readAt).toLocaleString() %>">
-                                <%= new Date(reader.readAt).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
-                              </span>
-                            </div>
-                          </li>
-                        <% }); %>
-                      <% } else { %>
-                          <li class="dropdown-item no-readers">لم يقرأها أحد بعد</li>
-                      <% } %>
-                    </ul>
+                    <% } %>
+                    
+                    <% if (message.direction === 'outgoing') { %>
+                    <button type="button" class="btn btn-sm text-muted message-action-btn delete-btn" 
+                            data-message-id="<%= message._id %>" 
+                            data-external-id="<%= message.externalMessageId || '' %>" 
+                            title="حذف" 
+                            onclick="window.confirmDeleteMessage('<%= message._id %>', '<%= message.externalMessageId || '' %>');">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
                     <% } %>
                   </div>
                 <% } %>
@@ -314,7 +393,7 @@
     </div>
   <% } %>
   
-  <!-- جافاسكريبت لعمل التصفح بالصفحات -->
+  <!-- جافاسكريبت لعمل التصفح بالصفحات وتتبع ظهور الرسائل -->
   <script>
     $(document).ready(function() {
       // استدعاء للصفحة التالية من الرسائل
@@ -355,11 +434,8 @@
               window.setupAudioPlayers();
             }
             
-            // تفعيل مراقبة الرسائل الجديدة
-            initMessageVisibilityObserver();
-            
-            // تفعيل معالجات الأحداث للأزرار
-            setupMessageActionHandlers();
+            // تفعيل مراقبة ظهور الرسائل للرسائل الجديدة
+            setupMessageObservers();
           },
           error: function() {
             $button.prop('disabled', false).html('حدث خطأ أثناء التحميل. حاول مرة أخرى.');
@@ -367,172 +443,85 @@
         });
       });
       
-      // تهيئة مراقب ظهور الرسائل
-      initMessageVisibilityObserver();
-      
-      // تفعيل القوائم المنسدلة
-      new bootstrap.Dropdown('.readers-btn');
-      
-      // تفعيل معالجات الأحداث للأزرار
-      setupMessageActionHandlers();
-      
-      // الاستماع لأحداث تحديث حالة الرسائل
-      window.socketConnection && window.socketConnection.on('message-status-update', function(data) {
-        if (data.readBy && data.readBy.length > 0) {
-          updateReadersDropdown(data.externalId, data.readBy);
-        }
-      });
-    });
-    
-    // إعداد معالجات الأحداث للأزرار
-    function setupMessageActionHandlers() {
-      // أزرار التفاعل
-      $('.reaction-btn').off('click').on('click', function() {
-        const messageId = $(this).data('message-id');
-        const externalId = $(this).data('external-id');
-        if (window.showReactionPicker) {
-          window.showReactionPicker(messageId, externalId, this);
-        }
-      });
-      
-      // أزرار الرد
-      $('.reply-btn').off('click').on('click', function() {
-        const messageId = $(this).data('message-id');
-        const externalId = $(this).data('external-id');
-        if (window.showReplyForm) {
-          window.showReplyForm(messageId, externalId, $(this).closest('.message')[0]);
-        }
-      });
-      
-      // أزرار الحذف
-      $('.delete-btn').off('click').on('click', function() {
-        const messageId = $(this).data('message-id');
-        const externalId = $(this).data('external-id');
-        if (window.confirmDeleteMessage) {
-          window.confirmDeleteMessage(messageId, externalId);
-        }
-      });
-    }
-    
-    // تحديث قائمة القراء
-    function updateReadersDropdown(messageId, readers) {
-      const message = document.querySelector(`.message[data-external-id="${messageId}"]`);
-      if (!message) return;
-      
-      const dropdown = message.querySelector('.readers-list');
-      if (!dropdown) return;
-      
-      // مسح القائمة الحالية باستثناء العنوان
-      const header = dropdown.querySelector('.dropdown-header');
-      dropdown.innerHTML = '';
-      dropdown.appendChild(header);
-      
-      // إضافة القراء الجدد
-      if (readers && readers.length > 0) {
-        readers.forEach(reader => {
-          const listItem = document.createElement('li');
-          listItem.className = 'dropdown-item';
-          
-          const readerItem = document.createElement('div');
-          readerItem.className = 'reader-item';
-          
-          const nameSpan = document.createElement('span');
-          nameSpan.className = 'reader-name';
-          nameSpan.textContent = reader.username;
-          
-          const timeSpan = document.createElement('span');
-          timeSpan.className = 'reader-time';
-          const date = new Date(reader.readAt);
-          timeSpan.title = date.toLocaleString();
-          timeSpan.textContent = date.toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' });
-          
-          readerItem.appendChild(nameSpan);
-          readerItem.appendChild(timeSpan);
-          listItem.appendChild(readerItem);
-          dropdown.appendChild(listItem);
-        });
-      } else {
-        const listItem = document.createElement('li');
-        listItem.className = 'dropdown-item no-readers';
-        listItem.textContent = 'لم يقرأها أحد بعد';
-        dropdown.appendChild(listItem);
-      }
-    }
-    
-    // تهيئة مراقبة ظهور الرسائل
-    function initMessageVisibilityObserver() {
-      // التحقق من دعم IntersectionObserver
-      if (!('IntersectionObserver' in window)) {
-        console.warn('المتصفح لا يدعم IntersectionObserver، لن يتم تتبع قراءة الرسائل');
-        return;
-      }
-      
-      const messageContainer = document.getElementById('messageContainer');
-      if (!messageContainer) return;
-      
-      // إعداد المراقب
-      const options = {
-        root: messageContainer,
-        rootMargin: '0px',
-        threshold: 0.5 // يعتبر المحتوى مرئيًا عندما يكون 50% منه ظاهرًا على الأقل
-      };
-      
-      // إنشاء المراقب
-      const observer = new IntersectionObserver((entries, observer) => {
-        // تجميع الرسائل الواردة المرئية التي لم يتم تتبعها بعد
-        const visibleIncomingMessages = entries
-          .filter(entry => entry.isIntersecting && 
-                 entry.target.classList.contains('incoming') &&
-                 entry.target.getAttribute('data-is-monitored') === 'false')
-          .map(entry => ({
-            element: entry.target,
-            id: entry.target.dataset.messageId || entry.target.dataset.externalId
-          }));
-        
-        if (visibleIncomingMessages.length > 0) {
-          // وضع علامة على الرسائل المرئية
-          visibleIncomingMessages.forEach(msg => {
-            msg.element.setAttribute('data-is-monitored', 'true');
+      // إعداد مراقب التقاطع (Intersection Observer) لتسجيل مشاهدة الرسائل
+      function setupMessageObservers() {
+        // إنشاء كائن مراقب التقاطع
+        const messageObserver = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              const $message = $(entry.target);
+              const messageId = $message.data('message-id');
+              const externalId = $message.data('external-id');
+              const direction = $message.hasClass('incoming') ? 'incoming' : 'outgoing';
+              const isObserved = $message.data('observed') === true;
+              
+              // تسجيل مشاهدة الرسائل الواردة فقط ولمرة واحدة
+              if (direction === 'incoming' && !isObserved) {
+                markMessageAsRead(messageId, externalId);
+                $message.data('observed', true);
+              }
+              
+              // إيقاف مراقبة الرسالة بعد تسجيلها
+              messageObserver.unobserve(entry.target);
+            }
           });
+        }, {
+          // تحديد نسبة الظهور المطلوبة لتسجيل المشاهدة (100% تعني أن الرسالة يجب أن تظهر بالكامل)
+          threshold: 0.8
+        });
+        
+        // تفعيل المراقبة على جميع الرسائل الواردة
+        $('.message.incoming').each(function() {
+          messageObserver.observe(this);
+        });
+      }
+      
+      // تحديد سلوك التمرير - عرض أحدث الرسائل في الأسفل
+      function scrollToLatestMessage(behavior = 'auto') {
+        const messageContainer = document.getElementById('messageContainer');
+        if (messageContainer) {
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+      }
+      
+      // ترتيب الرسائل بحيث تظهر أحدث رسالة في الأسفل عند تحميل الصفحة
+      scrollToLatestMessage();
+      
+      // تفعيل مراقبة ظهور الرسائل عند تحميل الصفحة
+      setupMessageObservers();
+      
+      // استماع للرسائل الجديدة وتحديث الواجهة
+      if (window.socket) {
+        window.socket.on('new_message', function(message) {
+          // تحديث واجهة المستخدم عند وصول رسالة جديدة
+          // تنفيذ التحديث دون تمرير تلقائي
           
-          // استخراج معرفات الرسائل
-          const messageIds = visibleIncomingMessages.map(msg => msg.id);
+          // الانتظار قليلاً ثم تفعيل مراقبة ظهور الرسائل الجديدة
+          setTimeout(setupMessageObservers, 500);
+        });
+        
+        // استماع لتحديثات قراءة الرسائل
+        window.socket.on('message_read_update', function(data) {
+          // تحديث واجهة المستخدم لإظهار أن الرسالة تمت قراءتها
+          const messageId = data.messageId;
+          const $message = $(`[data-message-id="${messageId}"], [data-external-id="${messageId}"]`);
           
-          // إرسال طلب لتحديث حالة القراءة
-          markMessagesAsRead(messageIds);
-        }
-      }, options);
-      
-      // تتبع كل الرسائل الواردة في الحاوية
-      const incomingMessages = messageContainer.querySelectorAll('.message.incoming');
-      incomingMessages.forEach(message => {
-        if (message.getAttribute('data-is-monitored') !== 'true') {
-          observer.observe(message);
-        }
-      });
-    }
-    
-    // تحديث حالة القراءة للرسائل
-    function markMessagesAsRead(messageIds) {
-      if (!messageIds || messageIds.length === 0) return;
-      
-      const conversationId = document.getElementById('conversationId').value;
-      
-      // إرسال طلب لتحديث حالة القراءة
-      $.ajax({
-        url: `/crm/conversations/${conversationId}/mark-as-read`,
-        type: 'POST',
-        dataType: 'json',
-        contentType: 'application/json',
-        data: JSON.stringify({ messageIds }),
-        success: function(response) {
-          console.log('تم تحديث حالة قراءة الرسائل', response);
-        },
-        error: function(error) {
-          console.error('فشل تحديث حالة قراءة الرسائل', error);
-        }
-      });
-    }
+          if ($message.length > 0) {
+            // تحديث العدد إذا كان موجوداً
+            let $readerCount = $message.find('.reader-count');
+            if ($readerCount.length === 0) {
+              // إنشاء عنصر جديد إذا لم يكن موجوداً
+              $readerCount = $('<span class="reader-count"></span>');
+              $message.find('.message-meta').append($readerCount);
+            }
+            
+            // تحديث العدد استناداً إلى البيانات المستلمة
+            $readerCount.text(`(${data.readerCount || 1})`);
+            $readerCount.attr('title', `قرأها ${data.readerCount || 1} مستخدم/ين`);
+          }
+        });
+      }
+    });
   </script>
 
 <!-- أنماط خاصة بهذه الصفحة -->
@@ -545,42 +534,53 @@
   position: relative;
 }
 
+.message-actions {
+  display: none;
+  position: absolute;
+  right: 5px;
+  bottom: -30px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 2px 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.message:hover .message-actions {
+  display: flex;
+}
+
+.message-action-btn {
+  border: none;
+  background: transparent;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+.message-action-btn:hover {
+  color: #0d6efd;
+}
+
+.reader-count {
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-left: 0.5rem;
+}
+
+.readers-popover {
+  max-width: 250px;
+}
+
+.readers-popover .list-group-item {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+
 .clear-both {
   clear: both;
-}
-
-/* أنماط للقراء */
-.readers-list {
-  min-width: 200px;
-  max-width: 300px;
-  padding: 0.5rem 0;
-}
-
-.readers-list .dropdown-header {
-  font-weight: bold;
-  color: #475569;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-}
-
-.reader-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.reader-name {
-  font-weight: 500;
-}
-
-.reader-time {
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.no-readers {
-  color: #94a3b8;
-  font-style: italic;
 }
 </style>
