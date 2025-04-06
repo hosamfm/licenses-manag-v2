@@ -6,7 +6,6 @@ const router = express.Router();
 const { isAuthenticated, checkCanAccessConversations } = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Conversation = require('../models/Conversation');
-const WhatsAppMessage = require('../models/WhatsappMessageModel'); // استيراد نموذج رسائل الواتساب
 const logger = require('../services/loggerService');
 
 // التحقق من الصلاحيات
@@ -187,33 +186,6 @@ router.get('/users/:userId/stats', ensureCanAccessAPI, async (req, res) => {
   } catch (error) {
     logger.error('apiRoutes', 'خطأ في جلب إحصائيات المستخدم', error);
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء جلب إحصائيات المستخدم' });
-  }
-});
-
-/**
- * الحصول على قائمة القراء لرسالة معينة
- * @route GET /api/messages/:messageId/readers
- */
-router.get('/messages/:messageId/readers', ensureCanAccessAPI, async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    
-    if (!messageId) {
-      return res.status(400).json({ success: false, error: 'معرف الرسالة مطلوب' });
-    }
-    
-    // استخدام الدالة المساعدة للحصول على قائمة القراء
-    const readers = await WhatsAppMessage.getMessageReaders(messageId);
-    
-    // ترتيب القراء بناءً على وقت القراءة (الأحدث أولاً)
-    const sortedReaders = readers.sort((a, b) => {
-      return new Date(b.readAt || 0) - new Date(a.readAt || 0);
-    });
-    
-    res.json({ success: true, readers: sortedReaders });
-  } catch (error) {
-    logger.error('apiRoutes', 'خطأ في جلب قائمة القراء للرسالة', error);
-    res.status(500).json({ success: false, error: 'حدث خطأ أثناء جلب قائمة القراء' });
   }
 });
 

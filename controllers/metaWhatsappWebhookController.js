@@ -153,73 +153,17 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
         message.deliveredAt = timestamp;
       } else if (newStatus === 'read') {
         message.readAt = timestamp;
-        
-        // إضافة معلومات القارئ إلى مصفوفة readBy لتسجيل قراءة العميل
-        // نستخدم معرف "customer" لتمييز قراءة العميل عن قراءة المستخدمين
-        if (!message.readBy) {
-          message.readBy = [];
-        }
-        
-        // التحقق من عدم وجود القارئ "customer" بالفعل
-        const existingReader = message.readBy.find(reader => reader.userId === 'customer');
-        
-        if (!existingReader) {
-          // إضافة قارئ جديد يمثل العميل
-          message.readBy.push({
-            userId: 'customer',
-            username: 'العميل',
-            readAt: timestamp
-          });
-          
-          logger.info('metaWhatsappWebhookController', 'تمت إضافة العميل إلى قائمة قراء الرسالة', { 
-            externalId, 
-            readByCount: message.readBy.length 
-          });
-        } else {
-          // تحديث وقت القراءة للقارئ الموجود
-          existingReader.readAt = timestamp;
-          
-          logger.info('metaWhatsappWebhookController', 'تم تحديث وقت قراءة العميل للرسالة', { 
-            externalId 
-          });
-        }
       }
       
       await message.save();
       
       // إرسال إشعار تحديث حالة الرسالة عبر Socket.io
       if (message.conversationId) {
-        // إضافة معلومات القراء إذا كانت الحالة "read"
-        if (newStatus === 'read') {
-          // إرسال حدث message_read_update بدلاً من message-status-update لتحديث قائمة القراء
-          const readers = message.readBy || [];
-          const readerCount = readers.length;
-          
-          // إرسال تحديث حالة القراءة للمتصلين
-          const io = require('../services/socketService').io;
-          if (io) {
-            io.to(`conversation-${message.conversationId.toString()}`).emit('message_read_update', {
-              messageId: externalId,
-              readerCount,
-              recentReader: 'العميل',
-              readers
-            });
-            
-            logger.info('metaWhatsappWebhookController', 'تم إرسال إشعار تحديث قراءة الرسالة عبر سوكت', { 
-              externalId, 
-              readerCount,
-              conversationId: message.conversationId.toString()
-            });
-          }
-        } else {
-          // استخدام الإشعار العادي لباقي الحالات
-          socketService.notifyMessageStatusUpdate(
-            message.conversationId.toString(),
-            externalId,
-            newStatus
-          );
-        }
-        
+        socketService.notifyMessageStatusUpdate(
+          message.conversationId.toString(),
+          externalId,
+          newStatus
+        );
         logger.info('metaWhatsappWebhookController', 'تم إرسال إشعار تحديث حالة الرسالة', { 
           externalId, 
           newStatus,

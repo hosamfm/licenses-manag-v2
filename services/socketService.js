@@ -81,143 +81,81 @@ function initialize(server) {
           source: socket.handshake.headers.referer || 'غير معروف'
         });
       }
-
-      // عند الاتصال - الانضمام إلى قناة تستند لمعرف المستخدم إذا كان معروفاً
-      if (socket.userId) {
-        socket.join(`user-${socket.userId}`);
-        logger.info('socketService', 'انضمام إلى غرفة المستخدم الخاصة', { userId: socket.userId, socketId: socket.id });
-      }
-
-      // السماح بالانضمام للقنوات بشكل صريح عبر Socket.io
-      socket.on('join', (data) => {
-        if (data && data.room) {
-          socket.join(data.room);
-          logger.info('socketService', 'انضمام إلى الغرفة', { room: data.room, socketId: socket.id });
-        }
-      });
-
-      // مغادرة غرفة - أمر عام (تنسيق جديد)
-      socket.on('leave', (data) => {
-        if (data && data.room) {
-          socket.leave(data.room);
-          logger.info('socketService', 'مغادرة غرفة', { room: data.room, socketId: socket.id });
-        }
-      });
-
-      // الانضمام لغرفة المحادثة (تنسيق قديم للتوافق)
-      socket.on('join-conversation', (conversationId) => {
-        if (conversationId) {
-          socket.join(`conversation-${conversationId}`);
-          logger.info('socketService', 'انضمام إلى غرفة المحادثة', { conversationId, socketId: socket.id });
-        }
-      });
-
-      // مغادرة غرفة المحادثة (تنسيق قديم للتوافق)
-      socket.on('leave-conversation', (conversationId) => {
-        if (conversationId) {
-          socket.leave(`conversation-${conversationId}`);
-          logger.info('socketService', 'مغادرة غرفة المحادثة', { conversationId, socketId: socket.id });
-        }
-      });
-
-      // معالجة حدث قراءة الرسالة
-      socket.on('message_read', async (data) => {
-        try {
-          logger.info('socketService', 'استلام حدث قراءة رسالة', { 
-            messageId: data.messageId,
-            userId: data.userId || socket.userId,
-            username: data.username || socket.username,
-            socketId: socket.id
-          });
-          
-          // التأكد من وجود بيانات المستخدم
-          if (!socket.userId && !data.userId) {
-            logger.warn('socketService', 'محاولة تسجيل قراءة رسالة بدون معرف مستخدم', { 
-              socketId: socket.id, 
-              messageId: data.messageId 
-            });
-            return;
-          }
-          
-          // استخدام معرف المستخدم من الجلسة أو من البيانات المرسلة
-          const userId = socket.userId || data.userId;
-          const username = socket.username || data.username || 'مستخدم غير معروف';
-          
-          logger.info('socketService', 'تسجيل قراءة رسالة', { 
-            messageId: data.messageId, 
-            userId,
-            username
-          });
-          
-          // تحديث حالة القراءة في قاعدة البيانات
-          const WhatsAppMessage = require('../models/WhatsappMessageModel');
-          const message = await WhatsAppMessage.markAsReadByUser(data.messageId, {
-            userId,
-            username
-          });
-          
-          if (message) {
-            // إذا نجح التحديث، أبلغ جميع المتصلين بغرفة المحادثة
-            const readerCount = message.readBy ? message.readBy.length : 0;
-            const conversationId = message.conversationId.toString();
-            
-            logger.info('socketService', 'تم تحديث حالة قراءة الرسالة بنجاح', { 
-              messageId: data.messageId, 
-              readerCount,
-              conversationId
-            });
-            
-            const updateData = {
-              messageId: data.messageId,
-              readerCount,
-              recentReader: username,
-              readers: message.readBy || []
-            };
-            
-            io.to(`conversation-${conversationId}`).emit('message_read_update', updateData);
-            
-            logger.info('socketService', 'تم إرسال إشعار بتحديث قراءة الرسالة للمتصلين', { 
-              messageId: data.messageId, 
-              room: `conversation-${conversationId}`,
-              readerCount 
-            });
-          } else {
-            logger.error('socketService', 'فشل تحديث حالة قراءة الرسالة في قاعدة البيانات', {
-              messageId: data.messageId
-            });
-          }
-        } catch (error) {
-          logger.error('socketService', 'خطأ في معالجة حدث قراءة الرسالة', error);
-        }
-      });
-
-      socket.on('disconnect', () => {
-        logger.info('socketService', 'انقطع الاتصال', { socketId: socket.id });
-      });
-
-      // استقبال إشعار برسالة جديدة من العميل وإعادة بثه لبقية المستخدمين
-      // ملاحظة هامة: هذا المعالج للإشعارات فقط وليس للإرسال الفعلي للرسائل الجديدة
-      // الإرسال الفعلي للرسائل يتم عبر طلب HTTP إلى /crm/conversations/:conversationId/reply
-      socket.on('new-message', (message) => {
-        if (!io) {
-          return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
-        }
-        
-        // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
-        if (message && message.mediaType) {
-          logger.info('socketService', 'إعادة بث إشعار برسالة جديدة مع وسائط', { 
-            conversationId: message.conversationId, 
-            mediaType: message.mediaType,
-            messageId: message._id
-          });
-        }
-        
-        io.to(`conversation-${message.conversationId}`).emit('new-message', message);
-        logger.info('socketService', 'تم إعادة بث إشعار برسالة جديدة', { conversationId: message.conversationId });
-      });
     } catch (error) {
-      logger.error('socketService', 'خطأ في معالجة اتصال Socket.io', error);
+      logger.error('socketService', 'خطأ في معالجة معلومات المستخدم عند الاتصال', { 
+        socketId: socket.id, 
+        error: error.message 
+      });
+      
+      // استخدام قيم افتراضية في حالة حدوث خطأ
+      socket.userId = 'guest';
+      socket.username = 'زائر';
     }
+
+    // الانضمام لغرفة المستخدم
+    socket.on('join-user-room', (userId) => {
+      if (userId) {
+        socket.join(`user-${userId}`);
+        logger.info('socketService', 'انضمام المستخدم إلى غرفته الخاصة', { userId, socketId: socket.id });
+      }
+    });
+
+    // الانضمام لغرفة - أمر عام (تنسيق جديد)
+    socket.on('join', (data) => {
+      if (data && data.room) {
+        socket.join(data.room);
+        logger.info('socketService', 'انضمام إلى غرفة', { room: data.room, socketId: socket.id });
+      }
+    });
+
+    // مغادرة غرفة - أمر عام (تنسيق جديد)
+    socket.on('leave', (data) => {
+      if (data && data.room) {
+        socket.leave(data.room);
+        logger.info('socketService', 'مغادرة غرفة', { room: data.room, socketId: socket.id });
+      }
+    });
+
+    // الانضمام لغرفة المحادثة (تنسيق قديم للتوافق)
+    socket.on('join-conversation', (conversationId) => {
+      if (conversationId) {
+        socket.join(`conversation-${conversationId}`);
+        logger.info('socketService', 'انضمام إلى غرفة المحادثة', { conversationId, socketId: socket.id });
+      }
+    });
+
+    // مغادرة غرفة المحادثة (تنسيق قديم للتوافق)
+    socket.on('leave-conversation', (conversationId) => {
+      if (conversationId) {
+        socket.leave(`conversation-${conversationId}`);
+        logger.info('socketService', 'مغادرة غرفة المحادثة', { conversationId, socketId: socket.id });
+      }
+    });
+
+    socket.on('disconnect', () => {
+      logger.info('socketService', 'انقطع الاتصال', { socketId: socket.id });
+    });
+
+    // استقبال إشعار برسالة جديدة من العميل وإعادة بثه لبقية المستخدمين
+    // ملاحظة هامة: هذا المعالج للإشعارات فقط وليس للإرسال الفعلي للرسائل الجديدة
+    // الإرسال الفعلي للرسائل يتم عبر طلب HTTP إلى /crm/conversations/:conversationId/reply
+    socket.on('new-message', (message) => {
+      if (!io) {
+        return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+      }
+      
+      // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
+      if (message && message.mediaType) {
+        logger.info('socketService', 'إعادة بث إشعار برسالة جديدة مع وسائط', { 
+          conversationId: message.conversationId, 
+          mediaType: message.mediaType,
+          messageId: message._id
+        });
+      }
+      
+      io.to(`conversation-${message.conversationId}`).emit('new-message', message);
+      logger.info('socketService', 'تم إعادة بث إشعار برسالة جديدة', { conversationId: message.conversationId });
+    });
   });
 
   logger.info('socketService', 'تم تهيئة خدمة Socket.io');
