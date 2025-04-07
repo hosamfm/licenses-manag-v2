@@ -58,6 +58,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  pushSubscription: {
+    type: Object,
+    default: null
+  },
   temp_code: { type: String },
   subordinates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   supervisor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false }
