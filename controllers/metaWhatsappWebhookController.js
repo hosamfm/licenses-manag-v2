@@ -24,10 +24,10 @@ exports.verifyWebhook = async (req, res) => {
     const challenge = req.query['hub.challenge'];
 
     if (mode === 'subscribe' && token === settings.config.verifyToken) {
-      logger.info('metaWhatsappWebhookController', 'تم التحقق من webhook بنجاح');
+      // logger.info('metaWhatsappWebhookController', 'تم التحقق من webhook بنجاح');
       return res.status(200).send(challenge);
     } else {
-      logger.warn('metaWhatsappWebhookController', 'فشل التحقق من webhook', { mode, token });
+      // logger.warn('metaWhatsappWebhookController', 'فشل التحقق من webhook', { mode, token });
       return res.status(403).json({ error: 'التحقق غير صالح' });
     }
   } catch (error) {
@@ -71,19 +71,19 @@ exports.handleWebhook = async (req, res) => {
                 }
               }
 
-              logger.info('metaWhatsappWebhookController', 'تغيير في الحقل ' + change.field, {
+              /* logger.info('metaWhatsappWebhookController', 'تغيير في الحقل ' + change.field, {
                 requestId,
                 field: change.field
-              });
+              }); */
 
               // تحديث الحالة
               if (change.field === 'messages' && change.value.statuses?.length > 0) {
                 for (const st of change.value.statuses) {
-                  logger.info('metaWhatsappWebhookController', 'تحديث حالة رسالة', {
+                  /* logger.info('metaWhatsappWebhookController', 'تحديث حالة رسالة', {
                     requestId,
                     messageId: st.id,
                     newStatus: st.status
-                  });
+                  }); */
                   await exports.updateMessageStatus(st.id, st.status, new Date(st.timestamp * 1000));
                 }
               }
@@ -113,7 +113,7 @@ exports.handleWebhook = async (req, res) => {
     webhookLog.requestType = requestType;
     await webhookLog.save();
 
-    logger.info('metaWhatsappWebhookController', 'تم حفظ سجل webhook', { requestId, requestType });
+    // logger.info('metaWhatsappWebhookController', 'تم حفظ سجل webhook', { requestId, requestType });
     return res.status(200).send('EVENT_RECEIVED');
   } catch (error) {
     logger.error('metaWhatsappWebhookController', 'خطأ في معالجة webhook', error);
@@ -130,7 +130,7 @@ const processedMessageIds = new Set();
  */
 exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
   try {
-    logger.info('metaWhatsappWebhookController', 'تحديث حالة الرسالة', { externalId, newStatus });
+    // logger.info('metaWhatsappWebhookController', 'تحديث حالة الرسالة', { externalId, newStatus });
     
     // تحويل الحالات الواردة من واتساب إلى الحالات المستخدمة في النظام
     if (newStatus === 'delivered') {
@@ -164,11 +164,11 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
           externalId,
           newStatus
         );
-        logger.info('metaWhatsappWebhookController', 'تم إرسال إشعار تحديث حالة الرسالة', { 
+        /* logger.info('metaWhatsappWebhookController', 'تم إرسال إشعار تحديث حالة الرسالة', { 
           externalId, 
           newStatus,
           conversationId: message.conversationId.toString()
-        });
+        }); */
       }
       
       // تحديث SemMessage إذا وجدت
@@ -182,7 +182,7 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
               ...(newStatus === 'read' ? { readAt: timestamp } : {})
             }
           );
-          logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage أيضاً', { externalId });
+          /* logger.info('metaWhatsappWebhookController', 'تم تحديث حالة الرسالة في SemMessage أيضاً', { externalId }); */
         } catch (semUpdateErr) {
           logger.error('metaWhatsappWebhookController', 'خطأ في تحديث SemMessage', semUpdateErr);
         }
@@ -190,7 +190,7 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
     } else {
       // لا نستخدم الكاش بعد الآن
       // cacheService.setMessageStatusCache(externalId, newStatus, timestamp);
-      logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage، تم تجاهل الحالة', { externalId, newStatus });
+      /* logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage، تم تجاهل الحالة', { externalId, newStatus }); */
     }
   } catch (err) {
     logger.error('metaWhatsappWebhookController', 'خطأ في updateMessageStatus', err);
@@ -203,15 +203,15 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
 async function handleReactions(reactions, meta) {
   try {
     const phoneNumberId = meta.phone_number_id;
-    logger.info('metaWhatsappWebhookController', 'تفاعلات واردة', {
+    /* logger.info('metaWhatsappWebhookController', 'تفاعلات واردة', {
       phoneNumberId, count: reactions.length
-    });
+    }); */
 
     // الحصول على القناة
     let channel = await WhatsAppChannel.getChannelByPhoneNumberId(phoneNumberId);
     if (!channel) {
       channel = await WhatsAppChannel.getDefaultChannel();
-      logger.info('metaWhatsappWebhookController', 'القناة غير موجودة، تم استخدام الافتراضية', { phoneNumberId });
+      /* logger.info('metaWhatsappWebhookController', 'القناة غير موجودة، تم استخدام الافتراضية', { phoneNumberId }); */
     }
 
     for (const reaction of reactions) {
@@ -220,25 +220,25 @@ async function handleReactions(reactions, meta) {
         const messageId = reaction.message_id;
         const emoji = reaction.emoji || '';
         
-        logger.info('metaWhatsappWebhookController', 'تفاعل وارد', {
+        /* logger.info('metaWhatsappWebhookController', 'تفاعل وارد', {
           from: sender,
           messageId,
           emoji
-        });
+        }); */
 
         // ابحث عن المحادثة المرتبطة بالهاتف المرسل
         const conversation = await Conversation.findOne({ 
           phoneNumber: sender 
         });
         if (!conversation) {
-          logger.warn('metaWhatsappWebhookController', 'محادثة غير موجودة للتفاعل', { sender });
+          /* logger.warn('metaWhatsappWebhookController', 'محادثة غير موجودة للتفاعل', { sender }); */
           continue;
         }
 
         // ابحث عن الرسالة المتفاعل معها
         const originalMessage = await WhatsappMessage.findOne({ externalMessageId: messageId });
         if (!originalMessage) {
-          logger.warn('metaWhatsappWebhookController', 'الرسالة المتفاعل معها غير موجودة', { messageId });
+          /* logger.warn('metaWhatsappWebhookController', 'الرسالة المتفاعل معها غير موجودة', { messageId }); */
           continue;
         }
 
@@ -276,7 +276,7 @@ exports.handleIncomingMessages = async (messages, meta) => {
       try {
         // تجاهل الرسائل التي تمت معالجتها
         if (processedMessageIds.has(msg.id)) {
-          logger.info('metaWhatsappWebhookController', 'تجاهل رسالة تمت معالجتها مسبقًا', { id: msg.id });
+          /* logger.info('metaWhatsappWebhookController', 'تجاهل رسالة تمت معالجتها مسبقًا', { id: msg.id }); */
           continue;
         }
         
@@ -290,14 +290,14 @@ exports.handleIncomingMessages = async (messages, meta) => {
           oldestItems.forEach(id => processedMessageIds.delete(id));
         }
         
-        logger.info('metaWhatsappWebhookController', 'معالجة رسالة واردة', { 
+        /* logger.info('metaWhatsappWebhookController', 'معالجة رسالة واردة', { 
           id: msg.id, 
           type: msg.type, 
           from: msg.from 
-        });
+        }); */
         
         if (!msg.from) {
-          logger.warn('metaWhatsappWebhookController', 'رسالة بدون مصدر', { id: msg.id });
+          /* logger.warn('metaWhatsappWebhookController', 'رسالة بدون مصدر', { id: msg.id }); */
           continue;
         }
         
@@ -322,7 +322,7 @@ exports.handleIncomingMessages = async (messages, meta) => {
         
         let isNewConversation = false;
         if (!conversationInstance) {
-          logger.info('metaWhatsappWebhookController', 'إنشاء محادثة جديدة', { phone, channelId: channel._id });
+          /* logger.info('metaWhatsappWebhookController', 'إنشاء محادثة جديدة', { phone, channelId: channel._id }); */
           isNewConversation = true;
           // إنشاء محادثة جديدة
           conversationInstance = await Conversation.create({
@@ -335,7 +335,7 @@ exports.handleIncomingMessages = async (messages, meta) => {
         } else {
           // التحقق من حالة المحادثة وإعادة فتحها تلقائيًا إذا كانت مغلقة
           if (conversationInstance.status === 'closed') {
-            logger.info('metaWhatsappWebhookController', 'إعادة فتح المحادثة المغلقة تلقائيًا', { conversationId: conversationInstance._id });
+            /* logger.info('metaWhatsappWebhookController', 'إعادة فتح المحادثة المغلقة تلقائيًا', { conversationId: conversationInstance._id }); */
             await conversationInstance.automaticReopen();
           } else {
             // إذا لم تكن مغلقة، فقط نحدث وقت آخر رسالة
@@ -369,16 +369,16 @@ exports.handleIncomingMessages = async (messages, meta) => {
             const originalMsgId = originalMsg._id ? originalMsg._id.toString() : null;
             messageData.replyToMessageId = originalMsgId;
             messageData.replyToExternalId = msg.context.id;
-            logger.info('metaWhatsappWebhookController', 'رسالة رد واردة على رسالة سابقة', {
+            /* logger.info('metaWhatsappWebhookController', 'رسالة رد واردة على رسالة سابقة', {
               messageId: msg.id,
               originalMessageId: originalMsgId,
               originalExternalId: msg.context.id
-            });
+            }); */
           } else {
-            logger.warn('metaWhatsappWebhookController', 'الرسالة الأصلية المردود عليها غير موجودة', {
+            /* logger.warn('metaWhatsappWebhookController', 'الرسالة الأصلية المردود عليها غير موجودة', {
               messageId: msg.id,
               originalExternalId: msg.context.id
-            });
+            }); */
           }
         }
         
@@ -411,9 +411,9 @@ exports.handleIncomingMessages = async (messages, meta) => {
             // تجاوز إنشاء رسالة جديدة للتفاعل
             continue;
           } else {
-            logger.warn('metaWhatsappWebhookController', 'الرسالة المتفاعل معها غير موجودة', { 
+            /* logger.warn('metaWhatsappWebhookController', 'الرسالة المتفاعل معها غير موجودة', { 
               messageId: msg.reaction.message_id 
-            });
+            }); */
             continue;
           }
         }
@@ -489,11 +489,11 @@ exports.handleIncomingMessages = async (messages, meta) => {
               
               // التأكد من وجود وسائط وربطها مع الرسالة
               if (result && result.success && result.media) {
-                logger.info('metaWhatsappWebhookController', 'تم تنزيل الوسائط بنجاح', { 
+                /* logger.info('metaWhatsappWebhookController', 'تم تنزيل الوسائط بنجاح', { 
                   messageId: savedMsg._id, 
                   mediaId: result.media._id,
                   mediaType: mediaInfo.type 
-                });
+                }); */
               }
             }
           } catch (mediaError) {
@@ -505,10 +505,10 @@ exports.handleIncomingMessages = async (messages, meta) => {
           }
         }
 
-        logger.info('metaWhatsappWebhookController', 'تم حفظ رسالة واردة وسيتم إرسال إشعار', { 
+        /* logger.info('metaWhatsappWebhookController', 'تم حفظ رسالة واردة وسيتم إرسال إشعار', { 
           messageId: savedMsg._id,
           externalId: savedMsg.externalMessageId 
-        });
+        }); */
 
         // تحديث التخزين المؤقت للمحادثة غير مطلوب بعد الآن
         // const isCacheUpdated = cacheService.updateCachedMessages(conversation._id.toString(), savedMsg.toObject());
@@ -525,17 +525,17 @@ exports.handleIncomingMessages = async (messages, meta) => {
           if (media) {
             messageWithMedia = mediaService.prepareMessageWithMedia(messageWithMedia, media);
             // تسجيل نجاح ربط الوسائط
-            logger.info('metaWhatsappWebhookController', 'تم ربط الوسائط بالإشعار', { 
+            /* logger.info('metaWhatsappWebhookController', 'تم ربط الوسائط بالإشعار', { 
               messageId: savedMsg._id,
               mediaId: media._id,
               mediaType: savedMsg.mediaType
-            });
+            }); */
           } else {
             // تسجيل عدم وجود وسائط بالرغم من وجود نوع وسائط
-            logger.warn('metaWhatsappWebhookController', 'الرسالة تحتوي على نوع وسائط ولكن لم يتم العثور على سجل الوسائط', { 
+            /* logger.warn('metaWhatsappWebhookController', 'الرسالة تحتوي على نوع وسائط ولكن لم يتم العثور على سجل الوسائط', { 
               messageId: savedMsg._id,
               mediaType: savedMsg.mediaType
-            });
+            }); */
           }
         }
         

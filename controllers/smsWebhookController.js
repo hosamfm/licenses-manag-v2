@@ -10,10 +10,10 @@ const logger = require('../services/loggerService');
 exports.handleStatusUpdate = async (req, res) => {
     try {
         // سجل الحد الأدنى من المعلومات عن الطلب الوارد
-        logger.info('smsWebhookController', 'استلام تحديث حالة من webhook', {
+        /* logger.info('smsWebhookController', 'استلام تحديث حالة من webhook', {
             method: req.method,
             contentType: req.headers['content-type']
-        });
+        }); */
 
         // استخراج المعلومات من الطلب - قد تكون في body أو query
         const data = { ...req.query, ...req.body };
@@ -36,7 +36,7 @@ exports.handleStatusUpdate = async (req, res) => {
 
         // إذا كان معرف الرسالة غير موجود، نسجل تحذيراً ونرسل استجابة مناسبة
         if (!id && !deviceId) {
-            logger.warn('smsWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة أو معرف الجهاز', data);
+            // logger.warn('smsWebhookController', 'تم استلام طلب webhook بدون معرف الرسالة أو معرف الجهاز', data);
             // نرسل استجابة إيجابية لتجنب إعادة المحاولة من الخدمة
             return res.status(200).json({ 
                 success: false, 
@@ -84,9 +84,9 @@ exports.handleStatusUpdate = async (req, res) => {
             
             if (message) {
                 // تحديث السجل لمراقبة هذه الحالة
-                logger.info('smsWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`, {
+                /* logger.info('smsWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`, {
                     deviceId: deviceId
-                });
+                }); */
                 
                 // تخزين معرف SemySMS في الرسالة للمستقبل إذا كان متوفراً
                 if (id) {
@@ -107,7 +107,7 @@ exports.handleStatusUpdate = async (req, res) => {
             
             if (message) {
                 // تحديث السجل لمراقبة هذه الحالة
-                logger.info('smsWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`);
+                // logger.info('smsWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`);
                 
                 // تخزين معرف SemySMS في الرسالة للمستقبل إذا كان متوفراً
                 if (id) {
@@ -122,11 +122,11 @@ exports.handleStatusUpdate = async (req, res) => {
         }
 
         if (!message) {
-            logger.warn('smsWebhookController', `لم يتم العثور على رسالة مطابقة`, {
-                searchId: id || 'غير محدد',
-                deviceId: deviceId || 'غير محدد',
-                phone: data.phone || 'غير محدد'
-            });
+            // logger.warn('smsWebhookController', `لم يتم العثور على رسالة مطابقة`, {
+            //     searchId: id || 'غير محدد',
+            //     deviceId: deviceId || 'غير محدد',
+            //     phone: data.phone || 'غير محدد'
+            // });
             return res.status(200).json({ 
                 success: false, 
                 error: 'الرسالة غير موجودة',
@@ -220,13 +220,13 @@ exports.handleStatusUpdate = async (req, res) => {
             
             await message.save();
             
-            logger.info('smsWebhookController', `تم تحديث حالة الرسالة`, {
+            /* logger.info('smsWebhookController', `تم تحديث حالة الرسالة`, {
                 messageId: id || message.messageId,
                 deviceId: deviceId || 'غير معروف',
                 from: message.status,
                 to: newStatus,
                 phone: data.phone || message.recipient || 'غير معروف'
-            });
+            }); */
         }
 
         // إرسال استجابة نجاح

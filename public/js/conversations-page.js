@@ -10,7 +10,7 @@ if (typeof window.loadConversationDetails !== 'function') {
      * تعريف موحد للدالة
      */
     window.loadConversationDetails = function(conversationId, skipCache = false) {
-        console.log('استدعاء للـ loadConversationDetails مع المعرف:', conversationId);
+        // console.log('استدعاء للـ loadConversationDetails مع المعرف:', conversationId);
         
         // سيتم استبدال هذه الدالة لاحقًا بالتنفيذ الكامل بعد تحميل DOM
         // حفظ للتنفيذ عندما تصبح جاهزة
@@ -18,7 +18,7 @@ if (typeof window.loadConversationDetails !== 'function') {
             window._pendingConversationLoads = [];
         }
         window._pendingConversationLoads.push({ id: conversationId, skipCache });
-        console.log(`تم حفظ طلب تحميل المحادثة للمعرف: ${conversationId} للتنفيذ لاحقًا`);
+        // console.log(`تم حفظ طلب تحميل المحادثة للمعرف: ${conversationId} للتنفيذ لاحقًا`);
     };
 }
 
@@ -139,13 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success && Array.isArray(data.conversations)) {
                 renderConversationsList(data.conversations);
             } else {
-                console.error("فشل في جلب المحادثات أو تنسيق بيانات غير صالح:", data);
+                // console.error("فشل في جلب المحادثات أو تنسيق بيانات غير صالح:", data);
                 noConversationsMessage.textContent = 'حدث خطأ أثناء تحميل المحادثات.';
                 noConversationsMessage.classList.remove('d-none');
             }
 
         } catch (error) {
-            console.error("خطأ في جلب المحادثات:", error);
+            // console.error("خطأ في جلب المحادثات:", error);
             noConversationsMessage.textContent = 'فشل الاتصال بالخادم لتحميل المحادثات.';
             noConversationsMessage.classList.remove('d-none');
         } finally {
@@ -437,7 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} skipReRender - تخطي إعادة تحميل القائمة
      */
     function updateConversationStatus(status, skipReRender = false) {
-        console.log('تحديث حالة المحادثة إلى:', status);
+        // console.log('تحديث حالة المحادثة إلى:', status);
         
         // 1. محاولة العثور على مؤشر الحالة بعدة طرق ممكنة
         const statusIndicator = 
@@ -449,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const reopenButton = document.querySelector('.reopen-conversation-btn');
         const closeButton = document.querySelector('.close-conversation-btn');
         
-        console.log('الأزرار:', { reopenButton, closeButton });
+        // console.log('الأزرار:', { reopenButton, closeButton });
         
         // 3. نموذج الرد وتنبيه المحادثة المغلقة
         const replyForm = document.getElementById('replyForm');
@@ -463,11 +463,11 @@ document.addEventListener('DOMContentLoaded', () => {
             el.textContent.includes('محادثة مغلقة')
         );
         
-        console.log('مؤشرات واجهة المستخدم:', { 
+        /* console.log('مؤشرات واجهة المستخدم:', { 
             statusIndicator: statusIndicator ? statusIndicator.outerHTML : 'غير موجود', 
             replyForm: replyForm ? true : false,
             closedAlert: closedAlert ? closedAlert.outerHTML : 'غير موجود'
-        });
+        }); */
         
         if (status === 'open') {
         // تحديث مؤشر الحالة
@@ -603,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             window.previousConversationId = conversationId; // تتبع الغرفة الحالية
         } else {
-            console.warn("Socket غير متصل أو وظيفة joinConversationRoom غير متاحة.");
+            // console.warn("Socket غير متصل أو وظيفة joinConversationRoom غير متاحة.");
         }
 
         // جلب وعرض التفاصيل
@@ -674,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 7. ربط معالجات الأحداث لأزرار إغلاق وإعادة فتح المحادثة
             attachButtonEventHandlers();
         }).catch(error => {
-            console.error("خطأ في تحميل تفاصيل المحادثة:", error);
+            // console.error("خطأ في تحميل تفاصيل المحادثة:", error);
             conversationDetailsContainer.innerHTML = `
                 <div class="alert alert-danger m-3">
                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -717,7 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const conversationId = this.getAttribute('data-conversation-id');
         if (!conversationId) {
-            console.error('معرف المحادثة غير موجود في زر إعادة الفتح');
+            // console.error('معرف المحادثة غير موجود في زر إعادة الفتح');
             return;
         }
 
@@ -729,7 +729,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof window.reopenConversation === 'function') {
             window.reopenConversation(conversationId)
                 .then(result => {
-                    console.log('تم إعادة فتح المحادثة بنجاح:', result);
+                    // console.log('تم إعادة فتح المحادثة بنجاح:', result);
                     
                     // إظهار رسالة نجاح
                     if (typeof window.showToast === 'function') {
@@ -744,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .catch(error => {
                     // إظهار رسالة خطأ
-                    console.error('فشل إعادة فتح المحادثة:', error);
+                    // console.error('فشل إعادة فتح المحادثة:', error);
                     if (typeof window.showToast === 'function') {
                         window.showToast('error', `فشل إعادة فتح المحادثة: ${error}`);
                     }
@@ -754,7 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.innerHTML = '<i class="fas fa-lock-open"></i> إعادة فتح';
                 });
         } else {
-            console.error('وظيفة reopenConversation غير موجودة في conversation-utils.js');
+            // console.error('وظيفة reopenConversation غير موجودة في conversation-utils.js');
             // إعادة الزر إلى حالته الأصلية
             this.disabled = false;
             this.innerHTML = '<i class="fas fa-lock-open"></i> إعادة فتح';
@@ -769,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const conversationId = this.getAttribute('data-conversation-id');
         if (!conversationId) {
-            console.error('معرف المحادثة غير موجود في زر الإغلاق');
+            // console.error('معرف المحادثة غير موجود في زر الإغلاق');
             return;
         }
 
@@ -784,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof window.closeConversation === 'function') {
             window.closeConversation(conversationId)
                 .then(result => {
-                    console.log('تم إغلاق المحادثة بنجاح:', result);
+                    // console.log('تم إغلاق المحادثة بنجاح:', result);
                     
                     // إظهار رسالة نجاح (إذا لم تكن قد أظهرت بالفعل في closeConversation)
                     if (typeof window.showToast === 'function') {
@@ -799,7 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .catch(error => {
                     // إظهار رسالة خطأ
-                    console.error('فشل إغلاق المحادثة:', error);
+                    // console.error('فشل إغلاق المحادثة:', error);
                     if (typeof window.showToast === 'function') {
                         window.showToast('error', `فشل إغلاق المحادثة: ${error}`);
                     }
@@ -810,7 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     closeButton.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
                 });
         } else {
-            console.error('وظيفة closeConversation غير موجودة في conversation-utils.js');
+            // console.error('وظيفة closeConversation غير موجودة في conversation-utils.js');
             // إعادة الزر إلى حالته الأصلية
             closeButton.disabled = false;
             closeButton.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
@@ -823,7 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     window.setupSocketListeners = function() {
         if (!window.socketConnection) {
-            console.error("اتصال Socket غير متاح لإعداد المستمعين.");
+            // console.error("اتصال Socket غير متاح لإعداد المستمعين.");
             return;
         }
 
@@ -908,7 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof window.updateMessageStatus === 'function') {
                     window.updateMessageStatus(data.externalId, data.status, data.conversationId);
                 } else {
-                    console.warn("دالة updateMessageStatus غير متوفرة. تأكد من تحميل الملف message-status.js");
+                    // console.warn("دالة updateMessageStatus غير متوفرة. تأكد من تحميل الملف message-status.js");
                 }
             }
         });
@@ -926,7 +926,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (messageExists) {
                     // الرسالة موجودة بالفعل، سنحدث حالتها فقط
-                    console.log('الرسالة موجودة بالفعل، تحديث حالتها:', messageData._id);
+                    // console.log('الرسالة موجودة بالفعل، تحديث حالتها:', messageData._id);
                     if (messageData.status) {
                     // تحديث حالة الرسالة الموجودة
                     const statusElement = messageExists.querySelector('.message-status');
@@ -963,7 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof window.addMessageToConversation === 'function') {
                         window.addMessageToConversation(messageData);
                     } else {
-                        console.warn("دالة addMessageToConversation غير متوفرة. تأكد من تحميل الملف message-sending.js");
+                        // console.warn("دالة addMessageToConversation غير متوفرة. تأكد من تحميل الملف message-sending.js");
                     }
                 }
             }
@@ -981,7 +981,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             handleSocketUpdateDebounced('message', data.conversation);
                         }
                     })
-                    .catch(err => console.error("خطأ في جلب محادثة واحدة للتحديث:", err));
+                    .catch(err => console.error("خطأ في جلب محادثة واحدة للتحديث:", err)); // Note: Keep this error log as it might be useful for backend issues
             }
 
             // تشغيل الصوت فقط إذا كانت رسالة واردة لدردشة مختلفة
@@ -1056,7 +1056,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // تفريغ المخزن المؤقت
             socketUpdateStore.pendingUpdates.clear();
         } catch (error) {
-            console.error('خطأ في معالجة تحديثات Socket:', error);
+            // console.error('خطأ في معالجة تحديثات Socket:', error); // Keep this error log? Or remove? Let's remove for now based on request.
         } finally {
             socketUpdateStore.processing = false;
         }
@@ -1111,7 +1111,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // إضافة وقت انتظار احتياطي في حالة تفويت حدث الاتصال أو استغراقه وقتًا طويلاً
             setTimeout(() => {
                 if (!window.socketConnected) {
-                    console.warn("انتهت مهلة اتصال Socket، محاولة التهيئة على أي حال.");
+                    // console.warn("انتهت مهلة اتصال Socket، محاولة التهيئة على أي حال.");
                     if (window.socketConnection && window.socketConnection.io && !window.socketConnection.connected) {
                         window.socketConnection.connect(); // محاولة إعادة الاتصال صراحة
                     }

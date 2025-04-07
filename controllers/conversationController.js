@@ -244,15 +244,6 @@ exports.addInternalNote = async (req, res) => {
     
     // 1. محاولة استخدام userId المرسل من العميل (إذا كان موجوداً وصحيحاً)
     if (userId) {
-      // تسجيل تشخيصي إضافي للمساعدة في تحديد المشكلة
-      logger.info('conversationController', 'تحليل معرف المستخدم المستلم', {
-        userId: userId,
-        type: typeof userId,
-        isValid: mongoose.Types.ObjectId.isValid(userId),
-        userIdLength: userId.length,
-        hexFormat: /^[0-9a-fA-F]{24}$/.test(userId)
-      });
-      
       // حالة خاصة: مستخدم النظام
       if (userId === 'system') {
         // حالة خاصة: مستخدم النظام، نتركه فارغاً ونضيف معلومات خاصة لاحقاً
@@ -281,12 +272,12 @@ exports.addInternalNote = async (req, res) => {
     }
     
     // سجل تشخيصي لمعلومات المستخدم المعالجة
-    logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
-      senderInfo: senderInfo ? {
-        _id: senderInfo._id ? senderInfo._id.toString() : null,
-        username: senderInfo.username
-      } : null
-    });
+    // logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
+    //   senderInfo: senderInfo ? {
+    //     _id: senderInfo._id ? senderInfo._id.toString() : null,
+    //     username: senderInfo.username
+    //   } : null
+    // });
 
     // 3. إنشاء وحفظ الملاحظة الداخلية
     const noteMsg = new WhatsappMessage({
@@ -319,10 +310,10 @@ exports.addInternalNote = async (req, res) => {
     
     // 7. إرسال إشعار للمستخدمين الآخرين في غرفة المحادثة
     socketService.emitToRoom(`conversation-${conversationId}`, 'internal-note', noteWithSender);
-    logger.info('تم إرسال إشعار إلى غرفة محددة', {
-      roomName: `conversation-${conversationId}`,
-      eventName: 'internal-note'
-    });
+    // logger.info('تم إرسال إشعار إلى غرفة محددة', {
+    //   roomName: `conversation-${conversationId}`,
+    //   eventName: 'internal-note'
+    // });
     
     // 8. إرسال استجابة ناجحة
     res.json({
@@ -385,26 +376,26 @@ exports.replyToConversation = async (req, res) => {
     const { content, replyToMessageId, mediaId, mediaType, userId, username } = req.body;
 
     // سجل تشخيصي لمعلومات المستخدم المرسلة
-    logger.info('conversationController', 'معلومات المستخدم المرسلة في طلب الرد', {
-      userId,
-      username,
-      sessionUser: req.user ? {
-        _id: req.user._id.toString(),
-        username: req.user.username
-      } : null
-    });
+    // logger.info('conversationController', 'معلومات المستخدم المرسلة في طلب الرد', {
+    //   userId,
+    //   username,
+    //   sessionUser: req.user ? {
+    //     _id: req.user._id.toString(),
+    //     username: req.user.username
+    //   } : null
+    // });
 
     // التحقق من معلومات المستخدم المرسلة من العميل
     let senderInfo = null;
     if (userId) {
       // تسجيل تشخيصي إضافي للمساعدة في تحديد المشكلة
-      logger.info('conversationController', 'تحليل معرف المستخدم المستلم', {
-        userId: userId,
-        type: typeof userId,
-        isValid: mongoose.Types.ObjectId.isValid(userId),
-        userIdLength: userId.length,
-        hexFormat: /^[0-9a-fA-F]{24}$/.test(userId)
-      });
+      // logger.info('conversationController', 'تحليل معرف المستخدم المستلم', {
+      //   userId: userId,
+      //   type: typeof userId,
+      //   isValid: mongoose.Types.ObjectId.isValid(userId),
+      //   userIdLength: userId.length,
+      //   hexFormat: /^[0-9a-fA-F]{24}$/.test(userId)
+      // });
       
       // حالة خاصة: مستخدم النظام
       if (userId === 'system') {
@@ -422,14 +413,14 @@ exports.replyToConversation = async (req, res) => {
             };
           } else {
             // لم يتم العثور على المستخدم - سجل تشخيصي
-            logger.warn('conversationController', 'تم إرسال معرف مستخدم صالح ولكن لم يتم العثور عليه', { userId });
+            // logger.warn('conversationController', 'تم إرسال معرف مستخدم صالح ولكن لم يتم العثور عليه', { userId });
           }
         } catch (err) {
           logger.error('conversationController', 'خطأ أثناء البحث عن المستخدم', { userId, error: err.message });
         }
       } else {
         // تم إرسال معرف غير صالح
-        logger.warn('conversationController', 'تم إرسال معرف مستخدم غير صالح', { userId });
+        // logger.warn('conversationController', 'تم إرسال معرف مستخدم غير صالح', { userId });
       }
     }
     
@@ -443,12 +434,12 @@ exports.replyToConversation = async (req, res) => {
     }
     
     // سجل تشخيصي لمعلومات المستخدم المعالجة
-    logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
-      senderInfo: senderInfo ? {
-        _id: senderInfo._id ? senderInfo._id.toString() : null,
-        username: senderInfo.username
-      } : null
-    });
+    // logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
+    //   senderInfo: senderInfo ? {
+    //     _id: senderInfo._id ? senderInfo._id.toString() : null,
+    //     username: senderInfo.username
+    //   } : null
+    // });
 
     // التحقق من وجود محتوى أو وسائط على الأقل
     if ((!content || !content.trim()) && !mediaId) {
@@ -476,19 +467,19 @@ exports.replyToConversation = async (req, res) => {
         externalReplyId = originalMessage.externalMessageId;
         
         // تسجيل معلومات تشخيصية مفصلة
-        logger.info('conversationController', 'معلومات الرسالة الأصلية للرد', { 
-          originalMessageId: originalMessage._id.toString(),
-          externalMessageId: originalMessage.externalMessageId,
-          from: originalMessage.metadata?.from,
-          direction: originalMessage.direction
-        });
+        // logger.info('conversationController', 'معلومات الرسالة الأصلية للرد', { 
+        //   originalMessageId: originalMessage._id.toString(),
+        //   externalMessageId: originalMessage.externalMessageId,
+        //   from: originalMessage.metadata?.from,
+        //   direction: originalMessage.direction
+        // });
         
         replyContext = {
           message_id: originalMessage.externalMessageId || replyToMessageId,
           from: originalMessage.metadata ? originalMessage.metadata.from : null
         };
       } else {
-        logger.warn('conversationController', 'لم يتم العثور على الرسالة الأصلية للرد', { replyToMessageId });
+        // logger.warn('conversationController', 'لم يتم العثور على الرسالة الأصلية للرد', { replyToMessageId });
       }
     }
 
@@ -511,11 +502,11 @@ exports.replyToConversation = async (req, res) => {
         conversation.assignedTo = req.user._id;
         conversation.status = 'assigned';
         
-        logger.info('conversationController', 'تم تعيين المحادثة تلقائياً للمستخدم الحالي بعد الرد', {
-          conversationId,
-          userId: req.user._id.toString(),
-          username: req.user.username
-        });
+        // logger.info('conversationController', 'تم تعيين المحادثة تلقائياً للمستخدم الحالي بعد الرد', {
+        //   conversationId,
+        //   userId: req.user._id.toString(),
+        //   username: req.user.username
+        // });
         
         // إرسال إشعار بالتعيين
         socketService.notifyConversationUpdate(conversationId, {
@@ -588,11 +579,11 @@ exports.replyToConversation = async (req, res) => {
           throw new Error('الوسائط غير موجودة');
         }
         
-        logger.info('conversationController', 'إرسال رسالة مع وسائط', {
-          mediaId,
-          mediaType,
-          conversationId
-        });
+        // logger.info('conversationController', 'إرسال رسالة مع وسائط', {
+        //   mediaId,
+        //   mediaType,
+        //   conversationId
+        // });
         
         // تحديث معرف الرسالة في سجل الوسائط
         await whatsappMediaController.updateMessageIdForMedia(mediaId, msg._id);
@@ -604,11 +595,11 @@ exports.replyToConversation = async (req, res) => {
         };
 
         // تسجيل معلومات إضافية للتشخيص
-        logger.info('conversationController', 'خيارات إرسال الوسائط', {
-          contentLength: content ? content.length : 0,
-          captionFromMedia: media.caption ? media.caption.length : 0,
-          finalCaption: options.caption ? options.caption.length : 0
-        });
+        // logger.info('conversationController', 'خيارات إرسال الوسائط', {
+        //   contentLength: content ? content.length : 0,
+        //   captionFromMedia: media.caption ? media.caption.length : 0,
+        //   finalCaption: options.caption ? options.caption.length : 0
+        // });
         
         // استخدام معرف الرد الخارجي إذا كان موجوداً، وإلا null للإرسال كرسالة عادية
         apiResponse = await metaWhatsappService.sendMediaMessage(
@@ -632,11 +623,11 @@ exports.replyToConversation = async (req, res) => {
               phoneNumberId
             );
             
-            logger.info('conversationController', 'إرسال رد على رسالة', { 
-              originalMessageId: replyToMessageId,
-              externalReplyId,
-              phoneNumber: conversation.phoneNumber
-            });
+            // logger.info('conversationController', 'إرسال رد على رسالة', { 
+            //   originalMessageId: replyToMessageId,
+            //   externalReplyId,
+            //   phoneNumber: conversation.phoneNumber
+            // });
           } else {
             // في حالة عدم وجود معرف خارجي، نرسل رسالة عادية
             apiResponse = await metaWhatsappService.sendTextMessage(
@@ -644,9 +635,9 @@ exports.replyToConversation = async (req, res) => {
               content,
               phoneNumberId
             );
-            logger.warn('conversationController', 'تم تحويل الرد إلى رسالة عادية (المعرف الخارجي غير موجود)', {
-              originalMessageId: replyToMessageId
-            });
+            // logger.warn('conversationController', 'تم تحويل الرد إلى رسالة عادية (المعرف الخارجي غير موجود)', {
+            //   originalMessageId: replyToMessageId
+            // });
           }
         } else {
           // رسالة عادية
@@ -825,15 +816,15 @@ exports.reactToMessage = async (req, res) => {
       const updatedMessage = await WhatsappMessage.updateReaction(messageIdToUse, reactionData);
       
       if (!updatedMessage) {
-        logger.warn('conversationController', 'فشل تحديث التفاعل في قاعدة البيانات', {
-          messageId: messageIdToUse,
-          reaction: reactionData
-        });
+        // logger.warn('conversationController', 'فشل تحديث التفاعل في قاعدة البيانات', {
+        //   messageId: messageIdToUse,
+        //   reaction: reactionData
+        // });
       } else {
-        logger.info('conversationController', 'تم تحديث التفاعل في قاعدة البيانات بنجاح', {
-          messageId: messageIdToUse,
-          reactionCount: updatedMessage.reactions.length
-        });
+        // logger.info('conversationController', 'تم تحديث التفاعل في قاعدة البيانات بنجاح', {
+        //   messageId: messageIdToUse,
+        //   reactionCount: updatedMessage.reactions.length
+        // });
       }
 
       // إرسال إشعار عبر Socket
@@ -857,7 +848,7 @@ exports.reactToMessage = async (req, res) => {
     }
   } catch (error) {
     logger.error('conversationController', 'خطأ في معالجة طلب التفاعل', error);
-    return res.status(500).json({ success: false, error: 'حدث خطأ في الخادم' });
+    return res.status(500).json({ success: false, error: 'حدث خطأ أثناء إرسال التفاعل' });
   }
 };
 
@@ -927,7 +918,7 @@ exports.getConversationDetailsAjax = async (req, res) => {
 
     if (!conversation) {
       // استخدام logger للتحذير بدلاً من الاعتماد فقط على الاستجابة
-      logger.warn('conversationController', 'المحادثة غير موجودة في getConversationDetailsAjax', { conversationId });
+      // logger.warn('conversationController', 'المحادثة غير موجودة في getConversationDetailsAjax', { conversationId });
       return res.status(404).send('<div class="alert alert-warning">المحادثة المطلوبة غير موجودة.</div>');
     }
 
@@ -960,7 +951,7 @@ exports.getConversationDetailsAjax = async (req, res) => {
         }
       } else {
         // تسجيل تحذير إذا كانت الخدمة غير معرفة
-        logger.warn('conversationController', 'mediaService أو processMessagesWithMedia غير معرفة في getConversationDetailsAjax');
+        // logger.warn('conversationController', 'mediaService أو processMessagesWithMedia غير معرفة في getConversationDetailsAjax');
       }
     }
 
@@ -1070,12 +1061,12 @@ exports.listConversationsAjaxList = async (req, res) => {
       sort: { lastMessageAt: -1 } // الترتيب حسب آخر رسالة
     };
     
-    logger.info('conversationController', 'فلترة المحادثات', {
-      status, 
-      assignment, 
-      search,
-      filterOptions
-    });
+    // logger.info('conversationController', 'فلترة المحادثات', {
+    //   status, 
+    //   assignment, 
+    //   search,
+    //   filterOptions
+    // });
     
     // استخدام خدمة المحادثات للحصول على قائمة المحادثات
     const result = await conversationService.getConversationsList(
@@ -1109,14 +1100,14 @@ exports.closeConversation = async (req, res) => {
     const { reason, note } = req.body;
 
     if (!userId) {
-      logger.warn('conversationController', 'محاولة إغلاق محادثة بدون مصادقة', { conversationId });
+      // logger.warn('conversationController', 'محاولة إغلاق محادثة بدون مصادقة', { conversationId });
       return res.status(401).json({ success: false, error: 'المصادقة مطلوبة' });
     }
 
     const conversation = await Conversation.findById(conversationId);
 
     if (!conversation) {
-      logger.warn('conversationController', 'المحادثة غير موجودة عند محاولة الإغلاق', { conversationId });
+      // logger.warn('conversationController', 'المحادثة غير موجودة عند محاولة الإغلاق', { conversationId });
       return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
     }
 
@@ -1138,7 +1129,7 @@ exports.closeConversation = async (req, res) => {
       // أضف أي حقول أخرى تحتاجها الواجهة الأمامية
     });
 
-    logger.info('conversationController', 'تم إغلاق المحادثة يدوياً', { conversationId, userId, reason });
+    // logger.info('conversationController', 'تم إغلاق المحادثة يدوياً', { conversationId, userId, reason });
     res.status(200).json({ success: true, conversation: updatedConversation });
 
   } catch (error) {
@@ -1156,14 +1147,14 @@ exports.reopenConversation = async (req, res) => {
     const userId = req.user?._id; // افتراض أن middleware المصادقة يضع معلومات المستخدم في req.user
 
     if (!userId) {
-      logger.warn('conversationController', 'محاولة إعادة فتح محادثة بدون مصادقة', { conversationId });
+      // logger.warn('conversationController', 'محاولة إعادة فتح محادثة بدون مصادقة', { conversationId });
       return res.status(401).json({ success: false, error: 'المصادقة مطلوبة' });
     }
 
     const conversation = await Conversation.findById(conversationId);
 
     if (!conversation) {
-      logger.warn('conversationController', 'المحادثة غير موجودة عند محاولة إعادة الفتح', { conversationId });
+      // logger.warn('conversationController', 'المحادثة غير موجودة عند محاولة إعادة الفتح', { conversationId });
       return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
     }
 
@@ -1185,7 +1176,7 @@ exports.reopenConversation = async (req, res) => {
       // أضف أي حقول أخرى تحتاجها الواجهة الأمامية
     });
 
-    logger.info('conversationController', 'تمت إعادة فتح المحادثة يدوياً', { conversationId, userId });
+    // logger.info('conversationController', 'تمت إعادة فتح المحادثة يدوياً', { conversationId, userId });
     res.status(200).json({ success: true, conversation: updatedConversation });
 
   } catch (error) {
