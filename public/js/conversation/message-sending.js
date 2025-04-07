@@ -75,9 +75,9 @@
         
           <div class="message-sender">${window.currentUsername || 'مستخدم النظام'}</div>
           
-          <div class="message-text">${messageData.content || (mediaId ? 'وسائط' : '')}</div>
+        <div class="message-text">${messageData.content || (mediaId ? 'وسائط' : '')}</div>
           
-          <div class="message-meta">
+        <div class="message-meta">
             <span class="message-time">${new Date().toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })}</span>
             <span class="message-status" title="حالة الرسالة: جاري الإرسال"><i class="fas fa-clock text-secondary"></i></span>
           </div>
@@ -134,7 +134,7 @@
       const requestUrl = `/crm/conversations/${conversationIdValue}/reply`;
       const requestData = {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest'
         },
@@ -316,7 +316,7 @@
         
         // تحديث أيقونة الحالة
         const statusElement = pendingMsg.querySelector('.message-status');
-        if (statusElement) {
+          if (statusElement) {
           if (messageData.status === 'sent') {
             statusElement.innerHTML = '<i class="fas fa-check text-secondary"></i>';
           } else if (messageData.status === 'delivered') {
@@ -520,7 +520,7 @@
       }, 1500);
     }
   };
-  
+
   /**
    * دالة لتشغيل صوت عند وصول رسائل جديدة
    */
@@ -576,5 +576,5 @@
       minute: '2-digit'
     });
   };
-
+  
 })(window); 

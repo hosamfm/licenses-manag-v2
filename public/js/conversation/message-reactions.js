@@ -61,40 +61,52 @@
     
     // التأكد من أن منتقي التفاعلات ليس خارج حدود الشاشة
     const rect = buttonElement.getBoundingClientRect();
+    const picker = reactionPicker;
     
     // الحصول على اتجاه المستند
     const isRTL = document.dir === 'rtl' || getComputedStyle(document.body).direction === 'rtl';
     
-    // تحديد إحداثيات العرض
-    const windowWidth = window.innerWidth;
-    const pickerWidth = 250; // تقدير عرض منتقي التفاعلات
+    // تقدير أبعاد المنتقي (قد تحتاج إلى ضبطها بناءً على تنسيقك)
+    const pickerWidth = 180; 
+    const pickerHeight = 40;
     
     // تحديد الموضع الأفقي
     let left, right;
     if (isRTL) {
-      right = windowWidth - rect.right;
-      reactionPicker.style.right = `${right}px`;
-    } else {
-      left = rect.left;
-      // التأكد من أن المنتقي لا يتجاوز حدود الشاشة
-      if (left + pickerWidth > windowWidth) {
-        left = windowWidth - pickerWidth - 10;
+      // في RTL، نضعه إلى يسار الزر
+      right = window.innerWidth - rect.left - (rect.width / 2) + (pickerWidth / 2);
+      // التأكد من أنه لا يتجاوز الحدود
+      if (right < 10) {
+        right = 10;
       }
-      reactionPicker.style.left = `${left}px`;
-    }
-    
-    // تحديد الموضع الرأسي (فوق أو تحت الزر حسب المساحة المتاحة)
-    const pickerHeight = 60; // تقدير ارتفاع منتقي التفاعلات
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    
-    if (spaceBelow < pickerHeight && spaceAbove > pickerHeight) {
-      // وضع المنتقي فوق الزر إذا لم تكن هناك مساحة كافية بالأسفل
-      reactionPicker.style.top = `${rect.top - pickerHeight - 5 + window.scrollY}px`;
+      if (right + pickerWidth > window.innerWidth) {
+        right = window.innerWidth - pickerWidth - 10;
+      }
+      picker.style.right = `${right}px`;
+      picker.style.left = 'auto';
     } else {
-      // وضع المنتقي تحت الزر (الوضع الافتراضي)
-      reactionPicker.style.top = `${rect.bottom + window.scrollY + 5}px`;
+      // في LTR، نضعه إلى يمين الزر
+      left = rect.right + (rect.width / 2) - (pickerWidth / 2);
+      // التأكد من أنه لا يتجاوز الحدود
+      if (left < 10) {
+        left = 10;
+      }
+      if (left + pickerWidth > window.innerWidth) {
+        left = window.innerWidth - pickerWidth - 10;
+      }
+      picker.style.left = `${left}px`;
+      picker.style.right = 'auto';
     }
+    
+    // تحديد الموضع الرأسي (فوق الزر)
+    const spaceAbove = rect.top;
+    let topPosition = rect.top - pickerHeight - 10 + window.scrollY;
+    
+    // التأكد من أنه لا يتجاوز الحد الأعلى للشاشة
+    if (topPosition < window.scrollY + 10) {
+      topPosition = rect.bottom + 10 + window.scrollY; // عرضه تحت الزر إذا لم يكن هناك مساحة كافية في الأعلى
+    }
+    picker.style.top = `${topPosition}px`;
   };
   
   /**
