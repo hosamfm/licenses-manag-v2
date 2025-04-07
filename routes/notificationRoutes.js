@@ -3,6 +3,7 @@ const router = express.Router();
 const NotificationController = require('../controllers/notificationController');
 const { isAuthenticated } = require('../middleware/authMiddleware');
 const webPushService = require('../services/webPushService');
+const User = require('../models/User');
 
 /**
  * مسارات الإشعارات
@@ -42,6 +43,38 @@ router.post('/subscription', isAuthenticated, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('خطأ في حفظ اشتراك إشعارات الويب:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// مسار إلغاء اشتراك إشعارات الويب
+router.post('/unsubscribe', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    
+    // إزالة بيانات الاشتراك من قاعدة البيانات
+    await User.findByIdAndUpdate(userId, { $unset: { pushSubscription: 1 } });
+    
+    console.log(`تم إلغاء اشتراك إشعارات الويب للمستخدم: ${userId}`);
+    
+    res.json({ success: true, message: 'تم إلغاء اشتراك إشعارات الويب بنجاح' });
+  } catch (error) {
+    console.error('خطأ في إلغاء اشتراك إشعارات الويب:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// مسار إرسال إشعار تجريبي
+router.post('/send-test', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    
+    // إرسال إشعار تجريبي
+    const result = await webPushService.sendTestNotification(userId);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('خطأ في إرسال الإشعار التجريبي:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });

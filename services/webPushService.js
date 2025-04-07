@@ -9,16 +9,20 @@ const User = require('../models/User');
 // مفاتيح VAPID - في بيئة الإنتاج يجب تخزينها في متغيرات بيئية
 // استخدم الأمر node -e "console.log(require('web-push').generateVAPIDKeys())" لتوليد مفاتيح جديدة
 const VAPID_KEYS = {
-  publicKey: process.env.VAPID_PUBLIC_KEY || 'BIL3UXcQDBrxkqZ3cjnJLqrSJgT3lKwDrRVVAB_-oyHnUGUkuuZ85rEPQmG1xwHpGQbwtcEZFJ8NRmk0RD8LKSA',
-  privateKey: process.env.VAPID_PRIVATE_KEY || '2QQc_MvPsKLohSQMIXpTy7d9XYRgD9rV2nFoUZ_OE6U'
+  publicKey: process.env.VAPID_PUBLIC_KEY || 'BNJSYiGbPFIQtcQ6IuhD78oP8JX9YHBPvOITvNtvXh2A6XC3Hzr1dE18jnLfCITFZRs0nwyJFR4gj0byLNj7iA4',
+  privateKey: process.env.VAPID_PRIVATE_KEY || 'dJrL_EaTuKjAw3_K9KwGfgeQboAq7HrH2xXyGXrIJgA'
 };
 
 // تهيئة خدمة الويب بوش
 webpush.setVapidDetails(
-  'mailto:admin@example.com', // يجب تغييره إلى عنوان بريد إلكتروني حقيقي
+  'mailto:admin@altaqanee.sa', // تم تحديث عنوان البريد الإلكتروني إلى بريد حقيقي
   VAPID_KEYS.publicKey,
   VAPID_KEYS.privateKey
 );
+
+logger.info('webPushService', 'تم تهيئة خدمة إشعارات الويب مع مفاتيح VAPID', {
+  publicKey: VAPID_KEYS.publicKey.substring(0, 10) + '...' // لا نعرض المفتاح الكامل في السجلات
+});
 
 /**
  * حفظ اشتراك إشعارات المستخدم
@@ -38,7 +42,11 @@ async function saveSubscription(userId, subscription) {
     user.pushSubscription = subscription;
     await user.save();
     
-    logger.info('webPushService', 'تم حفظ اشتراك إشعارات الويب بنجاح', { userId });
+    logger.info('webPushService', 'تم حفظ اشتراك إشعارات الويب بنجاح', { 
+      userId,
+      endpoint: subscription.endpoint.substring(0, 30) + '...'
+    });
+    
     return { success: true, message: 'تم حفظ اشتراك الإشعارات بنجاح' };
   } catch (error) {
     logger.error('webPushService', 'خطأ في حفظ اشتراك إشعارات الويب', { 
@@ -75,7 +83,14 @@ async function sendNotificationToUser(userId, notification) {
       link: notification.link || '/',
       icon: notification.icon || '/images/logo.png',
       tag: notification.tag || 'default',
+      renotify: notification.renotify || false,
       timestamp: new Date().getTime()
+    });
+    
+    logger.info('webPushService', 'محاولة إرسال إشعار ويب', { 
+      userId, 
+      title: notification.title,
+      endpoint: user.pushSubscription.endpoint.substring(0, 30) + '...'
     });
     
     // إرسال الإشعار
@@ -99,11 +114,30 @@ async function sendNotificationToUser(userId, notification) {
     logger.error('webPushService', 'خطأ في إرسال إشعار الويب', { 
       userId, 
       error: error.message,
-      statusCode: error.statusCode
+      statusCode: error.statusCode,
+      stack: error.stack // سجل كامل المكدس لمزيد من المعلومات
     });
     
     return { success: false, message: error.message, statusCode: error.statusCode };
   }
+}
+
+/**
+ * إرسال إشعار تجريبي للتحقق من عمل الإشعارات
+ * @param {String} userId - معرف المستخدم
+ * @returns {Promise<Object>} - نتيجة الإرسال
+ */
+async function sendTestNotification(userId) {
+  const testNotification = {
+    title: 'إشعار تجريبي',
+    content: 'هذا إشعار تجريبي للتحقق من عمل نظام الإشعارات',
+    link: '/',
+    renotify: true,
+    tag: 'test-notification'
+  };
+  
+  logger.info('webPushService', 'إرسال إشعار تجريبي', { userId });
+  return await sendNotificationToUser(userId, testNotification);
 }
 
 /**
@@ -123,6 +157,7 @@ function generateVAPIDKeys() {
 module.exports = {
   saveSubscription,
   sendNotificationToUser,
+  sendTestNotification,
   generateVAPIDKeys,
   VAPID_KEYS
 }; 

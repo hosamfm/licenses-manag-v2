@@ -3,11 +3,14 @@
  */
 
 // مفتاح VAPID العام - يجب توليده وتخزينه على الخادم
-const applicationServerPublicKey = 'BIL3UXcQDBrxkqZ3cjnJLqrSJgT3lKwDrRVVAB_-oyHnUGUkuuZ85rEPQmG1xwHpGQbwtcEZFJ8NRmk0RD8LKSA';
+const applicationServerPublicKey = 'BNJSYiGbPFIQtcQ6IuhD78oP8JX9YHBPvOITvNtvXh2A6XC3Hzr1dE18jnLfCITFZRs0nwyJFR4gj0byLNj7iA4';
 
 // المتغيرات العامة
 let swRegistration = null;
 let isSubscribed = false;
+
+// إصدار مفاتيح الإشعارات - يستخدم لتتبع تغييرات المفاتيح
+const CURRENT_PUSH_VERSION = 'v20230407';
 
 /**
  * تهيئة إشعارات الويب
@@ -20,7 +23,7 @@ function initializeWebPush() {
   }
 
   // تسجيل Service Worker
-  navigator.serviceWorker.register('/service-worker.js')
+  navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
     .then(function(registration) {
       console.log('تم تسجيل Service Worker بنجاح:', registration);
       swRegistration = registration;
@@ -43,14 +46,63 @@ function initializeUi() {
       isSubscribed = !(subscription === null);
       console.log('حالة الاشتراك في الإشعارات:', isSubscribed);
       
+      // التحقق من إصدار الإشعارات المخزن
+      const savedVersion = localStorage.getItem('pushVersion');
+      
       if (isSubscribed) {
         console.log('المستخدم مشترك بالفعل في إشعارات الويب');
+        
+        // إذا تغير الإصدار، نحتاج لإعادة الاشتراك
+        if (savedVersion !== CURRENT_PUSH_VERSION) {
+          console.log('تم اكتشاف إصدار جديد للإشعارات، سيتم إعادة الاشتراك');
+          // إلغاء الاشتراك القديم وإعادة الاشتراك
+          resetSubscription();
+        }
       } else {
         // طلب إذن الإشعارات تلقائيًا إذا كان المستخدم قد سجل الدخول
         if (window.currentUserId && window.currentUserId !== 'guest') {
           requestNotificationPermission();
+          // تحديث إصدار الإشعارات المخزن
+          localStorage.setItem('pushVersion', CURRENT_PUSH_VERSION);
         }
       }
+    });
+}
+
+/**
+ * إعادة تعيين الاشتراك عند تغيير مفاتيح VAPID
+ */
+function resetSubscription() {
+  if (!swRegistration) return;
+  
+  swRegistration.pushManager.getSubscription()
+    .then(function(subscription) {
+      if (subscription) {
+        // إلغاء الاشتراك من المتصفح
+        return subscription.unsubscribe();
+      }
+    })
+    .then(function() {
+      // إلغاء الاشتراك من الخادم
+      return fetch('/api/notifications/unsubscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+    })
+    .then(function() {
+      console.log('تم إلغاء الاشتراك القديم بنجاح، سيتم طلب اشتراك جديد');
+      // طلب اشتراك جديد
+      requestNotificationPermission();
+      // تحديث إصدار الإشعارات المخزن
+      localStorage.setItem('pushVersion', CURRENT_PUSH_VERSION);
+    })
+    .catch(function(error) {
+      console.error('خطأ في إعادة تعيين الاشتراك:', error);
+      // في حالة الخطأ، نحاول الاشتراك مباشرة
+      requestNotificationPermission();
+      localStorage.setItem('pushVersion', CURRENT_PUSH_VERSION);
     });
 }
 
@@ -145,12 +197,15 @@ function urlB64ToUint8Array(base64String) {
 document.addEventListener('DOMContentLoaded', function() {
   // عندما يتم تعيين userId عبر السوكت، أو إذا كان موجودًا بالفعل
   if (window.currentUserId && window.currentUserId !== 'guest') {
+    console.log('تهيئة إشعارات الويب للمستخدم:', window.currentUserId);
     initializeWebPush();
   } else {
     // الاستماع لحدث userId-set لتهيئة الإشعارات بعد تسجيل الدخول
+    console.log('انتظار تعيين معرف المستخدم...');
     if (window.socket) {
       window.socket.on('userId-set', function(data) {
         if (data.userId && data.userId !== 'guest') {
+          console.log('تم تعيين معرف المستخدم، تهيئة إشعارات الويب الآن:', data.userId);
           window.currentUserId = data.userId;
           initializeWebPush();
         }
