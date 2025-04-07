@@ -258,12 +258,12 @@ async function updateConversationNotifications(conversationId, conversation) {
     try {
         if (conversation.status === 'assigned' && conversation.assignedTo) {
             // إرسال إشعار للمستخدم المسند له المحادثة
-            const notification = await NotificationService.createNotification({
+            const notification = await NotificationService.createAndSendNotification({
                 recipient: conversation.assignedTo,
                 type: 'conversation',
                 title: 'تم إسناد محادثة جديدة لك',
                 content: `تم إسناد محادثة مع ${conversation.customerName || conversation.phoneNumber} إليك`,
-                link: `/crm/conversations/${conversationId}`,
+                link: `/crm/conversations/ajax?selected=${conversationId}`,
                 reference: {
                     model: 'Conversation',
                     id: conversationId
