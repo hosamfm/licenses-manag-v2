@@ -169,13 +169,20 @@ async function sendMessageNotification(conversationId, message, conversation) {
 
                 if (!isAssignedUserActive) {
                     logger.info('notificationSocketService', 'إرسال إشعار للمستخدم المسند له (غير نشط في الغرفة)', { conversationId, assignedTo });
-                    // إنشاء إشعار جديد
+                    
+                    // --- التصحيح: استدعاء الدالة بالتوقيع الصحيح ---
+                    // محاولة الحصول على اسم العميل من المحادثة أو استخدام رقم الهاتف
+                    const senderName = conversation?.customerName || conversation?.phoneNumber || 'عميل غير معروف';
+                    const messageId = message?._id || message?.id || null; // معرف الرسالة
+                    
                     const notification = await NotificationService.createMessageNotification(
-                        assignedTo,
-                        'system', // رسائل واتساب ليس لها مرسل في النظام
-                        conversationId,
-                        message.content || 'رسالة جديدة'
+                        assignedTo,                      // recipientId
+                        conversationId,                  // conversationId (الصحيح)
+                        message.content || 'رسالة جديدة', // messageContent
+                        messageId,                       // messageId
+                        senderName                       // senderName
                     );
+                    // --- نهاية التصحيح ---
                     
                     // إرسال الإشعار عبر سوكت
                     if (notification) {
@@ -207,7 +214,7 @@ async function sendMessageNotification(conversationId, message, conversation) {
                         logger.info('notificationSocketService', 'إرسال إشعار للمشرف (غير نشط في الغرفة)', { conversationId, adminId: admin._id });
                         
                         // --- التصحيح: استدعاء الدالة بالتوقيع الصحيح ---
-                        const senderName = contact?.name || contact?.phoneNumber || 'عميل غير معروف'; // اسم المرسل (العميل)
+                        const senderName = contact?.name || contact?.phoneNumber || 'عميل غير معروف';
                         const messageId = message?._id || message?.id || null; // معرف الرسالة
                         
                         const notification = await NotificationService.createMessageNotification(
