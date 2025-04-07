@@ -331,7 +331,7 @@
     }
     
     // إضافة فقاعة الرسالة
-    messageHTML += `<div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'} ${messageData.mediaType ? 'message-with-media' : ''}">`;
+    messageHTML += `<div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : (messageData.direction === 'internal' ? 'internal-note-bubble' : 'outgoing-bubble')} ${messageData.mediaType ? 'message-with-media' : ''}">`;
     
     // إضافة اسم المرسل للرسائل الصادرة
     if (messageData.direction === 'outgoing') {
@@ -450,7 +450,7 @@
     `;
     
     // إغلاق عنصر الرسالة
-    messageHTML += `</div><div class="clear-both"></div>`;
+    messageHTML += `</div>`;
     
     // إضافة الرسالة لحاوية الرسائل
     messageContainer.insertAdjacentHTML('beforeend', messageHTML);
