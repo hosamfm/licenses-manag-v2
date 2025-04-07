@@ -138,7 +138,7 @@
             <div class="card-header d-flex justify-content-between align-items-center">
               <span><i class="fas fa-comments me-2"></i> المحادثات</span>
               <% if (conversations.length > 5) { %>
-                <a href="/crm/conversations?search=<%= contact.phoneNumber %>" class="btn btn-sm btn-outline-primary">
+                <a href="/crm/conversations/ajax?search=<%= contact.phoneNumber %>" class="btn btn-sm btn-outline-primary">
                   عرض الكل
                 </a>
               <% } %>
@@ -147,7 +147,7 @@
               <% if (conversations && conversations.length > 0) { %>
                 <div class="list-group list-group-flush">
                   <% conversations.forEach(function(conversation) { %>
-                    <a href="/crm/conversations/<%= conversation._id %>" class="list-group-item list-group-item-action">
+                    <a href="/crm/conversations/ajax?selected=<%= conversation._id %>" class="list-group-item list-group-item-action">
                       <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-1">
                           <span class="status-badge status-<%= conversation.status %> me-2">

@@ -163,7 +163,7 @@ app.use('/whatsapp/media', whatsappMediaRoutes); // تسجيل مسارات وس
 app.use('/api/user', userApiRoutes); // تسجيل مسارات API للمستخدمين
 app.use('/api/conversations', conversationRoutes); // تسجيل مسارات المحادثات
 app.use('/api/profile', profileRoutes); // تسجيل مسارات الملف الشخصي
-app.use('/api/notifications', notificationRoutes); // تسجيل مسارات الإشعارات
+app.use('/api/notifications', notificationRoutes); // تسجيل مسارات الإشعارات تحت /api/notifications
 
 // إضافة مسار لعرض صفحة الملف الشخصي
 app.get('/profile', isAuthenticated, (req, res) => {

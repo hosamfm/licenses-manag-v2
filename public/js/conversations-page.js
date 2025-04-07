@@ -587,18 +587,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * تعليق مستمع حدث النقر على عنصر محادثة واحد
-     * @param {HTMLElement} itemElement - عنصر زر المحادثة
+     * ربط مستمع حدث النقر لعنصر محادثة
+     * @param {HTMLElement} itemElement - عنصر المحادثة
      */
     function attachSingleConversationItemEvent(itemElement) {
-        if (!itemElement) return;
-        // نسخ واستبدال لإزالة المستمعات القديمة بأمان
-        const newItem = itemElement.cloneNode(true);
-        itemElement.parentNode.replaceChild(newItem, itemElement);
-
-        newItem.addEventListener('click', function() {
+        if (!itemElement || itemElement.dataset.eventAttached) return;
+        
+        itemElement.dataset.eventAttached = 'true'; // تعليم العنصر لتجنب تكرار المستمع
+        
+        itemElement.addEventListener('click', function() {
+            // تحديث العناصر النشطة في القائمة
+            conversationListContainer.querySelectorAll('.conversation-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            this.classList.add('active');
+            
+            // استخراج معرف المحادثة من data-attribute
             const conversationId = this.getAttribute('data-conversation-id');
             if (conversationId) {
+                // تحديث تاريخ المتصفح باستخدام المسار الصحيح - تعديل الرابط ليكون بالشكل الجديد
+                if (history && history.pushState) {
+                    const url = `/crm/conversations/ajax?selected=${conversationId}`;
+                    history.pushState({ conversationId: conversationId }, '', url);
+                }
+                
+                // تحميل تفاصيل المحادثة
                 window.loadConversationDetails(conversationId);
             }
         });

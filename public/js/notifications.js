@@ -592,9 +592,10 @@ function attachSingleConversationItemEvent(item) {
         }
         window.currentConversationId = convId; // التأكد من تحديث المتغير العام
         
-        // إضافة المعرف إلى تاريخ المتصفح
+        // إضافة المعرف إلى تاريخ المتصفح - تعديل الرابط من الشكل القديم إلى الشكل الجديد
         if (history.pushState) {
-          const url = `/crm/conversations/${convId}`;
+          // تغيير من الشكل القديم إلى الشكل الجديد
+          const url = `/crm/conversations/ajax?selected=${convId}`;
           history.pushState({ conversationId: convId }, '', url);
         }
         

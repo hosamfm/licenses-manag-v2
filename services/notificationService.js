@@ -2,147 +2,208 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const logger = require('./loggerService');
 const mongoose = require('mongoose');
+const webpush = require('web-push');
+
+// إعداد web-push باستخدام مفاتيح VAPID من متغيرات البيئة
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:madlum.huusam@gmail.com', // تم التحديث بالبريد الصحيح
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+  logger.info('notificationService', 'تم إعداد تفاصيل VAPID لـ Web Push');
+} else {
+  logger.warn('notificationService', 'لم يتم العثور على مفاتيح VAPID في متغيرات البيئة. لن تعمل إشعارات Web Push.');
+}
 
 /**
  * خدمة الإشعارات - توفر وظائف لإنشاء وإدارة الإشعارات
  */
 class NotificationService {
   /**
-   * إنشاء إشعار جديد
-   * @param {Object} notification بيانات الإشعار
-   * @returns {Promise<Object>} الإشعار الذي تم إنشاؤه
+   * إنشاء إشعار جديد وإرساله (بما في ذلك Web Push)
+   * @param {Object} notificationData بيانات الإشعار الأساسية (recipient, type, title, content, link, reference)
+   * @returns {Promise<Object|null>} الإشعار الذي تم إنشاؤه أو null إذا تم منعه
    */
-  static async createNotification(notification) {
+  static async createAndSendNotification(notificationData) {
     try {
-      // التحقق من أن المستلم موجود
-      const recipient = await User.findById(notification.recipient);
+      // 1. التحقق من المستلم وتفضيلاته
+      const recipient = await User.findById(notificationData.recipient);
       if (!recipient) {
-        throw new Error('المستلم غير موجود');
-      }
-
-      // التحقق من إعدادات الإشعارات للمستخدم
-      if (!this.shouldSendNotification(recipient, notification.type)) {
-        console.log(`لن يتم إرسال إشعار للمستخدم ${recipient._id} بسبب إعداداته`);
+        logger.warn('notificationService', 'المستلم غير موجود في createAndSendNotification', { recipientId: notificationData.recipient });
         return null;
       }
 
-      // إنشاء الإشعار
-      const newNotification = new Notification(notification);
-      await newNotification.save();
+      // التحقق من الإعداد العام للإشعارات للمستلم
+      if (recipient.enable_general_notifications === false) {
+        logger.info('notificationService', `لن يتم إنشاء إشعار للمستخدم ${recipient._id} بسبب تعطيل الإشعارات العامة`);
+        return null;
+      }
       
-      // يمكن هنا إضافة إرسال الإشعار عبر ويب سوكت (سيتم تنفيذه لاحقاً)
-      // إرسال حدث إلى ويب سوكت لإرسال الإشعار فورياً
+      // التحقق من إعدادات الإشعارات الخاصة بالنوع المحدد
+      if (!this.shouldSendNotificationBasedOnType(recipient, notificationData.type)) {
+        logger.info('notificationService', `لن يتم إنشاء إشعار من النوع ${notificationData.type} للمستخدم ${recipient._id} بسبب إعداداته الخاصة بالنوع`);
+        return null;
+      }
+      
+      // 2. إنشاء الإشعار وحفظه في قاعدة البيانات
+      const newNotification = new Notification(notificationData);
+      await newNotification.save();
+      logger.info('notificationService', 'تم حفظ الإشعار الجديد في قاعدة البيانات', { notificationId: newNotification._id, recipientId: recipient._id });
+
+      // 3. إرسال الإشعار عبر Socket.IO (هذا يُفترض أن يتم في notificationSocketService)
+      // لا نضع استدعاء Socket.IO هنا للحفاظ على فصل الاهتمامات
+      // يجب أن يستدعي الكود الآخر sendNotification من notificationSocketService بعد استدعاء هذه الدالة بنجاح
+
+      // 4. إرسال الإشعار عبر Web Push إذا كان متاحًا
+      if (recipient.webPushSubscriptions && recipient.webPushSubscriptions.length > 0) {
+         logger.info('notificationService', `محاولة إرسال Web Push للمستخدم ${recipient._id} لعدد ${recipient.webPushSubscriptions.length} اشتراك`);
+         await this.sendWebPushNotification(recipient, newNotification);
+      } else {
+         logger.info('notificationService', `لا توجد اشتراكات Web Push للمستخدم ${recipient._id}`);
+      }
 
       return newNotification;
+
     } catch (error) {
-      console.error('خطأ في إنشاء الإشعار:', error);
-      throw error;
+      logger.error('notificationService', 'خطأ فادح في createAndSendNotification', { error: error.message, notificationData });
+      return null;
+    }
+  }
+  
+  /**
+   * إرسال إشعار عبر Web Push إلى جميع اشتراكات المستخدم
+   * @param {Object} user - كائن المستخدم
+   * @param {Object} notification - كائن الإشعار
+   */
+  static async sendWebPushNotification(user, notification) {
+    if (!user || !notification || !user.webPushSubscriptions || user.webPushSubscriptions.length === 0) {
+      return;
+    }
+    
+    // التأكد من إعداد مفاتيح VAPID
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+       logger.warn('notificationService', 'لا يمكن إرسال Web Push بسبب عدم وجود مفاتيح VAPID.');
+       return;
+    }
+
+    // تحضير بيانات الإشعار للـ payload
+    const payload = JSON.stringify({
+      title: notification.title,
+      body: notification.content,
+      url: notification.link || '/' // الرابط الذي سيتم فتحه
+    });
+
+    const promises = user.webPushSubscriptions.map(async (subscription) => {
+      try {
+        logger.info('notificationService', `إرسال Web Push إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`);
+        await webpush.sendNotification(subscription, payload);
+        logger.info('notificationService', `تم إرسال Web Push بنجاح إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`);
+      } catch (error) {
+        logger.error('notificationService', `خطأ في إرسال Web Push إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`, { errorMessage: error.message, statusCode: error.statusCode });
+        
+        // إذا كان الخطأ يشير إلى اشتراك منتهي الصلاحية أو غير صالح (مثل 404 أو 410)
+        if (error.statusCode === 404 || error.statusCode === 410) {
+          // قم بإزالة الاشتراك غير الصالح من قاعدة البيانات
+          logger.warn('notificationService', `إزالة اشتراك Web Push غير صالح للمستخدم ${user._id}: ${subscription.endpoint.substring(0, 30)}...`);
+          await this.removeWebPushSubscription(user._id, subscription.endpoint);
+        }
+      }
+    });
+
+    await Promise.all(promises);
+     logger.info('notificationService', `اكتملت محاولة إرسال Web Push لجميع اشتراكات المستخدم ${user._id}`);
+  }
+
+  /**
+   * إزالة اشتراك Web Push من المستخدم
+   * @param {String} userId - معرف المستخدم
+   * @param {String} endpoint - نقطة نهاية الاشتراك المراد إزالتها
+   */
+  static async removeWebPushSubscription(userId, endpoint) {
+    try {
+      await User.updateOne(
+        { _id: userId },
+        { $pull: { webPushSubscriptions: { endpoint: endpoint } } }
+      );
+      logger.info('notificationService', 'تمت إزالة اشتراك Web Push بنجاح', { userId, endpoint });
+    } catch (error) {
+      logger.error('notificationService', 'خطأ في إزالة اشتراك Web Push', { userId, endpoint, error: error.message });
     }
   }
 
   /**
    * إنشاء إشعار نظام لمستخدم واحد أو أكثر
-   * @param {Array|String} recipientIds معرف المستلم أو مصفوفة من المعرفات
-   * @param {String} title عنوان الإشعار
-   * @param {String} content محتوى الإشعار
-   * @param {String} link رابط للتنقل إليه عند النقر على الإشعار (اختياري)
-   * @param {Object} reference مرجع للعنصر المرتبط بالإشعار (اختياري)
-   * @returns {Promise<Array>} الإشعارات التي تم إنشاؤها
+   * يستخدم الآن createAndSendNotification
    */
   static async createSystemNotification(recipientIds, title, content, link = null, reference = null) {
-    try {
-      // تحويل المعرف إلى مصفوفة إذا كان واحدًا
-      const recipients = Array.isArray(recipientIds) ? recipientIds : [recipientIds];
-      const notifications = [];
-
-      for (const recipientId of recipients) {
-        const notification = await this.createNotification({
-          recipient: recipientId,
-          type: 'system',
-          title,
-          content,
-          link,
-          reference
-        });
-        if (notification) {
-          notifications.push(notification);
-        }
+    const recipients = Array.isArray(recipientIds) ? recipientIds : [recipientIds];
+    const notifications = [];
+    for (const recipientId of recipients) {
+      try {
+          const notification = await this.createAndSendNotification({
+            recipient: recipientId,
+            type: 'system',
+            title,
+            content,
+            link,
+            reference
+          });
+          if (notification) {
+            notifications.push(notification);
+          }
+      } catch (error) {
+         logger.error('notificationService', 'خطأ في إرسال إشعار النظام للمستخدم', { recipientId, error: error.message });
+         // استمر في المحاولة للمستخدمين الآخرين
       }
-
-      return notifications;
-    } catch (error) {
-      console.error('خطأ في إنشاء إشعار النظام:', error);
-      throw error;
     }
+    return notifications;
   }
 
   /**
    * إنشاء إشعار رسالة
-   * @param {String} recipientId معرف المستلم
-   * @param {String} senderId معرف المرسل ('system' للرسائل الواردة)
-   * @param {String} conversationId معرف المحادثة
-   * @param {String} messageContent محتوى الرسالة
-   * @returns {Promise<Object|null>} الإشعار الذي تم إنشاؤه أو null إذا تم منعه
+   * يستخدم الآن createAndSendNotification ويتجاوز الفحص العام لأنه يتم في notificationSocketService
    */
   static async createMessageNotification(recipientId, senderId, conversationId, messageContent) {
     try {
-      // 1. التحقق من وجود المستلم وتفضيلاته العامة
-      const recipient = await User.findById(recipientId);
-      if (!recipient) {
-        logger.warn('notificationService', 'المستلم غير موجود في createMessageNotification', { recipientId });
-        return null; // لا يمكن إرسال إشعار لمستلم غير موجود
-      }
-
-      // التحقق من الإعداد العام للإشعارات للمستلم
-      if (recipient.enable_general_notifications === false) {
-         logger.info('notificationService', `لن يتم إرسال إشعار رسالة للمستخدم ${recipientId} بسبب تعطيل الإشعارات العامة`);
-         return null;
-      }
-      
-      // *** تم تجاوز الفحص العام shouldSendNotification هنا ***
-      // نفترض أن القرار بإرسال الإشعار تم اتخاذه بشكل صحيح في notificationSocketService 
-      // بناءً على notify_assigned_conversation أو notify_unassigned_conversation.
-
-      // 2. تحديد اسم المرسل للعرض في الإشعار
-      let senderName = 'رسالة جديدة'; // الافتراضي للرسائل الواردة من العملاء
+      // 1. تحديد اسم المرسل (كما في النسخة السابقة)
+      let senderName = 'رسالة جديدة'; 
       if (senderId && senderId !== 'system' && mongoose.Types.ObjectId.isValid(senderId)) {
           try {
               const senderUser = await User.findById(senderId);
-              if (senderUser) {
-                  senderName = senderUser.full_name || senderUser.username;
-              } else {
-                   senderName = 'مستخدم غير معروف';
-              }
+              if (senderUser) senderName = senderUser.full_name || senderUser.username;
+              else senderName = 'مستخدم غير معروف';
           } catch (findError) {
                logger.warn('notificationService', 'خطأ في البحث عن مرسل رسالة داخلي', { senderId, error: findError.message });
                senderName = 'مرسل غير صالح';
           }
       }
-
-      // 3. تحضير بيانات الإشعار
+      
+      // 2. تحضير بيانات الإشعار الأساسية
       const notificationData = {
         recipient: recipientId,
-        // لا نربط بمرسل إذا كان 'system' أو المعرف غير صالح
         sender: (senderId === 'system' || !mongoose.Types.ObjectId.isValid(senderId) ? null : senderId),
         type: 'message',
-        title: `${senderName}`, // استخدام الاسم المحضر
-        // التعامل مع المحتوى غير النصي أو الطويل جدًا
+        title: `${senderName}`,
         content: messageContent && typeof messageContent === 'string'
                    ? (messageContent.length > 100 ? `${messageContent.slice(0, 100)}...` : messageContent)
-                   : 'رسالة جديدة', // استخدام نص بديل للمحتوى غير النصي
-        link: `/crm/conversation/${conversationId}`,
+                   : 'رسالة جديدة',
+        link: `/crm/conversations/ajax?selected=${conversationId}`, // <-- استخدام الرابط الصحيح هنا
         reference: {
           model: 'Conversation',
           id: conversationId
         }
       };
-
-      // 4. إنشاء الإشعار مباشرة وحفظه
-      const newNotification = new Notification(notificationData);
-      await newNotification.save();
-
-      logger.info('notificationService', 'تم إنشاء إشعار رسالة بنجاح (تم تجاوز الفحص العام)', { recipientId, conversationId });
-      return newNotification; // إرجاع الإشعار الذي تم إنشاؤه
+      
+      // 3. استدعاء الدالة الموحدة للإنشاء والإرسال
+      // **ملاحظة:** الفحص العام وتفضيلات النوع يتم داخل createAndSendNotification
+      const newNotification = await this.createAndSendNotification(notificationData);
+      
+      if (newNotification) {
+         logger.info('notificationService', 'تم إنشاء وإرسال إشعار رسالة بنجاح', { recipientId, conversationId });
+      }
+      
+      return newNotification; // إرجاع الإشعار الذي تم إنشاؤه (أو null)
 
     } catch (error) {
       logger.error('notificationService', 'خطأ فادح في createMessageNotification', { 
@@ -151,7 +212,7 @@ class NotificationService {
         senderId, 
         conversationId 
       });
-      return null; // إرجاع null عند حدوث خطأ فادح
+      return null; 
     }
   }
 
@@ -163,13 +224,9 @@ class NotificationService {
    */
   static async markAsRead(notificationId, isRead = true) {
     try {
-      return await Notification.findByIdAndUpdate(
-        notificationId,
-        { isRead },
-        { new: true }
-      );
+      return await Notification.findByIdAndUpdate(notificationId, { isRead }, { new: true });
     } catch (error) {
-      console.error('خطأ في تحديث حالة القراءة للإشعار:', error);
+      logger.error('notificationService', 'خطأ في تحديث حالة قراءة الإشعار:', { error: error.message, notificationId });
       throw error;
     }
   }
@@ -182,12 +239,9 @@ class NotificationService {
    */
   static async markAllAsRead(userId, isRead = true) {
     try {
-      return await Notification.updateMany(
-        { recipient: userId, isRead: !isRead },
-        { isRead }
-      );
+      return await Notification.updateMany({ recipient: userId, isRead: !isRead }, { isRead });
     } catch (error) {
-      console.error('خطأ في تحديث حالة القراءة لجميع الإشعارات:', error);
+      logger.error('notificationService', 'خطأ في تحديث حالة القراءة لجميع الإشعارات:', { error: error.message, userId });
       throw error;
     }
   }
@@ -200,11 +254,7 @@ class NotificationService {
    */
   static async archiveNotification(notificationId, isArchived = true) {
     try {
-      return await Notification.findByIdAndUpdate(
-        notificationId,
-        { isArchived },
-        { new: true }
-      );
+      return await Notification.findByIdAndUpdate(notificationId, { isArchived }, { new: true });
     } catch (error) {
       console.error('خطأ في أرشفة الإشعار:', error);
       throw error;
@@ -251,18 +301,16 @@ class NotificationService {
       }
       
       if (!includeArchived) {
-        query.isArchived = false;
+        query.isArchived = { $ne: true };
       }
 
-      const notifications = await Notification.find(query)
+      return await Notification.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('sender', 'username full_name profile_picture');
-
-      return notifications;
+        .lean(); // استخدام lean لأداء أفضل عند القراءة فقط
     } catch (error) {
-      console.error('خطأ في الحصول على إشعارات المستخدم:', error);
+      logger.error('notificationService', 'خطأ في جلب إشعارات المستخدم:', { error: error.message, userId });
       throw error;
     }
   }
@@ -277,36 +325,43 @@ class NotificationService {
       return await Notification.countDocuments({
         recipient: userId,
         isRead: false,
-        isArchived: false
+        isArchived: { $ne: true }
       });
     } catch (error) {
-      console.error('خطأ في الحصول على عدد الإشعارات غير المقروءة:', error);
+      logger.error('notificationService', 'خطأ في جلب عدد الإشعارات غير المقروءة:', { error: error.message, userId });
       throw error;
     }
   }
 
   /**
-   * التحقق مما إذا كان يجب إرسال إشعار للمستخدم بناءً على إعداداته
-   * @param {Object} user المستخدم
+   * التحقق مما إذا كان يجب إرسال إشعار بناءً على إعدادات المستخدم ونوع الإشعار
+   * @param {Object} user كائن المستخدم
    * @param {String} notificationType نوع الإشعار
-   * @returns {Boolean} هل يجب إرسال الإشعار
+   * @returns {Boolean}
    */
-  static shouldSendNotification(user, notificationType) {
-    // إذا كانت الإشعارات العامة معطلة، فلا ترسل أي إشعار
-    if (user.enable_general_notifications === false) {
-      return false;
+  static shouldSendNotificationBasedOnType(user, notificationType) {
+    if (!user || user.enable_general_notifications === false) {
+      return false; // الإشعارات العامة معطلة
     }
 
-    // بناءً على نوع الإشعار، تحقق من الإعدادات المحددة
     switch (notificationType) {
       case 'message':
-        return user.notify_any_message !== false;
+        // يتم التعامل مع منطق الرسائل بشكل منفصل بناءً على notify_assigned/unassigned/any
+        // هذه الدالة تركز على الأنواع الأخرى أو كفحص إضافي
+        return user.notify_any_message === true; 
       case 'conversation':
-        // إذا كانت المحادثة معينة للمستخدم
-        return user.notify_assigned_conversation !== false;
-      default:
-        // للأنواع الأخرى (system, license, user)، ارسل دائمًا
+        // نفترض أن إشعارات المحادثات (مثل التعيين) مهمة دائمًا إذا كانت الإشعارات العامة مفعلة
+        return true; 
+      case 'system':
+        // نفترض أن الإشعارات النظامية مهمة دائمًا إذا كانت الإشعارات العامة مفعلة
         return true;
+      case 'license':
+         // يمكن إضافة حقل مخصص في المستخدم للتحكم في إشعارات التراخيص
+         // return user.notify_license_updates === true;
+         return true; // مؤقتًا، نفترض أنها مفعلة دائمًا
+      // أضف أنواعًا أخرى هنا إذا لزم الأمر
+      default:
+        return true; // السماح بالأنواع غير المعروفة افتراضيًا إذا كانت الإشعارات العامة مفعلة
     }
   }
 }

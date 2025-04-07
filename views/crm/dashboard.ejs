@@ -134,7 +134,7 @@
                     <li class="list-group-item">
                       <div class="d-flex justify-content-between align-items-center">
                         <div>
-                          <a href="/crm/conversations/<%= conversation._id %>" class="text-decoration-none">
+                          <a href="/crm/conversations/ajax?selected=<%= conversation._id %>" class="text-decoration-none">
                             <strong><%= conversation.customerName || conversation.phoneNumber %></strong>
                           </a>
                           <br>
@@ -153,7 +153,7 @@
                           </small>
                         </div>
                         <div>
-                          <a href="/crm/conversations/<%= conversation._id %>" class="btn btn-sm btn-outline-primary">
+                          <a href="/crm/conversations/ajax?selected=<%= conversation._id %>" class="btn btn-sm btn-outline-primary">
                             <i class="far fa-eye"></i>
                           </a>
                         </div>

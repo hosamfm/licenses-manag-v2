@@ -60,7 +60,14 @@ const userSchema = new mongoose.Schema({
   },
   temp_code: { type: String },
   subordinates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  supervisor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false }
+  supervisor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
+  webPushSubscriptions: [{
+    endpoint: { type: String, required: true },
+    keys: {
+      p256dh: { type: String, required: true },
+      auth: { type: String, required: true }
+    }
+  }]
 });
 
 userSchema.pre('save', async function(next) {
