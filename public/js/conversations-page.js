@@ -921,6 +921,20 @@ document.addEventListener('DOMContentLoaded', () => {
             handleSocketUpdateDebounced('update', data);
         });
 
+        // مستمع لتحديثات حالة الرسائل
+        window.socketConnection.on('message-status-update', (data) => {
+            console.log('Socket تلقى message-status-update:', data);
+            
+            // استدعاء دالة تحديث حالة الرسالة إذا كانت المحادثة مفتوحة حالياً
+            if (data && data.conversationId === window.currentConversationId) {
+                if (typeof window.updateMessageStatus === 'function') {
+                    window.updateMessageStatus(data.externalId, data.status);
+                } else {
+                    console.warn("دالة updateMessageStatus غير متوفرة. تأكد من تحميل الملف message-status.js");
+                }
+            }
+        });
+
         // مستمع للرسائل الجديدة (قد تؤثر على ترتيب القائمة أو المعاينة)
         window.socketConnection.on('new-message', (messageData) => {
             console.log('Socket تلقى new-message:', messageData);

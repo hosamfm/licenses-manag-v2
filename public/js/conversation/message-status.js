@@ -14,6 +14,8 @@
       return;
     }
     
+    console.log('تحديث حالة الرسالة:', messageId, newStatus);
+    
     // البحث أولاً عن الرسالة حسب المعرف الخارجي (الذي يأتي من واتساب)
     let messageElem = document.querySelector(`.message[data-external-id="${messageId}"]`);
     
@@ -24,35 +26,31 @@
     
     // إذا لم يتم العثور على الرسالة بأي من المعرفين
     if (!messageElem) {
+      console.warn('لم يتم العثور على الرسالة للتحديث:', messageId);
       return;
     }
+    
+    console.log('تم العثور على الرسالة، تحديث الحالة:', messageId, newStatus);
     
     // تحديث السمة
     messageElem.setAttribute('data-status', newStatus);
     
     // تحديث أيقونة الحالة
-    const statusIcon = messageElem.querySelector('.message-status i');
-    if (statusIcon) {
-      // إزالة جميع الأصناف
-      statusIcon.className = '';
-      
-      // إضافة الصنف المناسب للحالة الجديدة
+    const statusElement = messageElem.querySelector('.message-status');
+    if (statusElement) {
       if (newStatus === 'sending') {
-        statusIcon.className = 'fas fa-clock text-secondary';
-        statusIcon.title = 'جاري الإرسال...';
+        statusElement.innerHTML = '<i class="fas fa-clock text-secondary" title="جاري الإرسال..."></i>';
       } else if (newStatus === 'sent') {
-        statusIcon.className = 'fas fa-check text-silver';
-        statusIcon.title = 'تم الإرسال';
+        statusElement.innerHTML = '<i class="fas fa-check text-secondary" title="تم الإرسال"></i>';
       } else if (newStatus === 'delivered') {
-        statusIcon.className = 'fas fa-check-double text-silver';
-        statusIcon.title = 'تم التسليم';
+        statusElement.innerHTML = '<i class="fas fa-check-double text-secondary" title="تم التسليم"></i>';
       } else if (newStatus === 'read') {
-        statusIcon.className = 'fas fa-check-double text-primary';
-        statusIcon.title = 'تم القراءة';
+        statusElement.innerHTML = '<i class="fas fa-check-double text-primary" title="تم القراءة"></i>';
       } else if (newStatus === 'failed') {
-        statusIcon.className = 'fas fa-exclamation-triangle text-danger';
-        statusIcon.title = 'فشل الإرسال';
+        statusElement.innerHTML = '<i class="fas fa-exclamation-circle text-danger" title="فشل الإرسال"></i>';
       }
+    } else {
+      console.warn('لم يتم العثور على عنصر حالة الرسالة للتحديث:', messageId);
     }
   };
   

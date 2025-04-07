@@ -250,16 +250,16 @@
       }
       
       // تحديث أيقونة الحالة
-      const statusIcon = messageExists.querySelector('.message-status');
-      if (statusIcon) {
+      const statusElement = messageExists.querySelector('.message-status');
+      if (statusElement) {
         if (messageData.status === 'sent') {
-          statusIcon.innerHTML = '<i class="fas fa-check text-secondary"></i>';
+          statusElement.innerHTML = '<i class="fas fa-check text-secondary"></i>';
         } else if (messageData.status === 'delivered') {
-          statusIcon.innerHTML = '<i class="fas fa-check-double text-secondary"></i>';
+          statusElement.innerHTML = '<i class="fas fa-check-double text-secondary"></i>';
         } else if (messageData.status === 'read') {
-          statusIcon.innerHTML = '<i class="fas fa-check-double text-primary"></i>';
+          statusElement.innerHTML = '<i class="fas fa-check-double text-primary"></i>';
         } else if (messageData.status === 'failed') {
-          statusIcon.innerHTML = '<i class="fas fa-exclamation-circle text-danger"></i>';
+          statusElement.innerHTML = '<i class="fas fa-exclamation-circle text-danger"></i>';
         }
       }
       
@@ -267,7 +267,7 @@
     }
     
     // التحقق من الرسائل المؤقتة (المرسلة محليًا)
-    const pendingMessages = document.querySelectorAll('.message.message-pending');
+    const pendingMessages = document.querySelectorAll('.message.message-pending, .message.outgoing:not([data-status="read"]):not([data-status="delivered"])');
     for (const pendingMsg of pendingMessages) {
       // إذا كانت هناك رسالة مؤقتة يجب تحديثها بدلاً من إضافة واحدة جديدة
       // نقارن محتوى الرسالة المؤقتة مع الرسالة الجديدة
@@ -291,16 +291,25 @@
         }
         
         // تحديث أيقونة الحالة
-        const statusIcon = pendingMsg.querySelector('.message-status');
-        if (statusIcon) {
+        const statusElement = pendingMsg.querySelector('.message-status');
+        if (statusElement) {
           if (messageData.status === 'sent') {
-            statusIcon.innerHTML = '<i class="fas fa-check text-secondary"></i>';
+            statusElement.innerHTML = '<i class="fas fa-check text-secondary"></i>';
           } else if (messageData.status === 'delivered') {
-            statusIcon.innerHTML = '<i class="fas fa-check-double text-secondary"></i>';
+            statusElement.innerHTML = '<i class="fas fa-check-double text-secondary"></i>';
           } else if (messageData.status === 'read') {
-            statusIcon.innerHTML = '<i class="fas fa-check-double text-primary"></i>';
+            statusElement.innerHTML = '<i class="fas fa-check-double text-primary"></i>';
           }
         }
+        
+        // تحديث أزرار التفاعل مع الرسالة
+        const actionButtons = pendingMsg.querySelectorAll('.message-action-btn');
+        actionButtons.forEach(button => {
+          button.setAttribute('data-message-id', messageData._id);
+          if (messageData.externalMessageId) {
+            button.setAttribute('data-external-id', messageData.externalMessageId);
+          }
+        });
         
         return;
       }
