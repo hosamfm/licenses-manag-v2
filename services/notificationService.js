@@ -2,7 +2,6 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const logger = require('./loggerService');
 const mongoose = require('mongoose');
-const webPushService = require('./webPushService');
 
 /**
  * خدمة الإشعارات - توفر وظائف لإنشاء وإدارة الإشعارات
@@ -23,7 +22,7 @@ class NotificationService {
 
       // التحقق من إعدادات الإشعارات للمستخدم
       if (!this.shouldSendNotification(recipient, notification.type)) {
-        logger.info('notificationService', `لن يتم إرسال إشعار للمستخدم ${recipient._id} بسبب إعداداته`);
+        console.log(`لن يتم إرسال إشعار للمستخدم ${recipient._id} بسبب إعداداته`);
         return null;
       }
 
@@ -31,27 +30,8 @@ class NotificationService {
       const newNotification = new Notification(notification);
       await newNotification.save();
       
-      // إرسال إشعار ويب للمستخدم إذا كان لديه اشتراك
-      if (recipient.pushSubscription) {
-        try {
-          await webPushService.sendNotificationToUser(recipient._id, {
-            title: notification.title,
-            content: notification.content,
-            link: notification.link,
-            icon: '/images/logo.png'
-          });
-          logger.info('notificationService', 'تم إرسال إشعار الويب للمستخدم', {
-            userId: recipient._id,
-            notificationType: notification.type
-          });
-        } catch (pushError) {
-          logger.error('notificationService', 'خطأ في إرسال إشعار الويب', {
-            userId: recipient._id,
-            error: pushError.message
-          });
-          // لا نمنع إتمام العملية إذا فشل إشعار الويب
-        }
-      }
+      // يمكن هنا إضافة إرسال الإشعار عبر ويب سوكت (سيتم تنفيذه لاحقاً)
+      // إرسال حدث إلى ويب سوكت لإرسال الإشعار فورياً
 
       return newNotification;
     } catch (error) {
@@ -150,7 +130,7 @@ class NotificationService {
         content: messageContent && typeof messageContent === 'string'
                    ? (messageContent.length > 100 ? `${messageContent.slice(0, 100)}...` : messageContent)
                    : 'رسالة جديدة', // استخدام نص بديل للمحتوى غير النصي
-        link: `/crm/conversations/ajax?selected=${conversationId}`,
+        link: `/crm/conversation/${conversationId}`,
         reference: {
           model: 'Conversation',
           id: conversationId
