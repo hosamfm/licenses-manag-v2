@@ -64,18 +64,36 @@
     
     // إظهار مؤشر للرسالة قيد الإرسال في الواجهة
     const tempMessageId = 'pending_' + Date.now().toString();
-    const pendingMessageElement = document.createElement('div');
-    pendingMessageElement.className = 'message outgoing message-pending';
-    pendingMessageElement.setAttribute('data-message-id', tempMessageId);
     
-    // عرض محتوى الرسالة مع مؤشر الحالة قيد الإرسال
-    pendingMessageElement.innerHTML = `
-      <div class="message-content">
-        ${window.currentUsername ? `<div class="message-sender">${window.currentUsername}</div>` : ''}
-        <div class="message-text">${messageData.content || (mediaId ? 'وسائط' : '')}</div>
-        <div class="message-meta">
-          <span class="message-time">${new Date().toLocaleTimeString()}</span>
-          <span class="message-status"><i class="fas fa-clock"></i></span>
+    // إنشاء HTML للرسالة المؤقتة مطابق لبنية الرسائل بالضبط
+    let pendingMessageHTML = `
+      <div class="message outgoing message-pending" 
+          data-message-id="${tempMessageId}" 
+          data-status="sending">
+          
+        <div class="message-bubble outgoing-bubble">
+        
+          <div class="message-sender">${window.currentUsername || 'مستخدم النظام'}</div>
+          
+          <div class="message-text">${messageData.content || (mediaId ? 'وسائط' : '')}</div>
+          
+          <div class="message-meta">
+            <span class="message-time">${new Date().toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span class="message-status" title="حالة الرسالة: جاري الإرسال"><i class="fas fa-clock text-secondary"></i></span>
+          </div>
+        </div>
+        
+        <div class="message-actions">
+          <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" 
+                  data-message-id="${tempMessageId}"
+                  title="تفاعل">
+            <i class="far fa-smile"></i>
+          </button>
+          <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
+                  data-message-id="${tempMessageId}" 
+                  title="رد">
+            <i class="fas fa-reply"></i>
+          </button>
         </div>
       </div>
     `;
@@ -83,8 +101,14 @@
     // إضافة الرسالة المؤقتة إلى الواجهة
     const messagesContainer = document.querySelector('.messages-container');
     if (messagesContainer) {
-      messagesContainer.appendChild(pendingMessageElement);
+      messagesContainer.insertAdjacentHTML('beforeend', pendingMessageHTML);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      
+      // تعليق مستمعات الأحداث للرسالة الجديدة
+      const pendingMessageElement = messagesContainer.querySelector(`.message[data-message-id="${tempMessageId}"]`);
+      if (pendingMessageElement && window.setupMessageActions) {
+        window.setupMessageActions(pendingMessageElement);
+      }
     }
     
     // تخزين المعرف المؤقت في متغير عام لمنع تكرار الرسالة عند استقبالها من الخادم

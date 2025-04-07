@@ -928,7 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // استدعاء دالة تحديث حالة الرسالة إذا كانت المحادثة مفتوحة حالياً
             if (data && data.conversationId === window.currentConversationId) {
                 if (typeof window.updateMessageStatus === 'function') {
-                    window.updateMessageStatus(data.externalId, data.status);
+                    window.updateMessageStatus(data.externalId, data.status, data.conversationId);
                 } else {
                     console.warn("دالة updateMessageStatus غير متوفرة. تأكد من تحميل الملف message-status.js");
                 }

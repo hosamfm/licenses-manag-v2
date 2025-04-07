@@ -16,12 +16,44 @@
     
     console.log('تحديث حالة الرسالة:', messageId, newStatus);
     
-    // البحث أولاً عن الرسالة حسب المعرف الخارجي (الذي يأتي من واتساب)
-    let messageElem = document.querySelector(`.message[data-external-id="${messageId}"]`);
+    // محاولة العثور على الرسالة بطرق متعددة
+    let messageElem = null;
     
-    // إذا لم يتم العثور على الرسالة بالمعرف الخارجي، حاول البحث بمعرف الرسالة في قاعدة البيانات
+    // الطريقة 1: البحث بالمعرف الخارجي مباشرة
+    messageElem = document.querySelector(`.message[data-external-id="${messageId}"]`);
+    
+    // الطريقة 2: البحث عن معرف قاعدة البيانات
     if (!messageElem) {
       messageElem = document.querySelector(`.message[data-message-id="${messageId}"]`);
+    }
+    
+    // الطريقة 3: البحث عن الرسائل الصادرة مؤخرًا (عندما لم يتم ربط المعرف الخارجي بعد)
+    if (!messageElem && messageId.startsWith('wamid.')) {
+      const recentOutgoingMessages = document.querySelectorAll('.message.outgoing[data-status="sent"], .message.outgoing[data-status="sending"]');
+      // تحويل إلى مصفوفة وترتيب بالتاريخ تنازليًا (الأحدث أولاً)
+      const sortedMessages = Array.from(recentOutgoingMessages).sort((a, b) => {
+        const timeA = a.querySelector('.message-time')?.getAttribute('data-timestamp') || 0;
+        const timeB = b.querySelector('.message-time')?.getAttribute('data-timestamp') || 0;
+        return Number(timeB) - Number(timeA);
+      });
+      
+      // استخدام أحدث رسالة صادرة لتحديث المعرف الخارجي
+      if (sortedMessages.length > 0) {
+        messageElem = sortedMessages[0];
+        console.log('لم يتم العثور على رسالة بالمعرف المباشر، تم استخدام أحدث رسالة صادرة:', messageId);
+        
+        // إضافة المعرف الخارجي للرسالة
+        if (messageId.startsWith('wamid.')) {
+          console.log('إضافة معرف خارجي للرسالة:', messageElem.getAttribute('data-message-id'), messageId);
+          messageElem.setAttribute('data-external-id', messageId);
+          
+          // تحديث أزرار التفاعل أيضًا
+          const actionButtons = messageElem.querySelectorAll('.message-action-btn');
+          actionButtons.forEach(btn => {
+            btn.setAttribute('data-external-id', messageId);
+          });
+        }
+      }
     }
     
     // إذا لم يتم العثور على الرسالة بأي من المعرفين

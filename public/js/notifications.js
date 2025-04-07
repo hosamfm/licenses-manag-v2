@@ -117,6 +117,7 @@ function setupNotificationListeners(socket) {
     // استقبال تحديث حالة الرسالة
     socket.on('message-status-update', function(data) {        
         if (typeof window.updateMessageStatus === 'function') {
+            console.log('Socket تلقى message-status-update:', data);
             window.updateMessageStatus(data.externalId, data.status);
         }
     });
