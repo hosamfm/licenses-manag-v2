@@ -298,17 +298,22 @@
       return;
     }
     
-    // *** التحقق من وجود mediaUrl (يجب أن يأتي من السوكت الآن) ***
-    const mediaUrl = messageData.mediaUrl;
-    if (!mediaUrl) {
-      console.error(`[updatePendingMediaContent] الرابط mediaUrl مفقود في بيانات السوكت للرسالة ID: ${messageId}`);
-      // عرض رسالة خطأ للمستخدم في العنصر النائب
-      const errorPlaceholder = document.querySelector(`.message[data-message-id="${messageId}"] .media-placeholder`);
-      if (errorPlaceholder) {
-          errorPlaceholder.innerHTML = '<div class="text-danger p-2"><i>خطأ: رابط الوسائط غير متوفر</i></div>';
-          errorPlaceholder.classList.remove('media-placeholder');
-      }
-      return;
+    // *** إعادة بناء الرابط إذا كان مفقوداً ***
+    let mediaUrl = messageData.mediaUrl;
+    if (!mediaUrl && messageId) {
+      // بناء الرابط محلياً بناءً على النمط المعروف
+      mediaUrl = `/whatsapp/media/content/${messageId}`;
+      console.log(`[updatePendingMediaContent] تم بناء mediaUrl محلياً: ${mediaUrl}`);
+    } else if (!mediaUrl) {
+      // لا يزال mediaUrl مفقوداً ولا يمكن بناؤه (لا يوجد messageId؟)
+      console.error(`[updatePendingMediaContent] الرابط mediaUrl مفقود ولا يمكن بناؤه للرسالة ID: ${messageId}`);
+       // عرض رسالة خطأ للمستخدم في العنصر النائب
+       const errorPlaceholder = document.querySelector(`.message[data-message-id="${messageId}"] .media-placeholder`);
+       if (errorPlaceholder) {
+           errorPlaceholder.innerHTML = '<div class="text-danger p-2"><i>خطأ: رابط الوسائط غير متوفر</i></div>';
+           errorPlaceholder.classList.remove('media-placeholder');
+       }
+       return;
     }
     
     const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
