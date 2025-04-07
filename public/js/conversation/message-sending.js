@@ -56,6 +56,13 @@
     // تفريغ حقل الرسالة مباشرة بعد الإرسال للسماح بكتابة رسالة جديدة
     messageInput.value = '';
     
+    // تخزين رابط الوسائط المؤقت (إذا كان متاحاً)
+    const tempMediaPreviewSrc = document.getElementById('mediaPreviewImage')?.src || 
+                                document.getElementById('mediaPreviewVideo')?.src || 
+                                document.getElementById('mediaPreviewAudio')?.src;
+                                
+    const tempMediaFileName = document.getElementById('mediaFileName')?.textContent;
+    
     // مسح مؤشر الرد إذا كان موجودا
     window.clearReplyIndicator && window.clearReplyIndicator();
     
@@ -65,18 +72,48 @@
     // إظهار مؤشر للرسالة قيد الإرسال في الواجهة
     const tempMessageId = 'pending_' + Date.now().toString();
     
-    // إنشاء HTML للرسالة المؤقتة مطابق لبنية الرسائل بالضبط
+    // إنشاء HTML للرسالة المؤقتة
     let pendingMessageHTML = `
       <div class="message outgoing message-pending" 
           data-message-id="${tempMessageId}" 
           data-status="sending">
           
-        <div class="message-bubble outgoing-bubble">
+        <div class="message-bubble outgoing-bubble ${mediaId ? 'message-with-media' : ''}">
         
           <div class="message-sender">${window.currentUsername || 'مستخدم النظام'}</div>
           
-        <div class="message-text">${messageData.content || (mediaId ? 'وسائط' : '')}</div>
+          `;
           
+    // إضافة عنصر نائب للوسائط للرسائل الصادرة المؤقتة
+    if (mediaId && mediaType) {
+      pendingMessageHTML += `<div class="media-placeholder" data-media-type="${mediaType}">`;
+      if (mediaType === 'image' && tempMediaPreviewSrc) {
+        pendingMessageHTML += `<img src="${tempMediaPreviewSrc}" alt="جاري الرفع..." class="img-fluid temp-media-preview">`;
+      } else if (mediaType === 'video' && tempMediaPreviewSrc) {
+        pendingMessageHTML += `<video src="${tempMediaPreviewSrc}" controls class="w-100 temp-media-preview" muted></video>`; // muted لمنع التشغيل التلقائي
+      } else if (mediaType === 'audio' && tempMediaPreviewSrc) {
+        pendingMessageHTML += `<audio src="${tempMediaPreviewSrc}" controls class="w-100 media-audio temp-media-preview"></audio>`;
+      } else if (mediaType === 'document' || mediaType === 'file') {
+        pendingMessageHTML += `
+          <div class="document-container temp-media-preview">
+            <i class="fas fa-spinner fa-spin document-icon"></i>
+            <div class="document-info">
+              <div class="document-name">${tempMediaFileName || 'جاري رفع الملف...'}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        pendingMessageHTML += `<div class="text-muted p-2"><i>جاري تحميل ${mediaType}...</i></div>`;
+      }
+      pendingMessageHTML += `</div>`;
+    }
+    
+    // إضافة النص إذا كان موجوداً
+    if (messageData.content) {
+      pendingMessageHTML += `<div class="message-text ${mediaId ? 'with-media' : ''}">${messageData.content}</div>`;
+    }
+          
+    pendingMessageHTML += `
         <div class="message-meta">
             <span class="message-time">${new Date().toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })}</span>
             <span class="message-status" title="حالة الرسالة: جاري الإرسال"><i class="fas fa-clock text-secondary"></i></span>
@@ -160,7 +197,10 @@
         updatePendingMessageId(tempMessageId, result.message._id);
         
         // تحديث حالة الرسالة
-        updatePendingMessageStatus(result.message._id, 'sent');
+        updatePendingMessageStatus(result.message._id, result.message.status || 'sent');
+        
+        // *** تحديث محتوى الوسائط في الرسالة المؤقتة ***
+        updatePendingMediaContent(result.message._id, result.message);
         
         // إضافة المعرف الجديد للرسائل المرسلة لمنع تكرارها
         window.sentMessageIds.add(result.message._id);
@@ -244,6 +284,69 @@
     actionButtons.forEach(button => {
       button.setAttribute('data-message-id', newId);
     });
+  }
+
+  /**
+   * تحديث محتوى الوسائط للرسالة المؤقتة بعد الحصول على الرابط النهائي
+   * @param {string} messageId - المعرف النهائي للرسالة
+   * @param {object} messageData - بيانات الرسالة الكاملة من الخادم
+   */
+  function updatePendingMediaContent(messageId, messageData) {
+    if (!messageData.mediaType) return; // لا توجد وسائط لتحديثها
+    
+    const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
+    if (!messageElement) return;
+    
+    const mediaPlaceholder = messageElement.querySelector('.media-placeholder');
+    if (!mediaPlaceholder) return; // لا يوجد عنصر نائب لتحديثه
+    
+    let mediaHTML = '';
+    const mediaUrl = messageData.mediaUrl;
+    const mediaType = messageData.mediaType;
+    const mediaCaption = messageData.mediaCaption || messageData.mediaName;
+    const mediaSize = messageData.mediaSize;
+    
+    // إنشاء HTML الوسائط بناءً على النوع (نفس منطق addMessageToConversation)
+    if (!mediaUrl) {
+      mediaHTML = '<div class="text-danger p-2"><i>فشل تحميل الوسائط</i></div>';
+    } else if (mediaType === 'image') {
+        mediaHTML = `<img src="${mediaUrl}" alt="${mediaCaption || 'صورة'}" class="img-fluid">`;
+      } else if (mediaType === 'video') {
+        mediaHTML = `
+            <video controls class="w-100">
+              <source src="${mediaUrl}" type="video/mp4">
+              متصفحك لا يدعم تشغيل الفيديو.
+            </video>
+        `;
+      } else if (mediaType === 'audio') {
+        mediaHTML = `
+            <audio controls class="w-100 media-audio">
+              <source src="${mediaUrl}" type="audio/mpeg">
+              متصفحك لا يدعم تشغيل الصوت.
+            </audio>
+        `;
+      } else if (mediaType === 'document' || mediaType === 'file') {
+        const fileName = mediaCaption || 'ملف';
+        mediaHTML = `
+          <div class="document-container">
+            <i class="fas fa-file document-icon"></i>
+            <div class="document-info">
+              <div class="document-name">${fileName}</div>
+              <div class="document-size">${mediaSize || ''}</div>
+            </div>
+            <a href="${mediaUrl}" download="${fileName}" class="document-download">
+              <i class="fas fa-download"></i>
+            </a>
+          </div>
+        `;
+      } else if (mediaType === 'sticker') {
+        mediaHTML = `<img src="${mediaUrl}" alt="ملصق" class="img-fluid sticker-image">`;
+      }
+      
+    // استبدال العنصر النائب بـ HTML الوسائط النهائي
+    mediaPlaceholder.innerHTML = mediaHTML;
+    // يمكن إزالة الفئة أو السمة إذا أردت بعد الاستبدال
+    mediaPlaceholder.classList.remove('media-placeholder');
   }
 
   /**
