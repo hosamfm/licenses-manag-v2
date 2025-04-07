@@ -12,6 +12,56 @@
   // حفظ حالة التحميل لتجنب تعارض الاستدعاءات
   let isFormatting = false;
   
+  /**
+   * استخراج الطابع الزمني من عنصر الرسالة - دالة موحدة للاستخدام العام
+   * @param {Element} messageElement عنصر الرسالة
+   * @returns {number} الطابع الزمني كرقم للمقارنة
+   */
+  window.getMessageTimestamp = function(messageElement) {
+    // البحث عن عنصر وقت الرسالة
+    const timeElement = messageElement.querySelector('.message-time');
+    
+    // طريقة 1: استخدام سمة data-timestamp
+    if (timeElement && timeElement.hasAttribute('data-timestamp')) {
+      const timestamp = parseInt(timeElement.getAttribute('data-timestamp'), 10);
+      if (!isNaN(timestamp)) {
+        return timestamp;
+      }
+    }
+    
+    // طريقة 2: استخدام title
+    if (timeElement && timeElement.title) {
+      try {
+        return new Date(timeElement.title).getTime();
+      } catch (e) {}
+    }
+    
+    // طريقة 3: استخدام سمة data-date
+    if (timeElement && timeElement.hasAttribute('data-date')) {
+      const dateStr = timeElement.getAttribute('data-date');
+      try {
+        return new Date(dateStr).getTime();
+      } catch (e) {}
+    }
+    
+    // طريقة 4: البحث عن سمة data-date أو data-timestamp في العنصر الأب
+    if (messageElement.hasAttribute('data-date')) {
+      try {
+        return new Date(messageElement.getAttribute('data-date')).getTime();
+      } catch (e) {}
+    }
+    
+    if (messageElement.hasAttribute('data-timestamp')) {
+      const timestamp = parseInt(messageElement.getAttribute('data-timestamp'), 10);
+      if (!isNaN(timestamp)) {
+        return timestamp;
+      }
+    }
+    
+    // في حالة الفشل، استخدام تاريخ المعالجة الحالي
+    return Date.now();
+  };
+  
   // دالة تنسيق جميع أوقات الرسائل
   window.formatAllMessageTimes = function() {
     // منع الاستدعاءات المتكررة

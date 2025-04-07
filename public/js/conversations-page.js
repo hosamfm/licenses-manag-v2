@@ -4,36 +4,68 @@
  */
 
 // تعريف وظيفة loadConversationDetails مبكرًا للتأكد من وجودها قبل الاستخدام في دوال أخرى
-// هذا سيساعد في تجنب الخطأ TypeError: window.loadConversationDetails is not a function
 if (typeof window.loadConversationDetails !== 'function') {
     /**
      * تحميل تفاصيل المحادثة في الجزء الأيمن باستخدام AJAX
-     * هذا التعريف مبكر قبل DOMContentLoaded
+     * تعريف موحد للدالة
      */
     window.loadConversationDetails = function(conversationId, skipCache = false) {
-        console.log('استدعاء مبكر للـ loadConversationDetails مع المعرف:', conversationId);
-        // سيتم استبدال هذه الدالة لاحقًا بالتنفيذ الكامل بعد تحميل DOM
+        console.log('استدعاء للـ loadConversationDetails مع المعرف:', conversationId);
         
-        // استدعاء loadConversationDetailsLocal لاحقًا إذا كانت معرفة
-        if (typeof window.loadConversationDetailsLocal === 'function') {
-            window.loadConversationDetailsLocal(conversationId, skipCache);
-        } else {
-            // حفظ للتنفيذ عندما تصبح جاهزة
-            if (!window._pendingConversationLoads) {
-                window._pendingConversationLoads = [];
-            }
-            window._pendingConversationLoads.push({ id: conversationId, skipCache });
-            console.log(`تم حفظ طلب تحميل المحادثة للمعرف: ${conversationId} للتنفيذ لاحقًا`);
-
-            // جدولة إعادة المحاولة
-            setTimeout(() => {
-                if (typeof window.loadConversationDetailsLocal === 'function') {
-                    window.loadConversationDetailsLocal(conversationId, skipCache);
-                } else {
-                    console.error('loadConversationDetailsLocal غير متاحة حتى بعد الانتظار');
-                }
-            }, 500);
+        // سيتم استبدال هذه الدالة لاحقًا بالتنفيذ الكامل بعد تحميل DOM
+        // حفظ للتنفيذ عندما تصبح جاهزة
+        if (!window._pendingConversationLoads) {
+            window._pendingConversationLoads = [];
         }
+        window._pendingConversationLoads.push({ id: conversationId, skipCache });
+        console.log(`تم حفظ طلب تحميل المحادثة للمعرف: ${conversationId} للتنفيذ لاحقًا`);
+    };
+}
+
+/**
+ * دالة لتنسيق الوقت النسبي (مثل "منذ دقيقة" أو "منذ ساعة")
+ * @param {string|Date} timestamp - طابع زمني
+ * @returns {string} - الوقت المنسق
+ */
+if (typeof window.formatRelativeTime !== 'function') {
+    window.formatRelativeTime = function(timestamp) {
+        if (!timestamp) return '';
+        
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+        
+        // إذا كان أقل من دقيقة
+        if (diffMin < 1) {
+            return 'الآن';
+        }
+        
+        // إذا كان أقل من ساعة
+        if (diffHour < 1) {
+            return `منذ ${diffMin} ${diffMin === 1 ? 'دقيقة' : 'دقائق'}`;
+        }
+        
+        // إذا كان أقل من يوم
+        if (diffDay < 1) {
+            return `منذ ${diffHour} ${diffHour === 1 ? 'ساعة' : 'ساعات'}`;
+        }
+        
+        // إذا كان خلال الأسبوع
+        if (diffDay < 7) {
+            return `منذ ${diffDay} ${diffDay === 1 ? 'يوم' : 'أيام'}`;
+        }
+        
+        // غير ذلك، استخدام التاريخ
+        return date.toLocaleDateString('ar-LY', { 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     };
 }
 
@@ -254,11 +286,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * تحديث عنصر محادثة واحد في القائمة أو إضافته إذا كان جديدًا
-     * لمعالجة التحديثات القادمة من Socket.IO
+     * لمعالجة التحديثات القادمة من Socket.IO - دالة موحدة
      * @param {object} updatedConv - بيانات المحادثة المحدثة
      * @param {boolean} skipReRender - تخطي التحديث الكامل للقائمة
      */
-    function updateConversationInList(updatedConv, skipReRender = false) {
+    window.updateConversationInList = function(updatedConv, skipReRender = false) {
         if (!conversationListContainer || !updatedConv || !updatedConv._id) return;
 
         console.log('تحديث محادثة في القائمة:', updatedConv._id, updatedConv.status);
@@ -336,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // تحديث ذاكرة التخزين المؤقت للمحادثات
         updateConversationCache(updatedConv);
-    }
+    };
     
     /**
      * ذاكرة تخزين مؤقت للمحادثات (كاش)
@@ -529,21 +561,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         newItem.addEventListener('click', function() {
             const conversationId = this.getAttribute('data-conversation-id');
-            if (typeof window.loadConversationDetails === 'function') {
+            if (conversationId) {
                 window.loadConversationDetails(conversationId);
-            } else {
-                console.error('خطأ: الدالة window.loadConversationDetails غير معرفة');
-                loadConversationDetailsLocal(conversationId);
             }
         });
     }
     
     /**
-     * تحميل تفاصيل المحادثة في الجزء الأيمن باستخدام AJAX (تعريف محلي)
+     * تحميل تفاصيل المحادثة في الجزء الأيمن باستخدام AJAX (تعريف موحد)
      * @param {string} conversationId - معرف المحادثة المراد تحميلها
      * @param {boolean} skipCache - ما إذا كان يجب فرض تحديث ذاكرة التخزين المؤقت
      */
-    function loadConversationDetailsLocal(conversationId, skipCache = false) {
+    window.loadConversationDetails = function(conversationId, skipCache = false) {
         if (!conversationId || !conversationDetailsContainer) return;
 
         console.log('تحميل تفاصيل المحادثة:', conversationId);
@@ -566,9 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.currentConversationId = conversationId;
 
         // الانضمام إلى غرفة Socket.IO
-        if (typeof window.joinConversationRoom === 'function') {
-            window.joinConversationRoom(conversationId);
-        } else if (window.socketConnection && window.socketConnected) {
+        if (window.socketConnection && window.socketConnected) {
             console.log(`الانضمام للغرفة: conversation-${conversationId}`);
             window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
             // مغادرة الغرفة السابقة إذا كانت مُتتبعة
@@ -646,11 +673,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.initializeNotes(conversationId);
             }
             
-            // 7. تعليق معالجات الأحداث على أزرار إدارة المحادثة
-            if (typeof window.attachConversationControlButtons === 'function') {
-                window.attachConversationControlButtons();
-                console.log('تم تعليق معالجات أزرار إدارة المحادثة');
-            }
+            // 7. ربط معالجات الأحداث لأزرار إغلاق وإعادة فتح المحادثة
+            attachButtonEventHandlers();
         }).catch(error => {
             console.error("خطأ في تحميل تفاصيل المحادثة:", error);
             conversationDetailsContainer.innerHTML = `
@@ -661,67 +685,141 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             window.currentConversationId = null; // إعادة تعيين إذا فشل التحميل
         });
-    }
-    
-    // جعل الدالة متاحة للنطاق العام للاستخدام من قبل دوال أخرى
-    window.loadConversationDetailsLocal = loadConversationDetailsLocal;
-    
-    /**
-     * تصدير دالة تحميل تفاصيل المحادثة كدالة عامة في window
-     * @param {string} conversationId - معرف المحادثة المراد تحميلها
-     * @param {boolean} skipCache - ما إذا كان يجب فرض تحديث ذاكرة التخزين المؤقت
-     */
-    window.loadConversationDetails = function(conversationId, skipCache = false) {
-        loadConversationDetailsLocal(conversationId, skipCache);
     };
     
-    // معالجة المحادثات المعلقة التي تم طلبها قبل تعريف الدالة
-    if (window._pendingConversationLoads && window._pendingConversationLoads.length > 0) {
-        console.log(`تنفيذ ${window._pendingConversationLoads.length} طلبات تحميل محادثة معلقة`);
-        window._pendingConversationLoads.forEach(request => {
-            loadConversationDetailsLocal(request.id, request.skipCache);
+    /**
+     * ربط معالجات الأحداث لأزرار إغلاق وإعادة فتح المحادثة
+     * تستخدم الوظائف الموجودة في conversation-utils.js
+     */
+    function attachButtonEventHandlers() {
+        // 1. زر إعادة فتح المحادثة
+        const reopenButtons = document.querySelectorAll('.reopen-conversation-btn');
+        reopenButtons.forEach(btn => {
+            if (!btn.dataset.listenerAttached) {
+                btn.addEventListener('click', handleReopenClick);
+                btn.dataset.listenerAttached = 'true';
+            }
         });
-        window._pendingConversationLoads = [];
+
+        // 2. زر إغلاق المحادثة
+        const closeButtons = document.querySelectorAll('.close-conversation-btn');
+        closeButtons.forEach(btn => {
+            if (!btn.dataset.listenerAttached) {
+                btn.addEventListener('click', handleCloseClick);
+                btn.dataset.listenerAttached = 'true';
+            }
+        });
     }
 
     /**
-     * تحديث تفاصيل المحادثة المحملة حاليًا
+     * معالج حدث النقر على زر إعادة فتح المحادثة
+     * @param {Event} e - حدث النقر
      */
-    window.refreshConversationDetails = function() {
-        if (window.currentConversationId) {
-            window.loadConversationDetails(window.currentConversationId, true); // فرض التحديث
+    function handleReopenClick(e) {
+        e.preventDefault();
+        const conversationId = this.getAttribute('data-conversation-id');
+        if (!conversationId) {
+            console.error('معرف المحادثة غير موجود في زر إعادة الفتح');
+            return;
         }
-    };
 
-    // --- إعداد مستمعات الأحداث ---
+        // تعطيل الزر وعرض حالة التحميل
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إعادة الفتح...';
 
-    // دالة البحث المؤخرة
-    const debouncedSearch = debounce(() => {
-        window.currentFilters.searchTerm = searchInput.value;
-        fetchAndRenderConversations(window.currentFilters);
-    }, 300); // تأخير 300 مللي ثانية
+        // استخدام الوظيفة الموجودة في conversation-utils.js
+        if (typeof window.reopenConversation === 'function') {
+            window.reopenConversation(conversationId)
+                .then(result => {
+                    console.log('تم إعادة فتح المحادثة بنجاح:', result);
+                    
+                    // إظهار رسالة نجاح
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('success', 'تم إعادة فتح المحادثة بنجاح');
+                    }
 
-    // مستمعات الفلاتر
-    if (filterStatusSelect) {
-        filterStatusSelect.addEventListener('change', (e) => {
-            window.currentFilters.status = e.target.value;
-            fetchAndRenderConversations(window.currentFilters);
-        });
+                    // تحديث واجهة المستخدم
+                    updateConversationStatus('open', true);
+                    
+                    // تحديث القائمة
+                    fetchAndRenderConversations(window.currentFilters);
+                })
+                .catch(error => {
+                    // إظهار رسالة خطأ
+                    console.error('فشل إعادة فتح المحادثة:', error);
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('error', `فشل إعادة فتح المحادثة: ${error}`);
+                    }
+                    
+                    // إعادة الزر إلى حالته الأصلية
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-lock-open"></i> إعادة فتح';
+                });
+        } else {
+            console.error('وظيفة reopenConversation غير موجودة في conversation-utils.js');
+            // إعادة الزر إلى حالته الأصلية
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-lock-open"></i> إعادة فتح';
+        }
     }
 
-    if (filterAssignmentSelect) {
-        filterAssignmentSelect.addEventListener('change', (e) => {
-            window.currentFilters.assignment = e.target.value;
-            fetchAndRenderConversations(window.currentFilters);
-        });
-    }
+    /**
+     * معالج حدث النقر على زر إغلاق المحادثة
+     * @param {Event} e - حدث النقر
+     */
+    function handleCloseClick(e) {
+        e.preventDefault();
+        const conversationId = this.getAttribute('data-conversation-id');
+        if (!conversationId) {
+            console.error('معرف المحادثة غير موجود في زر الإغلاق');
+            return;
+        }
 
-    if (searchInput) {
-        searchInput.addEventListener('input', debouncedSearch);
-    }
+        // تعطيل الزر وعرض حالة التحميل
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإغلاق...';
 
+        // استخدام الوظيفة الموجودة في conversation-utils.js
+        if (typeof window.closeConversation === 'function') {
+            window.closeConversation(conversationId)
+                .then(result => {
+                    console.log('تم إغلاق المحادثة بنجاح:', result);
+                    
+                    // إظهار رسالة نجاح
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('success', 'تم إغلاق المحادثة بنجاح');
+                    }
+
+                    // تحديث واجهة المستخدم
+                    updateConversationStatus('closed', true);
+                    
+                    // تحديث القائمة
+                    fetchAndRenderConversations(window.currentFilters);
+                })
+                .catch(error => {
+                    // إظهار رسالة خطأ
+                    console.error('فشل إغلاق المحادثة:', error);
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('error', `فشل إغلاق المحادثة: ${error}`);
+                    }
+                    
+                    // إعادة الزر إلى حالته الأصلية
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
+                });
+        } else {
+            console.error('وظيفة closeConversation غير موجودة في conversation-utils.js');
+            // إعادة الزر إلى حالته الأصلية
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
+        }
+    }
+    
     // --- معالجات أحداث Socket.IO ---
-    function setupSocketListeners() {
+    /**
+     * إعداد مستمعي Socket.IO الموحدين للمحادثات
+     */
+    window.setupSocketListeners = function() {
         if (!window.socketConnection) {
             console.error("اتصال Socket غير متاح لإعداد المستمعين.");
             return;
@@ -759,6 +857,49 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.updateConversationHeader(data);
                     }
                 }
+                
+                // معالجة تحديثات التعيين
+                if (data.type === 'assigned') {
+                    if (data.assignee) {
+                        // استخدام بيانات المستخدم المعين الكاملة من الإشعار
+                        const assigneeInfo = document.getElementById('assigneeInfo');
+                        const assignToMeBtn = document.getElementById('assignToMeBtn');
+                        
+                        if (assigneeInfo) {
+                            const assigneeName = data.assignee.full_name || data.assignee.username || 'مستخدم';
+                            assigneeInfo.innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeName}`;
+                        }
+                        
+                        // إخفاء زر التعيين الشخصي إذا كان المستخدم الحالي هو المعين
+                        if (assignToMeBtn && data.assignee._id === window.currentUserId) {
+                            assignToMeBtn.style.display = 'none';
+                        }
+                    } else {
+                        const assigneeInfo = document.getElementById('assigneeInfo');
+                        const assignToMeBtn = document.getElementById('assignToMeBtn');
+                        
+                        if (assigneeInfo) {
+                            assigneeInfo.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> غير معين';
+                        }
+                        
+                        // إظهار زر التعيين الشخصي
+                        if (assignToMeBtn) {
+                            assignToMeBtn.style.display = 'inline-block';
+                        }
+                    }
+                    
+                    // تحديث حالة المحادثة في البطاقة الرئيسية
+                    const statusBadge = document.querySelector('.conversation-status-badge');
+                    if (statusBadge) {
+                        if (data.assignee) {
+                            statusBadge.className = 'badge bg-info ms-2 conversation-status-badge';
+                            statusBadge.innerHTML = '<i class="fas fa-user-check me-1"></i> مسندة';
+                        } else {
+                            statusBadge.className = 'badge bg-success ms-2 conversation-status-badge';
+                            statusBadge.innerHTML = '<i class="fas fa-door-open me-1"></i> مفتوحة';
+                        }
+                    }
+                }
             }
             
             // تخزين الحدث ومعالجته بعد فترة زمنية لتجنب التكرار
@@ -790,24 +931,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // إعداد مستمعات التعيين
-        if (typeof window.setupAssignmentListeners === 'function') {
-            window.setupAssignmentListeners(window.socketConnection);
-        }
-
         // --- معالجة الاتصال/الانقطاع ---
         window.socketConnection.on('connect', () => {
             console.log('إعادة اتصال Socket (conversations-page.js).');
             // إعادة الانضمام للغرفة إذا كانت هناك محادثة مفتوحة
-            if (window.currentConversationId && typeof window.joinConversationRoom === 'function') {
-                window.joinConversationRoom(window.currentConversationId);
+            if (window.currentConversationId) {
+                window.socketConnection.emit('join', { room: `conversation-${window.currentConversationId}` });
             }
         });
 
         window.socketConnection.on('disconnect', () => {
             console.log('انقطاع اتصال Socket (conversations-page.js).');
         });
-    }
+    };
     
     /**
      * مخزن مؤقت للأحداث
@@ -870,225 +1006,6 @@ document.addEventListener('DOMContentLoaded', () => {
             socketUpdateStore.processing = false;
         }
     }
-
-    /**
-     * إعادة فتح محادثة مغلقة
-     * نستخدم وظيفة reopenConversation الموجودة في conversation-utils.js إذا كانت متاحة
-     * وإلا نستخدم تنفيذنا المحلي
-     * @param {string} conversationId - معرف المحادثة
-     * @returns {Promise<boolean>} - نجاح العملية
-     */
-    window.reopenConversation = (window.reopenConversation || async function(conversationId) {
-        if (!conversationId) {
-            console.error("لم يتم تحديد معرف المحادثة");
-            return false;
-        }
-
-        try {
-            // عرض مؤشر تحميل أو زر معطل حسب الحاجة
-            const reopenButton = document.querySelector('.reopen-conversation-btn');
-            if (reopenButton) {
-                reopenButton.disabled = true;
-                reopenButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إعادة الفتح...';
-            }
-
-            const response = await fetch(`/crm/conversations/${conversationId}/reopen`, {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'حدث خطأ أثناء محاولة إعادة فتح المحادثة');
-            }
-
-            if (data.success) {
-                // إظهار رسالة نجاح
-                if (typeof showToast === 'function') {
-                    showToast('success', 'تم إعادة فتح المحادثة بنجاح');
-                } else {
-                    alert('تم إعادة فتح المحادثة بنجاح');
-                }
-
-                // تحديث واجهة المستخدم
-                updateConversationStatus('open', true); // تمرير true لتجنب إعادة التحميل الكامل
-                
-                // تحديث العنصر في القائمة (بدون تحميل القائمة بالكامل)
-                if (window.currentConversationId) {
-                    const updatedConversation = {
-                        _id: conversationId,
-                        status: 'open',
-                        // إضافة معلومات أخرى إذا كانت متاحة
-                        lastOpenedAt: new Date().toISOString()
-                    };
-                    updateConversationInList(updatedConversation);
-                }
-                
-                return true;
-            } else {
-                throw new Error(data.error || 'فشلت عملية إعادة فتح المحادثة');
-            }
-        } catch (error) {
-            console.error("خطأ في إعادة فتح المحادثة:", error);
-            
-            // إظهار رسالة خطأ
-            if (typeof showToast === 'function') {
-                showToast('error', `فشل إعادة فتح المحادثة: ${error.message}`);
-            } else {
-                alert(`فشل إعادة فتح المحادثة: ${error.message}`);
-            }
-            
-            // إعادة تفعيل الزر
-            const reopenButton = document.querySelector('.reopen-conversation-btn');
-            if (reopenButton) {
-                reopenButton.disabled = false;
-                reopenButton.innerHTML = '<i class="fas fa-lock-open"></i> إعادة فتح';
-            }
-            
-            return false;
-        }
-    });
-
-    /**
-     * إغلاق محادثة مفتوحة
-     * نستخدم وظيفة closeConversation الموجودة إذا كانت متاحة
-     * وإلا نستخدم تنفيذنا المحلي
-     * @param {string} conversationId - معرف المحادثة
-     * @param {string} [reason] - سبب الإغلاق (اختياري)
-     * @param {string} [note] - ملاحظة الإغلاق (اختياري)
-     * @returns {Promise<boolean>} - نجاح العملية
-     */
-    window.closeConversation = (window.closeConversation || async function(conversationId, reason, note) {
-        if (!conversationId) {
-            console.error("لم يتم تحديد معرف المحادثة");
-            return false;
-        }
-
-        try {
-            // عرض مؤشر تحميل أو زر معطل حسب الحاجة
-            const closeButton = document.querySelector('.close-conversation-btn');
-            if (closeButton) {
-                closeButton.disabled = true;
-                closeButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإغلاق...';
-            }
-
-            const response = await fetch(`/crm/conversations/${conversationId}/close`, {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ reason, note })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'حدث خطأ أثناء محاولة إغلاق المحادثة');
-            }
-
-            if (data.success) {
-                // إظهار رسالة نجاح
-                if (typeof showToast === 'function') {
-                    showToast('success', 'تم إغلاق المحادثة بنجاح');
-                } else {
-                    alert('تم إغلاق المحادثة بنجاح');
-                }
-
-                // تحديث واجهة المستخدم
-                updateConversationStatus('closed', true); // تمرير true لتجنب إعادة التحميل الكامل
-                
-                // تحديث العنصر في القائمة (بدون تحميل القائمة بالكامل)
-                if (window.currentConversationId) {
-                    const updatedConversation = {
-                        _id: conversationId,
-                        status: 'closed',
-                        // إضافة معلومات أخرى إذا كانت متاحة
-                        closedAt: new Date().toISOString()
-                    };
-                    updateConversationInList(updatedConversation);
-                }
-                
-                return true;
-            } else {
-                throw new Error(data.error || 'فشلت عملية إغلاق المحادثة');
-            }
-        } catch (error) {
-            console.error("خطأ في إغلاق المحادثة:", error);
-            
-            // إظهار رسالة خطأ
-            if (typeof showToast === 'function') {
-                showToast('error', `فشل إغلاق المحادثة: ${error.message}`);
-            } else {
-                alert(`فشل إغلاق المحادثة: ${error.message}`);
-            }
-            
-            // إعادة تفعيل الزر
-            const closeButton = document.querySelector('.close-conversation-btn');
-            if (closeButton) {
-                closeButton.disabled = false;
-                closeButton.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
-            }
-            
-            return false;
-        }
-    });
-
-    /**
-     * تعليق معالجات أحداث على أزرار إدارة المحادثة (الإغلاق، إعادة الفتح، التعيين)
-     * هذه الدالة يتم استدعاؤها بعد تحميل تفاصيل المحادثة
-     */
-    window.attachConversationControlButtons = function() {
-        // 1. زر إعادة فتح المحادثة
-        const reopenButtons = document.querySelectorAll('.reopen-conversation-btn');
-        reopenButtons.forEach(btn => {
-            // التأكد من إزالة أي مستمعات سابقة لتجنب التكرار
-            btn.removeEventListener('click', handleReopenClick);
-            btn.addEventListener('click', handleReopenClick);
-        });
-
-        // 2. زر إغلاق المحادثة
-        const closeButtons = document.querySelectorAll('.close-conversation-btn');
-        closeButtons.forEach(btn => {
-            // التأكد من إزالة أي مستمعات سابقة لتجنب التكرار
-            btn.removeEventListener('click', handleCloseClick);
-            btn.addEventListener('click', handleCloseClick);
-        });
-    };
-
-    /**
-     * معالج حدث النقر على زر إعادة فتح المحادثة
-     * @param {Event} e - حدث النقر
-     */
-    function handleReopenClick(e) {
-        e.preventDefault();
-        const conversationId = this.getAttribute('data-conversation-id');
-        if (!conversationId) {
-            console.error('معرف المحادثة غير موجود في زر إعادة الفتح');
-            return;
-        }
-        window.reopenConversation(conversationId);
-    }
-
-    /**
-     * معالج حدث النقر على زر إغلاق المحادثة
-     * @param {Event} e - حدث النقر
-     */
-    function handleCloseClick(e) {
-        e.preventDefault();
-        const conversationId = this.getAttribute('data-conversation-id');
-        if (!conversationId) {
-            console.error('معرف المحادثة غير موجود في زر الإغلاق');
-            return;
-        }
-        window.closeConversation(conversationId);
-    }
-    
-    // --- نهاية إضافة دوال معالجة أحداث أزرار المحادثة ---
 
     /**
      * تهيئة الصفحة

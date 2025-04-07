@@ -294,10 +294,16 @@
 
   /**
    * استخراج الطابع الزمني من عنصر الرسالة
+   * استخدام الدالة الموحدة من date-formatter.js إذا كانت متاحة
    * @param {Element} messageElement عنصر الرسالة
    * @returns {number} الطابع الزمني كرقم للمقارنة
    */
   function getMessageTimestamp(messageElement) {
+    // استخدام الدالة الموحدة إذا كانت متاحة
+    if (typeof window.getMessageTimestamp === 'function') {
+      return window.getMessageTimestamp(messageElement);
+    }
+    
     // البحث عن عنصر وقت الرسالة
     const timeElement = messageElement.querySelector('.message-time');
     if (timeElement && timeElement.title) {
@@ -307,6 +313,11 @@
       } catch (e) {
         console.warn('خطأ في تحليل تاريخ الرسالة:', e);
       }
+    }
+    
+    // محاولة استخدام سمة data-timestamp إذا كانت متوفرة
+    if (timeElement && timeElement.hasAttribute('data-timestamp')) {
+      return parseInt(timeElement.getAttribute('data-timestamp'), 10);
     }
     
     // في حالة الفشل، استخدام تاريخ المعالجة الحالي (أقل دقة)
