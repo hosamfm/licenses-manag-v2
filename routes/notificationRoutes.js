@@ -28,6 +28,26 @@ router.put('/:notificationId/archive', isAuthenticated, NotificationController.a
 // حذف إشعار
 router.delete('/:notificationId', isAuthenticated, NotificationController.deleteNotification);
 
+// مسار للحصول على مفتاح VAPID العام
+router.get('/vapid-public-key', (req, res) => {
+  try {
+    if (!webPushService.VAPID_KEYS || !webPushService.VAPID_KEYS.publicKey) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'مفتاح VAPID العام غير متوفر على الخادم' 
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      publicKey: webPushService.VAPID_KEYS.publicKey 
+    });
+  } catch (error) {
+    console.error('خطأ في جلب مفتاح VAPID العام:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // مسار حفظ اشتراك إشعارات الويب
 router.post('/subscription', isAuthenticated, async (req, res) => {
   try {

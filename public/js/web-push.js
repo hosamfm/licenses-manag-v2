@@ -2,15 +2,15 @@
  * إدارة إشعارات الويب
  */
 
-// مفتاح VAPID العام - يجب توليده وتخزينه على الخادم
-const applicationServerPublicKey = 'BNJSYiGbPFIQtcQ6IuhD78oP8JX9YHBPvOITvNtvXh2A6XC3Hzr1dE18jnLfCITFZRs0nwyJFR4gj0byLNj7iA4';
+// سيتم الحصول على مفتاح VAPID العام من الخادم
+let applicationServerPublicKey = null;
 
 // المتغيرات العامة
 let swRegistration = null;
 let isSubscribed = false;
 
 // إصدار مفاتيح الإشعارات - يستخدم لتتبع تغييرات المفاتيح
-const CURRENT_PUSH_VERSION = 'v20230407';
+const CURRENT_PUSH_VERSION = 'v20230408';
 
 /**
  * تهيئة إشعارات الويب
@@ -22,8 +22,25 @@ function initializeWebPush() {
     return;
   }
 
-  // تسجيل Service Worker
-  navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+  // الحصول على المفتاح العام من الخادم
+  fetch('/api/notifications/vapid-public-key')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('فشل في الحصول على مفتاح VAPID العام');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (!data.publicKey) {
+        throw new Error('المفتاح العام غير موجود في استجابة الخادم');
+      }
+      
+      applicationServerPublicKey = data.publicKey;
+      console.log('تم الحصول على مفتاح VAPID العام من الخادم:', applicationServerPublicKey.substring(0, 10) + '...');
+      
+      // متابعة تسجيل Service Worker بعد الحصول على المفتاح
+      return navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+    })
     .then(function(registration) {
       console.log('تم تسجيل Service Worker بنجاح:', registration);
       swRegistration = registration;
@@ -32,7 +49,7 @@ function initializeWebPush() {
       initializeUi();
     })
     .catch(function(error) {
-      console.error('فشل تسجيل Service Worker:', error);
+      console.error('فشل في إعداد إشعارات الويب:', error);
     });
 }
 
@@ -125,6 +142,11 @@ function requestNotificationPermission() {
  * اشتراك المستخدم في إشعارات الويب
  */
 function subscribeUserToPush() {
+  if (!applicationServerPublicKey) {
+    console.error('مفتاح VAPID العام غير متوفر، لا يمكن الاشتراك');
+    return;
+  }
+  
   const applicationServerKey = urlB64ToUint8Array(applicationServerPublicKey);
   
   swRegistration.pushManager.subscribe({

@@ -6,22 +6,29 @@ const webpush = require('web-push');
 const logger = require('./loggerService');
 const User = require('../models/User');
 
-// مفاتيح VAPID - في بيئة الإنتاج يجب تخزينها في متغيرات بيئية
-// استخدم الأمر node -e "console.log(require('web-push').generateVAPIDKeys())" لتوليد مفاتيح جديدة
+// التحقق من وجود مفاتيح VAPID - في بيئة الإنتاج يجب تخزينها في متغيرات بيئية
+if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+  logger.error('webPushService', 'مفاتيح VAPID مفقودة في متغيرات البيئة - تعذر تهيئة خدمة إشعارات الويب', {
+    hint: 'استخدم الأمر node -e "console.log(require(\'web-push\').generateVAPIDKeys())" لتوليد مفاتيح جديدة ثم أضفها إلى ملف .env'
+  });
+  throw new Error('مفاتيح VAPID غير محددة في متغيرات البيئة. يرجى إضافتها إلى ملف .env');
+}
+
+// مفاتيح VAPID من متغيرات البيئة
 const VAPID_KEYS = {
-  publicKey: process.env.VAPID_PUBLIC_KEY || 'BNJSYiGbPFIQtcQ6IuhD78oP8JX9YHBPvOITvNtvXh2A6XC3Hzr1dE18jnLfCITFZRs0nwyJFR4gj0byLNj7iA4',
-  privateKey: process.env.VAPID_PRIVATE_KEY || 'dJrL_EaTuKjAw3_K9KwGfgeQboAq7HrH2xXyGXrIJgA'
+  publicKey: process.env.VAPID_PUBLIC_KEY,
+  privateKey: process.env.VAPID_PRIVATE_KEY
 };
 
 // تهيئة خدمة الويب بوش
 webpush.setVapidDetails(
-  'mailto:admin@altaqanee.sa', // تم تحديث عنوان البريد الإلكتروني إلى بريد حقيقي
+  'mailto:hussam.madlub@gmail.com', // تم تحديث عنوان البريد الإلكتروني إلى بريد حقيقي
   VAPID_KEYS.publicKey,
   VAPID_KEYS.privateKey
 );
 
 logger.info('webPushService', 'تم تهيئة خدمة إشعارات الويب مع مفاتيح VAPID', {
-  publicKey: VAPID_KEYS.publicKey.substring(0, 10) + '...' // لا نعرض المفتاح الكامل في السجلات
+  publicKey: VAPID_KEYS.publicKey.substring(0, 10) + '...'
 });
 
 /**
