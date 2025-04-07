@@ -25,14 +25,14 @@ window.testLocationMessage = function() {
         status: 'delivered'
     };
     
-    // console.log('محاكاة رسالة موقع جديدة:', testMessage);
+    console.log('محاكاة رسالة موقع جديدة:', testMessage);
     
     // محاكاة استلام رسالة جديدة
     if (typeof window.addMessageToConversation === 'function') {
         window.addMessageToConversation(testMessage);
-        // console.log('تم إضافة رسالة الموقع الاختبارية');
+        console.log('تم إضافة رسالة الموقع الاختبارية');
     } else {
-        console.error('وظيفة addMessageToConversation غير متاحة'); // Keep critical errors
+        console.error('وظيفة addMessageToConversation غير متاحة');
     }
 };
 
@@ -63,7 +63,6 @@ function addTestButton() {
 window.initMaps = function() {
     // تعيين حالة تحميل خرائط Google
     window.googleMapsLoaded = true;
-    // console.log('تم تحميل خرائط Google API بنجاح');
     
     // البحث عن جميع عناصر الخرائط في الصفحة وتهيئتها
     initializeAllMaps();
@@ -80,14 +79,13 @@ window.initMaps = function() {
 function initializeAllMaps() {
     // التحقق من تحميل خرائط Google
     if (!window.googleMapsLoaded || typeof google === 'undefined' || !google.maps) {
-        // console.warn('خرائط Google غير جاهزة بعد. سيتم إعادة المحاولة لاحقًا.');
+        console.warn('خرائط Google غير جاهزة بعد. سيتم إعادة المحاولة لاحقًا.');
         setTimeout(initializeAllMaps, 1000); // إعادة المحاولة بعد ثانية
         return;
     }
     
     // البحث عن جميع عناصر الخرائط في الصفحة
     const mapContainers = document.querySelectorAll('.google-map-container');
-    // console.log(`تم العثور على ${mapContainers.length} خريطة للتهيئة`);
     
     // تهيئة كل خريطة
     mapContainers.forEach(container => {
@@ -96,8 +94,6 @@ function initializeAllMaps() {
         
         // التحقق إذا كانت الخريطة موجودة مسبقًا لتجنب التكرار
         if (!window.locationMaps.has(messageId)) {
-            // console.log(`تهيئة خريطة جديدة للرسالة: ${messageId}`);
-            // console.log(`محتوى الموقع: ${locationContent}`);
             initializeMapFromContent(messageId, locationContent, container);
         }
     });
@@ -117,20 +113,18 @@ function initializeAllMaps() {
             name: 'initializeNewLocationMap',
             callback: function(message) {
                 if (message.mediaType === 'location') {
-                    // console.log('تم استلام رسالة موقع جديدة عبر Socket:', message);
                     // إتاحة وقت للعنصر ليتم إضافته إلى DOM
                     setTimeout(() => {
                         const container = document.getElementById(`map-${message._id}`);
                         if (container) {
                             initializeMapFromContent(message._id, message.content, container);
                         } else {
-                            // console.warn(`لم يتم العثور على حاوية الخريطة للرسالة: ${message._id}`);
+                            console.warn(`لم يتم العثور على حاوية الخريطة للرسالة: ${message._id}`);
                         }
                     }, 100);
                 }
             }
         });
-        // console.log('تم تسجيل مستمع لرسائل الموقع الجديدة');
     }
 }
 
@@ -145,12 +139,10 @@ function initializeMapFromContent(messageId, content, container) {
     const coordinates = extractCoordinates(content);
     
     if (!coordinates || !coordinates.lat || !coordinates.lng) {
-        // console.warn(`تعذر استخراج إحداثيات صالحة من محتوى الرسالة: ${content}`);
+        console.warn(`تعذر استخراج إحداثيات صالحة من محتوى الرسالة: ${content}`);
         container.innerHTML = '<div class="map-error">تعذر تحميل الخريطة: إحداثيات غير صالحة</div>';
         return;
     }
-    
-    // console.log(`تم استخراج الإحداثيات بنجاح:`, coordinates);
     
     // تعيين حجم الحاوية
     container.style.height = '200px';
@@ -197,10 +189,8 @@ function initializeMapFromContent(messageId, content, container) {
         
         // إضافة تلميح عند تحويم المؤشر
         container.title = 'انقر لفتح الموقع في خرائط Google';
-        
-        // console.log(`تم إنشاء خريطة بنجاح للرسالة: ${messageId}`);
     } catch (error) {
-        console.error('خطأ في إنشاء الخريطة:', error); // Keep critical errors
+        console.error('خطأ في إنشاء الخريطة:', error);
         container.innerHTML = '<div class="map-error">تعذر تحميل الخريطة</div>';
     }
 }
@@ -241,7 +231,7 @@ function extractCoordinates(content) {
         // فشل في استخراج الإحداثيات
         return null;
     } catch (error) {
-        console.error('خطأ في استخراج الإحداثيات:', error); // Keep critical errors
+        console.error('خطأ في استخراج الإحداثيات:', error);
         return null;
     }
 }
@@ -261,20 +251,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // إضافة مستمع للرسائل الجديدة المضافة عبر وظيفة addMessageToConversation
 if (typeof window.addMessageToConversation === 'function' && !window.locationMapListenerAdded) {
-    // console.log('تعديل وظيفة إضافة الرسائل لدعم رسائل الموقع');
     const originalAddMessage = window.addMessageToConversation;
     
     window.addMessageToConversation = function(message) {
-        // تسجيل معلومات الرسالة الواردة للتشخيص
-        /* if (message.mediaType === 'location') {
-            console.log('استلام رسالة موقع جديدة:', {
-                id: message._id,
-                content: message.content,
-                mediaType: message.mediaType,
-                direction: message.direction
-            });
-        } */
-        
         // استدعاء الدالة الأصلية
         originalAddMessage(message);
         
@@ -285,7 +264,7 @@ if (typeof window.addMessageToConversation === 'function' && !window.locationMap
                 if (container) {
                     initializeMapFromContent(message._id, message.content, container);
                 } else {
-                    // console.warn(`لم يتم العثور على حاوية الخريطة للرسالة بعد الإضافة: ${message._id}`);
+                    console.warn(`لم يتم العثور على حاوية الخريطة للرسالة بعد الإضافة: ${message._id}`);
                 }
             }, 300); // زيادة المهلة لضمان إضافة العنصر
         }

@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let conversationItem = conversationListContainer.querySelector(`.conversation-item[data-conversation-id="${updatedConv._id}"]`);
         const newHTML = createConversationItemHTML(updatedConv); // إنشاء HTML جديد من البيانات المحدثة
 
-        // التحقق مما إذا كانت المحادثة تطابق الفلاتر الحالية
+        // التحقق مما إذا كانت المحادثة تطابق الفلتر الحالي
         const matchesFilters = checkFilters(updatedConv, window.currentFilters);
 
         if (conversationItem) {
@@ -708,6 +708,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 7. ربط معالجات الأحداث لأزرار إغلاق وإعادة فتح المحادثة
             attachButtonEventHandlers();
+
+            // 8. تهيئة خرائط الموقع بعد تحميل المحتوى
+            if (typeof initializeAllMaps === 'function') {
+                // استدعاء تهيئة الخرائط بعد تحميل المحتوى وإعطاء وقت للعرض
+                // استخدام setTimeout 0 لتأجيل التنفيذ إلى نهاية دورة الحدث الحالية
+                setTimeout(initializeAllMaps, 0); 
+            } else {
+                console.warn('وظيفة initializeAllMaps غير متاحة لتهيئة خرائط الموقع.');
+            }
+
         }).catch(error => {
             // console.error("خطأ في تحميل تفاصيل المحادثة:", error);
             conversationDetailsContainer.innerHTML = `

@@ -162,6 +162,7 @@
     "has-unicode": "^2.0.1",
     "hasown": "^2.0.2",
     "he": "^1.2.0",
+    "helmet": "^8.1.0",
     "hexoid": "^1.0.0",
     "http-errors": "^2.0.0",
     "http-signature": "^1.2.0",
