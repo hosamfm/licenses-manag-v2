@@ -1009,70 +1009,41 @@ exports.getConversationDetailsAjax = async (req, res) => {
  */
 exports.listConversationsAjaxList = async (req, res) => {
   try {
-    logger.info('conversationController', 'معلمات طلب AJAX لقائمة المحادثات', { 
-      query: req.query, 
-      body: req.body,
-      user: req.user ? req.user._id : 'غير مسجل الدخول' 
-    });
-
     // بناء معايير التصفية
-    const filterOptions = {};
+    const filterOptions = {
+      status: req.query.status || 'all'
+    };
     
-    // 1. فلترة حسب الحالة
-    const status = req.query.status || 'all';
-    if (status !== 'all') {
-      filterOptions.status = status;
-    }
-    
-    // 2. فلترة حسب التعيين للمستخدم الحالي
-    const assignedToMe = req.query.assignedToMe === 'true';
-    if (assignedToMe && req.user && req.user._id) {
+    // إضافة فلتر المستخدم المسند إليه إذا كان المستخدم ليس مشرفًا أو مديرًا
+    if (req.user && req.user.user_role !== 'admin' && req.user.user_role !== 'supervisor') {
       filterOptions.assignedTo = req.user._id;
     }
     
-    // 3. فلترة حسب الرسائل غير المقروءة فقط
-    const unreadOnly = req.query.unreadOnly === 'true';
-    if (unreadOnly) {
-      filterOptions.hasUnread = true;
-    }
-    
-    // 4. فلترة حسب البحث النصي
-    const search = req.query.search || '';
-    if (search && search.trim() !== '') {
-      // البحث في اسم العميل أو رقم الهاتف
-      filterOptions.$or = [
-        { customerName: { $regex: search, $options: 'i' } },
-        { phoneNumber: { $regex: search, $options: 'i' } }
-      ];
-    }
-    
-    logger.info('conversationController', 'معايير التصفية المستخدمة', filterOptions);
-    
-    // إعداد خيارات التصفح
+    // خيارات التصفح
     const paginationOptions = {
-      page: 1,
       limit: 50,
-      sort: { lastMessageAt: -1 },
-      skipPagination: true // تخطي التصفح لجلب كل المحادثات في طلب واحد
+      skipPagination: true,
+      sort: { updatedAt: -1 }
     };
     
-    // استخدام خدمة المحادثات للحصول على قائمة المحادثات المصفاة
+    // استخدام خدمة المحادثات للحصول على قائمة المحادثات
     const result = await conversationService.getConversationsList(
       filterOptions,
       paginationOptions,
-      true, // تضمين آخر رسالة
-      true  // حساب عدد الرسائل غير المقروءة
+      true,  // تضمين آخر رسالة
+      true   // تضمين عدد الرسائل غير المقروءة
     );
     
-    // تقديم جزء HTML للمحادثات
-    res.render('crm/partials/conversation_list', {
-      conversations: result.conversations,
-      layout: false,
-      user: req.user
+    // إرجاع البيانات بصيغة JSON
+    return res.json({
+      success: true,
+      conversations: result.conversations
     });
-  } catch (error) {
-    logger.error('conversationController', 'خطأ في جلب قائمة محادثات AJAX', error);
-    res.status(500).json({ error: 'حدث خطأ أثناء تحميل المحادثات' });
+  } catch (err) {
+    return res.status(500).json({ 
+      success: false, 
+      error: 'حدث خطأ أثناء تحميل المحادثات' 
+    });
   }
 };
 

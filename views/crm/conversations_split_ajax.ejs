@@ -11,105 +11,6 @@
   <link rel="stylesheet" href="/css/crm.css">
   <link rel="stylesheet" href="/css/conversation-new.css">
   
-  <style>
-    /* أنماط للفلترة المتقدمة */
-    .conversation-advanced-filters {
-      background-color: #f8f9fa;
-      border-radius: 0.5rem;
-      padding: 0.75rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    
-    .conversation-advanced-filters select {
-      border-color: #dee2e6;
-      color: #495057;
-    }
-    
-    /* أنماط لعناصر المحادثة المسندة للمستخدم الحالي */
-    .conversation-item.assigned-to-me {
-      border-left: 3px solid #17a2b8;
-    }
-    
-    /* أنماط مختلفة للحالات المختلفة */
-    .conversation-item[data-status="closed"] {
-      opacity: 0.7;
-    }
-    
-    .conversation-item[data-status="assigned"] {
-      background-color: rgba(13, 110, 253, 0.03);
-    }
-    
-    .conversation-item[data-status="open"] {
-      background-color: rgba(25, 135, 84, 0.03);
-    }
-    
-    /* تحسين الوضوح عند التمرير فوق محادثة */
-    .conversation-item:hover {
-      background-color: rgba(13, 110, 253, 0.05);
-      transition: background-color 0.2s ease;
-    }
-    
-    /* تنسيق مؤشرات الحالة */
-    .status-indicator {
-      display: inline-flex;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      justify-content: center;
-      align-items: center;
-      font-size: 0.8rem;
-    }
-    
-    .status-indicator.open {
-      background-color: rgba(25, 135, 84, 0.15);
-      color: #198754;
-    }
-    
-    .status-indicator.closed {
-      background-color: rgba(108, 117, 125, 0.15);
-      color: #6c757d;
-    }
-    
-    .status-indicator.assigned {
-      background-color: rgba(13, 110, 253, 0.15);
-      color: #0d6efd;
-    }
-    
-    /* حالة عدم وجود محادثات */
-    #noConversationsResults {
-      text-align: center;
-      padding: 2rem;
-      border-radius: 0.5rem;
-      margin: 1rem;
-    }
-    
-    #noConversationsResults i {
-      font-size: 2rem;
-      opacity: 0.6;
-      margin-bottom: 1rem;
-      display: block;
-    }
-    
-    /* مؤشر التحميل */
-    #conversationLoadingIndicator {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 8px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      z-index: 10;
-    }
-    
-    /* حالة تحميل القائمة */
-    .conversations-list {
-      position: relative;
-      min-height: 200px;
-    }
-  </style>
-  
   <!-- إضافة مكتبة Tribute.js لدعم المنشن في التعليقات -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tributejs@5.1.3/dist/tribute.min.css">
   <script src="https://cdn.jsdelivr.net/npm/tributejs@5.1.3/dist/tribute.min.js"></script>
@@ -183,25 +84,6 @@
                 <button type="button" class="btn btn-sm btn-outline-primary filter-unread" data-filter="unread">
                   <i class="fas fa-envelope"></i> غير المقروءة
                 </button>
-              </div>
-            </div>
-            
-            <!-- فلترة محسنة للمحادثات -->
-            <div class="conversation-advanced-filters mt-3">
-              <div class="row g-2">
-                <div class="col-6">
-                  <select id="assignmentFilter" class="form-select form-select-sm" onchange="filterConversationsByAssignment(this.value)">
-                    <option value="all">جميع المحادثات</option>
-                    <option value="mine">محادثاتي</option>
-                  </select>
-                </div>
-                <div class="col-6">
-                  <select id="statusFilter" class="form-select form-select-sm" onchange="filterConversationsByStatus(this.value)">
-                    <option value="all">جميع الحالات</option>
-                    <option value="open" selected>مفتوحة</option>
-                    <option value="closed">مغلقة</option>
-                  </select>
-                </div>
               </div>
             </div>
             
@@ -433,9 +315,7 @@
             
             // تطبيق الفلتر على قائمة المحادثات
             const filterType = btn.dataset.filter;
-            
-            // تحديث قائمة المحادثات من الخادم
-            refreshConversationsList();
+            filterConversations(filterType, searchInput ? searchInput.value : '');
           });
         });
       }
@@ -443,14 +323,12 @@
       // إذا وجد مربع البحث أضف له مستمع
       if (searchInput) {
         searchInput.addEventListener('input', () => {
-          // تحديث قائمة المحادثات من الخادم بعد توقف المستخدم عن الكتابة
-          if (window.searchTimeout) {
-            clearTimeout(window.searchTimeout);
-          }
+          // الحصول على الفلتر النشط حاليًا
+          const activeFilter = document.querySelector('.conversation-filters button.active');
+          const filterType = activeFilter ? activeFilter.dataset.filter : 'all';
           
-          window.searchTimeout = setTimeout(() => {
-            refreshConversationsList();
-          }, 300); // تأخير 300 مللي ثانية
+          // تطبيق الفلتر مع البحث
+          filterConversations(filterType, searchInput.value);
         });
       }
       
@@ -466,22 +344,12 @@
           const hasUnread = item.classList.contains('has-unread');
           const matchesFilter = (filterType === 'all') || (filterType === 'unread' && hasUnread);
           
-          // التحقق من انطباق فلتر التعيين
-          const assignmentFilter = document.getElementById('assignmentFilter').value;
-          const isMine = item.classList.contains('assigned-to-me');
-          const matchesAssignment = (assignmentFilter === 'all') || (assignmentFilter === 'mine' && isMine);
-          
-          // التحقق من انطباق فلتر الحالة
-          const statusFilter = document.getElementById('statusFilter').value;
-          const itemStatus = item.getAttribute('data-status') || 'open';
-          const matchesStatus = (statusFilter === 'all') || (statusFilter === itemStatus);
-          
           // التحقق من انطباق البحث
           const conversationText = item.textContent.toLowerCase();
           const matchesSearch = !searchTerm || conversationText.includes(searchTerm);
           
-          // إظهار أو إخفاء العنصر بناءً على الفلتر والبحث والتعيين والحالة
-          if (matchesFilter && matchesSearch && matchesAssignment && matchesStatus) {
+          // إظهار أو إخفاء العنصر بناءً على الفلتر والبحث
+          if (matchesFilter && matchesSearch) {
             item.style.display = '';
           } else {
             item.style.display = 'none';
@@ -510,23 +378,6 @@
           }
         }
       }
-      
-      // دالة الفلترة حسب التعيين
-      window.filterConversationsByAssignment = function(value) {
-        // تحديث قائمة المحادثات من الخادم مع الفلتر الجديد
-        refreshConversationsList();
-      };
-      
-      // دالة الفلترة حسب الحالة
-      window.filterConversationsByStatus = function(value) {
-        // الحصول على الفلتر النشط حاليًا
-        const activeFilter = document.querySelector('.conversation-filters button.active');
-        const filterType = activeFilter ? activeFilter.dataset.filter : 'all';
-        
-        // تطبيق الفلتر مع البحث
-        const searchInput = document.getElementById('conversationSearchInput');
-        filterConversations(filterType, searchInput ? searchInput.value : '');
-      };
       
       // الاستماع لأحداث الرسائل الجديدة
       window.socketConnection.on('new-message', function(data) {
@@ -696,21 +547,8 @@
           const wasActive = conversationItem.classList.contains('active');
           
           // تحديث محتوى العنصر
-          conversationItem.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conversation.unreadCount > 0 ? 'has-unread' : ''} ${wasActive ? 'active' : ''}`;
-          
-          // إضافة سمة حالة المحادثة
+          conversationItem.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conversation.unreadCount > 0 ? 'has-unread' : ''} ${wasActive ? 'active' : ''} ${conversation.assignee ? 'assigned' : ''} ${conversation.assignee && conversation.assignee._id === window.currentUserId ? 'assigned-to-me' : ''}`;
           conversationItem.setAttribute('data-status', conversation.status || 'open');
-          
-          // إضافة فئة التعيين إذا كان معين
-          if (conversation.assignedTo || conversation.assignee) {
-            conversationItem.classList.add('assigned');
-            
-            // إضافة فئة "assigned-to-me" إذا كان معين للمستخدم الحالي
-            if (conversation.assignedTo === window.currentUserId || 
-                (conversation.assignee && conversation.assignee._id === window.currentUserId)) {
-              conversationItem.classList.add('assigned-to-me');
-            }
-          }
           
           // تحديث HTML الداخلي للعنصر
           conversationItem.innerHTML = `
@@ -756,22 +594,9 @@
           // إنشاء عنصر جديد
           conversationItem = document.createElement('button');
           conversationItem.type = 'button';
-          conversationItem.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conversation.unreadCount > 0 ? 'has-unread' : ''} ${isCurrentlyActive ? 'active' : ''}`;
+          conversationItem.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conversation.unreadCount > 0 ? 'has-unread' : ''} ${isCurrentlyActive ? 'active' : ''} ${conversation.assignee ? 'assigned' : ''} ${conversation.assignee && conversation.assignee._id === window.currentUserId ? 'assigned-to-me' : ''}`;
           conversationItem.setAttribute('data-conversation-id', conversation._id);
-          
-          // إضافة سمة حالة المحادثة
           conversationItem.setAttribute('data-status', conversation.status || 'open');
-          
-          // إضافة فئة التعيين إذا كان معين
-          if (conversation.assignedTo || conversation.assignee) {
-            conversationItem.classList.add('assigned');
-            
-            // إضافة فئة "assigned-to-me" إذا كان معين للمستخدم الحالي
-            if (conversation.assignedTo === window.currentUserId || 
-                (conversation.assignee && conversation.assignee._id === window.currentUserId)) {
-              conversationItem.classList.add('assigned-to-me');
-            }
-          }
           
           // إضافة المحتوى الداخلي
           conversationItem.innerHTML = `
@@ -841,11 +666,6 @@
         // إعادة تطبيق الفلتر والبحث الحالي
         const activeFilter = document.querySelector('.conversation-filters button.active');
         const searchInput = document.getElementById('conversationSearchInput');
-        
-        // إعادة تطبيق الفلترة المتقدمة
-        window.filterConversationsByStatus(document.getElementById('statusFilter').value);
-        window.filterConversationsByAssignment(document.getElementById('assignmentFilter').value);
-        
         if (activeFilter && searchInput) {
           filterConversations(activeFilter.dataset.filter, searchInput.value);
         }
@@ -1290,25 +1110,6 @@
             firstConv.click();
           }
         }
-        
-        // تطبيق الفلترة المتقدمة عند تحميل الصفحة
-        setTimeout(() => {
-          // التحقق مما إذا كان هناك معلمة myConversations في العنوان
-          const urlParams = new URLSearchParams(window.location.search);
-          const myConversations = urlParams.get('myConversations');
-          
-          if (myConversations === 'true') {
-            // تحديد "محادثاتي" في قائمة التعيين
-            const assignmentFilter = document.getElementById('assignmentFilter');
-            if (assignmentFilter) {
-              assignmentFilter.value = 'mine';
-            }
-          }
-          
-          // تطبيق الفلترة الافتراضية (المحادثات المفتوحة افتراضيًا)
-          window.filterConversationsByStatus(document.getElementById('statusFilter').value);
-          window.filterConversationsByAssignment(document.getElementById('assignmentFilter').value);
-        }, 200);
       }
       
       // تنفيذ عند تحميل الصفحة
@@ -1416,222 +1217,103 @@
 
       // تحديث قائمة المحادثات فقط
       window.refreshConversationsList = function() {
-        console.log('تحديث قائمة المحادثات...');
-        
-        // إظهار مؤشر التحميل
-        const loadingIndicator = document.getElementById('conversationsLoadingIndicator');
-        if (!loadingIndicator) {
-          // إنشاء مؤشر تحميل إذا لم يكن موجوداً
-          const indicator = document.createElement('div');
-          indicator.id = 'conversationsLoadingIndicator';
-          indicator.className = 'd-flex justify-content-center align-items-center';
-          indicator.style.position = 'absolute';
-          indicator.style.top = '50%';
-          indicator.style.left = '50%';
-          indicator.style.transform = 'translate(-50%, -50%)';
-          indicator.style.zIndex = '999';
-          indicator.style.background = 'rgba(255, 255, 255, 0.8)';
-          indicator.style.borderRadius = '8px';
-          indicator.style.padding = '20px';
-          indicator.innerHTML = `
-            <div class="spinner-border text-primary me-2" role="status"></div>
-            <span>جاري تحميل المحادثات...</span>
-          `;
+        // استدعاء API للحصول على تحديث للقائمة
+        fetch('/crm/conversations/ajax/list', {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        })
+        .then(response => {
+          if (!response.ok) throw new Error('HTTP error ' + response.status);
+          return response.json();
+        })
+        .then(data => {
+          if (!data.success || !data.conversations) {
+            console.error('خطأ في تنسيق البيانات المستلمة:', data);
+            return;
+          }
           
-          const listContainer = document.querySelector('.conversations-list');
-          if (listContainer) {
-            listContainer.style.position = 'relative';
-            listContainer.appendChild(indicator);
-          }
-        } else {
-          loadingIndicator.style.display = 'flex';
-        }
-        
-        // إخفاء رسالة "لا توجد محادثات"
-        const noConversationsMsg = document.getElementById('noConversationsMessage');
-        if (noConversationsMsg) {
-          noConversationsMsg.style.display = 'none';
-        }
-        
-        // الحصول على قيم الفلاتر الحالية
-        const assignmentFilter = document.getElementById('assignmentFilter').value;
-        const statusFilter = document.getElementById('statusFilter').value;
-        const searchInput = document.getElementById('conversationSearchInput').value || '';
-        const unreadOnlyActive = document.querySelector('.conversation-filters button[data-filter="unread"].active') !== null;
-        
-        console.log('فلاتر المحادثات:', { assignmentFilter, statusFilter, searchInput, unreadOnly: unreadOnlyActive });
-        
-        // بناء URL مع معلمات البحث والفلترة
-        const url = new URL('/crm/conversations/ajax/list', window.location.origin);
-        
-        // إضافة معلمات التصفية
-        if (statusFilter && statusFilter !== 'all') {
-          url.searchParams.append('status', statusFilter);
-        }
-        
-        if (assignmentFilter && assignmentFilter === 'mine') {
-          url.searchParams.append('assignedToMe', 'true');
-        }
-        
-        if (unreadOnlyActive) {
-          url.searchParams.append('unreadOnly', 'true');
-        }
-        
-        if (searchInput && searchInput.trim() !== '') {
-          url.searchParams.append('search', searchInput.trim());
-        }
-        
-        console.log('URL الطلب:', url.toString());
-        
-        // جلب البيانات من الخادم
-        fetch(url.toString())
-          .then(response => {
-            if (!response.ok) {
-              throw new Error('فشل جلب المحادثات: ' + response.status);
-            }
-            return response.text();
-          })
-          .then(html => {
-            // تحديث قائمة المحادثات
-            const conversationsList = document.getElementById('conversationList');
-            if (conversationsList) {
-              conversationsList.innerHTML = html;
-              
-              // إعادة تهيئة أحداث النقر على المحادثات
-              setupConversationClickHandlers();
-              
-              // التحقق من وجود محادثات
-              const hasConversations = conversationsList.querySelector('.conversation-item') !== null;
-              
-              // إخفاء مؤشر التحميل
-              const loadingIndicator = document.getElementById('conversationsLoadingIndicator');
-              if (loadingIndicator) {
-                loadingIndicator.style.display = 'none';
-              }
-              
-              // إظهار/إخفاء رسالة عدم وجود محادثات
-              let noConversationsMsg = document.getElementById('noConversationsMessage');
-              if (!hasConversations) {
-                if (!noConversationsMsg) {
-                  noConversationsMsg = document.createElement('div');
-                  noConversationsMsg.id = 'noConversationsMessage';
-                  noConversationsMsg.className = 'text-center p-4';
-                  noConversationsMsg.innerHTML = `
-                    <div class="py-5">
-                      <i class="fas fa-search text-muted fa-3x mb-3"></i>
-                      <h5>لا توجد محادثات تطابق البحث</h5>
-                      <p class="text-muted">جرب تغيير معايير الفلترة أو البحث</p>
-                      <button class="btn btn-outline-primary btn-sm mt-2" onclick="resetConversationFilters()">
-                        <i class="fas fa-redo me-1"></i> إعادة تعيين الفلاتر
-                      </button>
-                    </div>
-                  `;
-                  
-                  const conversationsListContainer = document.querySelector('.conversations-list');
-                  if (conversationsListContainer) {
-                    conversationsListContainer.appendChild(noConversationsMsg);
-                  }
-                } else {
-                  noConversationsMsg.style.display = 'block';
-                }
-              } else if (noConversationsMsg) {
-                noConversationsMsg.style.display = 'none';
-              }
-            }
-          })
-          .catch(error => {
-            console.error('خطأ أثناء تحديث المحادثات:', error);
+          // الحصول على حاوية قائمة المحادثات
+          const conversationList = document.getElementById('conversationList');
+          if (!conversationList) return;
+          
+          // حفظ المحادثة المحددة حالياً
+          const currentlyActiveId = currentConversationId;
+          
+          // حذف جميع المحادثات الحالية
+          conversationList.innerHTML = '';
+          
+          // إضافة المحادثات الجديدة
+          data.conversations.forEach(function(conv) {
+            // بناء عنصر المحادثة
+            const itemElement = document.createElement('button');
+            itemElement.type = 'button';
+            itemElement.className = `list-group-item list-group-item-action conversation-item d-flex flex-column ${conv.unreadCount > 0 ? 'has-unread' : ''} ${currentlyActiveId === conv._id ? 'active' : ''}`;
+            itemElement.setAttribute('data-conversation-id', conv._id);
             
-            // إخفاء مؤشر التحميل عند الخطأ
-            const loadingIndicator = document.getElementById('conversationsLoadingIndicator');
-            if (loadingIndicator) {
-              loadingIndicator.style.display = 'none';
-            }
-            
-            // عرض رسالة الخطأ
-            let noConversationsMsg = document.getElementById('noConversationsMessage');
-            if (!noConversationsMsg) {
-              noConversationsMsg = document.createElement('div');
-              noConversationsMsg.id = 'noConversationsMessage';
-              noConversationsMsg.className = 'text-center p-4';
-              
-              const conversationsListContainer = document.querySelector('.conversations-list');
-              if (conversationsListContainer) {
-                conversationsListContainer.appendChild(noConversationsMsg);
-              }
-            }
-            
-            if (noConversationsMsg) {
-              noConversationsMsg.style.display = 'block';
-              noConversationsMsg.innerHTML = `
-                <div class="py-5">
-                  <i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i>
-                  <h5>حدث خطأ أثناء تحميل المحادثات</h5>
-                  <p class="text-muted">يرجى المحاولة مرة أخرى</p>
-                  <button class="btn btn-primary btn-sm mt-2" onclick="refreshConversationsList()">
-                    <i class="fas fa-sync me-1"></i> إعادة المحاولة
-                  </button>
+            // بناء HTML الداخلي للعنصر
+            itemElement.innerHTML = `
+              <div class="d-flex justify-content-between align-items-center w-100">
+                <div class="conversation-info">
+                  <div class="conversation-name">
+                    <i class="${conv.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary'} me-2"></i>
+                    <span>${conv.customerName || conv.phoneNumber}</span>
+                  </div>
+                  <div class="conversation-preview">
+                    ${conv.lastMessage ? `
+                      <small class="${conv.unreadCount > 0 ? 'fw-bold' : 'text-muted'}">
+                        ${conv.lastMessage.direction === 'incoming' ? '<i class="fas fa-reply-all text-muted me-1 fa-flip-horizontal"></i>' : '<i class="fas fa-reply text-muted me-1"></i>'}
+                        ${conv.lastMessage.content
+                           ? conv.lastMessage.content.substring(0, 30) + (conv.lastMessage.content.length > 30 ? '...' : '')
+                           : (conv.lastMessage.mediaType ? 'محتوى وسائط' : 'رسالة')}
+                      </small>
+                    ` : `
+                      <small class="text-muted"><i class="fas fa-info-circle me-1"></i> محادثة جديدة</small>
+                    `}
+                  </div>
                 </div>
-              `;
-            }
+                <div class="conversation-meta text-end">
+                  ${conv.unreadCount > 0 ? `<span class="badge bg-danger rounded-pill conversation-badge mb-1">${conv.unreadCount}</span>` : ''}
+                  <div class="conversation-time small">
+                    ${new Date(conv.lastMessageAt || conv.updatedAt).toLocaleString('ar-LY', {hour: '2-digit', minute: '2-digit'})}
+                  </div>
+                  ${conv.status === 'closed' ? `<span class="status-indicator closed" title="محادثة مغلقة"><i class="fas fa-lock"></i></span>` 
+                    : conv.status === 'assigned' ? `<span class="status-indicator assigned" title="محادثة مسندة"><i class="fas fa-user-check"></i></span>`
+                    : `<span class="status-indicator open" title="محادثة مفتوحة"><i class="fas fa-door-open"></i></span>`}
+                </div>
+              </div>
+            `;
+            
+            // إضافة معالج الحدث للنقر
+            itemElement.addEventListener('click', function() {
+              // إزالة التنشيط من جميع العناصر
+              const items = conversationList.querySelectorAll('.conversation-item');
+              items.forEach(item => {
+                item.classList.remove('active');
+              });
+              
+              // تنشيط هذا العنصر
+              this.classList.add('active');
+              
+              // تحميل تفاصيل المحادثة
+              loadConversationDetails(conv._id);
+            });
+            
+            // إضافة العنصر إلى القائمة
+            conversationList.appendChild(itemElement);
           });
-      };
-      
-      // دالة إعادة تعيين فلاتر المحادثات
-      window.resetConversationFilters = function() {
-        // إعادة تعيين حقل البحث
-        const searchInput = document.getElementById('conversationSearchInput');
-        if (searchInput) {
-          searchInput.value = '';
-        }
-        
-        // إعادة تعيين فلتر التعيين
-        const assignmentFilter = document.getElementById('assignmentFilter');
-        if (assignmentFilter) {
-          assignmentFilter.value = 'all';
-        }
-        
-        // إعادة تعيين فلتر الحالة
-        const statusFilter = document.getElementById('statusFilter');
-        if (statusFilter) {
-          statusFilter.value = 'all';
-        }
-        
-        // إعادة تعيين زر الرسائل غير المقروءة
-        const filterButtons = document.querySelectorAll('.conversation-filters button');
-        filterButtons.forEach(btn => {
-          if (btn.dataset.filter === 'all') {
-            btn.classList.add('active');
-          } else {
-            btn.classList.remove('active');
+          
+          // إعادة تطبيق الفلتر والبحث الحالي
+          const activeFilter = document.querySelector('.conversation-filters button.active');
+          const searchInput = document.getElementById('conversationSearchInput');
+          if (activeFilter && searchInput) {
+            filterConversations(activeFilter.dataset.filter, searchInput.value);
           }
-        });
-        
-        // تحديث قائمة المحادثات
-        refreshConversationsList();
-      };
-
-      // إعداد أحداث النقر على المحادثات
-      window.setupConversationClickHandlers = function() {
-        const conversationItems = document.querySelectorAll('.conversation-item');
-        
-        conversationItems.forEach(item => {
-          item.addEventListener('click', function() {
-            // إزالة الفئة النشطة من جميع العناصر
-            conversationItems.forEach(i => i.classList.remove('active'));
-            
-            // إضافة الفئة النشطة لهذا العنصر
-            this.classList.add('active');
-            
-            // الحصول على معرف المحادثة
-            const conversationId = this.getAttribute('data-conversation-id');
-            
-            // تعيين المحادثة الحالية
-            currentConversationId = conversationId;
-            
-            // تحميل تفاصيل المحادثة
-            loadConversationDetails(conversationId);
-          });
+        })
+        .catch(err => {
+          console.error('خطأ في تحديث قائمة المحادثات:', err);
         });
       };
     });
