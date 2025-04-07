@@ -174,6 +174,14 @@ app.get('/profile', isAuthenticated, (req, res) => {
     }); 
 });
 
+// إضافة مسار لعرض صفحة الإشعارات
+app.get('/notifications', isAuthenticated, (req, res) => {
+    res.render('notifications', { 
+        title: 'الإشعارات', 
+        session: req.session
+    }); 
+});
+
 // توجيه المسار القديم للمحادثات إلى نظام CRM
 app.get('/conversations', (req, res) => {
   res.redirect('/crm/conversations');
@@ -351,7 +359,11 @@ const http = require('http').createServer(app);
 
 // تهيئة خدمة Socket.io
 const socketService = require('./services/socketService');
+const notificationSocketService = require('./services/notificationSocketService');
 const io = socketService.initialize(http);
+
+// تهيئة خدمة سوكت الإشعارات
+notificationSocketService.initialize(io);
 
 // مشاركة الجلسة بين Express و Socket.IO
 io.use((socket, next) => {

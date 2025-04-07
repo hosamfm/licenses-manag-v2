@@ -41,6 +41,17 @@ function initialize(server) {
             socket.username = user.username;
             socket.userRole = user.user_role;
             
+            // --- إضافة إرسال الحدث userId-set للإعلام عن تعيين userId ---
+            socket.emit('userId-set', { userId: socket.userId, userRole: socket.userRole, username: socket.username });
+            
+            // *** الأهم: إرسال أيضًا لنفس الاتصال حتى تتلقاه خدمة الإشعارات ***
+            socket.emit('userId-set', { 
+                userId: socket.userId, 
+                userRole: socket.userRole, 
+                username: socket.username,
+                shouldJoinNotifications: true // علامة للانضمام لغرفة الإشعارات
+            });
+            
             /* logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم من الجلسة', { 
               socketId: socket.id, 
               userId: socket.userId, 
@@ -65,6 +76,13 @@ function initialize(server) {
       else if (socket.handshake.auth && socket.handshake.auth.userId && socket.handshake.auth.userId !== 'guest') {
         socket.userId = socket.handshake.auth.userId;
         socket.username = socket.handshake.auth.username;
+        
+        // --- إضافة إرسال الحدث userId-set لهذه الحالة أيضًا ---
+        socket.emit('userId-set', { 
+            userId: socket.userId, 
+            username: socket.username,
+            shouldJoinNotifications: true // علامة للانضمام لغرفة الإشعارات
+        });
         
         /* logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم من بيانات المصادقة', { 
           socketId: socket.id, 

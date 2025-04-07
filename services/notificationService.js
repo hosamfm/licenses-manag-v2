@@ -1,5 +1,7 @@
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const logger = require('./loggerService');
+const mongoose = require('mongoose');
 
 /**
  * خدمة الإشعارات - توفر وظائف لإنشاء وإدارة الإشعارات
@@ -77,33 +79,79 @@ class NotificationService {
   /**
    * إنشاء إشعار رسالة
    * @param {String} recipientId معرف المستلم
-   * @param {String} senderId معرف المرسل
+   * @param {String} senderId معرف المرسل ('system' للرسائل الواردة)
    * @param {String} conversationId معرف المحادثة
    * @param {String} messageContent محتوى الرسالة
-   * @returns {Promise<Object>} الإشعار الذي تم إنشاؤه
+   * @returns {Promise<Object|null>} الإشعار الذي تم إنشاؤه أو null إذا تم منعه
    */
   static async createMessageNotification(recipientId, senderId, conversationId, messageContent) {
     try {
-      const sender = await User.findById(senderId);
-      if (!sender) {
-        throw new Error('المرسل غير موجود');
+      // 1. التحقق من وجود المستلم وتفضيلاته العامة
+      const recipient = await User.findById(recipientId);
+      if (!recipient) {
+        logger.warn('notificationService', 'المستلم غير موجود في createMessageNotification', { recipientId });
+        return null; // لا يمكن إرسال إشعار لمستلم غير موجود
       }
 
-      return await this.createNotification({
+      // التحقق من الإعداد العام للإشعارات للمستلم
+      if (recipient.enable_general_notifications === false) {
+         logger.info('notificationService', `لن يتم إرسال إشعار رسالة للمستخدم ${recipientId} بسبب تعطيل الإشعارات العامة`);
+         return null;
+      }
+      
+      // *** تم تجاوز الفحص العام shouldSendNotification هنا ***
+      // نفترض أن القرار بإرسال الإشعار تم اتخاذه بشكل صحيح في notificationSocketService 
+      // بناءً على notify_assigned_conversation أو notify_unassigned_conversation.
+
+      // 2. تحديد اسم المرسل للعرض في الإشعار
+      let senderName = 'رسالة جديدة'; // الافتراضي للرسائل الواردة من العملاء
+      if (senderId && senderId !== 'system' && mongoose.Types.ObjectId.isValid(senderId)) {
+          try {
+              const senderUser = await User.findById(senderId);
+              if (senderUser) {
+                  senderName = senderUser.full_name || senderUser.username;
+              } else {
+                   senderName = 'مستخدم غير معروف';
+              }
+          } catch (findError) {
+               logger.warn('notificationService', 'خطأ في البحث عن مرسل رسالة داخلي', { senderId, error: findError.message });
+               senderName = 'مرسل غير صالح';
+          }
+      }
+
+      // 3. تحضير بيانات الإشعار
+      const notificationData = {
         recipient: recipientId,
-        sender: senderId,
+        // لا نربط بمرسل إذا كان 'system' أو المعرف غير صالح
+        sender: (senderId === 'system' || !mongoose.Types.ObjectId.isValid(senderId) ? null : senderId),
         type: 'message',
-        title: `رسالة جديدة من ${sender.full_name || sender.username}`,
-        content: messageContent.length > 100 ? `${messageContent.slice(0, 100)}...` : messageContent,
+        title: `${senderName}`, // استخدام الاسم المحضر
+        // التعامل مع المحتوى غير النصي أو الطويل جدًا
+        content: messageContent && typeof messageContent === 'string'
+                   ? (messageContent.length > 100 ? `${messageContent.slice(0, 100)}...` : messageContent)
+                   : 'رسالة جديدة', // استخدام نص بديل للمحتوى غير النصي
         link: `/crm/conversation/${conversationId}`,
         reference: {
           model: 'Conversation',
           id: conversationId
         }
-      });
+      };
+
+      // 4. إنشاء الإشعار مباشرة وحفظه
+      const newNotification = new Notification(notificationData);
+      await newNotification.save();
+
+      logger.info('notificationService', 'تم إنشاء إشعار رسالة بنجاح (تم تجاوز الفحص العام)', { recipientId, conversationId });
+      return newNotification; // إرجاع الإشعار الذي تم إنشاؤه
+
     } catch (error) {
-      console.error('خطأ في إنشاء إشعار الرسالة:', error);
-      throw error;
+      logger.error('notificationService', 'خطأ فادح في createMessageNotification', { 
+        error: error.message, 
+        recipientId, 
+        senderId, 
+        conversationId 
+      });
+      return null; // إرجاع null عند حدوث خطأ فادح
     }
   }
 

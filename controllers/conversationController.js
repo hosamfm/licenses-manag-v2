@@ -18,6 +18,7 @@ const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const mediaService = require('../services/mediaService');
 const conversationService = require('../services/conversationService');
+const notificationSocketService = require('../services/notificationSocketService');
 
 /**
  * استخراج المنشنات من محتوى النص
@@ -196,6 +197,9 @@ exports.assignConversation = async (req, res) => {
       assignedBy: req.user?._id || null
     });
 
+    // إرسال إشعارات لتغيير حالة المحادثة
+    await notificationSocketService.updateConversationNotifications(conversationId, conversation);
+
     if (conversation.assignedTo && conversation.assignedTo.toString() !== (assignedTo || '')) {
       socketService.notifyUser(conversation.assignedTo, 'conversation_unassigned', {
         conversationId,
@@ -356,6 +360,9 @@ exports.toggleConversationStatus = async (req, res) => {
       status: newStatus,
       changedBy: req.user?._id || null
     });
+
+    // إرسال إشعارات لتغيير حالة المحادثة
+    await notificationSocketService.updateConversationNotifications(conversationId, conversation);
 
     req.flash('success', newStatus === 'closed' ? 'تم إغلاق المحادثة' : 'تم فتح المحادثة');
     res.redirect(`/crm/conversations/${conversationId}`);
@@ -1129,6 +1136,9 @@ exports.closeConversation = async (req, res) => {
       // أضف أي حقول أخرى تحتاجها الواجهة الأمامية
     });
 
+    // إرسال إشعارات لتغيير حالة المحادثة
+    await notificationSocketService.updateConversationNotifications(conversationId, conversation);
+
     // logger.info('conversationController', 'تم إغلاق المحادثة يدوياً', { conversationId, userId, reason });
     res.status(200).json({ success: true, conversation: updatedConversation });
 
@@ -1175,6 +1185,9 @@ exports.reopenConversation = async (req, res) => {
       lastOpenedAt: updatedConversation.lastOpenedAt, // إرسال وقت الفتح الجديد
       // أضف أي حقول أخرى تحتاجها الواجهة الأمامية
     });
+
+    // إرسال إشعارات لتغيير حالة المحادثة
+    await notificationSocketService.updateConversationNotifications(conversationId, conversation);
 
     // logger.info('conversationController', 'تمت إعادة فتح المحادثة يدوياً', { conversationId, userId });
     res.status(200).json({ success: true, conversation: updatedConversation });
@@ -1289,6 +1302,9 @@ exports.assignConversationAPI = async (req, res) => {
       assignee: assigneeData // إضافة بيانات المستخدم المعين المفصلة
     });
     
+    // إرسال إشعارات لتغيير حالة المحادثة
+    await notificationSocketService.updateConversationNotifications(conversationId, conversation);
+    
     // إرسال إشعار شخصي للمستخدم الذي تم تعيينه
     if (userId) {
       socketService.notifyUser(userId, 'conversation_assigned', {
@@ -1372,6 +1388,9 @@ exports.assignToMe = async (req, res) => {
       assignedBy: req.user._id,
       assignee: assigneeData // إضافة بيانات المستخدم الكاملة
     });
+    
+    // إرسال إشعارات لتغيير حالة المحادثة
+    await notificationSocketService.updateConversationNotifications(conversationId, conversation);
     
     // إرسال الاستجابة
     return res.json({

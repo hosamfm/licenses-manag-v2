@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<%- include('./partials/_head') %>
+<body>
+    <%- include('./partials/_header') %>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-white">
+                        <h5 class="m-0">الإشعارات</h5>
+                        <div>
+                            <button id="markAllReadBtn" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-check-double me-1"></i> 
+                                تعيين الكل كمقروء
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="notification-filters d-flex p-3 border-bottom">
+                            <button class="btn btn-filter active" data-filter="all">الكل</button>
+                            <button class="btn btn-filter" data-filter="unread">غير المقروءة</button>
+                            <button class="btn btn-filter" data-filter="message">الرسائل</button>
+                            <button class="btn btn-filter" data-filter="conversation">المحادثات</button>
+                            <button class="btn btn-filter" data-filter="system">النظام</button>
+                        </div>
+                        
+                        <ul class="list-group list-group-flush notification-list">
+                            <li class="list-group-item text-center py-5 loading-state">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">جار التحميل...</span>
+                                </div>
+                                <p class="mt-3 text-muted">جار تحميل الإشعارات...</p>
+                            </li>
+                            <li class="list-group-item text-center py-5 empty-state d-none">
+                                <i class="fas fa-bell text-muted fa-3x mb-3"></i>
+                                <p class="text-muted">لا توجد إشعارات</p>
+                            </li>
+                        </ul>
+                        
+                        <div class="load-more text-center p-3 border-top d-none">
+                            <button id="loadMoreBtn" class="btn btn-outline-secondary">
+                                تحميل المزيد
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <%- include('./partials/_footer') %>
+
+    <style>
+        .btn-filter {
+            background: none;
+            border: none;
+            color: #64748b;
+            padding: 0.5rem 1rem;
+            margin-right: 0.5rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+        
+        .btn-filter:hover {
+            background-color: rgba(29, 154, 154, 0.08);
+        }
+        
+        .btn-filter.active {
+            background-color: var(--primary-teal);
+            color: white;
+        }
+        
+        .notification-item {
+            padding: 1rem;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background-color 0.2s;
+        }
+        
+        .notification-item:hover {
+            background-color: rgba(29, 154, 154, 0.05);
+        }
+        
+        .notification-item.unread {
+            background-color: rgba(29, 154, 154, 0.08);
+        }
+        
+        .notification-item .notification-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: rgba(29, 154, 154, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 1rem;
+        }
+        
+        .notification-item .notification-icon i {
+            color: var(--primary-teal);
+            font-size: 1.25rem;
+        }
+        
+        .notification-item .notification-title {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.25rem;
+        }
+        
+        .notification-item .notification-content {
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .notification-item .notification-time {
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        
+        .notification-actions {
+            display: flex;
+            align-items: center;
+        }
+        
+        .notification-actions button {
+            background: none;
+            border: none;
+            color: #64748b;
+            padding: 0.5rem;
+            transition: color 0.2s;
+        }
+        
+        .notification-actions button:hover {
+            color: var(--primary-teal);
+        }
+    </style>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const notificationList = document.querySelector('.notification-list');
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            const markAllReadBtn = document.getElementById('markAllReadBtn');
+            const loadingState = document.querySelector('.loading-state');
+            const emptyState = document.querySelector('.empty-state');
+            const loadMoreContainer = document.querySelector('.load-more');
+            const filterButtons = document.querySelectorAll('.btn-filter');
+            
+            let currentFilter = 'all';
+            let currentPage = 1;
+            let hasMore = true;
+            
+            // تحميل الإشعارات الأولية
+            loadNotifications();
+            
+            // مستمع النقر على زر تحميل المزيد
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener('click', function() {
+                    currentPage++;
+                    loadNotifications(true);
+                });
+            }
+            
+            // مستمع النقر على زر تعيين الكل كمقروء
+            if (markAllReadBtn) {
+                markAllReadBtn.addEventListener('click', function() {
+                    markAllAsRead();
+                });
+            }
+            
+            // مستمعات أزرار التصفية
+            filterButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const filter = this.getAttribute('data-filter');
+                    currentFilter = filter;
+                    
+                    // تحديث أزرار التصفية
+                    filterButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // إعادة تحميل الإشعارات
+                    currentPage = 1;
+                    loadNotifications(false, true);
+                });
+            });
+            
+            // تحميل الإشعارات
+            function loadNotifications(append = false, reset = false) {
+                if (!append) {
+                    // إظهار حالة التحميل
+                    if (!reset) {
+                        loadingState.classList.remove('d-none');
+                    }
+                    emptyState.classList.add('d-none');
+                }
+                
+                // إخفاء زر تحميل المزيد أثناء التحميل
+                loadMoreContainer.classList.add('d-none');
+                
+                // بناء عنوان URL مع المعلمات
+                const url = `/api/notifications/user?limit=20&skip=${(currentPage - 1) * 20}${currentFilter === 'unread' ? '&unread=true' : ''}`;
+                
+                // جلب الإشعارات
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        // إخفاء حالة التحميل
+                        loadingState.classList.add('d-none');
+                        
+                        if (data.success) {
+                            const notifications = data.notifications;
+                            
+                            // التعامل مع حالة عدم وجود إشعارات
+                            if (notifications.length === 0 && !append) {
+                                emptyState.classList.remove('d-none');
+                                return;
+                            }
+                            
+                            // إذا كان إعادة تعيين، امسح القائمة الحالية
+                            if (reset) {
+                                notificationList.innerHTML = '';
+                            }
+                            
+                            // إنشاء عناصر الإشعارات
+                            notifications.forEach(notification => {
+                                const notificationItem = createNotificationItem(notification);
+                                notificationList.appendChild(notificationItem);
+                            });
+                            
+                            // التحقق مما إذا كان هناك المزيد من الإشعارات
+                            hasMore = notifications.length === 20;
+                            if (hasMore) {
+                                loadMoreContainer.classList.remove('d-none');
+                            } else {
+                                loadMoreContainer.classList.add('d-none');
+                            }
+                        } else {
+                            console.error('خطأ في جلب الإشعارات:', data.message);
+                            emptyState.classList.remove('d-none');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('خطأ في جلب الإشعارات:', error);
+                        loadingState.classList.add('d-none');
+                        emptyState.classList.remove('d-none');
+                    });
+            }
+            
+            // إنشاء عنصر إشعار
+            function createNotificationItem(notification) {
+                const notificationItem = document.createElement('li');
+                notificationItem.className = `list-group-item notification-item ${notification.isRead ? '' : 'unread'}`;
+                notificationItem.setAttribute('data-id', notification._id);
+                notificationItem.setAttribute('data-type', notification.type);
+                
+                // تحديد أيقونة الإشعار
+                let icon = 'fa-bell';
+                switch (notification.type) {
+                    case 'message':
+                        icon = 'fa-comment';
+                        break;
+                    case 'system':
+                        icon = 'fa-cog';
+                        break;
+                    case 'conversation':
+                        icon = 'fa-comments';
+                        break;
+                    case 'license':
+                        icon = 'fa-file-alt';
+                        break;
+                    case 'user':
+                        icon = 'fa-user';
+                        break;
+                }
+                
+                // تنسيق الوقت
+                const time = formatTime(new Date(notification.createdAt));
+                
+                // بناء HTML الإشعار
+                notificationItem.innerHTML = `
+                    <div class="d-flex">
+                        <div class="notification-icon">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div class="notification-content-wrapper flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="notification-title">${notification.title}</h6>
+                                    <p class="notification-content">${notification.content}</p>
+                                    <small class="notification-time">${time}</small>
+                                </div>
+                                <div class="notification-actions">
+                                    ${!notification.isRead ? `
+                                        <button class="mark-read-btn" title="تعيين كمقروء">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // إضافة مستمع النقر للإشعار
+                notificationItem.addEventListener('click', function(e) {
+                    // عدم تنفيذ النقر إذا كان على زر الإجراءات
+                    if (e.target.closest('.notification-actions')) {
+                        return;
+                    }
+                    
+                    // تعيين الإشعار كمقروء
+                    if (!notification.isRead) {
+                        markAsRead(notification._id);
+                    }
+                    
+                    // الانتقال إلى صفحة الإشعار إذا كان لديه رابط
+                    if (notification.link) {
+                        window.location.href = notification.link;
+                    }
+                });
+                
+                // إضافة مستمع لزر تعيين كمقروء
+                const markReadBtn = notificationItem.querySelector('.mark-read-btn');
+                if (markReadBtn) {
+                    markReadBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        markAsRead(notification._id);
+                    });
+                }
+                
+                return notificationItem;
+            }
+            
+            // تعيين إشعار كمقروء
+            function markAsRead(notificationId) {
+                fetch(`/api/notifications/${notificationId}/read`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ isRead: true })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // تحديث واجهة المستخدم
+                        const notificationItem = document.querySelector(`.notification-item[data-id="${notificationId}"]`);
+                        if (notificationItem) {
+                            notificationItem.classList.remove('unread');
+                            const markReadBtn = notificationItem.querySelector('.mark-read-btn');
+                            if (markReadBtn) {
+                                markReadBtn.remove();
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('خطأ في تعيين الإشعار كمقروء:', error);
+                });
+            }
+            
+            // تعيين جميع الإشعارات كمقروءة
+            function markAllAsRead() {
+                fetch('/api/notifications/mark-all-read', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // تحديث الواجهة
+                        const unreadItems = document.querySelectorAll('.notification-item.unread');
+                        unreadItems.forEach(item => {
+                            item.classList.remove('unread');
+                            const markReadBtn = item.querySelector('.mark-read-btn');
+                            if (markReadBtn) {
+                                markReadBtn.remove();
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('خطأ في تعيين جميع الإشعارات كمقروءة:', error);
+                });
+            }
+            
+            // تنسيق الوقت
+            function formatTime(date) {
+                const now = new Date();
+                const diffMs = now - date;
+                const diffSeconds = Math.floor(diffMs / 1000);
+                const diffMinutes = Math.floor(diffSeconds / 60);
+                const diffHours = Math.floor(diffMinutes / 60);
+                const diffDays = Math.floor(diffHours / 24);
+                
+                if (diffSeconds < 60) {
+                    return 'الآن';
+                } else if (diffMinutes < 60) {
+                    return `منذ ${diffMinutes} ${pluralize(diffMinutes, 'دقيقة', 'دقيقتين', 'دقائق')}`;
+                } else if (diffHours < 24) {
+                    return `منذ ${diffHours} ${pluralize(diffHours, 'ساعة', 'ساعتين', 'ساعات')}`;
+                } else if (diffDays < 7) {
+                    return `منذ ${diffDays} ${pluralize(diffDays, 'يوم', 'يومين', 'أيام')}`;
+                } else {
+                    return date.toLocaleDateString('ar-SA', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                }
+            }
+            
+            // صياغة الكلمات بحسب العدد (للغة العربية)
+            function pluralize(count, singular, dual, plural) {
+                if (count === 1) {
+                    return singular;
+                } else if (count === 2) {
+                    return dual;
+                } else if (count >= 3 && count <= 10) {
+                    return plural;
+                } else {
+                    return singular;
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

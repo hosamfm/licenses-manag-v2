@@ -11,6 +11,7 @@ const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const whatsappMediaController = require('./whatsappMediaController');
 const mediaService = require('../services/mediaService');
+const NotificationSocketService = require('../services/notificationSocketService');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -563,11 +564,54 @@ exports.handleIncomingMessages = async (messages, meta) => {
             customerName: updatedConversationForNotification.customerName
           });
         }
-      } catch (errMsg) {
-        logger.error('metaWhatsappWebhookController','خطأ في معالجة رسالة واردة', errMsg);
+
+        // بعد إضافة الرسالة بنجاح
+        if (messageWithMedia) {
+          // إرسال الإشعارات عن الرسالة الجديدة
+          await processNewMessage(messageWithMedia, conversationInstance, isNewConversation);
+        }
+      } catch (err) {
+        logger.error('metaWhatsappWebhookController', 'خطأ في معالجة رسالة فردية', err);
       }
     }
   } catch (err) {
-    logger.error('metaWhatsappWebhookController','خطأ في handleIncomingMessages', err);
+    logger.error('metaWhatsappWebhookController', 'خطأ في handleIncomingMessages', err);
   }
 };
+
+/**
+ * معالجة نهاية إضافة الرسالة الواردة
+ * @param {Object} message - كائن الرسالة التي تم حفظها
+ * @param {Object} conversationInstance - كائن المحادثة 
+ * @param {Boolean} isNewConversation - هل المحادثة جديدة
+ */
+async function processNewMessage(message, conversationInstance, isNewConversation) {
+  try {
+    // إرسال الرسالة إلى جميع المستخدمين المتصلين بالغرفة
+    socketService.notifyNewMessage(
+      conversationInstance._id.toString(),
+      message
+    );
+    
+    // التحقق مما إذا كان هناك مستخدمين نشطين في غرفة المحادثة
+    const isActive = socketService.io ? 
+      socketService.io.sockets.adapter.rooms.has(`conversation-${conversationInstance._id.toString()}`) : 
+      false;
+    
+    // إرسال إشعارات للمستخدمين المعنيين إذا لم يكونوا يشاهدون المحادثة حالياً
+    await NotificationSocketService.sendMessageNotification(
+      conversationInstance._id.toString(),
+      message,
+      conversationInstance,
+      isActive
+    );
+    
+    /* logger.info('metaWhatsappWebhookController', 'تم إرسال إشعار بالرسالة الجديدة', {
+      messageId: message._id,
+      conversationId: conversationInstance._id,
+      isNewConversation
+    }); */
+  } catch (error) {
+    logger.error('metaWhatsappWebhookController', 'خطأ في معالجة نهاية إضافة الرسالة', error);
+  }
+}

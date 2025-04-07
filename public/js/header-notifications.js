@@ -2,16 +2,133 @@
  * نظام الإشعارات في الهيدر
  * يتعامل مع عرض وتحديث وإدارة الإشعارات في الواجهة
  */
+
+// تعريف متغير socket في النطاق العام للملف
+let socket = null;
+
+// دالة لتهيئة اتصال Socket.IO
+function initializeSocketIO() {
+    // التأكد من تحميل مكتبة io
+    if (typeof io === 'undefined') {
+        console.error('مكتبة Socket.IO غير محملة!');
+        return;
+    }
+    
+    // إنشاء الاتصال إذا لم يكن موجودًا
+    if (!socket) {
+        socket = io(); // افتراض الاتصال بنفس الخادم
+        console.log('جارٍ إنشاء اتصال Socket.IO...');
+
+        socket.on('connect', () => {
+            console.log('تم الاتصال بـ Socket.IO بنجاح!');
+            // بعد الاتصال، انضم لغرفة الإشعارات
+            joinNotificationsRoom(); 
+            // إضافة مستمعي الأحداث من Socket.IO
+            attachSocketListeners();
+        });
+
+        socket.on('disconnect', () => {
+            console.log('تم قطع الاتصال بـ Socket.IO');
+            // يمكن محاولة إعادة الاتصال هنا إذا لزم الأمر
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('خطأ في الاتصال بـ Socket.IO:', error);
+        });
+    }
+}
+
+// دالة للانضمام لغرفة الإشعارات
+function joinNotificationsRoom() {
+    if (socket && socket.connected) { // التأكد من أن السوكت متصل
+        socket.emit('join-notifications');
+        console.log('تم إرسال طلب الانضمام لغرفة الإشعارات.');
+    } else {
+        console.warn('محاولة الانضمام لغرفة الإشعارات قبل الاتصال.');
+    }
+}
+
+// دالة لإرفاق مستمعي أحداث Socket.IO
+function attachSocketListeners() {
+    if (!socket) return;
+
+    console.log('[attachSocketListeners] محاولة إرفاق المستمعين...');
+
+    // إزالة المستمعين القدامى لتجنب التكرار عند إعادة الاتصال
+    socket.off('new-notification');
+    socket.off('unread-notifications-count');
+    socket.off('userId-set'); // إزالة المستمع القديم للحدث الجديد
+
+    // معالج لاستقبال الإشعارات الجديدة
+    socket.on('new-notification', (notification) => {
+        // --- تسجيل داخل المستمع ---
+        console.log('%c[Socket Event Received] new-notification', 'color: green; font-weight: bold;', notification);
+        playNotificationSound();
+        if (window.notificationSystem) {
+            window.notificationSystem.addNewNotification(notification);
+        }
+    });
+
+    // معالج لعدد الإشعارات غير المقروءة
+    socket.on('unread-notifications-count', (data) => {
+        // --- تسجيل داخل المستمع ---
+        console.log('%c[Socket Event Received] unread-notifications-count', 'color: blue; font-weight: bold;', data);
+        if (window.notificationSystem) {
+            window.notificationSystem.updateUnreadCount(data.count);
+        }
+    });
+    
+    // --- إضافة مستمع للحدث الجديد userId-set ---
+    socket.on('userId-set', (data) => {
+        console.log('%c[Socket Event Received] userId-set', 'color: purple; font-weight: bold;', data);
+        // تخزين userId في كائن النافذة للاستخدام لاحقًا إذا لم يكن موجودًا
+        if (data.userId && (!window.currentUserId || window.currentUserId === 'guest')) {
+            window.currentUserId = data.userId;
+            console.log(`[userId-set] تم تعيين window.currentUserId إلى ${data.userId}`);
+        }
+        
+        // إذا كان shouldJoinNotifications صحيح، انضم لغرفة الإشعارات
+        if (data.shouldJoinNotifications) {
+            console.log('[userId-set] إعادة محاولة الانضمام لغرفة الإشعارات بعد تعيين userId');
+            joinNotificationsRoom();
+        }
+    });
+    
+    console.log('[attachSocketListeners] تم إرفاق المستمعين لأحداث new-notification و unread-notifications-count و userId-set.');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
-    // التأكد من وجود سيشن المستخدم قبل تهيئة النظام
+    // التأكد من وجود سيشن المستخدم
     if (!window.currentUserId) {
+        console.warn('لم يتم العثور على معرف المستخدم الحالي. لن يتم تهيئة الإشعارات الفورية.');
         return;
     }
 
-    // تهيئة نظام الإشعارات
+    // تهيئة اتصال Socket.IO أولاً
+    initializeSocketIO();
+
+    // تهيئة نظام الإشعارات في الواجهة
     const notificationSystem = new NotificationSystem();
     notificationSystem.initialize();
+    
+    // ملاحظة: تم نقل الانضمام للغرفة ومستمعي الأحداث إلى داخل معالج 'connect' في initializeSocketIO
 });
+
+/**
+ * تشغيل صوت الإشعار
+ */
+function playNotificationSound() {
+    try {
+        const audio = new Audio('/sounds/notification.wav');
+        audio.volume = 0.5;
+        audio.play().catch(e => {
+            // تجاهل أخطاء تشغيل الصوت التي قد تحدث بسبب سياسات المتصفح
+            console.log('لم يتم تشغيل صوت الإشعار:', e.message);
+        });
+    } catch (error) {
+        console.error('خطأ في تشغيل صوت الإشعار:', error);
+    }
+}
 
 /**
  * فئة نظام الإشعارات
@@ -48,6 +165,9 @@ class NotificationSystem {
         if (this.isInitialized) {
             return;
         }
+        
+        // تخزين مرجع النظام في النافذة للوصول السهل
+        window.notificationSystem = this;
         
         // تحميل الإشعارات الأولية
         this.loadNotifications();
@@ -535,6 +655,34 @@ class NotificationSystem {
     hideLoading() {
         if (this.spinner) {
             this.spinner.classList.add('d-none');
+        }
+    }
+    
+    /**
+     * إضافة إشعار جديد إلى القائمة
+     * @param {Object} notification - الإشعار الجديد
+     */
+    addNewNotification(notification) {
+        // إضافة الإشعار في بداية المصفوفة
+        this.notifications.unshift(notification);
+        
+        // تحديث عدد الإشعارات غير المقروءة
+        if (!notification.isRead) {
+            this.unreadCount++;
+        }
+        
+        // تحديث الواجهة
+        this.updateUI();
+    }
+    
+    /**
+     * تحديث عدد الإشعارات غير المقروءة
+     * @param {Number} count - العدد الجديد
+     */
+    updateUnreadCount(count) {
+        if (typeof count === 'number' && count >= 0) {
+            this.unreadCount = count;
+            this.updateUnreadBadge();
         }
     }
 } 
