@@ -940,6 +940,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // *** تسجيل مفصل لكامل بيانات الرسالة المستلمة ***
             console.log('Socket تلقى new-message (بيانات كاملة):', JSON.stringify(messageData, null, 2));
             
+            // سجلات تشخيصية إضافية للوسائط
+            if (messageData && messageData.mediaType) {
+                console.log(`[Socket new-message] رسالة بها وسائط: 
+                  نوع: ${messageData.mediaType}, 
+                  الرابط: ${messageData.mediaUrl || 'غير موجود'}, 
+                  إسم الملف: ${messageData.fileName || 'غير موجود'},
+                  معرف الوسائط: ${messageData.mediaId || 'غير موجود'},
+                  بيانات الوسائط: ${messageData.media ? JSON.stringify(messageData.media) : 'غير موجودة'}`);
+            }
+            
             // معالجة الرسالة الواردة فقط إذا كانت تخص المحادثة الحالية
             if (messageData && messageData.conversationId === window.currentConversationId) {
             

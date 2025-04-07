@@ -515,6 +515,13 @@
       }
     }
     
+    // *** التحقق من وجود رابط الوسائط وبناؤه محلياً إذا كان غير موجود ***
+    if (messageData.mediaType && !messageData.mediaUrl && messageData._id) {
+      // بناء الرابط محلياً بناءً على معرف الرسالة
+      messageData.mediaUrl = `/whatsapp/media/content/${messageData._id}`;
+      console.log(`[addMessageToConversation] تم بناء mediaUrl محلياً للرسائل الجديدة: ${messageData.mediaUrl}`);
+    }
+    
     // إنشاء HTML للرسالة مطابق تمامًا لبنية القالب في _conversation_details_ajax.ejs
     let messageHTML = `
       <div class="message ${messageData.direction}" 
@@ -578,15 +585,24 @@
           </div>
         `;
       } else if (messageData.mediaType === 'document' || messageData.mediaType === 'file') {
-        const fileName = messageData.mediaCaption || messageData.mediaName || 'ملف';
+        const fileName = messageData.fileName || messageData.mediaCaption || messageData.mediaName || 'ملف';
+        const fileSize = messageData.fileSize ? (Math.round(messageData.fileSize / 1024) + ' كيلوبايت') : '';
+        
+        console.log(`[addMessageToConversation] عرض وثيقة/ملف:
+          اسم الملف: ${fileName}
+          حجم الملف: ${fileSize}
+          رابط التنزيل: ${messageData.mediaUrl}`);
+          
         messageHTML += `
           <div class="document-container">
-            <i class="fas fa-file document-icon"></i>
+            <div class="document-icon">
+              <i class="fas fa-file-alt"></i>
+            </div>
             <div class="document-info">
               <div class="document-name">${fileName}</div>
-              <div class="document-size">${messageData.mediaSize || ''}</div>
+              <div class="document-size">${fileSize}</div>
             </div>
-            <a href="${messageData.mediaUrl}" download="${fileName}" class="document-download">
+            <a href="${messageData.mediaUrl}" target="_blank" class="document-download">
               <i class="fas fa-download"></i>
             </a>
           </div>
