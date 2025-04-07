@@ -1009,22 +1009,61 @@ exports.getConversationDetailsAjax = async (req, res) => {
  */
 exports.listConversationsAjaxList = async (req, res) => {
   try {
-    // بناء معايير التصفية
-    const filterOptions = {
-      status: req.query.status || 'all'
-    };
+    const { status, assignment, search } = req.query;
     
-    // إضافة فلتر المستخدم المسند إليه إذا كان المستخدم ليس مشرفًا أو مديرًا
-    if (req.user && req.user.user_role !== 'admin' && req.user.user_role !== 'supervisor') {
-      filterOptions.assignedTo = req.user._id;
+    // بناء معايير التصفية
+    const filterOptions = {};
+
+    // 1. معالجة فلتر الحالة (مفتوحة/مغلقة)
+    if (status && status !== 'all') {
+      if (status === 'open') {
+        // تشمل الحالات التي تعتبر مفتوحة (مثلاً: open, assigned)
+        filterOptions.status = { $nin: ['closed'] }; // استبعاد الحالات المغلقة
+      } else if (status === 'closed') {
+        filterOptions.status = 'closed';
+      }
+    } else {
+      // افتراضياً عرض المحادثات المفتوحة
+      filterOptions.status = { $nin: ['closed'] };
     }
     
-    // خيارات التصفح
+    // 2. معالجة فلتر التعيين (الكل/محادثاتي/غير مسندة)
+    if (assignment) {
+      if (assignment === 'mine' && req.user && req.user._id) {
+        // محادثاتي - المسندة للمستخدم الحالي
+        filterOptions.assignedTo = req.user._id;
+      } else if (assignment === 'unassigned') {
+        // المحادثات غير المسندة
+        filterOptions.assignedTo = null;
+      }
+      // 'all' - لا تضيف شرط فلترة
+    }
+    
+    // 3. معالجة البحث النصي
+    if (search && search.trim() !== '') {
+      const searchTerm = search.trim();
+      const regex = new RegExp(searchTerm, 'i'); // بحث غير حساس لحالة الأحرف
+
+      filterOptions.$or = [
+        { customerName: regex },
+        { phoneNumber: regex }
+        // يمكن إضافة حقول أخرى للبحث عند الحاجة
+      ];
+    }
+    
+    // إعداد خيارات التصفح
     const paginationOptions = {
       limit: 50,
       skipPagination: true,
-      sort: { updatedAt: -1 }
+      sort: { lastMessageAt: -1 } // الترتيب حسب آخر رسالة
     };
+    
+    logger.info('conversationController', 'فلترة المحادثات', {
+      status, 
+      assignment, 
+      search,
+      filterOptions
+    });
     
     // استخدام خدمة المحادثات للحصول على قائمة المحادثات
     const result = await conversationService.getConversationsList(
@@ -1040,6 +1079,7 @@ exports.listConversationsAjaxList = async (req, res) => {
       conversations: result.conversations
     });
   } catch (err) {
+    logger.error('conversationController', 'خطأ في تحميل المحادثات المفلترة', err);
     return res.status(500).json({ 
       success: false, 
       error: 'حدث خطأ أثناء تحميل المحادثات' 
@@ -1346,6 +1386,64 @@ exports.assignToMe = async (req, res) => {
     return res.status(500).json({ 
       success: false, 
       error: 'حدث خطأ أثناء محاولة تعيين المحادثة' 
+    });
+  }
+};
+
+/**
+ * 5.1) إرجاع محادثة واحدة محدثة (للحل الاحتياطي في تحديثات السوكت)
+ */
+exports.getSingleConversationAjax = async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+    
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'معرف المحادثة غير صالح' 
+      });
+    }
+
+    // جلب المحادثة مع المعلومات الأساسية
+    const conversation = await Conversation.findById(conversationId)
+      .populate('assignedTo', 'username full_name')
+      .lean();
+    
+    if (!conversation) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'المحادثة غير موجودة' 
+      });
+    }
+    
+    // جلب آخر رسالة
+    const lastMessage = await WhatsappMessage.findOne({ conversationId })
+      .sort({ timestamp: -1 })
+      .lean();
+    
+    if (lastMessage) {
+      conversation.lastMessage = lastMessage;
+    }
+    
+    // حساب عدد الرسائل غير المقروءة
+    const unreadCount = await WhatsappMessage.countDocuments({
+      conversationId,
+      direction: 'incoming',
+      status: { $ne: 'read' }
+    });
+    
+    conversation.unreadCount = unreadCount;
+    
+    return res.json({
+      success: true,
+      conversation
+    });
+    
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في جلب محادثة واحدة', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'حدث خطأ أثناء جلب المحادثة' 
     });
   }
 };

@@ -35,6 +35,9 @@ router.get('/ajax', ensureCanAccessConversations, conversationController.listCon
 // 2) جلب قائمة المحادثات للتحديث عبر AJAX
 router.get('/ajax/list', ensureCanAccessConversations, conversationController.listConversationsAjaxList);
 
+// 2.1) جلب محادثة واحدة محدثة باستخدام معرفها (للاحتياط في تحديثات السوكت)
+router.get('/ajax/single/:id', ensureCanAccessConversations, conversationController.getSingleConversationAjax);
+
 // 3) جلب تفاصيل محادثة (Partial) عبر AJAX
 router.get('/ajax/details/:conversationId',
   ensureCanAccessConversations,
