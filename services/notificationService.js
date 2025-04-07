@@ -194,6 +194,7 @@ class NotificationService {
     }
 
     // استدعاء الدالة الرئيسية مع تمرير المحادثة
+    notificationData.content = notificationData.message; 
     return this.createAndSendNotification(notificationData, conversation);
   }
 
