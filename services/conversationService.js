@@ -34,6 +34,14 @@ exports.getConversationsList = async (filterOptions = {}, paginationOptions = {}
             query.assignedTo = filterOptions.assignedTo;
         }
         
+        // دعم البحث النصي
+        if (filterOptions.$or) {
+            query.$or = filterOptions.$or;
+        }
+        
+        // تسجيل استعلام البحث للتشخيص
+        logger.info('conversationService', 'استعلام قائمة المحادثات', { query, filterOptions });
+        
         // خيارات التصفح
         const page = paginationOptions.page || 1;
         const limit = paginationOptions.limit || 20;
@@ -51,56 +59,68 @@ exports.getConversationsList = async (filterOptions = {}, paginationOptions = {}
             .populate('assignedTo', 'username full_name')
             .lean();
         
+        // مجموعة من المحادثات بعد تحديد الرسائل غير المقروءة (إذا كان مطلوباً)
+        let filteredConversations = [...conversations];
+        
+        // تحضير المصفوفة للنتائج النهائية
+        let conversationsWithExtras = [];
+        
         // إضافة المعلومات الإضافية لكل محادثة (آخر رسالة وعدد الرسائل غير المقروءة)
-        const conversationsWithExtras = await Promise.all(
-            conversations.map(async (conversation) => {
-                // نسخة من المحادثة سنضيف إليها المعلومات الإضافية
-                const conversationWithExtras = { ...conversation };
-                
-                // إضافة آخر رسالة إذا طلب ذلك
-                if (includeLastMessage) {
-                    try {
-                        const lastMessage = await WhatsappMessage.findOne({ conversationId: conversation._id })
-                            .sort({ timestamp: -1 })
-                            .lean();
-                        conversationWithExtras.lastMessage = lastMessage || null;
-                    } catch (error) {
-                        logger.error('conversationService', 'خطأ في جلب آخر رسالة', {
-                            error,
-                            conversationId: conversation._id
-                        });
-                        conversationWithExtras.lastMessage = null;
-                    }
+        for (const conversation of filteredConversations) {
+            // نسخة من المحادثة سنضيف إليها المعلومات الإضافية
+            const conversationWithExtras = { ...conversation };
+            
+            // إضافة آخر رسالة إذا طلب ذلك
+            if (includeLastMessage) {
+                try {
+                    const lastMessage = await WhatsappMessage.findOne({ conversationId: conversation._id })
+                        .sort({ timestamp: -1 })
+                        .lean();
+                    conversationWithExtras.lastMessage = lastMessage || null;
+                } catch (error) {
+                    logger.error('conversationService', 'خطأ في جلب آخر رسالة', {
+                        error,
+                        conversationId: conversation._id
+                    });
+                    conversationWithExtras.lastMessage = null;
                 }
-                
-                // إضافة عدد الرسائل غير المقروءة إذا طلب ذلك
-                if (includeUnreadCount) {
-                    try {
-                        const unreadCount = await WhatsappMessage.countDocuments({
-                            conversationId: conversation._id,
-                            direction: 'incoming',
-                            status: { $ne: 'read' }
-                        });
-                        conversationWithExtras.unreadCount = unreadCount;
-                    } catch (error) {
-                        logger.error('conversationService', 'خطأ في حساب الرسائل غير المقروءة', {
-                            error,
-                            conversationId: conversation._id
-                        });
-                        conversationWithExtras.unreadCount = 0;
+            }
+            
+            // إضافة عدد الرسائل غير المقروءة إذا طلب ذلك
+            if (includeUnreadCount) {
+                try {
+                    const unreadCount = await WhatsappMessage.countDocuments({
+                        conversationId: conversation._id,
+                        direction: 'incoming',
+                        status: { $ne: 'read' }
+                    });
+                    conversationWithExtras.unreadCount = unreadCount;
+                    
+                    // تصفية المحادثات التي لها رسائل غير مقروءة فقط إذا كان هذا الفلتر مطلوبًا
+                    if (filterOptions.hasUnread && unreadCount === 0) {
+                        // تخطي إضافة هذه المحادثة لأنها لا تحوي رسائل غير مقروءة
+                        continue;
                     }
+                } catch (error) {
+                    logger.error('conversationService', 'خطأ في حساب الرسائل غير المقروءة', {
+                        error,
+                        conversationId: conversation._id
+                    });
+                    conversationWithExtras.unreadCount = 0;
                 }
-                
-                return conversationWithExtras;
-            })
-        );
+            }
+            
+            // إضافة المحادثة إلى القائمة النهائية
+            conversationsWithExtras.push(conversationWithExtras);
+        }
         
         // حساب معلومات التصفح
-        const totalPages = Math.ceil(total / limit);
+        const filteredTotal = conversationsWithExtras.length;
+        const totalPages = Math.ceil(filteredTotal / limit);
         const pagination = {
             currentPage: page,
             totalPages,
-            totalItems: total,
+            totalItems: filteredTotal,
             hasNextPage: page < totalPages,
             hasPrevPage: page > 1,
             nextPage: page < totalPages ? page + 1 : null,

@@ -14,10 +14,16 @@ const ensureCanAccessConversations = [isAuthenticated, checkCanAccessConversatio
 router.use(isAuthenticated);
 
 // مسار عرض جميع المحادثات
-router.get('/', ensureCanAccessConversations, conversationController.listConversations);
+router.get('/', ensureCanAccessConversations, (req, res) => {
+  // تحويل المستخدم للواجهة الجديدة
+  res.redirect(`/crm/conversations/ajax`);
+});
 
 // مسار عرض المحادثات المسندة للمستخدم الحالي
-router.get('/my', ensureCanAccessConversations, conversationController.listMyConversations);
+router.get('/my', ensureCanAccessConversations, (req, res) => {
+  // تحويل المستخدم للواجهة الجديدة مع إضافة معلمة myConversations
+  res.redirect(`/crm/conversations/ajax?myConversations=true`);
+});
 
 /* -------------------------------------------
  *          مسارات AJAX الجديدة

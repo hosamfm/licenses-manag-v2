@@ -1,0 +1,66 @@
+<% if (conversations && conversations.length > 0) { %>
+  <% conversations.forEach(function(conv) { %>
+    <button type="button"
+            class="list-group-item list-group-item-action conversation-item d-flex flex-column <%= conv.unreadCount > 0 ? 'has-unread' : '' %>"
+            data-conversation-id="<%= conv._id %>"
+            data-status="<%= conv.status || 'open' %>"
+            <% if (conv.assignedTo) { %>
+              data-assigned="true"
+              <% if (user && user._id && String(conv.assignedTo) === String(user._id)) { %>
+                data-assigned-to-me="true"
+                class="list-group-item list-group-item-action conversation-item d-flex flex-column <%= conv.unreadCount > 0 ? 'has-unread' : '' %> assigned assigned-to-me"
+              <% } else { %>
+                class="list-group-item list-group-item-action conversation-item d-flex flex-column <%= conv.unreadCount > 0 ? 'has-unread' : '' %> assigned"
+              <% } %>
+            <% } %>
+            >
+      <div class="d-flex justify-content-between align-items-center w-100">
+        <div class="conversation-info">
+          <div class="conversation-name">
+            <i class="<%= conv.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary' %> me-2"></i>
+            <span><%= conv.customerName || conv.phoneNumber %></span>
+          </div>
+          <% if (conv.assignedTo && conv.assignee) { %>
+            <div class="conversation-assignee small text-primary mb-1">
+              <i class="fas fa-user-check me-1"></i> <%= conv.assignee.full_name || conv.assignee.username %>
+            </div>
+          <% } %>
+          <div class="conversation-preview">
+            <% if (conv.lastMessage) { %>
+              <small class="<%= conv.unreadCount > 0 ? 'fw-bold' : 'text-muted' %>">
+                <% if (conv.lastMessage.direction === 'incoming') { %>
+                  <i class="fas fa-reply-all text-muted me-1 fa-flip-horizontal"></i>
+                <% } else { %>
+                  <i class="fas fa-reply text-muted me-1"></i>
+                <% } %>
+                <%= conv.lastMessage.content
+                     ? conv.lastMessage.content.substring(0, 30)
+                     : (conv.lastMessage.mediaType ? 'محتوى وسائط' : 'رسالة') %>
+                <%= conv.lastMessage.content && conv.lastMessage.content.length > 30 ? '...' : '' %>
+              </small>
+            <% } else { %>
+              <small class="text-muted"><i class="fas fa-info-circle me-1"></i> محادثة جديدة</small>
+            <% } %>
+          </div>
+        </div>
+        <div class="conversation-meta text-end">
+          <% if (conv.unreadCount > 0) { %>
+            <span class="badge bg-danger rounded-pill conversation-badge mb-1"><%= conv.unreadCount %></span>
+          <% } %>
+          <div class="conversation-time small">
+            <%= new Date(conv.lastMessageAt || conv.updatedAt).toLocaleString('ar-LY', {hour: '2-digit', minute: '2-digit'}) %>
+          </div>
+          <% if (conv.status === 'closed') { %>
+            <span class="status-indicator closed" title="محادثة مغلقة"><i class="fas fa-lock"></i></span>
+          <% } else if (conv.status === 'assigned' || conv.assignedTo) { %>
+            <span class="status-indicator assigned" title="محادثة مسندة"><i class="fas fa-user-check"></i></span>
+          <% } else { %>
+            <span class="status-indicator open" title="محادثة مفتوحة"><i class="fas fa-door-open"></i></span>
+          <% } %>
+        </div>
+      </div>
+    </button>
+  <% }); %>
+<% } else { %>
+  <!-- عندما تكون فارغة، سيتم عرض رسالة من خلال جافاسكربت -->
+<% } %> 
