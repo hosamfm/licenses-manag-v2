@@ -127,21 +127,21 @@ async function findMediaForMessage(message) {
 async function linkMediaToMessage(mediaId, messageId) {
   try {
     if (!mediaId || !messageId) {
-      logger.warn('mediaService', 'معرف الوسائط أو معرف الرسالة غير موجود', { mediaId, messageId });
+      // logger.warn('mediaService', 'معرف الوسائط أو معرف الرسالة غير موجود', { mediaId, messageId });
       return false;
     }
 
     // البحث عن الوسائط
     const media = await WhatsappMedia.findById(mediaId);
     if (!media) {
-      logger.warn('mediaService', 'لم يتم العثور على الوسائط للربط', { mediaId, messageId });
+      // logger.warn('mediaService', 'لم يتم العثور على الوسائط للربط', { mediaId, messageId });
       return false;
     }
 
     // البحث عن الرسالة للتأكد من وجودها
     const message = await WhatsappMessage.findById(messageId);
     if (!message) {
-      logger.warn('mediaService', 'لم يتم العثور على الرسالة للربط', { mediaId, messageId });
+      // logger.warn('mediaService', 'لم يتم العثور على الرسالة للربط', { mediaId, messageId });
       return false;
     }
 
@@ -181,10 +181,10 @@ async function linkMediaToMessage(mediaId, messageId) {
       }
       
       await message.save();
-      logger.info('mediaService', 'تم تحديث معلومات الوسائط في الرسالة', { mediaId, messageId });
+      // logger.info('mediaService', 'تم تحديث معلومات الوسائط في الرسالة', { mediaId, messageId });
     }
     
-    logger.info('mediaService', 'تم ربط الوسائط بالرسالة بنجاح', { mediaId, messageId });
+    // logger.info('mediaService', 'تم ربط الوسائط بالرسالة بنجاح', { mediaId, messageId });
     return true;
   } catch (error) {
     logger.error('mediaService', 'خطأ في ربط الوسائط بالرسالة', { 
@@ -273,7 +273,7 @@ async function processMessagesWithMedia(messages) {
 async function getMediaContent(mediaId) {
   try {
     if (!mediaId) {
-      logger.warn('mediaService', 'معرف الوسائط غير موجود');
+      // logger.warn('mediaService', 'معرف الوسائط غير موجود');
       return null;
     }
 
@@ -282,13 +282,13 @@ async function getMediaContent(mediaId) {
     
     // إذا لم يتم العثور على الوسائط، نحاول البحث بطرق أخرى
     if (!media) {
-      logger.warn('mediaService', `لم يتم العثور على وسائط بالمعرف المباشر: ${mediaId}`);
+      // logger.warn('mediaService', `لم يتم العثور على وسائط بالمعرف المباشر: ${mediaId}`);
       
       // محاولة البحث باستخدام المعرف كنص
       try {
         media = await WhatsappMedia.findOne({ _id: mediaId.toString() });
       } catch (idError) {
-        logger.debug('mediaService', 'خطأ في البحث بالمعرف كنص', { error: idError.message });
+        // logger.debug('mediaService', 'خطأ في البحث بالمعرف كنص', { error: idError.message });
       }
       
       // إذا لم نجد الوسائط، نحاول البحث في البيانات الوصفية
@@ -303,7 +303,7 @@ async function getMediaContent(mediaId) {
       
       // إذا لم نجد الوسائط، نعود بقيمة فارغة
       if (!media) {
-        logger.warn('mediaService', `لم يتم العثور على وسائط بأي طريقة للمعرف: ${mediaId}`);
+        // logger.warn('mediaService', `لم يتم العثور على وسائط بأي طريقة للمعرف: ${mediaId}`);
         return null;
       }
     }
@@ -332,7 +332,7 @@ async function getMediaContent(mediaId) {
     // استخدام البيانات المشفرة من metaData إن وجدت
     if (!media.fileData && media.metaData && media.metaData.base64Data) {
       media.fileData = media.metaData.base64Data;
-      logger.info(`تم استرداد بيانات الوسائط من metaData: ${mediaId}`);
+      // logger.info(`تم استرداد بيانات الوسائط من metaData: ${mediaId}`);
       
       // تحديث سجل الوسائط لتخزين البيانات في الحقل الصحيح
       try {
@@ -340,17 +340,17 @@ async function getMediaContent(mediaId) {
           { _id: media._id },
           { $set: { fileData: media.metaData.base64Data } }
         );
-        logger.info(`تم تحديث حقل fileData للوسائط: ${mediaId}`);
+        // logger.info(`تم تحديث حقل fileData للوسائط: ${mediaId}`);
       } catch (updateError) {
-        logger.error(`خطأ في تحديث حقل fileData للوسائط: ${updateError.message}`);
+        // logger.error(`خطأ في تحديث حقل fileData للوسائط: ${updateError.message}`);
       }
     }
     
     // إضافة سجل للتشخيص
     if (!hasDataInDb) {
-      logger.debug(`وسائط بدون بيانات مشفرة في قاعدة البيانات (messageId: ${media.messageId}, conversationId: ${media.conversationId})`);
+      // logger.debug(`وسائط بدون بيانات مشفرة في قاعدة البيانات (messageId: ${media.messageId}, conversationId: ${media.conversationId})`);
     } else {
-      logger.debug(`تم العثور على بيانات الوسائط بنجاح: ${mediaId}`);
+      // logger.debug(`تم العثور على بيانات الوسائط بنجاح: ${mediaId}`);
     }
     
     return {
@@ -374,7 +374,7 @@ async function getMediaContent(mediaId) {
  */
 async function downloadMediaFile(media) {
   // تسجيل رسالة تحذير بأن التنزيل معطل
-  logger.info(`تم تعطيل تنزيل الوسائط - نعتمد فقط على البيانات المخزنة في قاعدة البيانات. mediaId: ${media?._id}`);
+  // logger.info(`تم تعطيل تنزيل الوسائط - نعتمد فقط على البيانات المخزنة في قاعدة البيانات. mediaId: ${media?._id}`);
   
   // دائماً يعيد false لأن التنزيل معطل
   return false;
@@ -389,7 +389,7 @@ async function createMedia(mediaData) {
   try {
     const media = new WhatsappMedia(mediaData);
     await media.save();
-    logger.info(`تم إنشاء سجل وسائط جديد: ${media._id}`);
+    // logger.info(`تم إنشاء سجل وسائط جديد: ${media._id}`);
     return media;
   } catch (error) {
     logger.error(`خطأ في إنشاء سجل وسائط: ${error.message}`);
@@ -412,9 +412,9 @@ async function updateMedia(mediaId, updateData) {
     );
     
     if (media) {
-      logger.info(`تم تحديث سجل الوسائط: ${mediaId}`);
+      // logger.info(`تم تحديث سجل الوسائط: ${mediaId}`);
     } else {
-      logger.warn(`لم يتم العثور على سجل الوسائط للتحديث: ${mediaId}`);
+      // logger.warn(`لم يتم العثور على سجل الوسائط للتحديث: ${mediaId}`);
     }
     
     return media;
