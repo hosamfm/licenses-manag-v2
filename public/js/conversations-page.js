@@ -937,64 +937,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // مستمع للرسائل الجديدة (قد تؤثر على ترتيب القائمة أو المعاينة)
         window.socketConnection.on('new-message', (messageData) => {
-            // *** تسجيل مفصل لكامل بيانات الرسالة المستلمة ***
-            console.log('Socket تلقى new-message (بيانات كاملة):', JSON.stringify(messageData, null, 2));
-            
-            // سجلات تشخيصية إضافية للوسائط
-            if (messageData && messageData.mediaType) {
-                console.log(`[Socket new-message] رسالة بها وسائط: 
-                  نوع: ${messageData.mediaType}, 
-                  الرابط: ${messageData.mediaUrl || 'غير موجود'}, 
-                  إسم الملف: ${messageData.fileName || 'غير موجود'},
-                  معرف الوسائط: ${messageData.mediaId || 'غير موجود'},
-                  بيانات الوسائط: ${messageData.media ? JSON.stringify(messageData.media) : 'غير موجودة'}`);
-            }
+            console.log('Socket تلقى new-message:', messageData);
             
             // معالجة الرسالة الواردة فقط إذا كانت تخص المحادثة الحالية
             if (messageData && messageData.conversationId === window.currentConversationId) {
-            
-                // *** معالجة خاصة للرسائل الصادرة التي تم إرسالها محلياً ***
-                if (window.sentMessageIds && window.sentMessageIds.has(messageData._id)) {
-                    console.log('[Socket new-message] Handling locally sent message:', messageData._id);
-                    const pendingMsgElement = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
-                    if (pendingMsgElement) {
-                        // تحديث المحتوى بالبيانات الكاملة من السوكت (خاصة الوسائط)
-                        if (typeof window.updatePendingMediaContent === 'function') {
-                            console.log(`[Socket new-message] تحديث وسائط معلقة للرسالة: ${messageData._id}, النوع: ${messageData.mediaType}, الرابط: ${messageData.mediaUrl || 'غير موجود'}`);
-                            window.updatePendingMediaContent(messageData._id, messageData);
-                        } else {
-                            console.warn('updatePendingMediaContent function not found');
-                        }
-                        // تحديث الحالة (احتياطي)
-                        if (typeof window.updatePendingMessageStatus === 'function') {
-                            window.updatePendingMessageStatus(messageData._id, messageData.status || 'sent');
-                        }
-                        // إزالة الفئة المؤقتة
-                        pendingMsgElement.classList.remove('message-pending');
-        
-                        // إزالة المعرف من المجموعة بعد المعالجة
-                        window.sentMessageIds.delete(messageData._id);
-                        console.log('[Socket new-message] Removed from sentMessageIds:', messageData._id);
-        
-                    } else {
-                        console.warn('[Socket new-message] Could not find pending message element for ID:', messageData._id);
-                        // إزالة المعرف على أي حال لتجنب المشاكل
-                        window.sentMessageIds.delete(messageData._id);
-                    }
-                    return; // منع المعالجة اللاحقة بواسطة addMessageToConversation
-                }
-                
-                // التحقق من وجود الرسالة في DOM قبل إضافتها (للرسائل الواردة أو غير المتوقعة)
+                // التحقق من وجود الرسالة في DOM قبل إضافتها
                 const messageExists = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
+                const pendingMessageWithSameContent = Array.from(document.querySelectorAll('.message.outgoing')).find(msg => {
+                    const msgText = msg.querySelector('.message-text')?.textContent;
+                    return msgText === messageData.content;
+                });
                 
                 if (messageExists) {
-                    // الرسالة موجودة بالفعل، ربما تحديث بسيط للحالة إذا لزم الأمر (لكن يجب أن يكون تم بالفعل)
-                    console.log('الرسالة موجودة بالفعل (ليست صادرة محلياً)، تحديث بسيط للحالة:', messageData._id);
+                    // الرسالة موجودة بالفعل، سنحدث حالتها فقط
+                    console.log('الرسالة موجودة بالفعل، تحديث حالتها:', messageData._id);
                     if (messageData.status) {
-                        messageExists.setAttribute('data-status', messageData.status);
+                        // تحديث حالة الرسالة الموجودة
                         const statusElement = messageExists.querySelector('.message-status');
                         if (statusElement) {
-                             if (messageData.status === 'sent') {
+                            // تحديث أيقونة الحالة
+                            if (messageData.status === 'sent') {
                                 statusElement.innerHTML = '<i class="fas fa-check text-secondary"></i>';
                             } else if (messageData.status === 'delivered') {
                                 statusElement.innerHTML = '<i class="fas fa-check-double text-secondary"></i>';
@@ -1003,10 +965,27 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     }
+                } else if (pendingMessageWithSameContent) {
+                    // تحديث الرسالة المؤقتة بدلاً من إضافة رسالة جديدة
+                    console.log('تحديث رسالة مؤقتة بنفس المحتوى:', messageData._id);
+                    pendingMessageWithSameContent.setAttribute('data-message-id', messageData._id);
+                    pendingMessageWithSameContent.classList.remove('message-pending');
+                    pendingMessageWithSameContent.setAttribute('data-status', messageData.status || 'sent');
+                    
+                    // تحديث حالة الرسالة
+                    const statusElement = pendingMessageWithSameContent.querySelector('.message-status');
+                    if (statusElement) {
+                        if (messageData.status === 'sent') {
+                            statusElement.innerHTML = '<i class="fas fa-check text-secondary"></i>';
+                        } else if (messageData.status === 'delivered') {
+                            statusElement.innerHTML = '<i class="fas fa-check-double text-secondary"></i>';
+                        } else if (messageData.status === 'read') {
+                            statusElement.innerHTML = '<i class="fas fa-check-double text-primary"></i>';
+                        }
+                    }
                 } else {
-                    // إضافة الرسالة الجديدة (الواردة أو غير المتوقعة) إذا لم تكن موجودة
+                    // إضافة الرسالة الجديدة فقط إذا لم تكن موجودة بالفعل
                     if (typeof window.addMessageToConversation === 'function') {
-                        console.log('[Socket new-message] Adding new message via addMessageToConversation:', messageData._id);
                         window.addMessageToConversation(messageData);
                     } else {
                         console.warn("دالة addMessageToConversation غير متوفرة. تأكد من تحميل الملف message-sending.js");
