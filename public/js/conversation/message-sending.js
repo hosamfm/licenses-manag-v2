@@ -292,61 +292,114 @@
    * @param {object} messageData - بيانات الرسالة الكاملة من الخادم
    */
   function updatePendingMediaContent(messageId, messageData) {
-    if (!messageData.mediaType) return; // لا توجد وسائط لتحديثها
+    console.log(`[updatePendingMediaContent] محاولة تحديث وسائط الرسالة ID: ${messageId}`);
+    if (!messageData.mediaType) {
+      console.log(`[updatePendingMediaContent] لا توجد وسائط في messageData ID: ${messageId}`);
+      return;
+    }
     
     const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
-    if (!messageElement) return;
+    if (!messageElement) {
+      console.error(`[updatePendingMediaContent] لم يتم العثور على عنصر الرسالة ID: ${messageId}`);
+      return;
+    }
+    console.log(`[updatePendingMediaContent] تم العثور على عنصر الرسالة ID: ${messageId}`, messageElement);
     
     const mediaPlaceholder = messageElement.querySelector('.media-placeholder');
-    if (!mediaPlaceholder) return; // لا يوجد عنصر نائب لتحديثه
+    if (!mediaPlaceholder) {
+      console.warn(`[updatePendingMediaContent] لم يتم العثور على العنصر النائب (.media-placeholder) للرسالة ID: ${messageId}`);
+      // محاولة البحث عن حاوية وسائط عامة كحل احتياطي؟
+      // const mediaContainer = messageElement.querySelector('.media-container');
+      // if (!mediaContainer) return;
+      // mediaPlaceholder = mediaContainer; // استخدام الحاوية كبديل؟ (قد يسبب مشاكل)
+      return; 
+    }
+    console.log(`[updatePendingMediaContent] تم العثور على العنصر النائب للرسالة ID: ${messageId}`, mediaPlaceholder);
     
-    let mediaHTML = '';
     const mediaUrl = messageData.mediaUrl;
     const mediaType = messageData.mediaType;
     const mediaCaption = messageData.mediaCaption || messageData.mediaName;
     const mediaSize = messageData.mediaSize;
     
-    // إنشاء HTML الوسائط بناءً على النوع (نفس منطق addMessageToConversation)
+    console.log(`[updatePendingMediaContent] تحديث الوسائط بالرابط: ${mediaUrl} والنوع: ${mediaType}`);
+    
+    // *** طريقة جديدة لتحديث DOM ***
+    mediaPlaceholder.innerHTML = ''; // إفراغ المحتوى المؤقت أولاً
+    let mediaElement = null;
+    
     if (!mediaUrl) {
-      mediaHTML = '<div class="text-danger p-2"><i>فشل تحميل الوسائط</i></div>';
+      mediaElement = document.createElement('div');
+      mediaElement.className = 'text-danger p-2';
+      mediaElement.innerHTML = '<i>فشل تحميل الوسائط</i>';
     } else if (mediaType === 'image') {
-        mediaHTML = `<img src="${mediaUrl}" alt="${mediaCaption || 'صورة'}" class="img-fluid">`;
-      } else if (mediaType === 'video') {
-        mediaHTML = `
-            <video controls class="w-100">
-              <source src="${mediaUrl}" type="video/mp4">
-              متصفحك لا يدعم تشغيل الفيديو.
-            </video>
-        `;
-      } else if (mediaType === 'audio') {
-        mediaHTML = `
-            <audio controls class="w-100 media-audio">
-              <source src="${mediaUrl}" type="audio/mpeg">
-              متصفحك لا يدعم تشغيل الصوت.
-            </audio>
-        `;
-      } else if (mediaType === 'document' || mediaType === 'file') {
-        const fileName = mediaCaption || 'ملف';
-        mediaHTML = `
-          <div class="document-container">
-            <i class="fas fa-file document-icon"></i>
-            <div class="document-info">
-              <div class="document-name">${fileName}</div>
-              <div class="document-size">${mediaSize || ''}</div>
-            </div>
-            <a href="${mediaUrl}" download="${fileName}" class="document-download">
-              <i class="fas fa-download"></i>
-            </a>
-          </div>
-        `;
-      } else if (mediaType === 'sticker') {
-        mediaHTML = `<img src="${mediaUrl}" alt="ملصق" class="img-fluid sticker-image">`;
-      }
+      mediaElement = document.createElement('img');
+      mediaElement.src = mediaUrl;
+      mediaElement.alt = mediaCaption || 'صورة';
+      mediaElement.className = 'img-fluid';
+      // معالجة خطأ تحميل الصورة
+      mediaElement.onerror = () => {
+        console.error(`[updatePendingMediaContent] فشل تحميل الصورة من الرابط: ${mediaUrl}`);
+        mediaPlaceholder.innerHTML = '<div class="text-danger p-2"><i>فشل عرض الصورة</i></div>';
+      };
+    } else if (mediaType === 'video') {
+      mediaElement = document.createElement('video');
+      mediaElement.controls = true;
+      mediaElement.className = 'w-100';
+      const source = document.createElement('source');
+      source.src = mediaUrl;
+      source.type = 'video/mp4'; // أو تحديد النوع ديناميكيًا إذا لزم الأمر
+      mediaElement.appendChild(source);
+      mediaElement.appendChild(document.createTextNode('متصفحك لا يدعم تشغيل الفيديو.'));
+    } else if (mediaType === 'audio') {
+      mediaElement = document.createElement('audio');
+      mediaElement.controls = true;
+      mediaElement.className = 'w-100 media-audio';
+      const source = document.createElement('source');
+      source.src = mediaUrl;
+      source.type = 'audio/mpeg'; // أو تحديد النوع ديناميكيًا
+      mediaElement.appendChild(source);
+      mediaElement.appendChild(document.createTextNode('متصفحك لا يدعم تشغيل الصوت.'));
+    } else if (mediaType === 'document' || mediaType === 'file') {
+      mediaElement = document.createElement('div');
+      mediaElement.className = 'document-container';
+      const fileName = mediaCaption || 'ملف';
+      mediaElement.innerHTML = `
+        <i class="fas fa-file document-icon"></i>
+        <div class="document-info">
+          <div class="document-name">${fileName}</div>
+          <div class="document-size">${mediaSize || ''}</div>
+        </div>
+        <a href="${mediaUrl}" download="${fileName}" class="document-download">
+          <i class="fas fa-download"></i>
+        </a>
+      `;
+    } else if (mediaType === 'sticker') {
+      mediaElement = document.createElement('img');
+      mediaElement.src = mediaUrl;
+      mediaElement.alt = 'ملصق';
+      mediaElement.className = 'img-fluid sticker-image';
+       mediaElement.onerror = () => {
+        console.error(`[updatePendingMediaContent] فشل تحميل الملصق من الرابط: ${mediaUrl}`);
+        mediaPlaceholder.innerHTML = '<div class="text-danger p-2"><i>فشل عرض الملصق</i></div>';
+      };
+    } else {
+       mediaElement = document.createElement('div');
+       mediaElement.className = 'text-warning p-2';
+       mediaElement.innerHTML = `<i>نوع وسائط غير مدعوم: ${mediaType}</i>`;
+    }
       
-    // استبدال العنصر النائب بـ HTML الوسائط النهائي
-    mediaPlaceholder.innerHTML = mediaHTML;
+    // إضافة العنصر الجديد إلى العنصر النائب
+    if (mediaElement) {
+       mediaPlaceholder.appendChild(mediaElement);
+       console.log(`[updatePendingMediaContent] تم إضافة عنصر الوسائط للرسالة ID: ${messageId}`);
+    } else {
+        console.warn(`[updatePendingMediaContent] لم يتم إنشاء عنصر وسائط للنوع: ${mediaType}, ID: ${messageId}`);
+    }
+    
     // يمكن إزالة الفئة أو السمة إذا أردت بعد الاستبدال
     mediaPlaceholder.classList.remove('media-placeholder');
+    // قد تحتاج لإضافة فئة media-container إذا كانت تستخدم للتنسيق
+    // mediaPlaceholder.classList.add('media-container'); 
   }
 
   /**
