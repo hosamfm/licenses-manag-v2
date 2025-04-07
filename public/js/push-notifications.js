@@ -158,6 +158,11 @@ async function initializePushNotifications() {
 
 // استدعاء دالة التهيئة عند تحميل الصفحة أو عند حدث معين (مثل تسجيل الدخول)
 document.addEventListener('DOMContentLoaded', () => {
+  // --- تسجيل إضافي للتحقق ---
+  console.log('[Push Init] DOMContentLoaded event fired.');
+  console.log('[Push Init] Checking VAPID Key:', VAPID_PUBLIC_KEY);
+  // --- نهاية التسجيل ---
+  
   // تأكد من وجود VAPID_PUBLIC_KEY قبل المتابعة
   if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'YOUR_VAPID_PUBLIC_KEY') {
     console.error('خطأ: لم يتم تعيين VAPID_PUBLIC_KEY في public/js/push-notifications.js');
@@ -165,13 +170,18 @@ document.addEventListener('DOMContentLoaded', () => {
     return; 
   }
   
+  // --- تسجيل إضافي للتحقق ---
+  console.log('[Push Init] Checking window.currentUserId:', window.currentUserId);
+  // --- نهاية التسجيل ---
+  
   // يمكنك تأخير الاستدعاء حتى يتأكد المستخدم من تسجيل الدخول
   // أو ربطه بزر لتفعيل الإشعارات
-  // على سبيل المثال، يمكنك استدعاؤه بعد التحقق من وجود window.currentUserId
+  // على سبيل المثال, يمكنك استدعاؤه بعد التحقق من وجود window.currentUserId
   if (window.currentUserId && window.currentUserId !== 'guest') { 
+    console.log('[Push Init] User ID found, calling initializePushNotifications()...');
     initializePushNotifications();
   } else {
-    console.log('سيتم تأجيل تهيئة إشعارات Push حتى تسجيل الدخول.');
+    console.log('[Push Init] User ID not found or is guest. Postponing initialization.');
     // يمكنك إضافة مستمع لحدث تسجيل الدخول لاستدعاء initializePushNotifications()
   }
 }); 
