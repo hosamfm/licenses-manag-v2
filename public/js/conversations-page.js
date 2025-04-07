@@ -408,9 +408,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!conv) return false;
 
         // فلتر الحالة
-        const statusMatch = !filters.status || 
-                            filters.status === conv.status || 
-                            (filters.status === 'open' && conv.status !== 'closed');
+        let statusMatch = true;
+        if (filters.status) {
+            if (filters.status === 'closed') {
+                statusMatch = conv.status === 'closed';
+            } else if (filters.status === 'open') {
+                statusMatch = conv.status !== 'closed';
+            } else if (filters.status === 'all') {
+                statusMatch = true; // 'all' يطابق كل الحالات
+            } else {
+                statusMatch = filters.status === conv.status;
+            }
+        }
+        
+        console.log(`تحقق فلتر [${filters.status}] للمحادثة [${conv._id}] مع الحالة [${conv.status}]: ${statusMatch}`);
 
         // فلتر التعيين
         let assignmentMatch = true;
@@ -775,9 +786,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // تخزين مرجع للزر الحالي
+        const closeButton = this;
+
         // تعطيل الزر وعرض حالة التحميل
-        this.disabled = true;
-        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإغلاق...';
+        closeButton.disabled = true;
+        closeButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإغلاق...';
 
         // استخدام الوظيفة الموجودة في conversation-utils.js
         if (typeof window.closeConversation === 'function') {
@@ -785,7 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(result => {
                     console.log('تم إغلاق المحادثة بنجاح:', result);
                     
-                    // إظهار رسالة نجاح
+                    // إظهار رسالة نجاح (إذا لم تكن قد أظهرت بالفعل في closeConversation)
                     if (typeof window.showToast === 'function') {
                         window.showToast('success', 'تم إغلاق المحادثة بنجاح');
                     }
@@ -802,16 +816,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof window.showToast === 'function') {
                         window.showToast('error', `فشل إغلاق المحادثة: ${error}`);
                     }
-                    
-                    // إعادة الزر إلى حالته الأصلية
-                    this.disabled = false;
-                    this.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
+                })
+                .finally(() => {
+                    // إعادة الزر إلى حالته الأصلية بغض النظر عن النتيجة
+                    closeButton.disabled = false;
+                    closeButton.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
                 });
         } else {
             console.error('وظيفة closeConversation غير موجودة في conversation-utils.js');
             // إعادة الزر إلى حالته الأصلية
-            this.disabled = false;
-            this.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
+            closeButton.disabled = false;
+            closeButton.innerHTML = '<i class="fas fa-lock"></i> إغلاق';
         }
     }
     
@@ -1005,7 +1020,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // معالجة كل تحديث على حدة
             socketUpdateStore.pendingUpdates.forEach((update, id) => {
-                updateConversationInList(update.data, true); // تمرير true لتجنب إعادة التحميل
+                updateConversationInList(update.data, true); // تمرير true لتجنب إعادة تحميل القائمة
             });
             
             // تفريغ المخزن المؤقت
@@ -1021,6 +1036,42 @@ document.addEventListener('DOMContentLoaded', () => {
      * تهيئة الصفحة
      */
     function initializePage() {
+        // تهيئة حالة الفلتر العامة للتطبيق
+        window.currentFilters = window.currentFilters || {
+            status: filterStatusSelect ? filterStatusSelect.value : 'open',
+            assignment: filterAssignmentSelect ? filterAssignmentSelect.value : 'all',
+            searchTerm: searchInput ? searchInput.value : ''
+        };
+        
+        // إضافة مستمع أحداث لتغيير حالة الفلتر
+        if (filterStatusSelect) {
+            filterStatusSelect.addEventListener('change', function() {
+                window.currentFilters.status = this.value;
+                console.log('تغيير فلتر الحالة إلى:', this.value);
+                fetchAndRenderConversations(window.currentFilters);
+            });
+        }
+        
+        // إضافة مستمع أحداث لتغيير تعيين المسؤول
+        if (filterAssignmentSelect) {
+            filterAssignmentSelect.addEventListener('change', function() {
+                window.currentFilters.assignment = this.value;
+                console.log('تغيير فلتر التعيين إلى:', this.value);
+                fetchAndRenderConversations(window.currentFilters);
+            });
+        }
+        
+        // إضافة مستمع أحداث للبحث مع استخدام دالة التأخير لتفادي الكثير من الطلبات
+        if (searchInput) {
+            const debouncedSearch = debounce(function() {
+                window.currentFilters.searchTerm = searchInput.value;
+                console.log('تغيير نص البحث إلى:', searchInput.value);
+                fetchAndRenderConversations(window.currentFilters);
+            }, 500); // 500ms تأخير
+            
+            searchInput.addEventListener('input', debouncedSearch);
+        }
+        
         if (window.socketConnected) {
             console.log("Socket متصل بالفعل، تهيئة الصفحة.");
             setupSocketListeners();

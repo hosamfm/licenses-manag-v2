@@ -1017,15 +1017,16 @@ exports.listConversationsAjaxList = async (req, res) => {
     // 1. معالجة فلتر الحالة (مفتوحة/مغلقة)
     if (status && status !== 'all') {
       if (status === 'open') {
-        // تشمل الحالات التي تعتبر مفتوحة (مثلاً: open, assigned)
+        // تشمل الحالات التي تعتبر مفتوحة
         filterOptions.status = { $nin: ['closed'] }; // استبعاد الحالات المغلقة
       } else if (status === 'closed') {
         filterOptions.status = 'closed';
+      } else {
+        // حالات محددة أخرى
+        filterOptions.status = status;
       }
-    } else {
-      // افتراضياً عرض المحادثات المفتوحة
-      filterOptions.status = { $nin: ['closed'] };
     }
+    // لم نعد نضيف فلتر افتراضي للحالة، الآن سنعرض كل المحادثات عند عدم وجود فلتر محدد
     
     // 2. معالجة فلتر التعيين (الكل/محادثاتي/غير مسندة)
     if (assignment) {

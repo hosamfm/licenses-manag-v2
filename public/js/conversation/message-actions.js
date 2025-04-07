@@ -133,12 +133,18 @@
 
       // إضافة حدث النقر على زر إرفاق ملف
       if (attachMediaBtn && mediaFile) {
-        attachMediaBtn.addEventListener('click', function() {
-          mediaFile.click();
-        });
+        if (!attachMediaBtn.dataset.listenerAttached) {
+          attachMediaBtn.addEventListener('click', function() {
+            mediaFile.click();
+          });
+          attachMediaBtn.dataset.listenerAttached = 'true';
+        }
 
         // إضافة حدث تغيير الملف المختار
-        mediaFile.addEventListener('change', window.handleFileSelection);
+        if (!mediaFile.dataset.listenerAttached) {
+          mediaFile.addEventListener('change', window.handleFileSelection);
+          mediaFile.dataset.listenerAttached = 'true';
+        }
       }
     }
     
@@ -187,17 +193,6 @@
         window.reopenConversation && window.reopenConversation(conversationId);
       });
       reopenBtn.dataset.listenerAttached = 'true';
-    }
-
-    // ربط حدث النقر لزر إرفاق الوسائط
-    const attachMediaBtn2 = document.getElementById('attachMediaBtn');
-    const mediaFileInput = document.getElementById('mediaFile');
-    if (attachMediaBtn2 && mediaFileInput && !attachMediaBtn2.dataset.listenerAttached) {
-      attachMediaBtn2.addEventListener('click', () => {
-        mediaFileInput.click();
-      });
-      mediaFileInput.addEventListener('change', window.handleFileSelection);
-      attachMediaBtn2.dataset.listenerAttached = 'true';
     }
 
     // تفعيل السحب والإفلات

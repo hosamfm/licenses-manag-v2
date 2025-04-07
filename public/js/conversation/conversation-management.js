@@ -14,50 +14,129 @@
   window.closeConversation = async function(conversationId, reason, note) {
     if (!conversationId) return Promise.reject('معرف المحادثة مطلوب');
 
-    // إعادة تعريف مؤقت لمنع النافذة الافتراضية
-    const originalConfirm = window.confirm;
-    const originalPrompt = window.prompt;
-    window.confirm = () => true; // افتراض أن التأكيد تم بواسطة SweetAlert2
-    window.prompt = () => null; // افتراض أن البيانات تم جمعها بواسطة SweetAlert2
-
-    const fetchCallImpl = window.fetchCallImpl || window.fetch;
-
+    // إذا لم يتم تمرير سبب الإغلاق، نعرض نافذة استفسار
+    if (!reason && !note) {
+      try {
+        const { value: formValues } = await Swal.fire({
+          title: 'إغلاق المحادثة',
+          html: `
+            <div class="mb-3">
+              <label for="closeReason" class="form-label">سبب الإغلاق:</label>
+              <select id="closeReason" class="form-select">
+                <option value="">-- اختر سبباً --</option>
+                <option value="resolved">تم حل المشكلة</option>
+                <option value="spam">رسائل غير مرغوب فيها</option>
+                <option value="duplicate">محادثة مكررة</option>
+                <option value="test">اختبار</option>
+                <option value="other">سبب آخر</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="closeNote" class="form-label">ملاحظة (اختياري):</label>
+              <textarea id="closeNote" class="form-control" rows="3" placeholder="أدخل ملاحظة حول إغلاق المحادثة..."></textarea>
+            </div>
+          `,
+          focusConfirm: false,
+          showCancelButton: true,
+          confirmButtonText: 'إغلاق المحادثة',
+          cancelButtonText: 'إلغاء',
+          preConfirm: () => {
+            const reason = document.getElementById('closeReason').value;
+            const note = document.getElementById('closeNote').value;
+            
+            if (!reason) {
+              Swal.showValidationMessage('الرجاء اختيار سبب للإغلاق');
+              return false;
+            }
+            
+            return { reason, note };
+          }
+        });
+        
+        // إذا تم إلغاء النافذة
+        if (!formValues) return Promise.reject('تم إلغاء إغلاق المحادثة');
+        
+        // استخدام القيم المدخلة
+        reason = formValues.reason;
+        note = formValues.note;
+        
+      } catch (error) {
+        console.error('خطأ في نافذة طلب سبب الإغلاق:', error);
+        return Promise.reject('حدث خطأ في نافذة طلب سبب الإغلاق');
+      }
+    }
+    
+    // عرض مؤشر تحميل
+    const loadingToast = Swal.fire({
+      title: 'جاري إغلاق المحادثة...',
+      text: 'يرجى الانتظار',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
     try {
-      const response = await fetchCallImpl(`/crm/conversations/${conversationId}/close`, {
+      // إرسال طلب إغلاق المحادثة إلى الخادم - تصحيح المسار ليتوافق مع reopenConversation
+      const response = await fetch(`/crm/conversations/${conversationId}/close`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
         },
-        body: JSON.stringify({ reason, note })
+        body: JSON.stringify({
+          reason: reason,
+          note: note
+        })
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `فشل إغلاق المحادثة: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || 'فشل إغلاق المحادثة');
-      }
-
-      // تحديث الواجهة باستخدام الوظيفة الجديدة
-      if (typeof window.updateConversationHeader === 'function') {
-        window.updateConversationHeader({
-          _id: conversationId,
-          status: 'closed'
+      
+      const data = await response.json();
+      
+      // إغلاق مؤشر التحميل
+      loadingToast.close();
+      
+      if (!response.ok || !data.success) {
+        const errorMsg = data.error || 'حدث خطأ في إغلاق المحادثة';
+        console.error('خطأ في إغلاق المحادثة:', errorMsg);
+        
+        // إظهار رسالة الخطأ
+        Swal.fire({
+          icon: 'error',
+          title: 'خطأ في إغلاق المحادثة',
+          text: errorMsg,
+          timer: 3000
         });
+        
+        return Promise.reject(errorMsg);
       }
       
-      return result;
+      // إظهار رسالة النجاح
+      Swal.fire({
+        icon: 'success',
+        title: 'تم إغلاق المحادثة بنجاح',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      
+      return data;
+      
     } catch (error) {
-      console.error('Error closing conversation:', error);
-      return Promise.reject(error.message || 'حدث خطأ غير متوقع');
-    } finally {
-      // استعادة الدوال الأصلية
-      window.confirm = originalConfirm;
-      window.prompt = originalPrompt;
+      // إغلاق مؤشر التحميل في حالة الخطأ
+      loadingToast.close();
+      
+      console.error('خطأ في إغلاق المحادثة:', error);
+      
+      // إظهار رسالة الخطأ
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ في إغلاق المحادثة',
+        text: error.message || 'حدث خطأ غير متوقع',
+        timer: 3000
+      });
+      
+      return Promise.reject(error);
     }
   };
 

@@ -90,14 +90,12 @@
             <% if (!conversation.assignedTo) { %>
               <button type="button" class="btn btn-sm btn-outline-primary assign-to-me-btn"
                       data-conversation-id="<%= conversation._id %>"
-                      onclick="window.assignConversationToMe('<%= conversation._id %>')"
                       id="assignToMeBtn">
                 <i class="fas fa-user-plus me-1"></i> تعيين لي
               </button>
             <% } %>
             <button type="button" class="btn btn-sm btn-outline-secondary change-assignment-btn"
                     data-conversation-id="<%= conversation._id %>"
-                    onclick="window.showAssignmentModal('<%= conversation._id %>')"
                     id="changeAssignmentBtn">
               <i class="fas fa-exchange-alt me-1"></i> تغيير المسؤول
             </button>
@@ -465,46 +463,67 @@
     function setupButtonEventListeners() {
       // أزرار التفاعل
       document.querySelectorAll('.reaction-btn').forEach(function(button) {
-        button.addEventListener('click', function() {
-          const messageId = this.getAttribute('data-message-id');
-          const externalId = this.getAttribute('data-external-id');
-          window.showReactionPicker(messageId, externalId, this);
-        });
+        if (!button.dataset.listenerAttached) {
+          button.addEventListener('click', function() {
+            const messageId = this.getAttribute('data-message-id');
+            const externalId = this.getAttribute('data-external-id');
+            window.showReactionPicker(messageId, externalId, this);
+          });
+          button.dataset.listenerAttached = 'true';
+        }
       });
       
       // أزرار الرد
       document.querySelectorAll('.reply-btn').forEach(function(button) {
-        button.addEventListener('click', function() {
-          const messageId = this.getAttribute('data-message-id');
-          const externalId = this.getAttribute('data-external-id');
-          window.showReplyForm(messageId, externalId, this.closest('.message'));
-        });
+        if (!button.dataset.listenerAttached) {
+          button.addEventListener('click', function() {
+            const messageId = this.getAttribute('data-message-id');
+            const externalId = this.getAttribute('data-external-id');
+            window.showReplyForm(messageId, externalId, this.closest('.message'));
+          });
+          button.dataset.listenerAttached = 'true';
+        }
       });
       
       // أزرار الحذف
       document.querySelectorAll('.delete-btn').forEach(function(button) {
-        button.addEventListener('click', function() {
-          const messageId = this.getAttribute('data-message-id');
-          const externalId = this.getAttribute('data-external-id');
-          window.confirmDeleteMessage(messageId, externalId);
-        });
+        if (!button.dataset.listenerAttached) {
+          button.addEventListener('click', function() {
+            const messageId = this.getAttribute('data-message-id');
+            const externalId = this.getAttribute('data-external-id');
+            window.confirmDeleteMessage(messageId, externalId);
+          });
+          button.dataset.listenerAttached = 'true';
+        }
       });
+      
+      // زر تعيين لي
+      const assignToMeBtn = document.getElementById('assignToMeBtn');
+      if (assignToMeBtn && !assignToMeBtn.dataset.listenerAttached) {
+        assignToMeBtn.addEventListener('click', function() {
+          const conversationId = this.getAttribute('data-conversation-id');
+          window.assignConversationToMe && window.assignConversationToMe(conversationId);
+        });
+        assignToMeBtn.dataset.listenerAttached = 'true';
+      }
+      
+      // زر تغيير المسؤول
+      const changeAssignmentBtn = document.getElementById('changeAssignmentBtn');
+      if (changeAssignmentBtn && !changeAssignmentBtn.dataset.listenerAttached) {
+        changeAssignmentBtn.addEventListener('click', function() {
+          const conversationId = this.getAttribute('data-conversation-id');
+          window.showAssignmentModal && window.showAssignmentModal(conversationId);
+        });
+        changeAssignmentBtn.dataset.listenerAttached = 'true';
+      }
     }
     
     // تنفيذ الربط فور تحميل الصفحة
     setupButtonEventListeners();
-    // تنفيذ ربط أزرار التعيين
-    if (typeof window.setupAssignmentButtons === 'function') {
-      window.setupAssignmentButtons();
-    }
     
     // إضافة مستمع للتحميل AJAX للمحادثات
     window.addEventListener('messages-loaded', function() {
       setupButtonEventListeners();
-      // تنفيذ ربط أزرار التعيين بعد تحميل الرسائل
-      if (typeof window.setupAssignmentButtons === 'function') {
-        window.setupAssignmentButtons();
-      }
     });
     
     // إذا كان هناك دالة قائمة بالفعل لربط أحداث المحادثة، قم بتعديلها
@@ -513,10 +532,6 @@
       window.attachConversationEventListeners = function() {
         originalAttachFunction.call(this);
         setupButtonEventListeners();
-        // تنفيذ ربط أزرار التعيين بعد ربط الأحداث الأخرى
-        if (typeof window.setupAssignmentButtons === 'function') {
-          window.setupAssignmentButtons();
-        }
       };
     }
   });
