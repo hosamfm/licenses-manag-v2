@@ -444,7 +444,7 @@
     if (messageData.conversationId !== window.currentConversationId) return;
     
     // الحصول على حاوية الرسائل
-    const messageContainer = document.getElementById('messageContainer');
+    const messageContainer = document.getElementById('messages');
     if (!messageContainer) return;
     
     // التحقق من وجود الرسالة مسبقاً حسب معرفها النهائي
@@ -540,159 +540,57 @@
     
     // إنشاء HTML للرسالة مطابق تمامًا لبنية القالب في _conversation_details_ajax.ejs
     let messageHTML = `
-      <div class="message ${messageData.direction}" 
-          data-message-id="${messageData._id}" 
-          data-status="${messageData.status || 'sent'}"
-          ${messageData.externalMessageId ? `data-external-id="${messageData.externalMessageId}"` : ''}>
-    `;
-    
-    // إضافة معلومات الرد إذا كانت الرسالة رداً على رسالة أخرى
-    if (messageData.replyToMessageId) {
-      // العثور على الرسالة التي يتم الرد عليها (إن وجدت)
-      const repliedMsgElem = document.querySelector(`.message[data-message-id="${messageData.replyToMessageId}"], .message[data-external-id="${messageData.replyToMessageId}"]`);
-      const repliedMsgContent = repliedMsgElem ? (repliedMsgElem.querySelector('.message-text')?.textContent || 'محتوى وسائط') : 'رد على رسالة';
-      
-      messageHTML += `
-        <div class="replied-message">
-          <div class="replied-content">
-            <i class="fas fa-reply"></i>
-            <span>${repliedMsgContent.substring(0, 50)}${repliedMsgContent.length > 50 ? '...' : ''}</span>
+      <div class="message ${messageData.direction === 'incoming' ? 'incoming' : 'outgoing'}" 
+          data-message-id="${messageData._id}"
+          data-external-id="${messageData.externalMessageId || ''}">
+          
+        <div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : 'outgoing-bubble'}">
+          
+          ${messageData.direction === 'incoming' ? `
+            <div class="message-sender">${messageData.senderName || 'مستخدم'}</div>
+          ` : ''}
+          
+          ${messageData.content ? `
+            <div class="message-content">${messageData.content}</div>
+          ` : ''}
+          
+          ${messageData.mediaType ? `
+            <div class="media-container">
+              ${messageData.mediaType === 'image' ? `
+                <img src="${messageData.mediaUrl}" 
+                     alt="${messageData.fileName || 'صورة'}" 
+                     class="img-fluid media-content" 
+                     data-media-id="${messageData._id}">
+              ` : messageData.mediaType === 'video' ? `
+                <video src="${messageData.mediaUrl}" 
+                       controls 
+                       class="w-100 media-content" 
+                       muted>
+                  <source src="${messageData.mediaUrl}" 
+                          type="${messageData.mimeType || 'video/mp4'}">
+                </video>
+              ` : messageData.mediaType === 'audio' ? `
+                <audio controls 
+                       class="w-100 media-content">
+                  <source src="${messageData.mediaUrl}" 
+                          type="${messageData.mimeType || 'audio/mpeg'}">
+                </audio>
+              ` : ''}
+            </div>
+          ` : ''}
+          
+          <div class="message-metadata">
+            <span class="message-time">${window.formatTime(messageData.timestamp)}</span>
+            <span class="message-status ${messageData.status}">
+              ${messageData.status === 'sent' ? '<i class="fas fa-paper-plane"></i>' : 
+               messageData.status === 'delivered' ? '<i class="fas fa-check-double"></i>' : 
+               messageData.status === 'read' ? '<i class="fas fa-check-double read"></i>' : ''}
+            </span>
           </div>
         </div>
-      `;
-    }
-    
-    // إضافة فقاعة الرسالة
-    messageHTML += `<div class="message-bubble ${messageData.direction === 'incoming' ? 'incoming-bubble' : (messageData.direction === 'internal' ? 'internal-note-bubble' : 'outgoing-bubble')} ${messageData.mediaType ? 'message-with-media' : ''}">`;
-    
-    // إضافة اسم المرسل للرسائل الصادرة
-    if (messageData.direction === 'outgoing') {
-      const senderName = messageData.metadata && messageData.metadata.senderInfo
-        ? (messageData.metadata.senderInfo.username || messageData.metadata.senderInfo.full_name || 'مستخدم غير معروف')
-        : (messageData.sentByUsername || 'مستخدم غير معروف');
-        
-      messageHTML += `<div class="message-sender">${senderName}</div>`;
-    }
-    
-    // إضافة الوسائط إذا كانت موجودة
-    if (messageData.mediaType) {
-      if (messageData.mediaType === 'image') {
-        messageHTML += `
-          <div class="media-container">
-            <img src="${messageData.mediaUrl}" alt="صورة" class="img-fluid">
-          </div>
-        `;
-      } else if (messageData.mediaType === 'video') {
-        messageHTML += `
-          <div class="media-container">
-            <video controls class="w-100">
-              <source src="${messageData.mediaUrl}" type="video/mp4">
-              متصفحك لا يدعم تشغيل الفيديو.
-            </video>
-          </div>
-        `;
-      } else if (messageData.mediaType === 'audio') {
-        messageHTML += `
-          <div class="media-container">
-            <audio controls class="w-100 media-audio">
-              <source src="${messageData.mediaUrl}" type="audio/mpeg">
-              متصفحك لا يدعم تشغيل الصوت.
-            </audio>
-          </div>
-        `;
-      } else if (messageData.mediaType === 'document' || messageData.mediaType === 'file') {
-        const fileName = messageData.fileName || messageData.mediaCaption || messageData.mediaName || 'ملف';
-        const fileSize = messageData.fileSize ? (Math.round(messageData.fileSize / 1024) + ' كيلوبايت') : '';
-        
-        console.log(`[addMessageToConversation] عرض وثيقة/ملف:
-          اسم الملف: ${fileName}
-          حجم الملف: ${fileSize}
-          رابط التنزيل: ${messageData.mediaUrl}`);
-          
-        messageHTML += `
-          <div class="document-container">
-            <div class="document-icon">
-              <i class="fas fa-file-alt"></i>
-            </div>
-            <div class="document-info">
-              <div class="document-name">${fileName}</div>
-              <div class="document-size">${fileSize}</div>
-            </div>
-            <a href="${messageData.mediaUrl}" target="_blank" class="document-download">
-              <i class="fas fa-download"></i>
-            </a>
-          </div>
-        `;
-      } else if (messageData.mediaType === 'sticker') {
-        messageHTML += `
-          <div class="media-container">
-            <img src="${messageData.mediaUrl}" alt="ملصق" class="img-fluid">
-          </div>
-        `;
-      }
-    }
-    
-    // إضافة نص الرسالة إذا كان موجوداً
-    if (messageData.content && messageData.content.trim() !== '') {
-      messageHTML += `<div class="message-text ${messageData.mediaType ? 'with-media' : ''}">${messageData.content}</div>`;
-    }
-    
-    // إضافة معلومات الوقت والحالة
-    messageHTML += `
-      <div class="message-meta">
-        <span class="message-time" title="${new Date(messageData.timestamp || messageData.createdAt).toLocaleString()}" 
-              data-timestamp="${new Date(messageData.timestamp || messageData.createdAt).getTime()}"
-              data-date="${new Date(messageData.timestamp || messageData.createdAt).toISOString().split('T')[0]}">
-          ${new Date(messageData.timestamp || messageData.createdAt).toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })}
-        </span>
-    `;
-    
-    // إضافة حالة الرسالة للرسائل الصادرة
-    if (messageData.direction === 'outgoing') {
-      messageHTML += '<span class="message-status" title="حالة الرسالة: ' + (messageData.status || 'sent') + '">';
-      
-      if (messageData.status === 'sent') {
-        messageHTML += '<i class="fas fa-check text-secondary"></i>';
-      } else if (messageData.status === 'delivered') {
-        messageHTML += '<i class="fas fa-check-double text-secondary"></i>';
-      } else if (messageData.status === 'read') {
-        messageHTML += '<i class="fas fa-check-double text-primary"></i>';
-      } else if (messageData.status === 'failed') {
-        messageHTML += '<i class="fas fa-exclamation-circle text-danger"></i>';
-      } else { // حالة sending أو غير معرفة
-        messageHTML += '<i class="fas fa-clock text-secondary"></i>';
-      }
-      
-      messageHTML += '</span>';
-    }
-    
-    // إغلاق قسم معلومات الرسالة
-    messageHTML += `</div>`;
-    
-    // إغلاق فقاعة الرسالة
-    messageHTML += `</div>`;
-    
-    // إضافة قسم أزرار التفاعل مع الرسالة
-    messageHTML += `
-      <div class="message-actions">
-        <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" 
-                data-message-id="${messageData._id}"
-                data-external-id="${messageData.externalMessageId || ''}"
-                title="تفاعل">
-          <i class="far fa-smile"></i>
-        </button>
-        <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
-                data-message-id="${messageData._id}" 
-                data-external-id="${messageData.externalMessageId || ''}" 
-                title="رد">
-          <i class="fas fa-reply"></i>
-        </button>
       </div>
     `;
-    
-    // إغلاق عنصر الرسالة
-    messageHTML += `</div>`;
-    
+
     // إضافة الرسالة لحاوية الرسائل
     messageContainer.insertAdjacentHTML('beforeend', messageHTML);
     
@@ -714,10 +612,9 @@
     if (messageData.direction === 'incoming' && 
         messageData.status !== 'read' && 
         window.messageReadObserver) {
-      // إضافة الرسالة لمراقب القراءة
       window.messageReadObserver.observe(newMessage);
       
-      // تشغيل وظيفة markMessagesAsRead بعد فترة قصيرة من الزمن للتأكد من رؤية الرسالة
+      // تشغيل وظيفة markMessagesAsRead بعد فترة قصيرة من الزمن
       setTimeout(() => {
         if (newMessage && document.body.contains(newMessage)) {
           window.markMessagesAsRead && window.markMessagesAsRead([{
