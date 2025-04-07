@@ -910,6 +910,16 @@ document.addEventListener('DOMContentLoaded', () => {
         window.socketConnection.on('new-message', (messageData) => {
             console.log('Socket تلقى new-message:', messageData);
             
+            // معالجة الرسالة الواردة وإضافتها مباشرة إلى المحادثة الحالية إذا كانت تخصها
+            if (messageData && messageData.conversationId === window.currentConversationId) {
+                if (typeof window.addMessageToConversation === 'function') {
+                    window.addMessageToConversation(messageData);
+                } else {
+                    console.warn("دالة addMessageToConversation غير متوفرة. تأكد من تحميل الملف message-sending.js");
+                }
+            }
+            
+            // تحديث المحادثة في القائمة
             if (messageData && messageData.conversation) {
                 // تخزين الحدث ومعالجته بعد فترة زمنية لتجنب التكرار
                 handleSocketUpdateDebounced('message', messageData.conversation);
