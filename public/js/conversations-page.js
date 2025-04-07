@@ -960,6 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (pendingMsgElement) {
                         // تحديث المحتوى بالبيانات الكاملة من السوكت (خاصة الوسائط)
                         if (typeof window.updatePendingMediaContent === 'function') {
+                            console.log(`[Socket new-message] تحديث وسائط معلقة للرسالة: ${messageData._id}, النوع: ${messageData.mediaType}, الرابط: ${messageData.mediaUrl || 'غير موجود'}`);
                             window.updatePendingMediaContent(messageData._id, messageData);
                         } else {
                             console.warn('updatePendingMediaContent function not found');

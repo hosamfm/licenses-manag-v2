@@ -300,10 +300,12 @@
     
     // *** إعادة بناء الرابط إذا كان مفقوداً ***
     let mediaUrl = messageData.mediaUrl;
-    if (!mediaUrl && messageId) {
+    const isExternalId = mediaUrl && !mediaUrl.startsWith('/');
+    
+    if ((!mediaUrl || isExternalId) && messageId) {
       // بناء الرابط محلياً بناءً على النمط المعروف
       mediaUrl = `/whatsapp/media/content/${messageId}`;
-      console.log(`[updatePendingMediaContent] تم بناء mediaUrl محلياً: ${mediaUrl}`);
+      console.log(`[updatePendingMediaContent] تم بناء mediaUrl محلياً: ${mediaUrl} [النوع: ${messageData.mediaType}]`);
     } else if (!mediaUrl) {
       // لا يزال mediaUrl مفقوداً ولا يمكن بناؤه (لا يوجد messageId؟)
       console.error(`[updatePendingMediaContent] الرابط mediaUrl مفقود ولا يمكن بناؤه للرسالة ID: ${messageId}`);
@@ -374,14 +376,23 @@
     } else if (mediaType === 'document' || mediaType === 'file') {
       mediaElement = document.createElement('div');
       mediaElement.className = 'document-container';
-      const fileName = mediaCaption || 'ملف';
+      const fileName = messageData.fileName || mediaCaption || 'ملف';
+      const fileSize = messageData.fileSize ? (Math.round(messageData.fileSize / 1024) + ' كيلوبايت') : '';
+      
+      console.log(`[updatePendingMediaContent] عرض وثيقة/ملف:
+        اسم الملف: ${fileName}
+        حجم الملف: ${fileSize}
+        رابط التنزيل: ${mediaUrl}`);
+        
       mediaElement.innerHTML = `
-        <i class="fas fa-file document-icon"></i>
+        <div class="document-icon">
+          <i class="fas fa-file-alt"></i>
+        </div>
         <div class="document-info">
           <div class="document-name">${fileName}</div>
-          <div class="document-size">${mediaSize || ''}</div>
+          <div class="document-size">${fileSize}</div>
         </div>
-        <a href="${mediaUrl}" download="${fileName}" class="document-download">
+        <a href="${mediaUrl}" target="_blank" class="document-download">
           <i class="fas fa-download"></i>
         </a>
       `;
@@ -516,10 +527,15 @@
     }
     
     // *** التحقق من وجود رابط الوسائط وبناؤه محلياً إذا كان غير موجود ***
-    if (messageData.mediaType && !messageData.mediaUrl && messageData._id) {
-      // بناء الرابط محلياً بناءً على معرف الرسالة
-      messageData.mediaUrl = `/whatsapp/media/content/${messageData._id}`;
-      console.log(`[addMessageToConversation] تم بناء mediaUrl محلياً للرسائل الجديدة: ${messageData.mediaUrl}`);
+    if (messageData.mediaType && messageData._id) {
+      // تجاهل الروابط الخارجية (مثل أرقام معرفات الوسائط) واستخدام الرابط المحلي دائماً
+      const isExternalId = messageData.mediaUrl && !messageData.mediaUrl.startsWith('/');
+      
+      if (!messageData.mediaUrl || isExternalId) {
+        // بناء الرابط محلياً بناءً على معرف الرسالة
+        messageData.mediaUrl = `/whatsapp/media/content/${messageData._id}`;
+        console.log(`[addMessageToConversation] تم بناء mediaUrl محلياً للرسائل: ${messageData.mediaUrl} [النوع: ${messageData.mediaType}, الاتجاه: ${messageData.direction}]`);
+      }
     }
     
     // إنشاء HTML للرسالة مطابق تمامًا لبنية القالب في _conversation_details_ajax.ejs
