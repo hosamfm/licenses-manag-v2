@@ -292,10 +292,25 @@
    * @param {object} messageData - بيانات الرسالة الكاملة من الخادم
    */
   function updatePendingMediaContent(messageId, messageData) {
-    console.log(`[updatePendingMediaContent] محاولة تحديث وسائط الرسالة ID: ${messageId}`);
-    if (!messageData.mediaType) {
-      console.log(`[updatePendingMediaContent] لا توجد وسائط في messageData ID: ${messageId}`);
+    console.log(`[updatePendingMediaContent] محاولة تحديث وسائط الرسالة ID: ${messageId}`, messageData);
+    
+    // الحصول على نوع الوسائط. قد يكون مفقوداً في الاستجابة الأولية
+    const mediaType = messageData.mediaType;
+    
+    if (!mediaType) {
+      console.log(`[updatePendingMediaContent] لا يوجد mediaType في messageData ID: ${messageId}. لا يمكن تحديث الوسائط.`);
       return;
+    }
+    
+    // *** بناء الرابط إذا كان مفقوداً ***
+    let mediaUrl = messageData.mediaUrl;
+    if (!mediaUrl && messageId) {
+      // افتراض بناء الرابط بناءً على النمط المكتشف في السجلات
+      mediaUrl = `/whatsapp/media/content/${messageId}`;
+      console.log(`[updatePendingMediaContent] تم بناء mediaUrl محلياً: ${mediaUrl}`);
+    } else if (!mediaUrl) {
+        console.error(`[updatePendingMediaContent] الرابط mediaUrl مفقود ولا يوجد messageId لبنائه.`);
+        return;
     }
     
     const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
@@ -308,16 +323,10 @@
     const mediaPlaceholder = messageElement.querySelector('.media-placeholder');
     if (!mediaPlaceholder) {
       console.warn(`[updatePendingMediaContent] لم يتم العثور على العنصر النائب (.media-placeholder) للرسالة ID: ${messageId}`);
-      // محاولة البحث عن حاوية وسائط عامة كحل احتياطي؟
-      // const mediaContainer = messageElement.querySelector('.media-container');
-      // if (!mediaContainer) return;
-      // mediaPlaceholder = mediaContainer; // استخدام الحاوية كبديل؟ (قد يسبب مشاكل)
       return; 
     }
     console.log(`[updatePendingMediaContent] تم العثور على العنصر النائب للرسالة ID: ${messageId}`, mediaPlaceholder);
     
-    const mediaUrl = messageData.mediaUrl;
-    const mediaType = messageData.mediaType;
     const mediaCaption = messageData.mediaCaption || messageData.mediaName;
     const mediaSize = messageData.mediaSize;
     
