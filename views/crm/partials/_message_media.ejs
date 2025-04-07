@@ -45,5 +45,8 @@
       <div class="location-name">موقع جغرافي</div>
       <div class="location-coordinates"><%= message.content || 'إحداثيات غير متوفرة' %></div>
     </div>
+    <div class="location-map-container">
+      <div id="map-<%= message._id %>" class="google-map-container" data-message-id="<%= message._id %>" data-content="<%= message.content %>"></div>
+    </div>
   </div>
 <% } %> 

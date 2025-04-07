@@ -15,6 +15,10 @@
 <script src="/js/conversation/conversation-pagination.js"></script>
 <script src="/js/conversation/conversation-notes.js"></script>
 <script src="/js/conversation/date-formatter.js"></script>
+<script src="/js/conversation/location-messages.js"></script>
+
+<!-- Google Maps API -->
+<script src="https://maps.googleapis.com/maps/api/js?key=<%= process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyA0FT72KinyC7q7P_AeVZoRHPa2aj-xNBo' %>&callback=initMaps" async defer></script>
 
 <!-- الملف الرئيسي للمحادثات -->
 <script src="/js/conversation/conversation-main.js"></script>

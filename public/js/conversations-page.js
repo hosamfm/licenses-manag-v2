@@ -229,17 +229,52 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
 
-        const lastMessageContent = conv.lastMessage
-            ? (conv.lastMessage.content
-                ? conv.lastMessage.content.substring(0, 35) + (conv.lastMessage.content.length > 35 ? '...' : '')
-                : (conv.lastMessage.mediaType ? 'محتوى وسائط' : 'رسالة'))
-            : 'محادثة جديدة';
+        // تحسين عرض آخر رسالة لأنواع الوسائط المختلفة بما في ذلك الموقع
+        let lastMessageContent = 'محادثة جديدة';
+        let lastMessageIcon = '<i class="fas fa-info-circle me-1"></i>';
 
-        const lastMessageIcon = conv.lastMessage
-            ? (conv.lastMessage.direction === 'incoming'
+        if (conv.lastMessage) {
+            // تحديد الأيقونة بناءً على الاتجاه
+            lastMessageIcon = conv.lastMessage.direction === 'incoming'
                 ? '<i class="fas fa-reply-all text-muted me-1 fa-flip-horizontal"></i>'
-                : '<i class="fas fa-reply text-muted me-1"></i>')
-            : '<i class="fas fa-info-circle me-1"></i>';
+                : '<i class="fas fa-reply text-muted me-1"></i>';
+
+            // تحديد المحتوى
+            if (conv.lastMessage.mediaType) {
+                switch (conv.lastMessage.mediaType) {
+                    case 'image':
+                        lastMessageContent = '📷 صورة';
+                        break;
+                    case 'video':
+                        lastMessageContent = '🎬 فيديو';
+                        break;
+                    case 'audio':
+                        lastMessageContent = '🎵 رسالة صوتية';
+                        break;
+                    case 'document':
+                        lastMessageContent = `📄 مستند ${conv.lastMessage.fileName ? `(${conv.lastMessage.fileName.substring(0, 20)}...)` : ''}`;
+                        break;
+                    case 'sticker':
+                        lastMessageContent = '😀 ملصق';
+                        break;
+                    case 'location':
+                        // استخدام المحتوى النصي للموقع إذا كان متاحًا، أو نص عام
+                        lastMessageContent = conv.lastMessage.content && conv.lastMessage.content.startsWith('الموقع:')
+                            ? '📍 موقع جغرافي' // نص عام للموقع
+                            : '📍 موقع جغرافي'; // احتياطي
+                        break;
+                    default:
+                        // في حالة وجود نوع وسائط غير معروف، استخدم المحتوى النصي إن وجد
+                        lastMessageContent = conv.lastMessage.content
+                            ? conv.lastMessage.content.substring(0, 35) + (conv.lastMessage.content.length > 35 ? '...' : '')
+                            : 'محتوى وسائط';
+                }
+            } else if (conv.lastMessage.content) {
+                lastMessageContent = conv.lastMessage.content.substring(0, 35) + (conv.lastMessage.content.length > 35 ? '...' : '');
+            } else {
+                lastMessageContent = 'رسالة فارغة'; // حالة نادرة
+            }
+        }
 
         // استخدام دالة تنسيق الوقت إذا كانت متاحة
         const formattedTime = typeof window.formatRelativeTime === 'function'
