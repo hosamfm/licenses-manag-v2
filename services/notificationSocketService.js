@@ -112,29 +112,34 @@ async function sendNotification(userId, notification) {
         // --- تسجيل إضافي: التحقق من السوكتات في الغرفة --- 
         const socketsInRoom = io.sockets.adapter.rooms.get(targetRoom);
         const socketIdsInRoom = socketsInRoom ? Array.from(socketsInRoom) : [];
-        logger.info('notificationSocketService', '[sendNotification] التحقق من السوكتات في الغرفة قبل الإرسال', { userId, targetRoom, socketIdsInRoom });
+        logger.info('notificationSocketService', '[sendNotification] Checking sockets in room before sending', { userId, targetRoom, socketIdsInRoom });
         // --- نهاية التسجيل الإضافي ---
 
-        logger.info('notificationSocketService', '[sendNotification] محاولة الإرسال إلى الغرفة', { userId, targetRoom, event: 'new-notification', notificationId: notification._id });
+        if (socketIdsInRoom.length === 0) {
+            logger.warn('notificationSocketService', '[sendNotification] No sockets found in the target room. Skipping emit.', { userId, targetRoom });
+            return; // لا يوجد أحد يستمع في هذه الغرفة
+        }
 
-        // إرسال الإشعار للمستخدم عبر غرفته الخاصة
+        logger.info('notificationSocketService', '[sendNotification] Attempting to emit new-notification', { userId, targetRoom, event: 'new-notification', notificationId: notification._id });
         io.to(targetRoom).emit('new-notification', notification);
+        logger.info('notificationSocketService', '[sendNotification] Successfully emitted new-notification (or at least attempted)', { userId, targetRoom });
         
         // تحديث عدد الإشعارات غير المقروءة
         const unreadCount = await NotificationService.getUnreadCount(userId);
-        logger.info('notificationSocketService', '[sendNotification] محاولة إرسال عدد غير المقروء', { userId, targetRoom, event: 'unread-notifications-count', count: unreadCount });
+        logger.info('notificationSocketService', '[sendNotification] Attempting to emit unread-count', { userId, targetRoom, event: 'unread-notifications-count', count: unreadCount });
         io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
+        logger.info('notificationSocketService', '[sendNotification] Successfully emitted unread-count (or at least attempted)', { userId, targetRoom });
         
-        // تم نقل هذا السجل للأسفل للتأكيد بعد محاولة الإرسال
-        logger.info('notificationSocketService', '[sendNotification] تم إرسال الأحداث بنجاح (على ما يبدو)', { 
+        logger.info('notificationSocketService', '[sendNotification] All emits attempted successfully', { 
             userId, 
             notificationType: notification.type,
             targetRoom
         });
     } catch (error) {
-        logger.error('notificationSocketService', 'خطأ في إرسال الإشعار', {
+        logger.error('notificationSocketService', '[sendNotification] Error during emit', {
             userId,
-            error: error.message
+            error: error.message,
+            stack: error.stack // تضمين الـ stack trace مفيد
         });
     }
 }

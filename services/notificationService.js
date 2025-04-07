@@ -26,47 +26,49 @@ class NotificationService {
    * @returns {Promise<Object|null>} الإشعار الذي تم إنشاؤه أو null إذا تم منعه
    */
   static async createAndSendNotification(notificationData) {
+    logger.info('notificationService', '[createAndSendNotification] Starting...', { type: notificationData.type, recipientId: notificationData.recipient });
     try {
       // 1. التحقق من المستلم وتفضيلاته
       const recipient = await User.findById(notificationData.recipient);
       if (!recipient) {
-        logger.warn('notificationService', 'المستلم غير موجود في createAndSendNotification', { recipientId: notificationData.recipient });
+        logger.warn('notificationService', '[createAndSendNotification] Recipient not found', { recipientId: notificationData.recipient });
         return null;
       }
+      logger.info('notificationService', '[createAndSendNotification] Recipient found', { recipientId: recipient._id });
 
       // التحقق من الإعداد العام للإشعارات للمستلم
       if (recipient.enable_general_notifications === false) {
-        logger.info('notificationService', `لن يتم إنشاء إشعار للمستخدم ${recipient._id} بسبب تعطيل الإشعارات العامة`);
+        logger.info('notificationService', `[createAndSendNotification] General notifications disabled for user ${recipient._id}`);
         return null;
       }
       
       // التحقق من إعدادات الإشعارات الخاصة بالنوع المحدد
       if (!this.shouldSendNotificationBasedOnType(recipient, notificationData.type)) {
-        logger.info('notificationService', `لن يتم إنشاء إشعار من النوع ${notificationData.type} للمستخدم ${recipient._id} بسبب إعداداته الخاصة بالنوع`);
+        logger.info('notificationService', `[createAndSendNotification] Notification type ${notificationData.type} disabled for user ${recipient._id}`);
         return null;
       }
+      logger.info('notificationService', '[createAndSendNotification] Checks passed, creating notification...');
       
       // 2. إنشاء الإشعار وحفظه في قاعدة البيانات
       const newNotification = new Notification(notificationData);
       await newNotification.save();
-      logger.info('notificationService', 'تم حفظ الإشعار الجديد في قاعدة البيانات', { notificationId: newNotification._id, recipientId: recipient._id });
+      logger.info('notificationService', '[createAndSendNotification] Notification saved to DB', { notificationId: newNotification._id, recipientId: recipient._id });
 
-      // 3. إرسال الإشعار عبر Socket.IO (هذا يُفترض أن يتم في notificationSocketService)
-      // لا نضع استدعاء Socket.IO هنا للحفاظ على فصل الاهتمامات
-      // يجب أن يستدعي الكود الآخر sendNotification من notificationSocketService بعد استدعاء هذه الدالة بنجاح
+      // 3. إرسال الإشعار عبر Socket.IO (سيتم استدعاؤه بشكل منفصل من notificationSocketService)
+      logger.info('notificationService', '[createAndSendNotification] Notification creation successful, proceeding to send (if applicable)');
 
       // 4. إرسال الإشعار عبر Web Push إذا كان متاحًا
       if (recipient.webPushSubscriptions && recipient.webPushSubscriptions.length > 0) {
-         logger.info('notificationService', `محاولة إرسال Web Push للمستخدم ${recipient._id} لعدد ${recipient.webPushSubscriptions.length} اشتراك`);
+         logger.info('notificationService', `[createAndSendNotification] Attempting Web Push for user ${recipient._id} (${recipient.webPushSubscriptions.length} subscriptions)`);
          await this.sendWebPushNotification(recipient, newNotification);
       } else {
-         logger.info('notificationService', `لا توجد اشتراكات Web Push للمستخدم ${recipient._id}`);
+         logger.info('notificationService', `[createAndSendNotification] No Web Push subscriptions for user ${recipient._id}`);
       }
 
       return newNotification;
 
     } catch (error) {
-      logger.error('notificationService', 'خطأ فادح في createAndSendNotification', { error: error.message, notificationData });
+      logger.error('notificationService', '[createAndSendNotification] Critical error', { error: error.message, stack: error.stack, notificationData });
       return null;
     }
   }
@@ -77,6 +79,7 @@ class NotificationService {
    * @param {Object} notification - كائن الإشعار
    */
   static async sendWebPushNotification(user, notification) {
+    logger.info('notificationService', '[sendWebPushNotification] Starting...', { userId: user._id, notificationId: notification._id });
     if (!user || !notification || !user.webPushSubscriptions || user.webPushSubscriptions.length === 0) {
       return;
     }

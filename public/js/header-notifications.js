@@ -61,11 +61,16 @@ function attachSocketListeners() {
 
     // معالج لاستقبال الإشعارات الجديدة
     socket.on('new-notification', (notification) => {
-        // --- تسجيل داخل المستمع ---
-        console.log('%c[Socket Event Received] new-notification', 'color: green; font-weight: bold;', notification);
+        // --- تسجيل إضافي هنا ---
+        console.log('%c[Client Socket Received] new-notification received!', 'color: magenta; font-weight: bold;', notification);
+        // --- نهاية التسجيل الإضافي ---
+        
         playNotificationSound();
         if (window.notificationSystem) {
+            console.log('[Client Socket Received] Calling notificationSystem.addNewNotification...');
             window.notificationSystem.addNewNotification(notification);
+        } else {
+            console.warn('[Client Socket Received] window.notificationSystem is not available.');
         }
     });
 

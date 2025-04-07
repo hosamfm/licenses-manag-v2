@@ -1303,7 +1303,9 @@ exports.assignConversationAPI = async (req, res) => {
     });
     
     // إرسال إشعارات لتغيير حالة المحادثة
+    logger.info('conversationController', '[assignConversationAPI] Attempting to update/send notifications...', { conversationId, status: conversation.status });
     await notificationSocketService.updateConversationNotifications(conversationId, conversation);
+    logger.info('conversationController', '[assignConversationAPI] Finished attempting notification update/send.', { conversationId });
     
     // إرسال إشعار شخصي للمستخدم الذي تم تعيينه
     if (userId) {
