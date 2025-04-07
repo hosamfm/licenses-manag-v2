@@ -359,47 +359,58 @@
 
     // إضافة زر التعليق الداخلي
     window.addInternalNoteButton();
+  };
+  
+  /**
+   * فتح نافذة التعليق الداخلي وتهيئة المنشن
+   * دالة عالمية موحدة يتم استخدامها في جميع أنحاء التطبيق
+   */
+  window.openInternalNoteModal = function() {
+    // تأكد من وجود النافذة المنبثقة
+    if (typeof window.initInternalNoteModal === 'function') {
+      window.initInternalNoteModal();
+    }
     
-    // المزامنة مع وظيفة openInternalNoteModal الموجودة عالمياً
-    if (typeof window.openInternalNoteModal !== 'function') {
-      window.openInternalNoteModal = function() {
-        // تأكد من وجود النافذة المنبثقة
-        if (typeof window.initInternalNoteModal === 'function') {
-          window.initInternalNoteModal();
-        }
+    // الحصول على معرف المحادثة الحالية وتعيينه في النافذة
+    const conversationId = window.currentConversationId || 
+                          (document.getElementById('conversationId') ? 
+                            document.getElementById('conversationId').value : null);
+    
+    if (conversationId) {
+      // تعيين معرف المحادثة في الحقل الخفي
+      const conversationIdInput = document.getElementById('conversationId');
+      if (conversationIdInput) {
+        conversationIdInput.value = conversationId;
+      }
+      
+      // فتح النافذة
+      const modalElement = document.getElementById('internalNoteModal');
+      if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
         
-        // الحصول على معرف المحادثة الحالية وتعيينه في النافذة
-        const conversationId = window.currentConversationId || document.getElementById('conversationId').value;
-        
-        if (conversationId) {
-          // تعيين معرف المحادثة في الحقل الخفي
-          if (document.getElementById('conversationId')) {
-            document.getElementById('conversationId').value = conversationId;
-          }
-          
-          // فتح النافذة
-          const modal = new bootstrap.Modal(document.getElementById('internalNoteModal'));
-          modal.show();
-          
-          // يجب استدعاء fetchUsersForMention قبل تهيئة المنشن
-          if (typeof window.fetchUsersForMention === 'function') {
-            window.fetchUsersForMention().then(() => {
-              // بعد جلب المستخدمين، نقوم بتهيئة ميزة المنشن
-              if (typeof window.initializeMentionsInNoteField === 'function') {
-                setTimeout(() => {
-                  window.initializeMentionsInNoteField();
-                }, 100);
-              }
-              
-              // التركيز في حقل الإدخال بعد فتح النافذة وتحميل البيانات
-              const noteField = document.getElementById('internalNoteContent');
-              if (noteField) {
-                noteField.focus();
-              }
-            });
-          }
+        // يجب استدعاء fetchUsersForMention قبل تهيئة المنشن
+        if (typeof window.fetchUsersForMention === 'function') {
+          window.fetchUsersForMention().then(() => {
+            // بعد جلب المستخدمين، نقوم بتهيئة ميزة المنشن
+            if (typeof window.initializeMentionsInNoteField === 'function') {
+              setTimeout(() => {
+                window.initializeMentionsInNoteField();
+              }, 100);
+            }
+            
+            // التركيز في حقل الإدخال بعد فتح النافذة وتحميل البيانات
+            const noteField = document.getElementById('internalNoteContent');
+            if (noteField) {
+              noteField.focus();
+            }
+          });
         }
-      };
+      } else {
+        console.error('لم يتم العثور على عنصر النافذة المنبثقة (internalNoteModal)');
+      }
+    } else {
+      console.error('لم يتم العثور على معرف المحادثة الحالية');
     }
   };
 
@@ -441,4 +452,4 @@
       window.addInternalNoteButton();
     }, 1000);
   });
-})();
+})(); 

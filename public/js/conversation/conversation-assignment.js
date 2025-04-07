@@ -351,15 +351,4 @@
     });
   }
 
-  // === مستمعات الأحداث للسوكت ===
-
-  /**
-   * إعداد معالجات أحداث المرتبطة بتعيين المحادثات
-   * ملاحظة: تم نقل وظيفة مراقبة المحادثات إلى setupSocketListeners الموحدة
-   */
-  window.setupAssignmentListeners = function(socket) {
-    console.log('تم إهمال هذه الوظيفة: setupAssignmentListeners. استخدم setupSocketListeners بدلاً منها');
-    // هذه الدالة تم دمجها مع setupSocketListeners في ملف conversations-page.js
-  };
-
 })(window); 

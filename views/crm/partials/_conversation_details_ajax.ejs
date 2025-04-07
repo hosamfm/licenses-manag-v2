@@ -1,48 +1,18 @@
-<!-- هذا الملف الجزئي (Partial) يعرض تفاصيل المحادثة والرسائل -->
-<!-- تعريف متغيرات المستخدم عالمياً -->
 <script>
-  // تعريف معلومات المستخدم كمتغيرات عامة
-  window.currentUserId = "<%= typeof user !== 'undefined' && user ? user._id : 'system' %>";
-  window.currentUsername = "<%= typeof user !== 'undefined' && user ? user.username : 'مستخدم النظام' %>";
+  if (typeof window.currentUserId === 'undefined') {
+    window.currentUserId = "<%= typeof user !== 'undefined' && user ? user._id : 'system' %>";
+  }
+  if (typeof window.currentUsername === 'undefined') {
+    window.currentUsername = "<%= typeof user !== 'undefined' && user ? user.username : 'مستخدم النظام' %>";
+  }
 
-  // دالة لفتح نافذة التعليق الداخلي وتهيئة المنشن
-  window.openInternalNoteModal = function() {
-    // تأكد من وجود النافذة المنبثقة
-    if (typeof window.initInternalNoteModal === 'function') {
-      window.initInternalNoteModal();
-    }
-    
-    // الحصول على معرف المحادثة الحالية وتعيينه في النافذة
-    const conversationId = window.currentConversationId || document.getElementById('conversationId').value;
-    
-    if (conversationId) {
-      // تعيين معرف المحادثة في الحقل الخفي
-      if (document.getElementById('conversationId')) {
-        document.getElementById('conversationId').value = conversationId;
-      }
-      
-      // فتح النافذة
-      const modal = new bootstrap.Modal(document.getElementById('internalNoteModal'));
-      modal.show();
-      
-      // يجب استدعاء fetchUsersForMention قبل تهيئة المنشن
-      if (typeof window.fetchUsersForMention === 'function') {
-        window.fetchUsersForMention().then(() => {
-          // بعد جلب المستخدمين، نقوم بتهيئة ميزة المنشن
-          if (typeof window.initializeMentionsInNoteField === 'function') {
-            setTimeout(() => {
-              window.initializeMentionsInNoteField();
-            }, 100);
-          }
-          
-          // التركيز في حقل الإدخال بعد فتح النافذة وتحميل البيانات
-          const noteField = document.getElementById('internalNoteContent');
-          if (noteField) {
-            noteField.focus();
-          }
-        });
-      }
-    }
+  // التأكد من أن وظيفة openInternalNoteModal معرفة (ستستخدم الإصدار المعرف في conversation-notes-utils.js)
+  if (typeof window.openInternalNoteModal !== 'function') {
+    // تعريف نسخة مؤقتة حتى يتم تحميل النسخة الكاملة
+    window.openInternalNoteModal = function() {
+      console.log('جاري تحميل نافذة التعليقات الداخلية...');
+      // سيتم استبدال هذه الدالة عندما يتم تحميل conversation-notes-utils.js
+    };
   }
 </script>
 
@@ -66,9 +36,6 @@
     }
   }
 </script>
-
-<!-- تم نقل معالجة التواريخ إلى ملف date-formatter.js المستقل -->
-
 <div class="card shadow-sm border-0">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="mb-0 d-flex align-items-center">
