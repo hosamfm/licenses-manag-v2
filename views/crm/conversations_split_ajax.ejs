@@ -22,11 +22,10 @@
   <%- include('./partials/_head_chat_modules') %>
   <script src="/js/notifications.js"></script>
   <script src="/js/socket-utils.js"></script>
-  <script src="/js/conversations-page.js"></script> <!-- تم إزالة defer لضمان تحميل وتنفيذ الملف فورًا -->
+  <script src="/js/conversations-page.js"></script>
   
   <!-- تعريف معلومات المستخدم كمتغيرات عامة -->
   <script>
-    
     // تعريف المتغيرات العامة بشكل صحيح
     window.currentUserId = '<%= typeof user !== "undefined" && user && user._id ? user._id : "system" %>';
     window.currentUsername = '<%= typeof user !== "undefined" && user && user.username ? user.username : "مستخدم النظام" %>';
@@ -34,7 +33,7 @@
     // تهيئة كائن الفلاتر الافتراضية
     window.currentFilters = {
       status: 'open',     // افتراضي: المحادثات المفتوحة
-      assignment: 'all', // افتراضي: كل المحادثات
+      assignment: 'all',  // افتراضي: كل المحادثات
       searchTerm: ''
     };
 
@@ -52,7 +51,6 @@
       window.socketConnection.on('connect', function() {
         window.socketConnected = true;
         console.log('تم الاتصال بالسوكت بنجاح (conversations_split_ajax)');
-        // يمكن تنفيذ عمليات أولية هنا إذا لزم الأمر
       });
 
       window.socketConnection.on('disconnect', function() {
@@ -60,17 +58,14 @@
         console.log('تم قطع الاتصال بالسوكت (conversations_split_ajax)');
       });
 
-      // أي تهيئة أخرى لـ Socket.IO لا تتعلق مباشرة بالقائمة أو التفاصيل يمكن أن تبقى هنا
-       // إعداد مستمعات الإشعارات العامة
+      // إعداد مستمعات الإشعارات العامة
       if (typeof window.setupNotificationListeners === 'function') {
          window.setupNotificationListeners(window.socketConnection);
       }
     });
-    
   </script>
 </head>
 <body>
-
   <%- include('../partials/_header') %>
 
   <div class="crm-container">
@@ -79,7 +74,6 @@
 
     <!-- المحتوى الرئيسي -->
     <div class="crm-content">
-
       <!-- رسائل فلاش إن وجدت -->
       <% if (flashMessages && flashMessages.error) { %>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -94,73 +88,67 @@
         </div>
       <% } %>
 
-      <div class="row">
-
+      <div class="row conversations-view-container">
         <!-- العمود الأيمن: قائمة المحادثات -->
-        <div class="col-lg-4">
-          <div class="conversations-sidebar border-end h-100">
-            <div class="conversations-header p-3 border-bottom">
-              <h5 class="mb-0"><i class="fas fa-comments me-2 text-primary"></i> المحادثات</h5>
+        <div class="col-lg-4 conversations-list-column">
+          <div class="conversations-sidebar h-100">
+            <div class="conversations-header">
+              <h5><i class="fas fa-comments me-2 text-primary"></i> المحادثات</h5>
             </div>
             
-            <!-- منطقة الفلاتر الجديدة والبحث -->
-            <div class="conversation-filters-search p-3 border-bottom">
-              <div class="input-group mb-3">
-                <span class="input-group-text bg-light border-end-0">
+            <!-- منطقة الفلاتر والبحث -->
+            <div class="conversation-filters-search">
+              <div class="input-group search-container">
+                <span class="input-group-text">
                   <i class="fas fa-search text-muted"></i>
                 </span>
-                <input type="text" id="conversationSearchInput" class="form-control border-start-0" placeholder="بحث...">
+                <input type="text" id="conversationSearchInput" class="form-control" placeholder="بحث...">
               </div>
-              <div class="d-flex gap-2">
-                <div class="flex-grow-1">
-                  <label for="filterStatus" class="form-label visually-hidden">الحالة</label>
+              <div class="conversation-filters">
+                <div class="filter-status">
                   <select class="form-select form-select-sm" id="filterStatus">
                     <option value="open" selected>المفتوحة</option>
                     <option value="closed">المغلقة</option>
                   </select>
                 </div>
-                <div class="flex-grow-1">
-                  <label for="filterAssignment" class="form-label visually-hidden">التعيين</label>
+                <div class="filter-assignment">
                   <select class="form-select form-select-sm" id="filterAssignment">
                     <option value="all" selected>الكل</option>
                     <option value="mine">محادثاتي</option>
-                    <option value="unassigned">غير مسندة</option> <!-- إضافة خيار غير مسندة -->
+                    <option value="unassigned">غير مسندة</option>
                   </select>
                 </div>
               </div>
             </div>
             
-            <!-- حاوية قائمة المحادثات (سيتم ملؤها بواسطة JavaScript) -->
-            <div class="list-group conversations-list list-group-flush overflow-auto" id="conversationList" style="height: calc(100vh - 250px);"> <!-- تعديل الارتفاع ليناسب التخطيط -->
+            <!-- حاوية قائمة المحادثات -->
+            <div class="conversations-list" id="conversationList">
               <!-- عرض مؤشر تحميل أولي -->
-              <div id="conversationListLoader" class="text-center p-5">
+              <div id="conversationListLoader" class="conversation-list-loader">
                 <div class="spinner-border spinner-border-sm text-primary" role="status">
                   <span class="visually-hidden">جاري التحميل...</span>
-                        </div>
-                <p class="mt-2 small text-muted">جاري تحميل المحادثات...</p>
+                </div>
+                <p class="loading-text">جاري تحميل المحادثات...</p>
               </div>
-              <!-- سيتم حقن عناصر المحادثات هنا -->
-              <div id="noConversationsMessage" class="alert alert-light text-center m-3 d-none">
-                 <i class="fas fa-info-circle me-1"></i> لا توجد محادثات تطابق الفلتر الحالي.
+              
+              <!-- رسالة عدم وجود محادثات -->
+              <div id="noConversationsMessage" class="no-conversations-message d-none">
+                 <i class="fas fa-info-circle"></i> لا توجد محادثات تطابق الفلتر الحالي.
               </div>
             </div>
-
-            <!-- إزالة حلقة العرض الأصلية والجافاسكريبت المضمن لإدارة القائمة -->
-
           </div>
         </div>
 
-        <!-- العمود الأيسر: سيتم حقن تفاصيل المحادثة فيه بواسطة AJAX -->
-        <div class="col-lg-8" id="conversationDetailsContainer">
-          <div class="conversation-welcome d-flex justify-content-center align-items-center h-100">
-            <div class="text-center p-5 text-muted">
-              <i class="fas fa-comments display-4 mb-4"></i>
-              <h4 class="mb-3">حدد محادثة</h4>
+        <!-- العمود الأيسر: تفاصيل المحادثة -->
+        <div class="col-lg-8 conversation-details-column">
+          <div class="conversation-details-container" id="conversationDetailsContainer">
+            <div class="conversation-welcome">
+              <i class="fas fa-comments welcome-icon"></i>
+              <h4>حدد محادثة</h4>
               <p>اختر محادثة من القائمة على اليمين لعرضها.</p>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   </div>
@@ -169,9 +157,5 @@
 
   <!-- عنصر الصوت للتنبيه عند وصول رسالة جديدة -->
   <audio id="messageSound" src="/sounds/new-message.mp3" preload="auto"></audio>
-
-  <!-- إزالة السكربت المضمن الذي كان يدير القائمة والفلترة والتفاصيل -->
-  <!-- سيتم التعامل مع كل هذا في conversations-page.js -->
-
 </body>
 </html>

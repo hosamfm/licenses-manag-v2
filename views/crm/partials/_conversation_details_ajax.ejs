@@ -36,424 +36,359 @@
     }
   }
 </script>
-<div class="card shadow-sm border-0">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0 d-flex align-items-center">
-        <i class="fas fa-comments me-2 text-primary"></i>
-        <span>المحادثة مع <%= conversation.customerName || conversation.phoneNumber %></span>
-        <% if (conversation.status === 'closed') { %>
-          <span class="badge bg-secondary ms-2 conversation-status-badge"><i class="fas fa-lock me-1"></i> مغلقة</span>
-        <% } else if (conversation.status === 'assigned') { %>
-          <span class="badge bg-info ms-2 conversation-status-badge"><i class="fas fa-user-check me-1"></i> مسندة</span>
-        <% } else { %>
-          <span class="badge bg-success ms-2 conversation-status-badge"><i class="fas fa-door-open me-1"></i> مفتوحة</span>
-        <% } %>
-      </h5>
-      <div class="conversation-actions">
-        <% if (conversation.status !== 'closed') { %>
-          <button class="btn btn-danger close-conversation-btn" 
-                  data-conversation-id="<%= conversation._id %>" 
-                  title="إغلاق المحادثة">
-            <i class="fas fa-lock me-1"></i> إغلاق
-          </button>
-        <% } else { %>
-          <button class="btn btn-success reopen-conversation-btn" 
-                  data-conversation-id="<%= conversation._id %>" 
-                  title="إعادة فتح المحادثة">
-            <i class="fas fa-lock-open me-1"></i> إعادة فتح
-          </button>
-        <% } %>
-        <span class="badge bg-primary ms-2"><i class="fas fa-comments me-1"></i> <%= messages.length %> رسالة</span>
+
+<!-- حاوية المحادثة الرئيسية مع تنسيق جديد -->
+<div class="conversation-main-container">
+  <!-- رأس المحادثة المحسن -->
+  <div class="conversation-header">
+    <!-- معلومات العميل/المحادثة -->
+    <div class="customer-info">
+      <div class="avatar-container">
+        <div class="customer-avatar">
+          <i class="fas fa-user"></i>
+        </div>
+      </div>
+      <div class="customer-details">
+        <h5 class="customer-name"><%= conversation.customerName || conversation.phoneNumber %></h5>
+        <div class="conversation-meta">
+          <% if (conversation.status === 'closed') { %>
+            <span class="badge bg-secondary conversation-status-badge"><i class="fas fa-lock me-1"></i> مغلقة</span>
+          <% } else if (conversation.status === 'assigned') { %>
+            <span class="badge bg-info conversation-status-badge"><i class="fas fa-user-check me-1"></i> مسندة</span>
+          <% } else { %>
+            <span class="badge bg-success conversation-status-badge"><i class="fas fa-door-open me-1"></i> مفتوحة</span>
+          <% } %>
+          <span class="message-count">
+            <i class="fas fa-comments me-1"></i> <%= messages.length %> رسالة
+          </span>
+        </div>
       </div>
     </div>
     
-    <!-- بطاقة معلومات التعيين -->
-    <div class="conversation-assignment-info p-2 border-bottom">
-      <div class="d-flex justify-content-between align-items-center">
-        <div class="assignment-status d-flex align-items-center">
-          <span class="me-2 text-muted">المسؤول:</span>
+    <!-- أزرار الإجراءات -->
+    <div class="conversation-actions">
+      <div class="assignment-dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="assignmentDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="fas fa-user-check me-1"></i>
           <% if (conversation.assignedTo) { 
             let assigneeUser = typeof conversation.assignedTo === 'object' ? conversation.assignedTo : null;
             let assigneeName = assigneeUser ? (assigneeUser.full_name || assigneeUser.username) : 'غير معروف';
           %>
-            <span class="badge bg-info" id="assigneeInfo">
-              <i class="fas fa-user-check me-1"></i> <%= assigneeName %>
-            </span>
+            <%= assigneeName %>
           <% } else { %>
-            <span class="badge bg-warning text-dark" id="assigneeInfo">
-              <i class="fas fa-exclamation-circle me-1"></i> غير معين
-            </span>
+            غير معين
           <% } %>
-        </div>
-        <div class="assignment-actions">
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="assignmentDropdown">
           <% if (conversation.status !== 'closed') { %>
             <% if (!conversation.assignedTo) { %>
-              <button type="button" class="btn btn-sm btn-outline-primary assign-to-me-btn"
-                      data-conversation-id="<%= conversation._id %>"
-                      id="assignToMeBtn">
-                <i class="fas fa-user-plus me-1"></i> تعيين لي
-              </button>
+              <li>
+                <button class="dropdown-item assign-to-me-btn" type="button"
+                        data-conversation-id="<%= conversation._id %>"
+                        id="assignToMeBtn">
+                  <i class="fas fa-user-plus me-1"></i> تعيين لي
+                </button>
+              </li>
             <% } %>
-            <button type="button" class="btn btn-sm btn-outline-secondary change-assignment-btn"
-                    data-conversation-id="<%= conversation._id %>"
-                    id="changeAssignmentBtn">
-              <i class="fas fa-exchange-alt me-1"></i> تغيير المسؤول
-            </button>
+            <li>
+              <button class="dropdown-item change-assignment-btn" type="button"
+                      data-conversation-id="<%= conversation._id %>"
+                      id="changeAssignmentBtn">
+                <i class="fas fa-exchange-alt me-1"></i> تغيير المسؤول
+              </button>
+            </li>
           <% } %>
-        </div>
+        </ul>
       </div>
-    </div>
-
-    <div class="card-body p-0" id="messageContainer" style="max-height: 500px; overflow-y: auto;"
-         data-current-page="<%= pagination ? pagination.currentPage : 1 %>"
-         data-total-pages="<%= pagination ? pagination.totalPages : 0 %>"
-         data-total-messages="<%= pagination ? pagination.totalMessages : 0 %>">
-      <% if (conversation.status === 'closed') { %>
-        <div class="alert alert-info m-3 text-center">
-          <i class="fas fa-info-circle me-1"></i> هذه المحادثة مغلقة.
-          <br>
-          <small>سيتم إعادة فتحها تلقائيًا إذا أرسل العميل رسالة جديدة.</small>
-        </div>
+      
+      <% if (conversation.status !== 'closed') { %>
+        <button class="btn btn-sm btn-outline-danger close-conversation-btn" 
+                data-conversation-id="<%= conversation._id %>" 
+                title="إغلاق المحادثة">
+          <i class="fas fa-lock me-1"></i> إغلاق
+        </button>
+      <% } else { %>
+        <button class="btn btn-sm btn-outline-success reopen-conversation-btn" 
+                data-conversation-id="<%= conversation._id %>" 
+                title="إعادة فتح المحادثة">
+          <i class="fas fa-lock-open me-1"></i> إعادة فتح
+        </button>
       <% } %>
-      <div class="message-container-wrapper">
-        <!-- زر تحميل المزيد من الرسائل -->
-        <% if (pagination && pagination.totalPages > 1) { %>
-          <div class="text-center p-1 load-more-btn-container">
-            <button id="loadMoreMessagesBtn" class="btn btn-sm btn-outline-primary">
-              <i class="fas fa-chevron-up"></i> تحميل المزيد من الرسائل
-            </button>
-          </div>
-        <% } %>
-        <% if (messages && messages.length) { %>
-            <% messages.forEach(function(message) { %>
-              <div class="message <%= message.direction %>" 
-                  data-message-id="<%= message._id %>" 
-                  data-status="<%= message.status || 'sent' %>"
-                  <%= message.externalMessageId ? `data-external-id="${message.externalMessageId}"` : '' %>>
-                
-                <% if (message.replyToMessageId) { 
-                  // البحث عن الرسالة المرد عليها
-                  let repliedMsg = null;
-                  for (let i = 0; i < messages.length; i++) {
-                    if (messages[i]._id.toString() === message.replyToMessageId.toString() || 
-                        (messages[i].externalMessageId && messages[i].externalMessageId === message.replyToMessageId)) {
-                      repliedMsg = messages[i];
-                      break;
-                    }
-                  }
-                %>
-                  <div class="replied-message">
-                    <div class="replied-content">
-                      <i class="fas fa-reply"></i>
-                      <span><%= repliedMsg ? 
-                        (repliedMsg.content ? repliedMsg.content.substring(0, 50) + (repliedMsg.content.length > 50 ? '...' : '') : 'محتوى وسائط') : 
-                        `رد على رسالة محذوفة` %></span>
-                    </div>
-                  </div>
-                <% } %>
-                
-                <div class="message-bubble <%= message.direction === 'incoming' ? 'incoming-bubble' : (message.direction === 'internal' ? 'internal-note-bubble' : 'outgoing-bubble') %> <%= message.mediaType ? 'message-with-media' : '' %>">
-                  <% if (message.direction === 'internal') { %>
-                    <%- include('_internal_note', { note: message }) %>
-                  <% } else { %>
-                    <% if (message.direction === 'outgoing') { %>
-                    <!-- إضافة اسم المرسل فقط للرسائل الصادرة -->
-                    <div class="message-sender">
-                      <%= message.metadata && message.metadata.senderInfo 
-                        ? message.metadata.senderInfo.username || message.metadata.senderInfo.full_name || 'مستخدم غير معروف'
-                        : message.sentByUsername || 'مستخدم غير معروف' %>
-                    </div>
-                    <% } %>
-                    
-                    <!-- عرض الوسائط -->
-                    <% if (message.mediaType) { %>
-                      <%- include('_message_media', { message: message }) %>
-                    <% } %>
-                    
-                    <% if (message.content && message.content.trim() !== '') { %>
-                      <div class="message-text <%= message.mediaType ? 'with-media' : '' %>">
-                        <%= message.content %>
-                      </div>
-                    <% } %>
-                    
-                    <div class="message-meta">
-                      <span class="message-time" title="<%= new Date(message.timestamp || message.createdAt).toLocaleString() %>" 
-                            data-timestamp="<%= new Date(message.timestamp || message.createdAt).getTime() %>"
-                            data-date="<%= new Date(message.timestamp || message.createdAt).toISOString().split('T')[0] %>">
-                        <%= new Date(message.timestamp || message.createdAt).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
-                      </span>
-                      
-                      <% if (message.direction === 'outgoing') { %>
-                        <span class="message-status" title="حالة الرسالة: <%= message.status || 'sent' %>">
-                          <% if (message.status === 'sent') { %>
-                            <i class="fas fa-check text-secondary"></i>
-                          <% } else if (message.status === 'delivered') { %>
-                            <i class="fas fa-check-double text-secondary"></i>
-                          <% } else if (message.status === 'read') { %>
-                            <i class="fas fa-check-double text-primary"></i>
-                          <% } else if (message.status === 'failed') { %>
-                            <i class="fas fa-exclamation-circle text-danger"></i>
-                          <% } else { /* sending or undefined */ %>
-                            <i class="fas fa-clock text-secondary"></i>
-                          <% } %>
-                        </span>
-                      <% } %>
-                    </div>
-                  <% } %>
-                </div>
-                
-                <% if (message.reactions && message.reactions.length > 0 && message.direction !== 'internal') { %>
-                  <div class="message-reactions">
-                    <% message.reactions.forEach(function(reaction) { %>
-                      <span class="reaction-emoji" title="تفاعل من <%= reaction.sender %>">
-                        <%= reaction.emoji %>
-                      </span>
-                    <% }); %>
-                  </div>
-                <% } %>
-                
-                <!-- أزرار التفاعل مع الرسالة (باستثناء الملاحظات الداخلية) -->
-                <% if (message.direction !== 'internal') { %>
-                  <div class="message-actions">
-                    <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" 
-                            data-message-id="<%= message._id %>"
-                            data-external-id="<%= message.externalMessageId || '' %>">
-                      <i class="far fa-smile"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
-                            data-message-id="<%= message._id %>" 
-                            data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="رد">
-                      <i class="fas fa-reply"></i>
-                    </button>
-                    <% if (message.direction === 'outgoing') { %>
-                    <button type="button" class="btn btn-sm text-muted message-action-btn delete-btn" 
-                            data-message-id="<%= message._id %>" 
-                            data-external-id="<%= message.externalMessageId || '' %>" 
-                            title="حذف">
-                      <i class="fas fa-trash-alt"></i>
-                    </button>
-                    <% } %>
-                  </div>
-                <% } %>
-              </div>
-            <% }); %>
-        <% } else { %>
-          <div class="text-center p-5">
-            <div class="empty-conversation">
-              <i class="far fa-comments"></i>
-              <p>لا توجد رسائل في هذه المحادثة حتى الآن.</p>
-            </div>
-          </div>
-        <% } %>
-      </div>
     </div>
   </div>
   
-  <!-- نموذج إرسال الرد (إذا كانت المحادثة غير مغلقة) -->
-  <% if (conversation.status !== 'closed') { %>
-    <!-- النموذج مع الاعتماد على دالة sendReply المتوفرة من ملف conversation-utils.js -->
-    <form id="replyForm" class="mt-3" onsubmit="window.sendReply(event)">
-      <input type="hidden" id="conversationId" value="<%= conversation._id %>">
-      <div class="mb-3">
-        <label for="replyMessage" class="form-label">إرسال رد</label>
-        <div class="position-relative message-input-container">
-          <textarea class="form-control message-input" id="replyMessage" name="content"
-                rows="3" placeholder="اكتب رسالتك... (Enter للإرسال)" 
-                onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); window.sendReply(event); }"></textarea>
-          <div class="message-input-actions">
-            <button type="button" class="btn btn-link text-secondary" id="attachMediaBtn" title="إرفاق ملف">
-              <i class="fas fa-paperclip"></i>
-            </button>
-            <input type="file" class="d-none" id="mediaFile" name="mediaFile">
-          </div>
-        </div>
+  <!-- منطقة المحادثة المركزية -->
+  <div class="messages-container" id="messageContainer" 
+       data-current-page="<%= pagination ? pagination.currentPage : 1 %>"
+       data-total-pages="<%= pagination ? pagination.totalPages : 0 %>"
+       data-total-messages="<%= pagination ? pagination.totalMessages : 0 %>">
+    
+    <% if (conversation.status === 'closed') { %>
+      <div class="alert alert-info conversation-closed-alert">
+        <i class="fas fa-info-circle me-1"></i> هذه المحادثة مغلقة.
+        <br>
+        <small>سيتم إعادة فتحها تلقائيًا إذا أرسل العميل رسالة جديدة.</small>
       </div>
-
-      <div id="mediaPreview" class="media-preview mt-2" style="display: none;">
-        <div class="card">
-          <div class="card-body">
-            <div class="d-flex align-items-center">
-              <i class="fas fa-paperclip me-2"></i>
-              <span id="mediaFileName">اسم الملف</span>
-              <input type="hidden" id="mediaId" name="mediaId">
-              <input type="hidden" id="mediaType" name="mediaType">
-              <input type="hidden" id="uploadMediaType" name="mediaType" value="auto">
-              <input type="hidden" id="uploadConversationId" name="conversationId" value="<%= conversation._id %>">
-              <button type="button" class="btn btn-sm btn-danger ms-auto" onclick="window.clearMediaAttachment()">
-                <i class="fas fa-times"></i>
+    <% } %>
+    
+    <div class="message-container-wrapper">
+      <!-- زر تحميل المزيد من الرسائل -->
+      <% if (pagination && pagination.totalPages > 1) { %>
+        <div class="load-more-btn-container">
+          <button id="loadMoreMessagesBtn" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-chevron-up"></i> تحميل المزيد من الرسائل
+          </button>
+        </div>
+      <% } %>
+      
+      <% if (messages && messages.length) { %>
+          <% messages.forEach(function(message) { %>
+            <div class="message <%= message.direction %>" 
+                data-message-id="<%= message._id %>" 
+                data-status="<%= message.status || 'sent' %>"
+                <%= message.externalMessageId ? `data-external-id="${message.externalMessageId}"` : '' %>>
+              
+              <% if (message.replyToMessageId) { 
+                // البحث عن الرسالة المرد عليها
+                let repliedMsg = null;
+                for (let i = 0; i < messages.length; i++) {
+                  if (messages[i]._id.toString() === message.replyToMessageId.toString() || 
+                      (messages[i].externalMessageId && messages[i].externalMessageId === message.replyToMessageId)) {
+                    repliedMsg = messages[i];
+                    break;
+                  }
+                }
+              %>
+                <div class="replied-message">
+                  <div class="replied-content">
+                    <i class="fas fa-reply"></i>
+                    <span><%= repliedMsg ? 
+                      (repliedMsg.content ? repliedMsg.content.substring(0, 50) + (repliedMsg.content.length > 50 ? '...' : '') : 'محتوى وسائط') : 
+                      `رد على رسالة محذوفة` %></span>
+                  </div>
+                </div>
+              <% } %>
+              
+              <div class="message-bubble <%= message.direction === 'incoming' ? 'incoming-bubble' : (message.direction === 'internal' ? 'internal-note-bubble' : 'outgoing-bubble') %> <%= message.mediaType ? 'message-with-media' : '' %>">
+                <% if (message.direction === 'internal') { %>
+                  <%- include('_internal_note', { note: message }) %>
+                <% } else { %>
+                  <% if (message.direction === 'outgoing') { %>
+                  <!-- إضافة اسم المرسل فقط للرسائل الصادرة -->
+                  <div class="message-sender">
+                    <%= message.metadata && message.metadata.senderInfo 
+                      ? message.metadata.senderInfo.username || message.metadata.senderInfo.full_name || 'مستخدم غير معروف'
+                      : message.sentByUsername || 'مستخدم غير معروف' %>
+                  </div>
+                  <% } %>
+                  
+                  <!-- عرض الوسائط -->
+                  <% if (message.mediaType) { %>
+                    <%- include('_message_media', { message: message }) %>
+                  <% } %>
+                  
+                  <% if (message.content && message.content.trim() !== '') { %>
+                    <div class="message-text <%= message.mediaType ? 'with-media' : '' %>">
+                      <%= message.content %>
+                    </div>
+                  <% } %>
+                  
+                  <div class="message-meta">
+                    <span class="message-time" title="<%= new Date(message.timestamp || message.createdAt).toLocaleString() %>" 
+                          data-timestamp="<%= new Date(message.timestamp || message.createdAt).getTime() %>"
+                          data-date="<%= new Date(message.timestamp || message.createdAt).toISOString().split('T')[0] %>">
+                      <%= new Date(message.timestamp || message.createdAt).toLocaleString('ar-LY', { hour: '2-digit', minute: '2-digit' }) %>
+                    </span>
+                    
+                    <% if (message.direction === 'outgoing') { %>
+                      <span class="message-status" title="حالة الرسالة: <%= message.status || 'sent' %>">
+                        <% if (message.status === 'sent') { %>
+                          <i class="fas fa-check text-secondary"></i>
+                        <% } else if (message.status === 'delivered') { %>
+                          <i class="fas fa-check-double text-secondary"></i>
+                        <% } else if (message.status === 'read') { %>
+                          <i class="fas fa-check-double text-primary"></i>
+                        <% } else if (message.status === 'failed') { %>
+                          <i class="fas fa-exclamation-circle text-danger"></i>
+                        <% } else { /* sending or undefined */ %>
+                          <i class="fas fa-clock text-secondary"></i>
+                        <% } %>
+                      </span>
+                    <% } %>
+                  </div>
+                <% } %>
+              </div>
+              
+              <% if (message.reactions && message.reactions.length > 0 && message.direction !== 'internal') { %>
+                <div class="message-reactions">
+                  <% message.reactions.forEach(function(reaction) { %>
+                    <span class="reaction-emoji" title="تفاعل من <%= reaction.sender %>">
+                      <%= reaction.emoji %>
+                    </span>
+                  <% }); %>
+                </div>
+              <% } %>
+              
+              <!-- أزرار التفاعل مع الرسالة (باستثناء الملاحظات الداخلية) -->
+              <% if (message.direction !== 'internal') { %>
+                <div class="message-actions">
+                  <button type="button" class="btn btn-sm text-muted message-action-btn reaction-btn" title="تفاعل" 
+                          data-message-id="<%= message._id %>"
+                          data-external-id="<%= message.externalMessageId || '' %>">
+                    <i class="far fa-smile"></i>
+                  </button>
+                  <button type="button" class="btn btn-sm text-muted message-action-btn reply-btn" 
+                          data-message-id="<%= message._id %>" 
+                          data-external-id="<%= message.externalMessageId || '' %>" 
+                          title="رد">
+                    <i class="fas fa-reply"></i>
+                  </button>
+                  <% if (message.direction === 'outgoing') { %>
+                  <button type="button" class="btn btn-sm text-muted message-action-btn delete-btn" 
+                          data-message-id="<%= message._id %>" 
+                          data-external-id="<%= message.externalMessageId || '' %>" 
+                          title="حذف">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                  <% } %>
+                </div>
+              <% } %>
+            </div>
+          <% }); %>
+      <% } else { %>
+        <div class="empty-conversation">
+          <i class="far fa-comments"></i>
+          <p>لا توجد رسائل في هذه المحادثة حتى الآن.</p>
+        </div>
+      <% } %>
+    </div>
+  </div>
+  
+  <!-- نموذج إرسال الرد (مثبت دائمًا في الأسفل) -->
+  <div class="message-input-container">
+    <% if (conversation.status !== 'closed') { %>
+      <form id="replyForm" onsubmit="window.sendReply(event)">
+        <input type="hidden" id="conversationId" value="<%= conversation._id %>">
+        
+        <div class="reply-form-content">
+          <div class="reply-form-controls">
+            <!-- أزرار الإرفاق والتعليقات الداخلية -->
+            <div class="message-tools">
+              <button type="button" class="btn btn-light" id="attachMediaBtn" title="إرفاق ملف">
+                <i class="fas fa-paperclip"></i>
+              </button>
+              <button type="button" class="btn btn-light" 
+                      onclick="if(typeof window.openInternalNoteModal === 'function') window.openInternalNoteModal(); else alert('عذراً، ميزة التعليقات الداخلية غير متوفرة حالياً');" 
+                      title="ملاحظة داخلية">
+                <i class="fas fa-sticky-note"></i>
+              </button>
+              <input type="file" class="d-none" id="mediaFile" name="mediaFile">
+            </div>
+            
+            <!-- حقل الإدخال -->
+            <div class="reply-input-wrapper">
+              <textarea class="form-control" id="replyMessage" name="content"
+                    rows="1" placeholder="اكتب رسالتك... (Enter للإرسال)" 
+                    onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); window.sendReply(event); }"></textarea>
+            </div>
+            
+            <!-- زر الإرسال -->
+            <div class="send-button-wrapper">
+              <button type="submit" class="btn btn-primary" id="sendButton" title="إرسال">
+                <i class="fas fa-paper-plane"></i>
               </button>
             </div>
-            <div class="upload-progress mt-2" style="display: none;">
-              <div class="progress">
-                <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+          </div>
+          
+          <!-- معاينة الملفات المرفقة -->
+          <div id="mediaPreview" class="media-preview" style="display: none;">
+            <div class="card">
+              <div class="card-body">
+                <div class="media-preview-info">
+                  <i class="fas fa-paperclip"></i>
+                  <span id="mediaFileName">اسم الملف</span>
+                  <input type="hidden" id="mediaId" name="mediaId">
+                  <input type="hidden" id="mediaType" name="mediaType">
+                  <input type="hidden" id="uploadMediaType" name="mediaType" value="auto">
+                  <input type="hidden" id="uploadConversationId" name="conversationId" value="<%= conversation._id %>">
+                  <button type="button" class="btn btn-sm btn-danger remove-media-btn" onclick="window.clearMediaAttachment()">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+                <div class="upload-progress" style="display: none;">
+                  <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+          
+          <!-- مؤشر الإرسال -->
+          <div id="sendingIndicator" class="sending-indicator" style="display: none;">
+            <i class="fas fa-circle-notch fa-spin"></i> جاري الإرسال...
+          </div>
         </div>
+      </form>
+    <% } else { %>
+      <div class="conversation-closed-notice">
+        <i class="fas fa-lock"></i>
+        المحادثة مغلقة، لا يمكن الرد.
       </div>
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="sending-indicator" id="sendingIndicator" style="display: none;">
-          <i class="fas fa-circle-notch fa-spin"></i> جاري الإرسال...
-        </span>
-        <div class="reply-form-actions">
-          <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('replyMessage').value = ''">مسح</button>
-          <button type="button" class="btn btn-outline-secondary me-2 internal-note-btn" onclick="if(typeof window.openInternalNoteModal === 'function') window.openInternalNoteModal(); else alert('عذراً، ميزة التعليقات الداخلية غير متوفرة حالياً');">
-            <i class="fas fa-sticky-note me-1"></i> ملاحظة داخلية
-          </button>
-          <button type="submit" class="btn btn-primary" id="sendButton">
-            <i class="fas fa-paper-plane me-1"></i> إرسال
-          </button>
-        </div>
+    <% } %>
+  </div>
+</div>
+
+<!-- نافذة معاينة الوسائط -->
+<div id="mediaPreviewModal" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">معاينة الوسائط</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
       </div>
-    </form>
-    
-    <!-- نافذة معاينة الوسائط -->
-    <div id="mediaPreviewModal" class="modal fade" tabindex="-1">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">معاينة الوسائط</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-          </div>
-          <div class="modal-body text-center" id="mediaPreviewContent">
-            <!-- سيتم إضافة محتوى الوسائط هنا ديناميكياً -->
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-            <a href="#" class="btn btn-primary" id="downloadMediaBtn" download>تنزيل</a>
-          </div>
-        </div>
+      <div class="modal-body text-center" id="mediaPreviewContent">
+        <!-- سيتم إضافة محتوى الوسائط هنا ديناميكياً -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+        <a href="#" class="btn btn-primary" id="downloadMediaBtn" download>تنزيل</a>
       </div>
     </div>
-  <% } else { %>
-    <div class="alert alert-secondary mt-3">
-      <i class="fas fa-lock me-1"></i>
-      المحادثة مغلقة، لا يمكن الرد.
-    </div>
-  <% } %>
+  </div>
+</div>
   
-  <!-- جافاسكريبت لعمل التصفح بالصفحات -->
-  <script>
-    $(document).ready(function() {
-      // تهيئة نظام تحميل الرسائل التزايدي
-      if (window.conversationPagination) {
-        window.conversationPagination.initialize({
-          conversationId: '<%= conversation._id %>'
-        });
-      }
-    });
-  </script>
-
-<!-- أنماط خاصة بهذه الصفحة -->
-<style>
-.message-container {
-  min-height: 150px;
-  max-height: 400px;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-  position: relative;
-}
-
-.clear-both {
-  clear: both;
-}
-
-/* أنماط خاصة بزر التعليق الداخلي */
-.internal-note-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.internal-note-btn i {
-  margin-left: 5px;
-}
-
-/* أنماط خاصة بميزة المنشن للمستخدمين */
-.tribute-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: auto;
-  max-height: 300px;
-  max-width: 500px;
-  overflow: auto;
-  display: block;
-  z-index: 9999;
-  background: #fff;
-  border-radius: 4px;
-  box-shadow: 0 1px 5px rgba(0,0,0,0.15);
-  direction: rtl;
-}
-
-.tribute-container ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tribute-container li {
-  padding: 8px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.tribute-container li:last-child {
-  border-bottom: none;
-}
-
-.tribute-container li.highlight,
-.tribute-container li:hover {
-  background: #f5f9ff;
-}
-
-.mention-item {
-  display: flex;
-  align-items: center;
-}
-
-.user-mention {
-  display: inline-block;
-  background-color: #e8f0fe;
-  border-radius: 3px;
-  padding: 0 3px;
-  color: #1a73e8;
-  font-weight: 500;
-}
-
-/* أنماط خاصة بالتحميل التزايدي للرسائل */
-.load-more-btn-container {
-  margin: 5px 0;
-  padding: 5px;
-  position: sticky;
-  top: 0;
-  background-color: #f8f9fa;
-  border-radius: 0 0 5px 5px;
-  border-bottom: 1px solid #dee2e6;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  z-index: 1;
-}
-
-/* تم نقل أنماط تنسيق التواريخ إلى ملف date-formatter.js المستقل */
-
-#loadMoreMessagesBtn {
-  transition: all 0.3s ease;
-  margin: 0 auto;
-}
-
-#loadMoreMessagesBtn:hover {
-  background-color: #e9ecef;
-}
-
-#loadMoreMessagesBtn:active {
-  transform: translateY(1px);
-}
-
-#loadMoreMessagesBtn.loading {
-  opacity: 0.7;
-}
-</style>
+<!-- جافاسكريبت لعمل التصفح بالصفحات -->
+<script>
+  $(document).ready(function() {
+    // تهيئة نظام تحميل الرسائل التزايدي
+    if (window.conversationPagination) {
+      window.conversationPagination.initialize({
+        conversationId: '<%= conversation._id %>'
+      });
+    }
+    
+    // التمرير إلى أحدث رسالة
+    const messageContainer = document.getElementById('messageContainer');
+    if (messageContainer) {
+      messageContainer.scrollTop = messageContainer.scrollHeight;
+    }
+    
+    // جعل منطقة النص تتمدد تلقائياً
+    const replyMessage = document.getElementById('replyMessage');
+    if (replyMessage) {
+      replyMessage.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+        // تحديد حد أقصى للارتفاع
+        if (this.scrollHeight > 150) {
+          this.style.height = '150px';
+          this.style.overflowY = 'auto';
+        }
+      });
+    }
+  });
+</script>
 
 <!-- إضافة معالجات الأحداث للأزرار -->
 <script>
