@@ -117,7 +117,6 @@ function setupNotificationListeners(socket) {
     // استقبال تحديث حالة الرسالة
     socket.on('message-status-update', function(data) {        
         if (typeof window.updateMessageStatus === 'function') {
-            console.log('Socket تلقى message-status-update:', data);
             window.updateMessageStatus(data.externalId, data.status);
         }
     });
@@ -619,64 +618,24 @@ function updateConversationInfo(data) {
     // التحقق مما إذا كانت هذه هي المحادثة الحالية
     if (!window.currentConversationId || data._id !== window.currentConversationId) return;
     
-    const conversationDetailsContainer = document.getElementById('conversationDetailsContainer');
-    if (!conversationDetailsContainer) return;
-
     // تحديث معلومات المحادثة في واجهة المستخدم
-    const conversationHeader = conversationDetailsContainer.querySelector('.conversation-header');
+    const conversationHeader = document.querySelector('.conversation-header');
     if (conversationHeader) {
         // تحديث الحالة
-        const statusBadge = conversationHeader.querySelector('.conversation-status-badge');
-        if (statusBadge && data.status) {
-            let iconClass = 'fas fa-door-open';
-            let badgeClass = 'bg-success';
-            let statusText = 'مفتوحة';
-
-            if (data.status === 'closed') {
-                iconClass = 'fas fa-lock';
-                badgeClass = 'bg-secondary';
-                statusText = 'مغلقة';
-            } else if (data.status === 'assigned') {
-                iconClass = 'fas fa-user-check';
-                badgeClass = 'bg-info';
-                statusText = 'مسندة';
-            }
-
-            statusBadge.innerHTML = `<i class="${iconClass} me-1"></i> ${statusText}`;
-            // إزالة فئات الخلفية القديمة وإضافة الجديدة
-            statusBadge.classList.remove('bg-success', 'bg-info', 'bg-secondary');
-            statusBadge.classList.add(badgeClass);
-        }
-        
-        // تحديث المسؤول في الزر المنسدل
-        const assignmentDropdownButton = conversationHeader.querySelector('#assignmentDropdown');
-        if (assignmentDropdownButton) {
-            let assigneeText = 'غير معين';
-            if (data.assignee) { // استخدام assignee الذي يجب أن يرسله الخادم
-                assigneeText = data.assignee.full_name || data.assignee.username;
-            } else if (data.assignedTo) { // كحل بديل إذا لم يتم إرسال assignee
-                 // محاولة استنتاج الاسم من assignedTo (قد يكون مجرد ID)
-                 if(typeof data.assignedTo === 'object' && data.assignedTo !== null) {
-                   assigneeText = data.assignedTo.full_name || data.assignedTo.username || 'غير معروف';
-                 } else {
-                   assigneeText = 'معين (غير معروف)'; // أو استعلام للحصول على الاسم؟
-                 }
-            }
+        const statusElement = conversationHeader.querySelector('.conversation-status');
+        if (statusElement) {
+            statusElement.textContent = getStatusText(data.status);
             
-            // تحديث نص الزر
-            // يجب الإبقاء على الأيقونة وتحديث النص فقط
-            const iconElement = assignmentDropdownButton.querySelector('i');
-            assignmentDropdownButton.innerHTML = ''; // مسح المحتوى القديم
-            if (iconElement) {
-                assignmentDropdownButton.appendChild(iconElement); // إعادة إضافة الأيقونة
-                assignmentDropdownButton.appendChild(document.createTextNode(` ${assigneeText}`)); // إضافة النص الجديد
-            } else {
-                // في حالة عدم وجود أيقونة لسبب ما
-                assignmentDropdownButton.innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeText}`;
-            }
+            // تحديث لون الحالة
+            statusElement.className = 'conversation-status';
+            statusElement.classList.add(`status-${data.status}`);
         }
         
-        // قد تحتاج لتحديث عناصر أخرى هنا إذا لزم الأمر (مثل أزرار القائمة المنسدلة نفسها)
+        // تحديث المسؤول
+        const assignedToElement = conversationHeader.querySelector('.conversation-assigned');
+        if (assignedToElement && data.assignedTo) {
+            assignedToElement.textContent = data.assignedTo.full_name || data.assignedTo.username;
+        }
     }
 }
 

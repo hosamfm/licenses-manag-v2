@@ -79,9 +79,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterAssignmentSelect = document.getElementById('filterAssignment');
     const searchInput = document.getElementById('conversationSearchInput');
 
-    // --- إشارة إلى أن DOM جاهز ---
-    console.log('DOM Content Loaded في conversations-page.js');
-
     // --- Utility Functions ---
 
     /**
@@ -293,8 +290,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.updateConversationInList = function(updatedConv, skipReRender = false) {
         if (!conversationListContainer || !updatedConv || !updatedConv._id) return;
 
-        console.log('تحديث محادثة في القائمة:', updatedConv._id, updatedConv.status);
-
         let conversationItem = conversationListContainer.querySelector(`.conversation-item[data-conversation-id="${updatedConv._id}"]`);
         const newHTML = createConversationItemHTML(updatedConv); // إنشاء HTML جديد من البيانات المحدثة
 
@@ -304,7 +299,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (conversationItem) {
             if (!matchesFilters) {
                 // إزالة العنصر إذا لم يعد يطابق الفلاتر
-                console.log('إزالة العنصر من القائمة لأنه لم يعد يطابق الفلاتر:', updatedConv._id);
                 conversationItem.remove();
             } else {
                 // تحديث العنصر الموجود مع الحفاظ على وضعه النشط
@@ -349,7 +343,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (matchesFilters) {
             // إضافة عنصر جديد إذا كان يطابق الفلاتر ولم يكن موجودًا
-            console.log('إضافة عنصر جديد إلى القائمة:', updatedConv._id);
             conversationListContainer.insertAdjacentHTML('afterbegin', newHTML); // إضافة في الأعلى
             conversationItem = conversationListContainer.querySelector(`.conversation-item[data-conversation-id="${updatedConv._id}"]`);
             if (conversationItem) {
@@ -421,8 +414,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        console.log(`تحقق فلتر [${filters.status}] للمحادثة [${conv._id}] مع الحالة [${conv.status}]: ${statusMatch}`);
-
         // فلتر التعيين
         let assignmentMatch = true;
         if (filters.assignment === 'mine') {
@@ -479,8 +470,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         if (status === 'open') {
-            // تحديث مؤشر الحالة
-            if (statusIndicator) {
+        // تحديث مؤشر الحالة
+        if (statusIndicator) {
                 statusIndicator.innerHTML = '<i class="fas fa-door-open text-success"></i> مفتوحة';
                 if (statusIndicator.classList.contains('badge')) {
                     statusIndicator.className = 'badge bg-success'; // للطبقات الحالية
@@ -515,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // إخفاء زر الإغلاق وإظهار زر إعادة الفتح
             if (reopenButton) reopenButton.style.display = 'inline-block';
             if (closeButton) closeButton.style.display = 'none';
-            
+
             // إخفاء نموذج الرد وإظهار تنبيه الإغلاق
             if (replyForm) replyForm.style.display = 'none';
             if (!closedAlert) {
@@ -536,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchAndRenderConversations(window.currentFilters);
             }
         }
-        
+
         // تحديث العنصر في القائمة أيضًا
         if (window.currentConversationId) {
             const listItem = document.querySelector(`.conversation-item[data-conversation-id="${window.currentConversationId}"]`);
@@ -586,8 +577,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.loadConversationDetails = function(conversationId, skipCache = false) {
         if (!conversationId || !conversationDetailsContainer) return;
 
-        console.log('تحميل تفاصيل المحادثة:', conversationId);
-
         // تحديث اختيار القائمة
         const allItems = conversationListContainer.querySelectorAll('.conversation-item');
         allItems.forEach(item => item.classList.remove('active'));
@@ -607,11 +596,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // الانضمام إلى غرفة Socket.IO
         if (window.socketConnection && window.socketConnected) {
-            console.log(`الانضمام للغرفة: conversation-${conversationId}`);
             window.socketConnection.emit('join', { room: `conversation-${conversationId}` });
             // مغادرة الغرفة السابقة إذا كانت مُتتبعة
             if (window.previousConversationId && window.previousConversationId !== conversationId) {
-                console.log(`مغادرة الغرفة: conversation-${window.previousConversationId}`);
                 window.socketConnection.emit('leave', { room: `conversation-${window.previousConversationId}` });
             }
             window.previousConversationId = conversationId; // تتبع الغرفة الحالية
@@ -840,8 +827,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        console.log("إعداد مستمعي Socket.IO لقائمة المحادثات...");
-
         // إزالة جميع المستمعين السابقة لتجنب التكرار
         window.socketConnection.off('conversation-list-update');
         window.socketConnection.off('conversation-update');
@@ -849,16 +834,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // مستمع تحديثات المحادثة في القائمة - استخدام لمعالجة تغييرات القائمة
         window.socketConnection.on('conversation-list-update', (updatedConversation) => {
-            console.log('Socket تلقى conversation-list-update:', updatedConversation);
-            
-            // تخزين الحدث ومعالجته بعد فترة زمنية لتجنب التكرار
             handleSocketUpdateDebounced('list-update', updatedConversation);
         });
 
         // مستمع لتحديثات المحادثة العامة - استخدام لتحديث تفاصيل المحادثة
         window.socketConnection.on('conversation-update', (data) => {
-            console.log('Socket تلقى conversation-update:', data);
-            
             // تحديث الواجهة المحلية إذا كانت المحادثة مفتوحة حاليًا
             if (data && data._id && window.currentConversationId === data._id) {
                 if (data.type === 'status') {
@@ -923,8 +903,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // مستمع لتحديثات حالة الرسائل
         window.socketConnection.on('message-status-update', (data) => {
-            console.log('Socket تلقى message-status-update:', data);
-            
             // استدعاء دالة تحديث حالة الرسالة إذا كانت المحادثة مفتوحة حالياً
             if (data && data.conversationId === window.currentConversationId) {
                 if (typeof window.updateMessageStatus === 'function') {
@@ -937,8 +915,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // مستمع للرسائل الجديدة (قد تؤثر على ترتيب القائمة أو المعاينة)
         window.socketConnection.on('new-message', (messageData) => {
-            console.log('Socket تلقى new-message:', messageData);
-            
             // معالجة الرسالة الواردة فقط إذا كانت تخص المحادثة الحالية
             if (messageData && messageData.conversationId === window.currentConversationId) {
                 // التحقق من وجود الرسالة في DOM قبل إضافتها
@@ -952,22 +928,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     // الرسالة موجودة بالفعل، سنحدث حالتها فقط
                     console.log('الرسالة موجودة بالفعل، تحديث حالتها:', messageData._id);
                     if (messageData.status) {
-                        // تحديث حالة الرسالة الموجودة
-                        const statusElement = messageExists.querySelector('.message-status');
-                        if (statusElement) {
-                            // تحديث أيقونة الحالة
-                            if (messageData.status === 'sent') {
-                                statusElement.innerHTML = '<i class="fas fa-check text-secondary"></i>';
-                            } else if (messageData.status === 'delivered') {
-                                statusElement.innerHTML = '<i class="fas fa-check-double text-secondary"></i>';
-                            } else if (messageData.status === 'read') {
-                                statusElement.innerHTML = '<i class="fas fa-check-double text-primary"></i>';
+                    // تحديث حالة الرسالة الموجودة
+                    const statusElement = messageExists.querySelector('.message-status');
+                    if (statusElement) {
+                        // تحديث أيقونة الحالة
+                        if (messageData.status === 'sent') {
+                            statusElement.innerHTML = '<i class="fas fa-check text-secondary"></i>';
+                        } else if (messageData.status === 'delivered') {
+                            statusElement.innerHTML = '<i class="fas fa-check-double text-secondary"></i>';
+                        } else if (messageData.status === 'read') {
+                            statusElement.innerHTML = '<i class="fas fa-check-double text-primary"></i>';
                             }
                         }
                     }
                 } else if (pendingMessageWithSameContent) {
                     // تحديث الرسالة المؤقتة بدلاً من إضافة رسالة جديدة
-                    console.log('تحديث رسالة مؤقتة بنفس المحتوى:', messageData._id);
                     pendingMessageWithSameContent.setAttribute('data-message-id', messageData._id);
                     pendingMessageWithSameContent.classList.remove('message-pending');
                     pendingMessageWithSameContent.setAttribute('data-status', messageData.status || 'sent');
@@ -1017,7 +992,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- معالجة الاتصال/الانقطاع ---
         window.socketConnection.on('connect', () => {
-            console.log('إعادة اتصال Socket (conversations-page.js).');
             // إعادة الانضمام للغرفة إذا كانت هناك محادثة مفتوحة
             if (window.currentConversationId) {
                 window.socketConnection.emit('join', { room: `conversation-${window.currentConversationId}` });
@@ -1025,7 +999,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         window.socketConnection.on('disconnect', () => {
-            console.log('انقطاع اتصال Socket (conversations-page.js).');
         });
     };
     
@@ -1075,8 +1048,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            console.log(`معالجة ${socketUpdateStore.pendingUpdates.size} تحديثات معلقة من Socket.IO`);
-            
             // معالجة كل تحديث على حدة
             socketUpdateStore.pendingUpdates.forEach((update, id) => {
                 updateConversationInList(update.data, true); // تمرير true لتجنب إعادة تحميل القائمة
@@ -1106,7 +1077,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filterStatusSelect) {
             filterStatusSelect.addEventListener('change', function() {
                 window.currentFilters.status = this.value;
-                console.log('تغيير فلتر الحالة إلى:', this.value);
                 fetchAndRenderConversations(window.currentFilters);
             });
         }
@@ -1115,7 +1085,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filterAssignmentSelect) {
             filterAssignmentSelect.addEventListener('change', function() {
                 window.currentFilters.assignment = this.value;
-                console.log('تغيير فلتر التعيين إلى:', this.value);
                 fetchAndRenderConversations(window.currentFilters);
             });
         }
@@ -1124,7 +1093,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (searchInput) {
             const debouncedSearch = debounce(function() {
                 window.currentFilters.searchTerm = searchInput.value;
-                console.log('تغيير نص البحث إلى:', searchInput.value);
                 fetchAndRenderConversations(window.currentFilters);
             }, 500); // 500ms تأخير
             
@@ -1132,14 +1100,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (window.socketConnected) {
-            console.log("Socket متصل بالفعل، تهيئة الصفحة.");
             setupSocketListeners();
             fetchAndRenderConversations(window.currentFilters); // التحميل الأولي للبيانات
         } else {
             // انتظار الاتصال المنشأ في ملف EJS
-            console.log("انتظار اتصال Socket...");
             window.socketConnection.once('connect', () => {
-                console.log("تم استلام حدث اتصال Socket، تهيئة الصفحة.");
                 setupSocketListeners();
                 fetchAndRenderConversations(window.currentFilters); // التحميل الأولي للبيانات
             });

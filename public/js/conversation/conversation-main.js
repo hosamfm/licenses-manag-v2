@@ -20,8 +20,6 @@
    * تهيئة وظائف المحادثات عند تحميل الصفحة
    */
   function initializeConversationModule() {
-    console.log("تهيئة وحدة المحادثات");
-    
     // تحقق من وجود المتغيرات العالمية الضرورية
     if (typeof window.currentUserId === 'undefined') {
       console.warn("تحذير: المتغير currentUserId غير معرف");

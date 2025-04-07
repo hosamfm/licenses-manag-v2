@@ -54,7 +54,22 @@
           <% if (conversation.status === 'closed') { %>
             <span class="badge bg-secondary conversation-status-badge"><i class="fas fa-lock me-1"></i> مغلقة</span>
           <% } else if (conversation.status === 'assigned') { %>
-            <span class="badge bg-info conversation-status-badge"><i class="fas fa-user-check me-1"></i> مسندة</span>
+            <span class="badge bg-info conversation-status-badge">
+              <i class="fas fa-user-check me-1"></i> مسندة
+              <% 
+                // إضافة اسم المسند إليه هنا إذا كان متاحاً عند تحميل الصفحة الأولي
+                let assigneeNameText = '';
+                let assigneeUser = conversation.assignedTo && typeof conversation.assignedTo === 'object' ? conversation.assignedTo : null;
+                if (assigneeUser) { 
+                  assigneeNameText = assigneeUser.full_name || assigneeUser.username || 'غير معروف';
+              %> 
+                <span class="assigned-to-name ms-1">(<%= assigneeNameText %>)</span>
+                <script>
+                </script>
+              <% } else { %>
+                 <span class="assigned-to-name ms-1" style="display: none;"></span>
+              <% } %>
+            </span>
           <% } else { %>
             <span class="badge bg-success conversation-status-badge"><i class="fas fa-door-open me-1"></i> مفتوحة</span>
           <% } %>
@@ -132,7 +147,6 @@
     <% } %>
     
     <div class="message-container-wrapper">
-      <!-- زر تحميل المزيد من الرسائل -->
       <% if (pagination && pagination.totalPages > 1) { %>
         <div class="load-more-btn-container">
           <button id="loadMoreMessagesBtn" class="btn btn-sm btn-outline-primary">
@@ -140,6 +154,7 @@
           </button>
         </div>
       <% } %>
+      */ %>
       
       <% if (messages && messages.length) { %>
           <% messages.forEach(function(message) { %>

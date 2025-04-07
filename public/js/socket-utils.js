@@ -79,60 +79,73 @@ function setupAssignmentListeners(socket) {
                 window.currentConversationId === data.conversationId) {
                 
                 // تحديث عرض المسؤول في الواجهة
-                const assigneeInfo = document.getElementById('assigneeInfo');
+                const assignmentDropdownBtn = document.querySelector('#assignmentDropdown'); // الزر الرئيسي للقائمة
                 const assignToMeBtn = document.getElementById('assignToMeBtn');
                 const statusBadge = document.querySelector('.conversation-status-badge');
+                const assignedNameSpan = statusBadge ? statusBadge.querySelector('.assigned-to-name') : null;
                 
-                if (assigneeInfo) {
+                if (assignmentDropdownBtn && statusBadge && assignedNameSpan) {
                     if (data.assignedTo) {
                         // الحصول على اسم المستخدم المعين
-                        let assigneeName = 'معين لمستخدم آخر';
+                        let assigneeName = 'مستخدم غير معروف'; // قيمة افتراضية
                         
-                        // إذا كان التعيين للمستخدم الحالي
-                        if (data.assignedTo === window.currentUserId) {
+                        // التحقق من وجود بيانات المستخدم المعين في الحدث
+                        if (data.assignee && (data.assignee.full_name || data.assignee.username)) {
+                            assigneeName = data.assignee.full_name || data.assignee.username;
+                        } 
+                        // إذا لم تكن بيانات المستخدم متوفرة في الحدث، استخدم بيانات المستخدم الحالي إذا كان هو المعين
+                        else if (data.assignedTo === window.currentUserId) {
                             assigneeName = window.currentUsername;
                         } 
-                        // إذا كان اسم المستخدم مرسلاً في البيانات
+                        // إذا كان اسم المستخدم فقط متاحًا في الحدث (من إصدارات أقدم ربما)
                         else if (data.assigneeName) {
-                            assigneeName = data.assigneeName;
+                             assigneeName = data.assigneeName;
                         } else if (data.assigneeUsername) {
-                            assigneeName = data.assigneeUsername;
+                             assigneeName = data.assigneeUsername;
                         }
                         
-                        // تحديث عرض معلومات المسؤول
-                        assigneeInfo.innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeName}`;
+                        // تحديث زر القائمة المنسدلة
+                        assignmentDropdownBtn.innerHTML = `<i class="fas fa-user-check me-1"></i> ${assigneeName}`;
                         
+                        // تحديث حالة المحادثة لعرض الاسم
+                        statusBadge.className = 'badge bg-info conversation-status-badge'; // التأكد من أنها زرقاء
+                        assignedNameSpan.textContent = `( ${assigneeName} )`;
+                        assignedNameSpan.style.display = 'inline';
+                        // تحديث المحتوى الرئيسي للشارة (الأيقونة والنص)
+                        // يجب التأكد من عدم استبدال الـ span الذي أضفناه
+                        const icon = statusBadge.querySelector('i');
+                        if (icon) icon.className = 'fas fa-user-check me-1';
+                        // التأكد من النص الأساسي هو "مسندة"
+                        // الطريقة الأضمن هي إعادة بناء المحتوى مع الحفاظ على الـ span
+                        statusBadge.innerHTML = `<i class="fas fa-user-check me-1"></i> مسندة <span class="assigned-to-name ms-1" style="display: inline;">${assignedNameSpan.textContent}</span>`;
+
                         // إخفاء زر التعيين الذاتي
                         if (assignToMeBtn) {
                             assignToMeBtn.style.display = 'none';
                         }
-                        
-                        // تحديث حالة المحادثة
-                        if (statusBadge) {
-                            statusBadge.className = 'badge bg-info ms-2 conversation-status-badge';
-                            statusBadge.innerHTML = '<i class="fas fa-user-check me-1"></i> مسندة';
-                        }
                     } else {
                         // المحادثة غير معينة
-                        assigneeInfo.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> غير معين';
+                        assignmentDropdownBtn.innerHTML = '<i class="fas fa-user-check me-1"></i> غير معين';
                         
-                        // إظهار زر التعيين الذاتي
+                        // تحديث حالة المحادثة لإظهار "مفتوحة" وإخفاء اسم المستخدم
+                        statusBadge.className = 'badge bg-success conversation-status-badge'; // تغيير إلى اللون الأخضر
+                        assignedNameSpan.textContent = '';
+                        assignedNameSpan.style.display = 'none';
+                        // تحديث المحتوى الرئيسي للشارة
+                        statusBadge.innerHTML = `<i class="fas fa-door-open me-1"></i> مفتوحة <span class="assigned-to-name ms-1" style="display: none;"></span>`;
+
+                        // إظهار زر التعيين الذاتي (إذا كان مسموحًا به في الحالة الحالية)
                         if (assignToMeBtn) {
-                            assignToMeBtn.style.display = 'inline-block';
-                        }
-                        
-                        // تحديث حالة المحادثة
-                        if (statusBadge) {
-                            statusBadge.className = 'badge bg-success ms-2 conversation-status-badge';
-                            statusBadge.innerHTML = '<i class="fas fa-door-open me-1"></i> مفتوحة';
+                            assignToMeBtn.style.display = 'block'; // أو 'inline-block' حسب التنسيق
                         }
                     }
                 }
             }
             
-            // تحديث القائمة للعرض الصحيح للتعيينات
+            // تحديث القائمة للعرض الصحيح للتعيينات (يجب أن يتم بالفعل بواسطة حدث منفصل conversation-list-update)
+            // نتركها هنا كاحتياط، لكن يجب التحقق من عدم وجود تحديث مزدوج للقائمة
             if (typeof window.refreshConversationsList === 'function') {
-                window.refreshConversationsList();
+                // window.refreshConversationsList(); // قد يكون هذا غير ضروري إذا كان conversation-list-update يعالجها
             }
         }
     });

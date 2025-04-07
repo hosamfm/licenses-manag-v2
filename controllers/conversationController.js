@@ -912,80 +912,89 @@ exports.listConversationsAjax = async (req, res) => {
 exports.getConversationDetailsAjax = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    // إضافة دعم للصفحات
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20; // تعديل حجم الدفعة الافتراضي إلى 20 رسالة
+    const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
-    
+
     let conversation;
     let totalMessages;
     let messages = [];
-    
-    // جلب بيانات المحادثة من قاعدة البيانات مباشرة
+
     conversation = await Conversation.findById(conversationId)
       .populate('channelId', 'name')
       .populate('assignedTo', 'username full_name')
       .lean();
-      
+
     if (!conversation) {
-      return res.status(404).send('<div class="alert alert-danger">المحادثة غير موجودة</div>');
+      // استخدام logger للتحذير بدلاً من الاعتماد فقط على الاستجابة
+      logger.warn('conversationController', 'المحادثة غير موجودة في getConversationDetailsAjax', { conversationId });
+      return res.status(404).send('<div class="alert alert-warning">المحادثة المطلوبة غير موجودة.</div>');
     }
-    
-    // جلب إجمالي عدد الرسائل للمحادثة (للصفحات)
+
     totalMessages = await WhatsappMessage.countDocuments({ conversationId });
-    
-    // جلب الرسائل من قاعدة البيانات - تحسين الاستعلام للترتيب الصحيح باستخدام timestamp
+
     messages = await WhatsappMessage.find({ conversationId })
-      .sort({ timestamp: -1, createdAt: -1 }) // تحسين: ترتيب أوّلي حسب الطابع الزمني ثم حسب تاريخ الإنشاء
+      .sort({ timestamp: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
-    
-    // قلب الترتيب مرة أخرى ليعود إلى الأقدم للأحدث للعرض
+
     messages = messages.reverse();
-    
+
+    // معالجة الوسائط مع التحقق من وجود الخدمة
     if (messages && messages.length > 0) {
-      /* 
-      // إزالة التحديث التلقائي للرسائل - نستبدله بنظام تتبع الرؤية في جانب العميل
-      // تحديث حالة الرسائل الواردة إلى "مقروءة"
-      if (page === 1) { // فقط نعلم بأن الرسائل مقروءة عند تحميل الصفحة الأولى
-        await WhatsappMessage.updateMany(
-          { conversationId, direction: 'incoming', status: { $ne: 'read' } },
-          { $set: { status: 'read' } }
-        );
-      }
-      */
-      
-      // استخدام خدمة الوسائط لإضافة معلومات الوسائط للرسائل
-      messages = await mediaService.processMessagesWithMedia(messages);
-    }
-    
-    // في حالة عدم وجود رسائل
-    if (!messages || messages.length === 0) {
-      return res.render('crm/partials/_conversation_details_ajax', {
-        layout: false,
-        conversation,
-        messages: [],
-        user: req.user,
-        triggerMessagesLoaded: true,
-        pagination: {
-          currentPage: page,
-          totalPages: 0,
-          totalMessages: 0,
+      // التحقق من تعريف mediaService ووجود الدالة المطلوبة
+      if (typeof mediaService !== 'undefined' && typeof mediaService.processMessagesWithMedia === 'function') {
+        try {
+          messages = await mediaService.processMessagesWithMedia(messages);
+        } catch (mediaError) {
+          // تسجيل خطأ معالجة الوسائط ولكن الاستمرار لعرض الرسائل النصية على الأقل
+          logger.error('conversationController', 'خطأ أثناء معالجة الوسائط في getConversationDetailsAjax', {
+            error: mediaError.message,
+            stack: mediaError.stack,
+            conversationId,
+            page
+          });
+          // يمكنك هنا اختيار إرجاع خطأ 500 إذا كانت معالجة الوسائط ضرورية
+          // return res.status(500).send('<div class="alert alert-danger">خطأ في معالجة مرفقات الرسائل.</div>');
         }
-      });
+      } else {
+        // تسجيل تحذير إذا كانت الخدمة غير معرفة
+        logger.warn('conversationController', 'mediaService أو processMessagesWithMedia غير معرفة في getConversationDetailsAjax');
+      }
     }
-    
-    // حساب إجمالي عدد الصفحات
+
+    // التعامل مع حالة عدم وجود رسائل (خصوصًا للصفحات اللاحقة)
+    if (!messages || messages.length === 0) {
+      // إذا كانت الصفحة الأولى ولا توجد رسائل، أرجع القالب الفارغ
+      if (page === 1) {
+        return res.render('crm/partials/_conversation_details_ajax', {
+          layout: false,
+          conversation,
+          messages: [],
+          user: req.user,
+          // triggerMessagesLoaded: true, // يمكن إزالته إذا لم يعد مستخدماً
+          pagination: {
+            currentPage: page,
+            totalPages: 0,
+            totalMessages: 0,
+          }
+        });
+      } else {
+        // إذا لم تكن الصفحة الأولى ولا توجد رسائل (نهاية المحادثة)، أرجع استجابة فارغة 200
+        // هذا يمنع استبدال المحتوى الحالي بقالب فارغ عند الوصول لنهاية التمرير
+        return res.status(200).send('');
+      }
+    }
+
     const totalPages = Math.ceil(totalMessages / limit);
 
-    // نعيد الـ Partial فقط (layout: false)
     return res.render('crm/partials/_conversation_details_ajax', {
       layout: false,
       conversation,
       messages,
       user: req.user,
-      triggerMessagesLoaded: true,
+      // triggerMessagesLoaded: true, // يمكن إزالته إذا لم يعد مستخدماً
       pagination: {
         currentPage: page,
         totalPages,
@@ -993,14 +1002,16 @@ exports.getConversationDetailsAjax = async (req, res) => {
       }
     });
   } catch (err) {
-    // تسجيل الخطأ الفعلي في السجلات
-    logger.error('conversationController', 'خطأ في getConversationDetailsAjax', { 
+    // تحسين تسجيل الخطأ العام
+    logger.error('conversationController', 'خطأ فادح في getConversationDetailsAjax', {
       error: err.message,
-      stack: err.stack,
+      stack: err.stack, // تضمين stack trace مهم للتشخيص
       conversationId: req.params.conversationId,
+      page: req.query.page || 1,
       user: req.user ? req.user._id : 'N/A'
     });
-    return res.status(500).send('<div class="alert alert-danger">خطأ في الخادم. يرجى مراجعة السجلات.</div>');
+    // إرجاع رسالة خطأ أوضح قليلاً للعميل
+    return res.status(500).send('<div class="alert alert-danger">حدث خطأ غير متوقع أثناء تحميل تفاصيل المحادثة. يرجى المحاولة مرة أخرى.</div>');
   }
 };
 

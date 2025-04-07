@@ -14,8 +14,6 @@
       return;
     }
     
-    console.log('تحديث حالة الرسالة:', messageId, newStatus);
-    
     // محاولة العثور على الرسالة بطرق متعددة
     let messageElem = null;
     
@@ -40,11 +38,9 @@
       // استخدام أحدث رسالة صادرة لتحديث المعرف الخارجي
       if (sortedMessages.length > 0) {
         messageElem = sortedMessages[0];
-        console.log('لم يتم العثور على رسالة بالمعرف المباشر، تم استخدام أحدث رسالة صادرة:', messageId);
         
         // إضافة المعرف الخارجي للرسالة
         if (messageId.startsWith('wamid.')) {
-          console.log('إضافة معرف خارجي للرسالة:', messageElem.getAttribute('data-message-id'), messageId);
           messageElem.setAttribute('data-external-id', messageId);
           
           // تحديث أزرار التفاعل أيضًا
@@ -61,8 +57,6 @@
       console.warn('لم يتم العثور على الرسالة للتحديث:', messageId);
       return;
     }
-    
-    console.log('تم العثور على الرسالة، تحديث الحالة:', messageId, newStatus);
     
     // تحديث السمة
     messageElem.setAttribute('data-status', newStatus);
