@@ -718,6 +718,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('وظيفة initializeAllMaps غير متاحة لتهيئة خرائط الموقع.');
             }
 
+            // 9. تهيئة الردود السريعة بعد تحميل المحتوى
+            if (window.conversationModules && window.conversationModules.quickReplies && typeof window.conversationModules.quickReplies.init === 'function') {
+                 // تمرير الحاوية التي تم تحميل المحتوى فيها للتأكد من البحث داخلها
+                 window.conversationModules.quickReplies.init(conversationDetailsContainer);
+            } else {
+                 console.warn('وحدة الردود السريعة غير متاحة (quick-replies.js)');
+            }
+
         }).catch(error => {
             // console.error("خطأ في تحميل تفاصيل المحادثة:", error);
             conversationDetailsContainer.innerHTML = `

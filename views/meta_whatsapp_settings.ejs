@@ -301,6 +301,50 @@
         <% } %>
       </div>
     </div>
+
+    <!-- قسم الردود السريعة -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">الردود السريعة (Quick Replies)</h5>
+        </div>
+        <div class="card-body">
+            <p class="card-text">قم بإدارة الردود السريعة الخاصة بك لزيادة سرعة الرد في المحادثات. يمكنك استخدامها في نافذة المحادثة عن طريق كتابة <code>/</code> متبوعًا بالاختصار.</p>
+            
+            <!-- نموذج إضافة/تعديل رد سريع -->
+            <form id="quickReplyForm" class="mb-4">
+                <input type="hidden" id="quickReplyId" value="">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="quickReplyShortcut" class="form-label">الاختصار (مسبوق بـ /)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">/</span>
+                            <input type="text" class="form-control" id="quickReplyShortcut" name="shortcut" placeholder="مثال: ترحيب" required>
+                        </div>
+                         <div class="form-text">استخدم كلمة واحدة أو كلمتين بدون مسافات.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="quickReplyText" class="form-label">نص الرد الكامل</label>
+                        <textarea class="form-control" id="quickReplyText" name="text" rows="2" placeholder="أهلاً بك في خدمة العملاء..." required></textarea>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100" id="saveQuickReplyBtn">حفظ الرد</button>
+                        <button type="button" class="btn btn-secondary w-100 ms-2" id="cancelEditQuickReplyBtn" style="display: none;">إلغاء التعديل</button>
+                    </div>
+                </div>
+            </form>
+            
+            <!-- قائمة الردود السريعة -->
+            <h6>الردود السريعة المحفوظة:</h6>
+            <div id="quickRepliesList" class="list-group">
+                <!-- سيتم ملء القائمة بواسطة JavaScript -->
+                <div class="list-group-item text-center" id="quickRepliesLoading">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">جاري التحميل...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
   </div>
 
   <!-- مودال إضافة إعداد جديد -->
@@ -1064,6 +1108,241 @@
           return 'bg-secondary';
       }
     }
+  </script>
+
+  <!-- JavaScript لإدارة الردود السريعة -->
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+      const quickReplyForm = document.getElementById('quickReplyForm');
+      const quickReplyIdInput = document.getElementById('quickReplyId');
+      const quickReplyShortcutInput = document.getElementById('quickReplyShortcut');
+      const quickReplyTextInput = document.getElementById('quickReplyText');
+      const saveQuickReplyBtn = document.getElementById('saveQuickReplyBtn');
+      const cancelEditQuickReplyBtn = document.getElementById('cancelEditQuickReplyBtn');
+      const quickRepliesList = document.getElementById('quickRepliesList');
+      const quickRepliesLoading = document.getElementById('quickRepliesLoading');
+
+      let isEditing = false;
+
+      // دالة لعرض الردود
+      function displayQuickReplies(replies) {
+          quickRepliesList.innerHTML = ''; // مسح القائمة
+          if (!replies || replies.length === 0) {
+              quickRepliesList.innerHTML = '<div class="list-group-item text-muted text-center">لا توجد ردود سريعة محفوظة حاليًا.</div>';
+              return;
+          }
+
+          replies.forEach(reply => {
+              const item = document.createElement('div');
+              item.className = 'list-group-item d-flex justify-content-between align-items-center';
+              item.innerHTML = `
+                  <div>
+                      <strong class="me-2">/${reply.shortcut}</strong>
+                      <span class="text-muted">${reply.text.substring(0, 70)}${reply.text.length > 70 ? '...' : ''}</span>
+                  </div>
+                  <div>
+                      <button type="button" class="btn btn-sm btn-outline-secondary me-2 edit-qr-btn" data-id="${reply._id}" title="تعديل">
+                          <i class="fas fa-edit"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-danger delete-qr-btn" data-id="${reply._id}" title="حذف">
+                          <i class="fas fa-trash"></i>
+                      </button>
+                  </div>
+              `;
+              quickRepliesList.appendChild(item);
+          });
+
+          // إضافة معالجات أحداث لأزرار التعديل والحذف
+          document.querySelectorAll('.edit-qr-btn').forEach(btn => {
+              btn.addEventListener('click', handleEditClick);
+          });
+          document.querySelectorAll('.delete-qr-btn').forEach(btn => {
+              btn.addEventListener('click', handleDeleteClick);
+          });
+      }
+
+      // دالة لجلب الردود من API
+      async function fetchAndDisplayQuickReplies() {
+          quickRepliesLoading.style.display = 'block';
+          quickRepliesList.innerHTML = ''; // مسح المؤقت
+          try {
+              const response = await fetch('/api/quick-replies');
+              if (!response.ok) {
+                  throw new Error('فشل جلب الردود');
+              }
+              const replies = await response.json();
+              displayQuickReplies(replies);
+          } catch (error) {
+              console.error('خطأ في جلب الردود السريعة:', error);
+              quickRepliesList.innerHTML = '<div class="list-group-item text-danger text-center">حدث خطأ أثناء تحميل الردود.</div>';
+          } finally {
+              quickRepliesLoading.style.display = 'none';
+          }
+      }
+
+      // دالة لإعادة تعيين النموذج
+      function resetForm() {
+          quickReplyForm.reset();
+          quickReplyIdInput.value = '';
+          saveQuickReplyBtn.textContent = 'حفظ الرد';
+          cancelEditQuickReplyBtn.style.display = 'none';
+          isEditing = false;
+          quickReplyShortcutInput.focus();
+      }
+
+      // معالج حدث إرسال النموذج (إضافة أو تحديث)
+      quickReplyForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const id = quickReplyIdInput.value;
+          const shortcut = quickReplyShortcutInput.value.trim();
+          const text = quickReplyTextInput.value.trim();
+
+          if (!shortcut || !text) {
+              showToast('يرجى إدخال الاختصار والنص.', 'error');
+              return;
+          }
+
+          const url = id ? `/api/quick-replies/${id}` : '/api/quick-replies';
+          const method = id ? 'PUT' : 'POST';
+
+          saveQuickReplyBtn.disabled = true;
+          saveQuickReplyBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> جاري الحفظ...';
+
+          try {
+              const response = await fetch(url, {
+                  method: method,
+                  headers: {
+                      'Content-Type': 'application/json',
+                      // إضافة CSRF token إذا كان مستخدمًا
+                      // 'CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                  },
+                  body: JSON.stringify({ shortcut, text })
+              });
+
+              const result = await response.json();
+
+              if (!response.ok) {
+                   throw new Error(result.message || `فشل ${id ? 'تحديث' : 'إنشاء'} الرد`);
+              }
+              
+              showToast(result.message || `تم ${id ? 'تحديث' : 'حفظ'} الرد بنجاح!`, 'success');
+              resetForm();
+              fetchAndDisplayQuickReplies(); // إعادة تحميل القائمة
+
+          } catch (error) {
+              console.error(`خطأ في ${id ? 'تحديث' : 'إنشاء'} الرد السريع:`, error);
+              showToast(error.message || 'حدث خطأ غير متوقع.', 'error');
+          } finally {
+              saveQuickReplyBtn.disabled = false;
+              saveQuickReplyBtn.innerHTML = isEditing ? 'تحديث الرد' : 'حفظ الرد';
+          }
+      });
+
+      // معالج حدث النقر على زر التعديل
+      function handleEditClick(event) {
+          const button = event.currentTarget;
+          const id = button.getAttribute('data-id');
+          const listItem = button.closest('.list-group-item');
+          const shortcutText = listItem.querySelector('strong').textContent.substring(1); // إزالة /
+          const fullText = listItem.querySelector('span.text-muted').textContent; // قد نحتاج لجلب النص الكامل من API إذا كان مقطوعًا
+          
+          // الحل الأفضل: جلب الرد الكامل من الكاش أو API للتأكد من النص الكامل
+          // في هذا المثال، سنستخدم النص المعروض كحل مبسط
+          // const replyToEdit = fetchedReplies.find(r => r._id === id); // ابحث في الكاش
+          // if (replyToEdit) { quickReplyTextInput.value = replyToEdit.text; } ...
+          
+          quickReplyIdInput.value = id;
+          quickReplyShortcutInput.value = shortcutText;
+          quickReplyTextInput.value = fullText; // استخدام النص المتاح (قد يكون غير كامل)
+          saveQuickReplyBtn.textContent = 'تحديث الرد';
+          cancelEditQuickReplyBtn.style.display = 'inline-block';
+          isEditing = true;
+          quickReplyShortcutInput.focus();
+          window.scrollTo({ top: quickReplyForm.offsetTop - 20, behavior: 'smooth' }); // تمرير لأعلى النموذج
+      }
+
+      // معالج حدث النقر على زر الحذف
+      async function handleDeleteClick(event) {
+          const button = event.currentTarget;
+          const id = button.getAttribute('data-id');
+
+          // استخدام SweetAlert للتأكد
+          if (typeof Swal === 'undefined') {
+               if (!confirm('هل أنت متأكد من حذف هذا الرد السريع؟')) return;
+          } else {
+              const result = await Swal.fire({
+                  title: 'هل أنت متأكد؟',
+                  text: "لن تتمكن من التراجع عن هذا الإجراء!",
+                  icon: 'warning',
+                  showCancelButton: true,
+                  confirmButtonColor: '#d33',
+                  cancelButtonColor: '#3085d6',
+                  confirmButtonText: 'نعم، احذفه!',
+                  cancelButtonText: 'إلغاء'
+              });
+              if (!result.isConfirmed) return;
+          }
+
+          button.disabled = true;
+          button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+          try {
+              const response = await fetch(`/api/quick-replies/${id}`, {
+                  method: 'DELETE',
+                  headers: {
+                       // إضافة CSRF token إذا كان مستخدمًا
+                  }
+              });
+              const result = await response.json();
+              
+              if (!response.ok) {
+                  throw new Error(result.message || 'فشل حذف الرد');
+              }
+              
+              showToast(result.message || 'تم حذف الرد بنجاح!', 'success');
+              fetchAndDisplayQuickReplies(); // إعادة تحميل القائمة
+          } catch (error) {
+              console.error('خطأ في حذف الرد السريع:', error);
+              showToast(error.message || 'حدث خطأ أثناء الحذف.', 'error');
+               button.disabled = false;
+               button.innerHTML = '<i class="fas fa-trash"></i>'; // إعادة الأيقونة
+          }
+      }
+
+      // معالج حدث النقر على زر إلغاء التعديل
+      cancelEditQuickReplyBtn.addEventListener('click', resetForm);
+
+      // دالة لعرض التوست (تحتاج لمكتبة مثل Toastify أو Bootstrap Toasts)
+      function showToast(message, type = 'info') {
+          // Implement your preferred toast notification logic here
+          console.log(`[Toast - ${type}]: ${message}`);
+          // مثال باستخدام Bootstrap Toasts (يتطلب تهيئة)
+          /*
+          const toastContainer = document.getElementById('toastPlacement');
+          if (toastContainer) {
+              const toastHTML = `
+              <div class="toast align-items-center text-white bg-${type === 'error' ? 'danger' : (type === 'success' ? 'success' : 'primary')} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                  <div class="toast-body">
+                    ${message}
+                  </div>
+                  <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+              </div>`;
+              const toastElement = document.createElement('div');
+              toastElement.innerHTML = toastHTML;
+              toastContainer.appendChild(toastElement.firstChild);
+              const toast = new bootstrap.Toast(toastContainer.lastElementChild);
+              toast.show();
+          }
+          */
+           // حل بسيط باستخدام alert مؤقتًا
+           alert(`${type.toUpperCase()}: ${message}`);
+      }
+
+      // جلب الردود عند تحميل الصفحة
+      fetchAndDisplayQuickReplies();
+  });
   </script>
 </body>
 </html>

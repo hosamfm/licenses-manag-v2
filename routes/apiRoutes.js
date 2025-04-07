@@ -7,6 +7,8 @@ const { isAuthenticated, checkCanAccessConversations } = require('../middleware/
 const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const logger = require('../services/loggerService');
+const balanceRoutes = require('./balanceRoutes');
+const quickReplyRoutes = require('./quickReplyRoutes');
 
 // التحقق من الصلاحيات
 const ensureCanAccessAPI = [isAuthenticated, checkCanAccessConversations];
@@ -188,5 +190,11 @@ router.get('/users/:userId/stats', ensureCanAccessAPI, async (req, res) => {
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء جلب إحصائيات المستخدم' });
   }
 });
+
+// مسارات الرصيد
+router.use('/balance', balanceRoutes);
+
+// إضافة استخدام مسارات الردود السريعة
+router.use('/quick-replies', quickReplyRoutes);
 
 module.exports = router;
