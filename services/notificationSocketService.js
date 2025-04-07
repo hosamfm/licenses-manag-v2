@@ -205,12 +205,19 @@ async function sendMessageNotification(conversationId, message, conversation) {
                     
                     if (!isAdminActive) {
                         logger.info('notificationSocketService', 'إرسال إشعار للمشرف (غير نشط في الغرفة)', { conversationId, adminId: admin._id });
+                        
+                        // --- التصحيح: استدعاء الدالة بالتوقيع الصحيح ---
+                        const senderName = contact?.name || contact?.phoneNumber || 'عميل غير معروف'; // اسم المرسل (العميل)
+                        const messageId = message?._id || message?.id || null; // معرف الرسالة
+                        
                         const notification = await NotificationService.createMessageNotification(
-                            admin._id,
-                            'system',
-                            conversationId,
-                            message.content || 'رسالة جديدة غير مسندة'
+                            admin._id,                         // recipientId
+                            conversationId,                  // conversationId (الصحيح)
+                            message.content || 'رسالة جديدة', // messageContent
+                            messageId,                       // messageId
+                            senderName                       // senderName
                         );
+                        // --- نهاية التصحيح ---
                         
                         if (notification) {
                             await sendNotification(admin._id, notification);
