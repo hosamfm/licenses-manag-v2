@@ -199,9 +199,6 @@
         // تحديث حالة الرسالة
         updatePendingMessageStatus(result.message._id, result.message.status || 'sent');
         
-        // *** تحديث محتوى الوسائط في الرسالة المؤقتة ***
-        updatePendingMediaContent(result.message._id, result.message);
-        
         // إضافة المعرف الجديد للرسائل المرسلة لمنع تكرارها
         window.sentMessageIds.add(result.message._id);
       } else {
@@ -224,11 +221,11 @@
   };
 
   /**
-   * تحديث حالة الرسالة قيد الإرسال
+   * تحديث حالة الرسالة قيد الإرسال (جعلها عامة)
    * @param {string} messageId - معرف الرسالة
    * @param {string} status - الحالة الجديدة
    */
-  function updatePendingMessageStatus(messageId, status) {
+  window.updatePendingMessageStatus = function(messageId, status) {
     // البحث عن الرسالة بالمعرف
     const pendingMessage = document.querySelector(`.message[data-message-id="${messageId}"]`);
     if (!pendingMessage) return;
@@ -287,30 +284,31 @@
   }
 
   /**
-   * تحديث محتوى الوسائط للرسالة المؤقتة بعد الحصول على الرابط النهائي
+   * تحديث محتوى الوسائط للرسالة المؤقتة (جعلها عامة)
+   * تتوقع الآن بيانات كاملة (مع mediaUrl) من السوكت
    * @param {string} messageId - المعرف النهائي للرسالة
-   * @param {object} messageData - بيانات الرسالة الكاملة من الخادم
+   * @param {object} messageData - بيانات الرسالة الكاملة
    */
-  function updatePendingMediaContent(messageId, messageData) {
-    console.log(`[updatePendingMediaContent] محاولة تحديث وسائط الرسالة ID: ${messageId}`, messageData);
+  window.updatePendingMediaContent = function(messageId, messageData) {
+    console.log(`[updatePendingMediaContent] محاولة تحديث وسائط الرسالة ID: ${messageId} -- البيانات المستلمة:`, JSON.stringify(messageData, null, 2));
     
-    // الحصول على نوع الوسائط. قد يكون مفقوداً في الاستجابة الأولية
     const mediaType = messageData.mediaType;
-    
     if (!mediaType) {
-      console.log(`[updatePendingMediaContent] لا يوجد mediaType في messageData ID: ${messageId}. لا يمكن تحديث الوسائط.`);
+      console.log(`[updatePendingMediaContent] لا يوجد mediaType في messageData ID: ${messageId}.`);
       return;
     }
     
-    // *** بناء الرابط إذا كان مفقوداً ***
-    let mediaUrl = messageData.mediaUrl;
-    if (!mediaUrl && messageId) {
-      // افتراض بناء الرابط بناءً على النمط المكتشف في السجلات
-      mediaUrl = `/whatsapp/media/content/${messageId}`;
-      console.log(`[updatePendingMediaContent] تم بناء mediaUrl محلياً: ${mediaUrl}`);
-    } else if (!mediaUrl) {
-        console.error(`[updatePendingMediaContent] الرابط mediaUrl مفقود ولا يوجد messageId لبنائه.`);
-        return;
+    // *** التحقق من وجود mediaUrl (يجب أن يأتي من السوكت الآن) ***
+    const mediaUrl = messageData.mediaUrl;
+    if (!mediaUrl) {
+      console.error(`[updatePendingMediaContent] الرابط mediaUrl مفقود في بيانات السوكت للرسالة ID: ${messageId}`);
+      // عرض رسالة خطأ للمستخدم في العنصر النائب
+      const errorPlaceholder = document.querySelector(`.message[data-message-id="${messageId}"] .media-placeholder`);
+      if (errorPlaceholder) {
+          errorPlaceholder.innerHTML = '<div class="text-danger p-2"><i>خطأ: رابط الوسائط غير متوفر</i></div>';
+          errorPlaceholder.classList.remove('media-placeholder');
+      }
+      return;
     }
     
     const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
