@@ -356,6 +356,14 @@
   window.addMessageToConversation = function(messageData) {
     if (!messageData || !window.currentConversationId) return;
     
+    // *** التحقق الجديد: تجاهل الرسائل التي أرسلها العميل الحالي ولا تزال قيد المعالجة المحلية ***
+    if (window.sentMessageIds && window.sentMessageIds.has(messageData._id)) {
+      console.log('تجاهل معالجة الرسالة الصادرة محلياً بواسطة addMessageToConversation:', messageData._id);
+      // يمكننا إزالتها من المجموعة هنا إذا أردنا السماح بتحديثات لاحقة عبر السوكت
+      // window.sentMessageIds.delete(messageData._id);
+      return; 
+    }
+    
     // التأكد من أن الرسالة تخص المحادثة الحالية
     if (messageData.conversationId !== window.currentConversationId) return;
     
