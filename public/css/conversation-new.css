@@ -348,34 +348,34 @@
 
 .message {
   margin-bottom: 10px;
-  max-width: 75%;
+  max-width: 95%;
   position: relative;
-  padding: 4px 50px;
   margin: 8px 0;
+  display: flex;
+  align-items: center;
 }
 
 .message.incoming {
   margin-right: auto;
-  padding-left: 50px;
-  padding-right: 8px;
+  justify-content: flex-start;
 }
 
 .message.outgoing {
   margin-left: auto;
-  padding-right: 50px;
-  padding-left: 8px;
+  justify-content: flex-end;
 }
 
 .message.internal {
   max-width: 90%;
   margin-left: auto;
   margin-right: auto;
+  padding: 4px 15px;
+  display: block;
 }
 
 .message-bubble {
   border-radius: 18px;
   padding: 8px 12px;
-  position: relative;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   word-wrap: break-word;
   width: fit-content;
@@ -620,34 +620,43 @@
 /* تنسيقات شريط التفاعل مع الرسائل */
 .message-actions {
   display: none;
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
   padding: 4px;
   border-radius: 20px;
   background-color: var(--bs-white);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   z-index: 2;
   transition: all 0.2s ease;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .message.outgoing .message-actions {
-  left: -45px;
+  order: -1;
+  margin-right: 8px;
+  margin-left: 0;
 }
 
 .message.incoming .message-actions {
-  right: -45px;
+  order: 1;
+  margin-left: 8px;
+  margin-right: 0;
 }
 
-/* تعديل سلوك ظهور شريط التفاعل */
+/* تعديل سلوك الظهور للتحويم على الرسالة بأكملها */
 .message:hover .message-actions,
 .message-actions:hover {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
-/* إضافة مساحة إضافية للتفاعل */
+/* إزالة القاعدة القديمة غير الضرورية */
+/*
+.message:hover .message-actions { 
+}
+*/
+
+/* التأكد من أن المساحة الإضافية للتفاعل لا تزال تعمل */
+/* 
 .message-actions::before {
   content: '';
   position: absolute;
@@ -657,6 +666,7 @@
   right: -10px;
   z-index: -1;
 }
+*/
 
 /* إضافة مساحة أكبر للأزرار لتسهيل النقر عليها */
 .message-action-btn {
