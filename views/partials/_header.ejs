@@ -112,22 +112,70 @@
 
             <!-- User Menu -->
             <% if (session && session.userId) { %>
+                <!-- Notifications Dropdown -->
+                <div class="nav-item dropdown notifications-menu">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <div class="notifications-icon">
+                            <i class="fas fa-bell"></i>
+                            <span class="badge rounded-pill bg-danger unread-badge d-none">0</span>
+                        </div>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-end notification-dropdown">
+                        <div class="dropdown-header d-flex justify-content-between align-items-center">
+                            <span>الإشعارات</span>
+                            <div>
+                                <button class="btn btn-sm btn-link mark-all-read">تعيين الكل كمقروء</button>
+                            </div>
+                        </div>
+                        <div class="notifications-container">
+                            <div class="spinner-container text-center p-3 d-none">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">جار التحميل...</span>
+                                </div>
+                            </div>
+                            <div class="notifications-list">
+                                <!-- سيتم إضافة الإشعارات هنا ديناميكيًا -->
+                                <div class="dropdown-item empty-state">
+                                    <p class="text-center text-muted my-3">لا توجد إشعارات جديدة</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dropdown-footer">
+                            <a href="#" class="view-all-notifications">عرض كل الإشعارات</a>
+                        </div>
+                    </div>
+                </div>
                 <div class="nav-item dropdown user-menu">
                     <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <div class="user-info">
-                            <i class="fas fa-user-circle"></i>
-                            <span class="username"><%= session.username %></span>
+                            <% if (session.profile_picture) { %>
+                                <img src="<%= session.profile_picture %>" alt="الصورة الشخصية" class="header-profile-picture">
+                            <% } else { %>
+                                <i class="fas fa-user-circle"></i>
+                            <% } %>
+                            <span class="username"><%= session.full_name || session.username %></span>
                         </div>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li class="dropdown-header">
                             <div class="d-flex align-items-center">
-                                <i class="fas fa-user-circle fs-4"></i>
+                                <% if (session.profile_picture) { %>
+                                    <img src="<%= session.profile_picture %>" alt="الصورة الشخصية" class="header-profile-picture-lg">
+                                <% } else { %>
+                                    <i class="fas fa-user-circle fs-4"></i>
+                                <% } %>
                                 <div class="ms-2">
-                                    <div class="fw-bold"><%= session.username %></div>
+                                    <div class="fw-bold"><%= session.full_name || session.username %></div>
                                     <small class="text-muted"><%= session.userRole %></small>
                                 </div>
                             </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="/profile">
+                                <i class="fas fa-id-card"></i>
+                                <span>الملف الشخصي</span>
+                            </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
@@ -323,6 +371,125 @@
 
         .dropdown-item {
             padding: 0.75rem 1rem;
+        }
+    }
+
+    /* Notifications Styles */
+    .notifications-menu {
+        margin-right: 0.5rem;
+    }
+    
+    .notifications-icon {
+        position: relative;
+        padding: 0.5rem;
+    }
+    
+    .notifications-icon i {
+        font-size: 1.3rem;
+        color: #64748b;
+    }
+    
+    .unread-badge {
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 0.65rem;
+        padding: 0.25rem 0.4rem;
+    }
+    
+    .notification-dropdown {
+        width: 320px;
+        max-height: 400px;
+        overflow: hidden;
+        padding: 0;
+    }
+    
+    .dropdown-header {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .notifications-container {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .notification-item {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f1f5f9;
+        position: relative;
+    }
+    
+    .notification-item:hover {
+        background-color: rgba(29, 154, 154, 0.05);
+    }
+    
+    .notification-item.unread {
+        background-color: rgba(29, 154, 154, 0.08);
+    }
+    
+    .notification-item.unread:after {
+        content: '';
+        position: absolute;
+        top: 1rem;
+        right: 0.5rem;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--primary-teal);
+    }
+    
+    .notification-title {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+        color: var(--text-dark);
+        font-size: 0.9rem;
+    }
+    
+    .notification-content {
+        color: #64748b;
+        font-size: 0.85rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .notification-time {
+        color: #94a3b8;
+        font-size: 0.75rem;
+    }
+    
+    .dropdown-footer {
+        padding: 0.75rem 1rem;
+        text-align: center;
+        border-top: 1px solid #e2e8f0;
+    }
+    
+    .dropdown-footer a {
+        color: var(--primary-blue);
+        text-decoration: none;
+    }
+    
+    .dropdown-footer a:hover {
+        text-decoration: underline;
+    }
+    
+    .mark-all-read {
+        font-size: 0.8rem;
+        padding: 0;
+        color: var(--primary-blue);
+    }
+    
+    .mark-all-read:hover {
+        text-decoration: underline;
+    }
+    
+    .empty-state {
+        padding: 1rem;
+    }
+    
+    @media (max-width: 767px) {
+        .notification-dropdown {
+            width: 100%;
+            margin-top: 0.5rem;
         }
     }
 </style>

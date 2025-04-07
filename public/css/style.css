@@ -317,3 +317,299 @@ body, h1, h2, h3, h4, h5, h6, p, label, input, button {
     display: flex; /* استخدام flexbox لتوسيط النص عموديًا */
     align-items: center; /* توسيط العناصر عموديًا */
 }
+
+/* إضافة تنسيقات لصفحة الملف الشخصي */
+body.profile-page {
+    background-color: #f4f7f6; /* خلفية رمادية فاتحة جداً */
+}
+
+.profile-container {
+    max-width: 900px; /* زيادة العرض قليلاً */
+    margin: 3rem auto;
+    background-color: #fff;
+    padding: 2.5rem 3rem; /* زيادة الحشو الداخلي */
+    border-radius: 1rem; /* زوايا أكثر دائرية */
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); /* ظل أنعم وأكبر */
+    border: 1px solid #e9ecef; /* إضافة حد رقيق */
+}
+
+.profile-container h1, 
+.profile-container h2 {
+    color: var(--primary-blue, #1B365D); /* استخدام متغير اللون إن وجد */
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 700; /* خط أثقل للعناوين */
+}
+
+.profile-container .form-group {
+    margin-bottom: 1.75rem; /* زيادة المسافة بين مجموعات الحقول */
+}
+
+.profile-container label {
+    display: block;
+    margin-bottom: 0.75rem; /* زيادة المسافة تحت الـ label */
+    font-weight: 600; /* خط أثقل للـ label */
+    color: #495057;
+    font-size: 0.9rem; /* تصغير حجم الخط قليلاً */
+}
+
+.profile-container .form-control {
+    /* استخدام تنسيقات .form-control الموجودة في _head.ejs */
+    /* ولكن يمكن إضافة بعض التعديلات إذا لزم الأمر */
+    padding: 0.8rem 1.1rem; /* تعديل الحشو قليلاً */
+}
+
+
+.profile-container input[type="text"][readonly],
+.profile-container input[type="email"][readonly],
+.profile-container input[type="tel"][readonly] {
+    background-color: #eef1f4; /* لون خلفية مختلف قليلاً للقراءة فقط */
+    cursor: not-allowed;
+    border-color: #dfe3e7;
+}
+
+.profile-picture-section {
+    display: flex;
+    align-items: center;
+    gap: 2rem; /* مسافة بين الصورة والنص */
+    margin-bottom: 2.5rem;
+    flex-wrap: wrap; /* للسماح بالالتفاف على شاشات أصغر */
+}
+
+.profile-picture-container {
+    text-align: center;
+    margin-bottom: 0; /* إزالة الهامش السفلي الافتراضي */
+    flex-shrink: 0; /* منع الصورة من التقلص */
+}
+
+#profile-picture-preview {
+    width: 120px; /* تصغير حجم الصورة قليلاً */
+    height: 120px; 
+    border-radius: 50%;
+    border: 4px solid #fff; /* حد أبيض حول الصورة */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* ظل للصورة */
+    display: block;
+    margin: 0 auto;
+    object-fit: cover; 
+    background-color: #e9ecef; 
+}
+
+.profile-picture-controls {
+    margin-top: 1rem;
+}
+
+.profile-picture-controls label {
+    cursor: pointer;
+    color: var(--primary-teal, #1D9A9A);
+    background-color: rgba(29, 154, 154, 0.1); /* خلفية شفافة بلون السمة */
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: inline-block; /* للعرض الصحيح */
+    border: 1px solid rgba(29, 154, 154, 0.2);
+}
+
+.profile-picture-controls label:hover {
+    background-color: rgba(29, 154, 154, 0.2);
+}
+
+.profile-picture-controls input[type="file"] {
+    display: none; 
+}
+
+.profile-info-text {
+    flex-grow: 1; /* السماح للنص بأخذ المساحة المتبقية */
+}
+
+.profile-info-text h3 {
+    margin-top: 0; /* إزالة الهامش العلوي */
+    margin-bottom: 0.5rem;
+    color: var(--primary-blue, #1B365D);
+    font-size: 1.5rem;
+}
+
+.profile-info-text p {
+    color: #6c757d; /* لون رمادي للنص الوصفي */
+    margin-bottom: 0;
+    font-size: 0.95rem;
+}
+
+
+.profile-container .notification-settings {
+     margin-bottom: 1rem; /* تقليل المسافة السفلية قليلاً */
+}
+
+.profile-container .notification-settings .form-check {
+     /* استخدام فئات Bootstrap للتباعد والتنسيق إن أمكن */
+     padding-right: 0; /* إزالة الحشو الافتراضي لـ form-check في RTL */
+}
+
+.profile-container .notification-settings input[type="checkbox"] {
+    margin-right: 0;
+    margin-left: 0.5rem; /* إضافة هامش لليسار في RTL */
+    vertical-align: middle;
+    width: 1.1em; /* حجم قياسي لمربع الاختيار */
+    height: 1.1em;
+}
+
+.profile-container .notification-settings label {
+     display: inline-block;
+     margin-bottom: 0; /* إزالة الهامش السفلي */
+     font-weight: normal; 
+     vertical-align: middle;
+     font-size: 0.95rem; /* خط أصغر قليلاً */
+}
+
+.profile-container #detailed-notifications {
+    margin-right: 1.5rem; 
+    padding-right: 1.5rem; 
+    border-right: 2px solid #f1f3f5; 
+    margin-top: 1rem;
+}
+
+
+.profile-container button[type="submit"] {
+    padding: 0.9rem 2rem; /* زيادة الحشو */
+    background: var(--primary-blue, #1B365D); /* استخدام لون السمة الأساسي */
+    border-color: var(--primary-blue, #1B365D);
+    color: white;
+    border: none;
+    border-radius: 0.5rem; /* زوايا أكثر دائرية */
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600; /* خط أثقل للزر */
+    transition: all 0.3s ease;
+    display: inline-block; /* للعرض الصحيح */
+    width: auto; /* إزالة العرض الكامل */
+    margin-top: 2rem;
+    box-shadow: 0 4px 10px rgba(27, 54, 93, 0.2); /* ظل للزر */
+}
+
+.profile-container button[type="submit"]:hover {
+    background: var(--primary-teal, #1D9A9A); 
+    border-color: var(--primary-teal, #1D9A9A);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(29, 154, 154, 0.3); 
+}
+
+/* تعديل تنسيق منطقة الرسائل */
+.profile-container #message-area {
+    margin-bottom: 2rem; /* زيادة المسافة السفلية */
+    padding: 1rem;
+    border-radius: 0.5rem; /* زوايا دائرية */
+    text-align: center;
+    font-weight: 500;
+}
+
+/* استخدام فئات Bootstrap القياسية للتنبيهات إن أمكن */
+.profile-container .alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.profile-container .alert-info {
+    background-color: #cff4fc;
+    color: #055160;
+    border: 1px solid #b6effb;
+}
+
+
+hr {
+    border-top: 1px solid #e9ecef; /* لون أفتح للخط الفاصل */
+    margin: 2.5rem 0;
+}
+
+/* --- تنسيقات الصورة الشخصية في الهيدر --- */
+.header-profile-picture,
+.header-profile-picture-lg {
+    border-radius: 50%;
+    object-fit: cover; /* للحفاظ على نسبة العرض إلى الارتفاع */
+    background-color: #eee; /* خلفية بسيطة في حالة عدم تحميل الصورة */
+}
+
+.header-profile-picture {
+    width: 32px;  /* حجم مناسب للهيدر الرئيسي */
+    height: 32px;
+    border: 1px solid #ddd; /* حد رقيق */
+}
+
+.header-profile-picture-lg {
+    width: 40px;  /* حجم أكبر قليلاً للقائمة المنسدلة */
+    height: 40px;
+    border: 2px solid #fff; /* حد أبيض */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* ظل خفيف */
+}
+
+/* --- نهاية تنسيقات الملف الشخصي --- */
+
+
+/* التنسيقات القديمة (أضفها إذا كانت هناك تعارضات أو للحفاظ على التوافق) */
+/*
+body {
+    padding: 20px;
+}
+.form-group {
+    margin-bottom: 15px;
+}
+label {
+    display: block;
+    margin-bottom: 5px;
+}
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="password"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+.profile-picture-container {
+    margin-bottom: 15px;
+    text-align: center;
+}
+#profile-picture-preview {
+    width: 150px; 
+    height: 150px; 
+    border-radius: 50%;
+    border: 1px solid #ccc;
+    display: block;
+    margin: 10px auto;
+    object-fit: cover; 
+    background-color: #f8f9fa; 
+}
+.notification-settings label {
+     display: inline-block;
+     margin-left: 10px;
+}
+button {
+    padding: 10px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+button:hover {
+    background-color: #0056b3;
+}
+#message-area {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 4px;
+}
+.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+*/

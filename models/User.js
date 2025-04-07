@@ -10,6 +10,13 @@ const userSchema = new mongoose.Schema({
   },
   password: { type: String, required: true },
   full_name: { type: String, required: true },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    match: /^\S+@\S+\.\S+$/
+  },
   phone_number: { 
     type: String, 
     required: true,
@@ -17,6 +24,10 @@ const userSchema = new mongoose.Schema({
   },
   company_name: { type: String, required: true, default: 'Default Company' },
   telegram_chat_id: { type: String },
+  profile_picture: {
+    type: String,
+    default: null 
+  },
   account_status: { 
     type: String, 
     enum: ['active', 'inactive'], 
@@ -27,10 +38,25 @@ const userSchema = new mongoose.Schema({
     enum: ['no_permissions', 'representative', 'supervisor', 'admin', 'supplier'], // Added 'supplier'
     default: 'no_permissions' 
   },
-  // إضافة صلاحية الوصول إلى نظام المحادثات
   can_access_conversations: {
     type: Boolean,
     default: false
+  },
+  enable_general_notifications: {
+    type: Boolean,
+    default: true
+  },
+  notify_assigned_conversation: {
+    type: Boolean,
+    default: true
+  },
+  notify_unassigned_conversation: {
+    type: Boolean,
+    default: true
+  },
+  notify_any_message: {
+    type: Boolean,
+    default: true
   },
   temp_code: { type: String },
   subordinates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],

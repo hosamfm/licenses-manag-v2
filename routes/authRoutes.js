@@ -125,6 +125,8 @@ router.post('/auth/login', async (req, res) => {
     if (isMatch) {
       req.session.userId = user._id;
       req.session.userRole = user.user_role;
+      req.session.profile_picture = user.profile_picture;
+      req.session.full_name = user.full_name;
       req.flash('success', 'Logged in successfully.');
       return res.redirect('/');
     } else {

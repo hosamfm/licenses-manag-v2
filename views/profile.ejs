@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<%- include('partials/_head.ejs') %>
+
+<body class="profile-page">
+    <%- include('partials/_header.ejs') %>
+
+    <div class="profile-container container">
+        <h1>الملف الشخصي</h1>
+
+        <div id="message-area"></div>
+
+        <!-- قسم الصورة الشخصية والمعلومات الأساسية -->
+        <div class="profile-picture-section">
+            <div class="profile-picture-container">
+                <img id="profile-picture-preview" src="/images/logo.png" alt="الصورة الشخصية">
+                 <div class="profile-picture-controls">
+                    <label for="profile_picture">تغيير الصورة</label>
+                    <input type="file" id="profile_picture" name="profile_picture" accept="image/*">
+                </div>
+            </div>
+            <div class="profile-info-text">
+                <h3 id="profile-full-name"><%= session.username %></h3> <!-- عرض الاسم هنا -->
+                <p>يمكنك تعديل معلومات ملفك الشخصي وإعدادات الإشعارات أدناه.</p>
+            </div>
+        </div>
+
+        <hr>
+
+        <form id="profile-form">
+            
+            <h2>المعلومات الشخصية</h2>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="username">اسم المستخدم (غير قابل للتعديل):</label>
+                        <input type="text" id="username" name="username" class="form-control" readonly>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="full_name">الاسم الكامل:</label>
+                        <input type="text" id="full_name" name="full_name" class="form-control" required>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                 <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="email">البريد الإلكتروني:</label>
+                        <input type="email" id="email" name="email" class="form-control" required>
+                    </div>
+                 </div>
+                 <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="phone_number">رقم الهاتف:</label>
+                        <input type="tel" id="phone_number" name="phone_number" class="form-control" required>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="telegram_chat_id">معرف تيليجرام (غير قابل للتعديل):</label>
+                <input type="text" id="telegram_chat_id" name="telegram_chat_id" class="form-control" readonly>
+            </div>
+
+            <hr>
+            <h2>تغيير كلمة المرور</h2>
+             <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="current_password">كلمة المرور الحالية (اتركه فارغًا إذا لم ترغب في التغيير):</label>
+                        <input type="password" id="current_password" name="current_password" class="form-control">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="new_password">كلمة المرور الجديدة:</label>
+                        <input type="password" id="new_password" name="new_password" class="form-control">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="confirm_new_password">تأكيد كلمة المرور الجديدة:</label>
+                        <input type="password" id="confirm_new_password" name="confirm_new_password" class="form-control">
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+            <h2>إعدادات الإشعارات</h2>
+            <div class="form-group notification-settings">
+                 <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="enable_general_notifications" name="enable_general_notifications">
+                    <label class="form-check-label" for="enable_general_notifications">تفعيل الإشعارات العامة</label>
+                </div>
+            </div>
+            <div id="detailed-notifications" style="margin-right: 20px;"> 
+                <div class="form-group notification-settings">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="notify_assigned_conversation" name="notify_assigned_conversation">
+                        <label class="form-check-label" for="notify_assigned_conversation">إشعار برسالة جديدة لمحادثة معينة لي</label>
+                    </div>
+                </div>
+                <div class="form-group notification-settings">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="notify_unassigned_conversation" name="notify_unassigned_conversation">
+                        <label class="form-check-label" for="notify_unassigned_conversation">إشعار برسالة جديدة لمحادثة لم يتم تعينها</label>
+                    </div>
+                </div>
+                <div class="form-group notification-settings">
+                     <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="notify_any_message" name="notify_any_message">
+                        <label class="form-check-label" for="notify_any_message">إشعار عند إستلام أي رسالة</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center"> <!-- توسيط الزر -->
+                 <button type="submit" class="btn btn-primary" id="saveProfileButton">حفظ التغييرات</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bootstrap Modal for Success Message -->
+    <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title" id="successModalLabel">نجاح</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body" id="successModalBody">
+            <!-- سيتم وضع رسالة النجاح هنا -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-success" id="successModalOkButton">موافق</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const profileForm = document.getElementById('profile-form');
+            const usernameInput = document.getElementById('username');
+            const fullNameInput = document.getElementById('full_name');
+            const emailInput = document.getElementById('email');
+            const phoneInput = document.getElementById('phone_number');
+            const telegramInput = document.getElementById('telegram_chat_id');
+            const profilePictureInput = document.getElementById('profile_picture');
+            const profilePicturePreview = document.getElementById('profile-picture-preview');
+            const currentPasswordInput = document.getElementById('current_password');
+            const newPasswordInput = document.getElementById('new_password');
+            const confirmNewPasswordInput = document.getElementById('confirm_new_password');
+            const enableGeneralNotificationsCheckbox = document.getElementById('enable_general_notifications');
+            const detailedNotificationsDiv = document.getElementById('detailed-notifications');
+            const notifyAssignedCheckbox = document.getElementById('notify_assigned_conversation');
+            const notifyUnassignedCheckbox = document.getElementById('notify_unassigned_conversation');
+            const notifyAnyMessageCheckbox = document.getElementById('notify_any_message');
+            const messageArea = document.getElementById('message-area');
+            const profileFullNameElement = document.getElementById('profile-full-name'); // عنصر لعرض الاسم الكامل
+            // الحصول على مرجع للنافذة المنبثقة وزر الموافقة
+            const successModalElement = document.getElementById('successModal');
+            const successModalBody = document.getElementById('successModalBody');
+            const successModalOkButton = document.getElementById('successModalOkButton');
+            // التأكد من أن bootstrap متاح قبل استخدامه
+            let successModalInstance = null;
+            if (typeof bootstrap !== 'undefined') {
+                 successModalInstance = new bootstrap.Modal(successModalElement);
+            } else {
+                console.error('Bootstrap Modal component not found!');
+            }
+            
+            let currentProfilePictureBase64 = null;
+            const defaultAvatar = '/images/logo.png';
+    
+            // جلب بيانات المستخدم عند تحميل الصفحة
+            async function fetchProfileData() {
+                try {
+                    const response = await fetch('/api/profile');
+                    if (!response.ok) {
+                        throw new Error('فشل جلب بيانات الملف الشخصي');
+                    }
+                    const user = await response.json();
+                    usernameInput.value = user.username;
+                    fullNameInput.value = user.full_name;
+                    // تحديث الاسم المعروض في قسم الصورة
+                    if(profileFullNameElement) profileFullNameElement.textContent = user.full_name;
+                    
+                    emailInput.value = user.email || ''; // التعامل مع حالة عدم وجود بريد إلكتروني
+                    phoneInput.value = user.phone_number;
+                    telegramInput.value = user.telegram_chat_id || 'غير متوفر';
+                    enableGeneralNotificationsCheckbox.checked = user.enable_general_notifications !== false; // الافتراضي true
+                    notifyAssignedCheckbox.checked = user.notify_assigned_conversation !== false; // الافتراضي true
+                    notifyUnassignedCheckbox.checked = user.notify_unassigned_conversation !== false; // الافتراضي true
+                    notifyAnyMessageCheckbox.checked = user.notify_any_message !== false; // الافتراضي true
+                    
+                    currentProfilePictureBase64 = user.profile_picture; // حفظ الصورة الحالية
+                     if (user.profile_picture) {
+                         profilePicturePreview.src = user.profile_picture; // عرض الصورة المحفوظة كـ Base64
+                     } else {
+                         profilePicturePreview.src = defaultAvatar; // عرض الصورة الافتراضية
+                     }
+                     toggleDetailedNotifications(); // تحديث عرض إعدادات الإشعارات التفصيلية
+    
+                } catch (error) {
+                    showMessage('error', `خطأ: ${error.message}`);
+                    console.error('Error fetching profile:', error);
+                }
+            }
+    
+             // إظهار/إخفاء الإشعارات التفصيلية بناءً على الإعداد العام
+            function toggleDetailedNotifications() {
+                 detailedNotificationsDiv.style.display = enableGeneralNotificationsCheckbox.checked ? 'block' : 'none';
+            }
+    
+            enableGeneralNotificationsCheckbox.addEventListener('change', toggleDetailedNotifications);
+    
+            // التعامل مع تغيير الصورة
+            profilePictureInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        profilePicturePreview.src = e.target.result;
+                    }
+                    reader.readAsDataURL(file);
+                }
+            });
+    
+            // التعامل مع إرسال النموذج
+            profileForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                messageArea.textContent = '';
+                messageArea.className = '';
+
+                // --- تعطيل الزر وإظهار مؤشر التحميل --- 
+                const saveButton = document.getElementById('saveProfileButton');
+                const originalButtonText = saveButton.innerHTML;
+                saveButton.disabled = true;
+                saveButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> جاري الحفظ...';
+                // ------------------------------------------
+
+                const newPassword = newPasswordInput.value;
+                const confirmPassword = confirmNewPasswordInput.value;
+    
+                if (newPassword && newPassword !== confirmPassword) {
+                    showMessage('error', 'كلمة المرور الجديدة وتأكيدها غير متطابقين.');
+                    return;
+                }
+                
+                 let profilePictureBase64 = currentProfilePictureBase64;
+                 const file = profilePictureInput.files[0];
+                 if (file) {
+                     try {
+                        profilePictureBase64 = await readFileAsBase64(file);
+                     } catch (error) {
+                        showMessage('error', 'حدث خطأ أثناء قراءة ملف الصورة.');
+                        console.error('Error reading file:', error);
+                        return;
+                     }
+                 } else if (profilePicturePreview.src.endsWith(defaultAvatar) && currentProfilePictureBase64) {
+                     profilePictureBase64 = null;
+                 }
+    
+                const formData = {
+                    full_name: fullNameInput.value,
+                    email: emailInput.value,
+                    phone_number: phoneInput.value,
+                    profile_picture: profilePictureBase64,
+                    enable_general_notifications: enableGeneralNotificationsCheckbox.checked,
+                    notify_assigned_conversation: notifyAssignedCheckbox.checked,
+                    notify_unassigned_conversation: notifyUnassignedCheckbox.checked,
+                    notify_any_message: notifyAnyMessageCheckbox.checked,
+                };
+    
+                if (newPassword) {
+                    formData.current_password = currentPasswordInput.value;
+                    formData.new_password = newPassword;
+                }
+    
+                try {
+                    const response = await fetch('/api/profile', {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData),
+                    });
+    
+                    const result = await response.json();
+    
+                    if (!response.ok) {
+                        throw new Error(result.message || `فشل تحديث الملف الشخصي (الحالة: ${response.status})`);
+                    }
+                    
+                    if(successModalInstance) {
+                        successModalBody.textContent = result.message || 'تم تحديث الملف الشخصي بنجاح!';
+                        successModalInstance.show();
+                    } else {
+                         showMessage('success', result.message || 'تم تحديث الملف الشخصي بنجاح!');
+                         setTimeout(() => { window.location.href = '/'; }, 2000);
+                    }
+    
+                    currentProfilePictureBase64 = profilePictureBase64;
+                    currentPasswordInput.value = '';
+                    newPasswordInput.value = '';
+                    confirmNewPasswordInput.value = '';
+                    
+                    if(profileFullNameElement) profileFullNameElement.textContent = fullNameInput.value;
+    
+                } catch (error) {
+                    showMessage('error', `خطأ: ${error.message}`);
+                    console.error('Error updating profile:', error);
+                    // --- إعادة تمكين الزر في حالة الخطأ --- 
+                    saveButton.disabled = false;
+                    saveButton.innerHTML = originalButtonText;
+                    // --------------------------------------
+                } 
+            });
+    
+            // إضافة مستمع لزر "موافق" في نافذة النجاح لإعادة التوجيه
+            successModalOkButton.addEventListener('click', () => {
+                if(successModalInstance) successModalInstance.hide(); 
+                window.location.href = '/'; // إعادة التوجيه إلى لوحة التحكم
+            });
+    
+            // إعادة التوجيه عند إغلاق النافذة بأي طريقة أخرى
+            successModalElement.addEventListener('hidden.bs.modal', event => {
+                if (window.location.pathname !== '/') {
+                    window.location.href = '/';
+                }
+            });
+    
+            // دالة مساعد لقراءة الملف كـ Base64
+            function readFileAsBase64(file) {
+                 return new Promise((resolve, reject) => {
+                     const reader = new FileReader();
+                     reader.onload = () => resolve(reader.result);
+                     reader.onerror = error => reject(error);
+                     reader.readAsDataURL(file);
+                 });
+             }
+    
+            // دالة مساعد لعرض الرسائل (تستخدم الآن فقط للأخطاء)
+            function showMessage(type, message) {
+                messageArea.textContent = message;
+                messageArea.className = `alert alert-${type === 'error' ? 'danger' : 'info'} text-center`; 
+            }
+    
+            // استدعاء الدالة لجلب البيانات عند تحميل الصفحة
+            fetchProfileData();
+        });
+    </script>
+    <!-- Bootstrap 5 JS Bundle (Popper included) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+</body>
+</html> 

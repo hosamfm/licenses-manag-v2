@@ -14,25 +14,25 @@
     async function fetchQuickReplies() {
         if (quickRepliesCache.length === 0 || (Date.now() - fetchTimestamp > 300000)) { // Cache for 5 minutes
             try {
-                console.log('Quick Replies: Fetching...');
+                // console.log('Quick Replies: Fetching...');
                 const response = await fetch('/api/quick-replies');
                 if (!response.ok) {
                     let errorBody = '';
                     try { errorBody = await response.json(); } catch (e) {}
-                    console.error('Quick Replies: API response not OK:', response.status, errorBody);
+                    // console.error('Quick Replies: API response not OK:', response.status, errorBody);
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
                 if (Array.isArray(data)) {
                     quickRepliesCache = data;
                 } else {
-                    console.warn('Quick Replies: Unexpected data format:', data);
+                    // console.warn('Quick Replies: Unexpected data format:', data);
                     quickRepliesCache = [];
                 }
                 fetchTimestamp = Date.now();
-                console.log(`Quick Replies: Fetched ${quickRepliesCache.length} replies.`);
+                // console.log(`Quick Replies: Fetched ${quickRepliesCache.length} replies.`);
             } catch (error) {
-                console.error('Quick Replies: Failed to fetch:', error);
+                // console.error('Quick Replies: Failed to fetch:', error);
                 quickRepliesCache = [];
             }
         }
@@ -51,7 +51,7 @@
 
         filteredReplies.forEach(reply => {
             if (!reply || typeof reply.shortcut !== 'string' || typeof reply.text !== 'string') {
-                console.warn('Quick Replies: Ignoring invalid reply format:', reply);
+                // console.warn('Quick Replies: Ignoring invalid reply format:', reply);
                 return;
             }
             const item = document.createElement('button');
@@ -162,21 +162,22 @@
     }
 
     function initQuickReplies(detailsContainer) {
+        /* // إزالة أو تعليق
         if (isInitialized) {
             console.log("Quick Replies: Already initialized.");
-            // Optionally re-attach listeners if elements might have changed
-            // detachListeners(); // Implement if needed
         } else {
              console.log("Quick Replies: Initializing...");
         }
+        */
+       isInitialized = false; // إعادة تعيين للسماح بإعادة التهيئة إذا لزم الأمر
 
         // Find elements within the newly loaded container or globally
         replyMessageInput = (detailsContainer || document).querySelector('#replyMessage');
         messageInputContainer = (detailsContainer || document).querySelector('.message-input-container');
-        conversationMainContainer = (detailsContainer || document).querySelector('.conversation-main-container'); // Might be outside detailsContainer
+        conversationMainContainer = (detailsContainer || document).querySelector('.conversation-main-container');
 
         if (!replyMessageInput || !messageInputContainer || !conversationMainContainer) {
-            console.error('Quick Replies: Required elements not found (#replyMessage, .message-input-container, .conversation-main-container).');
+            // console.error('Quick Replies: Required elements not found (#replyMessage, .message-input-container, .conversation-main-container).');
             isInitialized = false;
             return;
         }
@@ -184,7 +185,7 @@
         // Create or find suggestions container
         suggestionsContainer = (messageInputContainer || document).querySelector('#quickReplySuggestions');
         if (!suggestionsContainer) {
-            console.log("Quick Replies: Creating suggestions container.");
+            // console.log("Quick Replies: Creating suggestions container.");
             suggestionsContainer = document.createElement('div');
             suggestionsContainer.id = 'quickReplySuggestions';
             suggestionsContainer.className = 'list-group position-absolute';
@@ -201,12 +202,12 @@
                  // Insert the suggestions container *before* the form
                  messageInputContainer.insertBefore(suggestionsContainer, replyForm);
             } else {
-                 console.error("Quick Replies: Could not find #replyForm to insert suggestions container before.");
+                 // console.error("Quick Replies: Could not find #replyForm to insert suggestions container before.");
                  // Fallback: append to messageInputContainer (might affect layout)
                  messageInputContainer.appendChild(suggestionsContainer);
             }
         } else {
-             console.log("Quick Replies: Reusing existing suggestions container.");
+             // console.log("Quick Replies: Reusing existing suggestions container.");
              suggestionsContainer.innerHTML = ''; // Clear previous suggestions
              suggestionsContainer.style.display = 'none';
         }
@@ -233,7 +234,7 @@
         fetchQuickReplies();
         
         isInitialized = true;
-        console.log("Quick Replies: Initialization complete.");
+        // console.log("Quick Replies: Initialization complete.");
     }
     
     // Expose the init function to the global scope or a specific namespace

@@ -29,6 +29,8 @@ const userApiRoutes = require('./routes/api/userRoutes'); // استيراد مس
 const { startTelegramBot } = require('./services/telegramService'); // استيراد دالة startTelegramBot
 const telegramMessagesRoutes = require('./routes/telegramMessages'); // استيراد مسارات الرسائل التلغرامية
 const conversationRoutes = require('./routes/conversationRoutes'); // استيراد مسارات المحادثات
+const profileRoutes = require('./routes/profileRoutes'); // استيراد مسارات الملف الشخصي
+const notificationRoutes = require('./routes/notificationRoutes'); // استيراد مسارات الإشعارات
 
 if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
   console.error("Error: config environment variables not set. Please create/edit .env configuration file.");
@@ -38,8 +40,9 @@ if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// زيادة الحد الأقصى لحجم الطلب لاستيعاب صور الملف الشخصي (Base64)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // إضافة دعم تنسيق multipart/form-data لطلبات webhook
 const multer = require('multer');
@@ -159,6 +162,17 @@ app.use('/api', apiRoutes);
 app.use('/whatsapp/media', whatsappMediaRoutes); // تسجيل مسارات وسائط الواتساب
 app.use('/api/user', userApiRoutes); // تسجيل مسارات API للمستخدمين
 app.use('/api/conversations', conversationRoutes); // تسجيل مسارات المحادثات
+app.use('/api/profile', profileRoutes); // تسجيل مسارات الملف الشخصي
+app.use('/api/notifications', notificationRoutes); // تسجيل مسارات الإشعارات
+
+// إضافة مسار لعرض صفحة الملف الشخصي
+app.get('/profile', isAuthenticated, (req, res) => {
+    // يمكن تمرير بيانات إضافية هنا إذا لزم الأمر، ولكن معظم البيانات ستُجلب عبر API
+    res.render('profile', { 
+        title: 'الملف الشخصي', 
+        session: req.session // تمرير الجلسة لاستخدامها في القالب (مثل اسم المستخدم)
+    }); 
+});
 
 // توجيه المسار القديم للمحادثات إلى نظام CRM
 app.get('/conversations', (req, res) => {
