@@ -12,7 +12,7 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
   );
-  logger.info('notificationService', 'تم إعداد تفاصيل VAPID لـ Web Push');
+  // logger.info('notificationService', 'تم إعداد تفاصيل VAPID لـ Web Push');
 } else {
   logger.warn('notificationService', 'لم يتم العثور على مفاتيح VAPID في متغيرات البيئة. لن تعمل إشعارات Web Push.');
 }
@@ -28,7 +28,7 @@ class NotificationService {
    * @returns {Promise<Notification|null>} - الإشعار الذي تم إنشاؤه أو null.
    */
   static async createNotification(notificationData, conversation = null) {
-    logger.info('notificationService', '[createNotification] Starting...', { type: notificationData.type, recipientId: notificationData.recipient, conversationId: conversation?._id });
+    // logger.info('notificationService', '[createNotification] Starting...', { type: notificationData.type, recipientId: notificationData.recipient, conversationId: conversation?._id });
     try {
       // 1. التحقق من المستلم وتفضيلاته
       const recipient = await User.findById(notificationData.recipient);
@@ -36,11 +36,11 @@ class NotificationService {
         logger.warn('notificationService', '[createNotification] Recipient not found', { recipientId: notificationData.recipient });
         return null;
       }
-      logger.info('notificationService', '[createNotification] Recipient found', { recipientId: recipient._id });
+      // logger.info('notificationService', '[createNotification] Recipient found', { recipientId: recipient._id });
 
       // التحقق من الإعداد العام للإشعارات للمستلم
       if (recipient.enable_general_notifications === false) {
-        logger.info('notificationService', `[createNotification] General notifications disabled for user ${recipient._id}`);
+        // logger.info('notificationService', `[createNotification] General notifications disabled for user ${recipient._id}`);
         return null;
       }
       
@@ -49,12 +49,12 @@ class NotificationService {
         // لا حاجة لرسالة سجل هنا، الدالة الداخلية تسجل السبب
         return null;
       }
-      logger.info('notificationService', '[createNotification] Checks passed, creating notification...');
+      // logger.info('notificationService', '[createNotification] Checks passed, creating notification...');
       
       // 2. إنشاء الإشعار وحفظه في قاعدة البيانات
       const newNotification = new Notification(notificationData);
       await newNotification.save();
-      logger.info('notificationService', '[createNotification] Notification saved to DB', { notificationId: newNotification._id, recipientId: recipient._id });
+      // logger.info('notificationService', '[createNotification] Notification saved to DB', { notificationId: newNotification._id, recipientId: recipient._id });
 
       // 3. إزالة جزء إرسال الويب بوش من هنا
       // logger.info('notificationService', '[createNotification] Notification creation successful, proceeding to send (if applicable)');
@@ -75,7 +75,7 @@ class NotificationService {
    * @param {Object} notification - كائن الإشعار
    */
   static async sendWebPushNotification(user, notification) {
-    logger.info('notificationService', '[sendWebPushNotification] Starting...', { userId: user._id, notificationId: notification._id });
+    // logger.info('notificationService', '[sendWebPushNotification] Starting...', { userId: user._id, notificationId: notification._id });
     if (!user || !notification || !user.webPushSubscriptions || user.webPushSubscriptions.length === 0) {
       return;
     }
@@ -95,9 +95,9 @@ class NotificationService {
 
     const promises = user.webPushSubscriptions.map(async (subscription) => {
       try {
-        logger.info('notificationService', `إرسال Web Push إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`);
+        // logger.info('notificationService', `إرسال Web Push إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`);
         await webpush.sendNotification(subscription, payload);
-        logger.info('notificationService', `تم إرسال Web Push بنجاح إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`);
+        // logger.info('notificationService', `تم إرسال Web Push بنجاح إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`);
       } catch (error) {
         logger.error('notificationService', `خطأ في إرسال Web Push إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`, { errorMessage: error.message, statusCode: error.statusCode });
         
@@ -111,7 +111,7 @@ class NotificationService {
     });
 
     await Promise.all(promises);
-     logger.info('notificationService', `اكتملت محاولة إرسال Web Push لجميع اشتراكات المستخدم ${user._id}`);
+     // logger.info('notificationService', `اكتملت محاولة إرسال Web Push لجميع اشتراكات المستخدم ${user._id}`);
   }
 
   /**
@@ -125,7 +125,7 @@ class NotificationService {
         { _id: userId },
         { $pull: { webPushSubscriptions: { endpoint: endpoint } } }
       );
-      logger.info('notificationService', 'تمت إزالة اشتراك Web Push بنجاح', { userId, endpoint });
+      // logger.info('notificationService', 'تمت إزالة اشتراك Web Push بنجاح', { userId, endpoint });
     } catch (error) {
       logger.error('notificationService', 'خطأ في إزالة اشتراك Web Push', { userId, endpoint, error: error.message });
     }
@@ -252,45 +252,53 @@ class NotificationService {
     try {
       return await Notification.findByIdAndDelete(notificationId);
     } catch (error) {
-      console.error('خطأ في حذف الإشعار:', error);
+      logger.error('notificationService', 'خطأ في حذف الإشعار:', { error: error.message, notificationId });
       throw error;
     }
   }
 
   /**
-   * الحصول على إشعارات المستخدم
+   * حذف جميع الإشعارات المؤرشفة للمستخدم
    * @param {String} userId معرف المستخدم
-   * @param {Object} options خيارات الاستعلام
-   * @param {Boolean} options.onlyUnread إرجاع الإشعارات غير المقروءة فقط
-   * @param {Boolean} options.includeArchived تضمين الإشعارات المؤرشفة
-   * @param {Number} options.limit عدد الإشعارات المطلوب استرجاعها
-   * @param {Number} options.skip عدد الإشعارات التي يجب تخطيها
-   * @returns {Promise<Array>} الإشعارات
+   * @returns {Promise<Object>} نتيجة الحذف
+   */
+  static async deleteAllArchivedNotifications(userId) {
+    try {
+      return await Notification.deleteMany({ recipient: userId, isArchived: true });
+    } catch (error) {
+      logger.error('notificationService', 'خطأ في حذف جميع الإشعارات المؤرشفة:', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * جلب إشعارات المستخدم مع التصفية والتصفح
+   * @param {String} userId معرف المستخدم
+   * @param {Object} options خيارات التصفية والتصفح
+   * @returns {Promise<Object>} قائمة الإشعارات ومعلومات التصفح
    */
   static async getUserNotifications(userId, options = {}) {
     try {
-      const {
-        onlyUnread = false,
-        includeArchived = false,
-        limit = 20,
-        skip = 0
-      } = options;
-
-      const query = { recipient: userId };
+      const page = options.page || 1;
+      const limit = options.limit || 20;
+      const filter = { recipient: userId, ...options.filter };
+      const sort = options.sort || { createdAt: -1 };
       
-      if (onlyUnread) {
-        query.isRead = false;
-      }
-      
-      if (!includeArchived) {
-        query.isArchived = { $ne: true };
-      }
-
-      return await Notification.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
+      const totalNotifications = await Notification.countDocuments(filter);
+      const notifications = await Notification.find(filter)
+        .sort(sort)
+        .skip((page - 1) * limit)
         .limit(limit)
-        .lean(); // استخدام lean لأداء أفضل عند القراءة فقط
+        .lean();
+      
+      return {
+        notifications,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(totalNotifications / limit),
+          totalItems: totalNotifications
+        }
+      };
     } catch (error) {
       logger.error('notificationService', 'خطأ في جلب إشعارات المستخدم:', { error: error.message, userId });
       throw error;
@@ -298,73 +306,72 @@ class NotificationService {
   }
 
   /**
-   * الحصول على عدد الإشعارات غير المقروءة للمستخدم
+   * حساب عدد الإشعارات غير المقروءة للمستخدم
    * @param {String} userId معرف المستخدم
    * @returns {Promise<Number>} عدد الإشعارات غير المقروءة
    */
   static async getUnreadCount(userId) {
     try {
-      return await Notification.countDocuments({
-        recipient: userId,
-        isRead: false,
-        isArchived: { $ne: true }
+      return await Notification.countDocuments({ 
+        recipient: userId, 
+        isRead: false, 
+        isArchived: false 
       });
     } catch (error) {
-      logger.error('notificationService', 'خطأ في جلب عدد الإشعارات غير المقروءة:', { error: error.message, userId });
-      throw error;
+      logger.error('notificationService', 'خطأ في حساب عدد الإشعارات غير المقروءة:', { error: error.message, userId });
+      return 0;
     }
   }
 
   /**
-   * التحقق مما إذا كان يجب إرسال إشعار بناءً على إعدادات المستخدم ونوع الإشعار
-   * @param {Object} user كائن المستخدم
-   * @param {String} notificationType نوع الإشعار
-   * @param {Object} [conversation=null] - كائن المحادثة المرتبط بالإشعار (إذا كان منطبقًا).
-   * @returns {Boolean}
+   * التحقق مما إذا كان يجب إرسال إشعار بناءً على نوعه وتفضيلات المستخدم والمحادثة
+   * @param {Object} user - كائن المستخدم
+   * @param {String} notificationType - نوع الإشعار (message, assignment, mention, system)
+   * @param {Object} [conversation=null] - كائن المحادثة المرتبط (إن وجد)
+   * @returns {Boolean} هل يجب إرسال الإشعار أم لا
    */
   static shouldSendNotificationBasedOnType(user, notificationType, conversation = null) {
-    if (!user || user.enable_general_notifications === false) {
-      logger.info('notificationService', `[shouldSendNotificationBasedOnType] Blocking: General notifications disabled for user ${user._id}`);
-      return false; // الإشعارات العامة معطلة
-    }
-
+    const userId = user._id;
     switch (notificationType) {
       case 'message':
-        // إذا كان notify_any_message مفعلًا، أرسل دائمًا
-        if (user.notify_any_message === true) {
-          logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${user._id} (notify_any_message enabled)`);
+        // التحقق من تفضيلات إشعارات الرسائل
+        if (user.notify_assigned_conversation && conversation && conversation.assignedTo && conversation.assignedTo.toString() === userId) {
+          // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${userId} (conversation assigned and notify_assigned_conversation enabled)`);
+          return true; // إرسال للمستخدم المسند له
+        }
+        if (user.notify_unassigned_conversation && conversation && !conversation.assignedTo) {
+          // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${userId} (conversation unassigned and notify_unassigned_conversation enabled)`);
+          return true; // إرسال للمشرفين للمحادثات غير المسندة
+        }
+        if (user.notify_any_message && !conversation) { // إذا لم يتم تمرير المحادثة، نعتمد على الإعداد العام
+            // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${userId} (notify_any_message enabled, conversation not provided)`);
+            return true;
+        }
+        if (user.notify_any_message && conversation && conversation.assignedTo && conversation.assignedTo.toString() !== userId) { 
+            // إرسال للمشرفين حتى لو كانت مسندة لغيرهم (إذا الإعداد يسمح)
+            // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${userId} (notify_any_message enabled)`);
+            return true; 
+        }
+        // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Blocking message notification for user ${userId} based on preferences`);
+        return false;
+      case 'assignment':
+        // الإشعارات المتعلقة بالإسناد يتم إرسالها دائمًا للمستلم
+        // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing assignment notification for user ${userId}`);
+        return true;
+      case 'mention':
+        if (user.notify_mention) {
+          // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing mention notification for user ${userId} (notify_mention enabled)`);
           return true;
         }
-        
-        // إذا لم يكن notify_any_message مفعلًا، تحقق من حالة التعيين
-        if (conversation) {
-          const isAssignedToCurrentUser = conversation.assignedTo && conversation.assignedTo.toString() === user._id.toString();
-          
-          if (isAssignedToCurrentUser && user.notify_assigned_conversation === true) {
-            logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${user._id} (conversation assigned and notify_assigned_conversation enabled)`);
-            return true; // المحادثة معينة له ويريد إشعارات المحادثات المعينة
-          } else if (!conversation.assignedTo && user.notify_unassigned_conversation === true) {
-            logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${user._id} (conversation unassigned and notify_unassigned_conversation enabled)`);
-            return true; // المحادثة غير معينة ويريد إشعارات المحادثات غير المعينة
-          }
-        }
-        
-        // إذا لم يتحقق أي من الشروط السابقة، لا ترسل
-        logger.info('notificationService', `[shouldSendNotificationBasedOnType] Blocking message notification for user ${user._id} based on assignment and preferences. Conversation assigned: ${!!conversation?.assignedTo}, Assigned to self: ${conversation?.assignedTo?.toString() === user._id.toString()}, Notify assigned: ${user.notify_assigned_conversation}, Notify unassigned: ${user.notify_unassigned_conversation}`);
+        // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Blocking mention notification for user ${userId} (notify_mention disabled)`);
         return false;
-
-      case 'assignment':
-        // إشعارات التعيين تُرسل دائمًا إذا كانت الإشعارات العامة مفعلة
-        // يمكن إضافة تفضيل خاص بها لاحقًا إذا لزم الأمر
-        logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing assignment notification for user ${user._id} (general enabled)`);
+      case 'system':
+        // إشعارات النظام يتم إرسالها دائمًا
+        // logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing system notification for user ${userId}`);
         return true;
-        
-      // أضف حالات لأنواع إشعارات أخرى هنا
-      // case 'status_change': ...
-
       default:
-        logger.warn('notificationService', `[shouldSendNotificationBasedOnType] Unknown notification type: ${notificationType}. Allowing by default.`);
-        return true; // السماح بأنواع غير معروفة افتراضيًا (أو إرجاع false حسب الحاجة)
+        logger.warn('notificationService', `[shouldSendNotificationBasedOnType] Unknown notification type: ${notificationType}`);
+        return false;
     }
   }
 }
