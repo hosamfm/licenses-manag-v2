@@ -17,14 +17,22 @@ let io;
 /**
  * بدء تشغيل خدمة Socket.io
  * @param {Object} server - خادم HTTP
+ * @param {Object} options - خيارات إضافية للتكوين
  */
-function initialize(server) {
-  io = socketIO(server, {
+function initialize(server, options = {}) {
+  const defaultOptions = {
     cors: {
       origin: '*', // في البيئة الإنتاجية، يجب تحديد أصول محددة فقط
       methods: ['GET', 'POST']
-    }
-  });
+    },
+    // تقليل مستوى السجلات
+    logLevel: 1 // فقط الأخطاء
+  };
+
+  // دمج الخيارات المخصصة مع الخيارات الافتراضية
+  const socketOptions = { ...defaultOptions, ...options };
+  
+  io = socketIO(server, socketOptions);
 
   io.on('connection', async (socket) => {
     try {

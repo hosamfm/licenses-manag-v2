@@ -378,7 +378,17 @@ const http = require('http').createServer(app);
 // تهيئة خدمة Socket.io
 const socketService = require('./services/socketService');
 const notificationSocketService = require('./services/notificationSocketService');
-const io = socketService.initialize(http);
+const io = socketService.initialize(http, {
+  // خيارات Socket.IO
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  },
+  // تعطيل سجلات socket.io
+  log: false,
+  logLevel: 1, // فقط الأخطاء
+  transports: ['websocket', 'polling']
+});
 
 // تهيئة خدمة سوكت الإشعارات
 notificationSocketService.initialize(io);
