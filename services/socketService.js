@@ -220,59 +220,92 @@ async function notifyNewMessage(conversationId, message) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   
-  // --- التأكد من إضافة معلومات المرسل للرسائل الصادرة --- 
-  if (message && message.direction === 'outgoing' && message.sentBy) {
-    // تأكد من أن sentBy هو سلسلة نصية
-    const senderId = message.sentBy.toString();
-    
-    // تهيئة metadata إذا لم تكن موجودة
-    if (!message.metadata) {
-      message.metadata = {};
-    }
-    // تهيئة senderInfo إذا لم تكن موجودة
-    if (!message.metadata.senderInfo) {
-      message.metadata.senderInfo = {}; 
-    }
-
-    try {
-      // التحقق إذا كان النظام هو المرسل
-      if (senderId === 'system') {
-        message.metadata.senderInfo.username = 'النظام';
-        message.metadata.senderInfo.full_name = 'النظام';
-        message.sentByUsername = 'النظام';
-      } 
-      // التحقق إذا كان المستخدم الحالي هو المرسل (من الخادم)
-      else {
-        const User = require('../models/User');
-        const user = await User.findById(senderId);
-        if (user) {
-          message.metadata.senderInfo.username = user.username;
-          message.metadata.senderInfo.full_name = user.full_name || user.username;
-          message.metadata.senderInfo._id = user._id.toString();
-          message.sentByUsername = user.username;
-        } else {
-          // في حالة عدم العثور على المستخدم، استخدم المعرف
-          message.metadata.senderInfo.username = senderId;
-          message.metadata.senderInfo.full_name = senderId;
-          message.metadata.senderInfo._id = senderId;
-          message.sentByUsername = senderId;
-          /* logger.warn('socketService', 'لم يتم العثور على معلومات المستخدم للمرسل الصادر', { conversationId, senderId }); */
-        }
+  try {
+    // --- جلب معلومات contactId للمحادثة إذا لم تكن موجودة بالفعل ---
+    // تستخدم عند إرسال رسائل جديدة لتأكيد توفر معلومات جهة الاتصال الكاملة للواجهة الأمامية
+    if (message && message.conversationId) {
+      const Conversation = require('../models/Conversation');
+      const conversation = await Conversation.findById(message.conversationId)
+        .populate('contactId', 'name phoneNumber')
+        .lean();
+        
+      if (conversation && conversation.contactId) {
+        // إنشاء تحديث المحادثة بمعلومات جهة الاتصال
+        const updateData = {
+          _id: conversation._id,
+          lastMessageAt: conversation.lastMessageAt,
+          status: conversation.status,
+          contactId: conversation.contactId, // إضافة معلومات جهة الاتصال الكاملة
+          phoneNumber: conversation.phoneNumber,
+          lastMessage: message // إضافة الرسالة الأخيرة
+        };
+        
+        // إرسال تحديث للمحادثة بعد الرسالة الجديدة لضمان تحديث معلومات جهة الاتصال
+        io.to(`conversation-${conversationId}`).emit('conversation-update', updateData);
+        
+        // إرسال تحديث لقائمة المحادثات أيضًا
+        io.emit('conversation-list-update', updateData);
       }
-    } catch (error) {
-      logger.error('socketService', 'خطأ في استرجاع معلومات المرسل لإشعار Socket.IO', { 
-        conversationId, 
-        senderId: message.sentBy.toString(),
-        error: error.message
-      });
-      // محاولة استخدام قيمة افتراضية في حالة الخطأ
-      if (!message.sentByUsername) message.sentByUsername = senderId; 
-      if (!message.metadata.senderInfo.username) message.metadata.senderInfo.username = senderId;
     }
+      
+    // --- التأكد من إضافة معلومات المرسل للرسائل الصادرة --- 
+    if (message && message.direction === 'outgoing' && message.sentBy) {
+      // تأكد من أن sentBy هو سلسلة نصية
+      const senderId = message.sentBy.toString();
+      
+      // تهيئة metadata إذا لم تكن موجودة
+      if (!message.metadata) {
+        message.metadata = {};
+      }
+      // تهيئة senderInfo إذا لم تكن موجودة
+      if (!message.metadata.senderInfo) {
+        message.metadata.senderInfo = {}; 
+      }
+
+      try {
+        // التحقق إذا كان النظام هو المرسل
+        if (senderId === 'system') {
+          message.metadata.senderInfo.username = 'النظام';
+          message.metadata.senderInfo.full_name = 'النظام';
+          message.sentByUsername = 'النظام';
+        } 
+        // التحقق إذا كان المستخدم الحالي هو المرسل (من الخادم)
+        else {
+          const User = require('../models/User');
+          const user = await User.findById(senderId);
+          if (user) {
+            message.metadata.senderInfo.username = user.username;
+            message.metadata.senderInfo.full_name = user.full_name || user.username;
+            message.metadata.senderInfo._id = user._id.toString();
+            message.sentByUsername = user.username;
+          } else {
+            // في حالة عدم العثور على المستخدم، استخدم المعرف
+            message.metadata.senderInfo.username = senderId;
+            message.metadata.senderInfo.full_name = senderId;
+            message.metadata.senderInfo._id = senderId;
+            message.sentByUsername = senderId;
+          }
+        }
+      } catch (error) {
+        logger.error('socketService', 'خطأ في استرجاع معلومات المرسل لإشعار Socket.IO', { 
+          conversationId, 
+          senderId: message.sentBy.toString(),
+          error: error.message
+        });
+        // محاولة استخدام قيمة افتراضية في حالة الخطأ
+        if (!message.sentByUsername) message.sentByUsername = senderId; 
+        if (!message.metadata.senderInfo.username) message.metadata.senderInfo.username = senderId;
+      }
+    }
+    
+    // إرسال التحديث إلى جميع المستخدمين في غرفة المحادثة
+    io.to(`conversation-${conversationId}`).emit('new-message', message);
+  } catch (error) {
+    logger.error('socketService', 'خطأ في إرسال إشعار برسالة جديدة', { 
+      conversationId, 
+      error: error.message
+    });
   }
-  
-  // إرسال التحديث إلى جميع المستخدمين في غرفة المحادثة
-  io.to(`conversation-${conversationId}`).emit('new-message', message);
 }
 
 /**
@@ -286,83 +319,89 @@ async function notifyConversationUpdate(conversationId, update) {
   if (!io) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
-  
-  // التأكد من وجود البيانات الأساسية للتحديث
-  if (!update) {
-    update = {};
+
+  // التأكد من أن conversationId هو سلسلة نصية
+  if (conversationId && typeof conversationId === 'object') {
+    conversationId = conversationId.toString();
   }
-  
-  // ضمان أن _id موجود دائماً
-  if (!update._id) {
-    update._id = conversationId;
-  }
-  
-  // إذا كان التحديث متعلق بتعيين المحادثة لمستخدم، وكانت بيانات المستخدم المعين غير كاملة
-  if (update.type === 'assigned' && update.assignedTo && !update.assignee) {
-    try {
-      // استرجاع معلومات المستخدم المعين من قاعدة البيانات
-      const User = require('../models/User');
-      const assignee = await User.findById(update.assignedTo).select('_id username full_name');
-      
-      if (assignee) {
-        // إضافة معلومات المستخدم المعين إلى التحديث
-        update.assignee = {
-          _id: assignee._id,
-          username: assignee.username,
-          full_name: assignee.full_name
-        };
+
+  try {
+    // إذا لم تكن هناك معلومات contactId في التحديث، نقوم بجلبها من قاعدة البيانات
+    if (update._id && !update.contactId) {
+      const Conversation = require('../models/Conversation');
+      const conversation = await Conversation.findById(update._id)
+        .populate('contactId', 'name phoneNumber')
+        .lean();
         
-        /* logger.info('socketService', 'تم إضافة معلومات المستخدم المعين إلى تحديث المحادثة', {
-          conversationId,
-          assigneeId: assignee._id,
-          assigneeName: assignee.full_name || assignee.username
-        }); */
+      if (conversation && conversation.contactId) {
+        update.contactId = conversation.contactId;
       }
-    } catch (error) {
-      logger.error('socketService', 'خطأ في استرجاع معلومات المستخدم المعين لتحديث المحادثة', {
-        conversationId,
-        assignedTo: update.assignedTo,
-        error: error.message
-      });
     }
-  }
-  
-  // إذا كان التحديث متعلق بتغيير حالة المحادثة (مفتوحة/مغلقة) ولم يتم تحديد نوع التحديث
-  if (!update.type && update.status) {
-    // إضافة نوع التحديث للتعرف عليه من طرف المستقبل
-    update.type = 'status';
-    /* logger.info('socketService', 'تم إضافة نوع التحديث (status) لتغيير حالة المحادثة', {
+    
+    // إذا كان التحديث متعلق بتعيين المحادثة لمستخدم، وكانت بيانات المستخدم المعين غير كاملة
+    if (update.type === 'assigned' && update.assignedTo && !update.assignee) {
+      try {
+        // استرجاع معلومات المستخدم المعين من قاعدة البيانات
+        const User = require('../models/User');
+        const assignee = await User.findById(update.assignedTo).select('_id username full_name');
+        
+        if (assignee) {
+          // إضافة معلومات المستخدم المعين إلى التحديث
+          update.assignee = {
+            _id: assignee._id,
+            username: assignee.username,
+            full_name: assignee.full_name
+          };
+        }
+      } catch (error) {
+        logger.error('socketService', 'خطأ في استرجاع معلومات المستخدم المعين لتحديث المحادثة', {
+          conversationId,
+          assignedTo: update.assignedTo,
+          error: error.message
+        });
+      }
+    }
+    
+    // إذا كان التحديث متعلق بتغيير حالة المحادثة (مفتوحة/مغلقة) ولم يتم تحديد نوع التحديث
+    if (!update.type && update.status) {
+      // إضافة نوع التحديث للتعرف عليه من طرف المستقبل
+      update.type = 'status';
+    }
+    
+    // إرسال التحديث إلى غرفة المحادثة
+    io.to(`conversation-${conversationId}`).emit('conversation-update', update);
+    
+    // إرسال التحديث لجميع المستخدمين - مهم لتحديث القائمة
+    // استخدام حدث منفصل مع المعلومات المطلوبة فقط
+    const updateForList = {
+      _id: update._id,
+      status: update.status,
+      lastMessageAt: update.lastMessageAt,
+      unreadCount: update.unreadCount,
+      lastMessage: update.lastMessage,
+      customerName: update.customerName,
+      phoneNumber: update.phoneNumber,
+      assignedTo: update.assignedTo,
+      // إضافة معلومات المستخدم المعين إلى تحديث القائمة
+      assignee: update.assignee,
+      // إضافة معلومات جهة الاتصال إذا كانت موجودة
+      contactId: update.contactId
+    };
+    
+    // إرسال التحديث للجميع
+    io.emit('conversation-list-update', updateForList);
+    
+    /* logger.info('socketService', 'تم إرسال إشعار بتحديث المحادثة', { 
       conversationId,
-      status: update.status
+      updateType: update.type || 'غير محدد',
+      updateFields: Object.keys(update).join(', ')
     }); */
+  } catch (error) {
+    logger.error('socketService', 'خطأ في تحديث المحادثة', { 
+      conversationId,
+      error: error.message
+    });
   }
-  
-  // إرسال التحديث إلى غرفة المحادثة
-  io.to(`conversation-${conversationId}`).emit('conversation-update', update);
-  
-  // إرسال التحديث لجميع المستخدمين - مهم لتحديث القائمة
-  // استخدام حدث منفصل مع المعلومات المطلوبة فقط
-  const updateForList = {
-    _id: update._id,
-    status: update.status,
-    lastMessageAt: update.lastMessageAt,
-    unreadCount: update.unreadCount,
-    lastMessage: update.lastMessage,
-    customerName: update.customerName,
-    phoneNumber: update.phoneNumber,
-    assignedTo: update.assignedTo,
-    // إضافة معلومات المستخدم المعين إلى تحديث القائمة
-    assignee: update.assignee
-  };
-  
-  // إرسال التحديث للجميع
-  io.emit('conversation-list-update', updateForList);
-  
-  /* logger.info('socketService', 'تم إرسال إشعار بتحديث المحادثة', { 
-    conversationId,
-    updateType: update.type || 'غير محدد',
-    updateFields: Object.keys(update).join(', ')
-  }); */
 }
 
 /**
@@ -497,6 +536,103 @@ function notifyMessageReaction(conversationId, externalId, reaction) {
 }
 
 /**
+ * إرسال تحديث برد على رسالة إلى غرفة المحادثة
+ * هذه الدالة تستخدم لتحديث واجهة المستخدم فوراً عند وجود رد على رسالة
+ * @param {String} conversationId - معرف المحادثة
+ * @param {Object} message - الرسالة (الرد)
+ * @param {String} originalMessageId - معرف الرسالة الأصلية التي تم الرد عليها
+ */
+async function notifyMessageReply(conversationId, message, originalMessageId) {
+  if (!io) {
+    return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
+  }
+  
+  try {
+    // --- جلب معلومات contactId للمحادثة إذا لم تكن موجودة بالفعل ---
+    // تستخدم عند إرسال رسائل جديدة لتأكيد توفر معلومات جهة الاتصال الكاملة للواجهة الأمامية
+    if (message && message.conversationId) {
+      const Conversation = require('../models/Conversation');
+      const conversation = await Conversation.findById(message.conversationId)
+        .populate('contactId', 'name phoneNumber')
+        .lean();
+        
+      if (conversation && conversation.contactId) {
+        // إنشاء تحديث المحادثة بمعلومات جهة الاتصال
+        const updateData = {
+          _id: conversation._id,
+          lastMessageAt: conversation.lastMessageAt,
+          status: conversation.status,
+          contactId: conversation.contactId, // إضافة معلومات جهة الاتصال الكاملة
+          phoneNumber: conversation.phoneNumber,
+          lastMessage: message // إضافة الرسالة الأخيرة
+        };
+        
+        // إرسال تحديث للمحادثة بعد الرسالة الجديدة لضمان تحديث معلومات جهة الاتصال
+        io.to(`conversation-${conversationId}`).emit('conversation-update', updateData);
+        
+        // إرسال تحديث لقائمة المحادثات أيضًا
+        io.emit('conversation-list-update', updateData);
+      }
+    }
+    
+    // --- التأكد من إضافة معلومات المرسل للرسائل الصادرة --- 
+    if (message && message.direction === 'outgoing' && message.sentBy) {
+      // نفس منطق notifyNewMessage
+      const senderId = message.sentBy.toString();
+      
+      if (!message.metadata) {
+        message.metadata = {};
+      }
+      if (!message.metadata.senderInfo) {
+        message.metadata.senderInfo = {}; 
+      }
+
+      try {
+        // التحقق إذا كان النظام هو المرسل
+        if (senderId === 'system') {
+          message.metadata.senderInfo.username = 'النظام';
+          message.metadata.senderInfo.full_name = 'النظام';
+          message.sentByUsername = 'النظام';
+        } else {
+          const User = require('../models/User');
+          const user = await User.findById(senderId);
+          if (user) {
+            message.metadata.senderInfo.username = user.username;
+            message.metadata.senderInfo.full_name = user.full_name || user.username;
+            message.metadata.senderInfo._id = user._id.toString();
+            message.sentByUsername = user.username;
+          } else {
+            message.metadata.senderInfo.username = senderId;
+            message.metadata.senderInfo.full_name = senderId;
+            message.metadata.senderInfo._id = senderId;
+            message.sentByUsername = senderId;
+          }
+        }
+      } catch (error) {
+        logger.error('socketService', 'خطأ في استرجاع معلومات المرسل لإشعار Socket.IO', { 
+          conversationId, 
+          senderId,
+          error: error.message
+        });
+        if (!message.sentByUsername) message.sentByUsername = senderId; 
+        if (!message.metadata.senderInfo.username) message.metadata.senderInfo.username = senderId;
+      }
+    }
+    
+    // إضافة معلومات الرد
+    message.originalMessageId = originalMessageId;
+    
+    // إرسال إشعار بالرد إلى غرفة المحادثة
+    io.to(`conversation-${conversationId}`).emit('new-message', message);
+  } catch (error) {
+    logger.error('socketService', 'خطأ في إرسال إشعار برد على رسالة', { 
+      conversationId, 
+      error: error.message
+    });
+  }
+}
+
+/**
  * تحديث حالة الرسائل في قاعدة البيانات إلى "مقروءة"
  * @param {String} conversationId - معرف المحادثة
  * @param {Array} messages - مصفوفة من معرفات الرسائل
@@ -613,5 +749,6 @@ module.exports = {
   emitToRoom,
   notifyMessageExternalIdUpdate,
   updateMessagesReadStatus,
-  updateConversationUnreadCount
+  updateConversationUnreadCount,
+  notifyMessageReply
 };

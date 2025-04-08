@@ -18,6 +18,11 @@ const conversationSchema = new mongoose.Schema({
     required: true,
     trim: true 
   },
+  contactId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Contact',
+    default: null
+  },
   customerName: { 
     type: String,
     trim: true 

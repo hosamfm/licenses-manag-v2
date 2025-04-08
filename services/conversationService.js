@@ -49,6 +49,7 @@ exports.getConversationsList = async (filterOptions = {}, paginationOptions = {}
             .limit(paginationOptions.skipPagination ? (paginationOptions.limit || 50) : limit)
             .populate('channelId', 'name')
             .populate('assignedTo', 'username full_name')
+            .populate('contactId', 'name phoneNumber')
             .lean();
         
         // إضافة المعلومات الإضافية لكل محادثة (آخر رسالة وعدد الرسائل غير المقروءة)

@@ -136,7 +136,16 @@ function setupNotificationListeners(socket) {
     // استقبال تحديث المحادثة
     socket.on('conversation-update', function(data) {        
         updateConversationInfo(data);
-        updateConversationsList();
+        
+        // تحديث قائمة المحادثات إذا كانت الرسالة تحتوي على آخر رسالة
+        if (data.lastMessage) {
+            // عندما تحتوي البيانات على "lastMessage"، غالبًا ما يكون ذلك تحديثًا أكثر شمولاً 
+            // يتطلب تحديث العناصر في قائمة المحادثات بشكل يدوي بدلاً من إعادة تحميل القائمة بالكامل
+            updateConversationInList(data);
+        } else {
+            // إلا فنحدث القائمة بالكامل
+            updateConversationsList();
+        }
     });
 
     // إضافة معالج لحدث الملاحظات الداخلية
@@ -539,6 +548,15 @@ function createConversationItemHTML(conv) {
       statusIcon = 'fa-user-check';
     }
 
+    // تحديد اسم العميل المناسب (من جهة الاتصال فقط أو رقم الهاتف)
+    let customerDisplayName = '';
+    
+    if (conv.contactId && typeof conv.contactId === 'object' && conv.contactId.name) {
+        customerDisplayName = conv.contactId.name; // استخدام اسم جهة الاتصال فقط
+    } else {
+        customerDisplayName = conv.phoneNumber || 'رقم غير معروف'; // استخدام رقم الهاتف فقط وتجاهل customerName
+    }
+
     return `
         <button type="button"
                 class="list-group-item list-group-item-action conversation-item d-flex flex-column ${hasUnread ? 'has-unread' : ''}"
@@ -547,7 +565,7 @@ function createConversationItemHTML(conv) {
             <div class="conversation-info">
               <div class="conversation-name">
                 <i class="${conv.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary'} me-2"></i>
-                <span>${conv.customerName || conv.phoneNumber}</span>
+                <span>${customerDisplayName}</span>
               </div>
               <div class="conversation-preview">
                 <small class="${hasUnread ? 'fw-bold' : 'text-muted'}">
@@ -775,4 +793,90 @@ function appendInternalNote(note) {
     
     // تحديث الموضع إلى أحدث رسالة
     scrollToBottom(messagesContainer);
+}
+
+/**
+ * تحديث عنصر محادثة واحد في القائمة دون إعادة تحميل القائمة بالكامل
+ * @param {Object} convData - بيانات المحادثة المحدثة
+ */
+function updateConversationInList(convData) {
+    if (!convData || !convData._id) return;
+    
+    // البحث عن عنصر المحادثة في القائمة
+    const conversationItem = document.querySelector(`.conversation-item[data-conversation-id="${convData._id}"]`);
+    if (!conversationItem) {
+        // إذا لم يتم العثور على العنصر، نقوم بتحديث القائمة بالكامل
+        updateConversationsList();
+        return;
+    }
+    
+    // تجهيز البيانات للعرض - ضمان تنسيق وتكامل البيانات
+    const conv = {
+        _id: convData._id,
+        status: convData.status || 'open',
+        lastMessageAt: convData.lastMessageAt || new Date(),
+        phoneNumber: convData.phoneNumber || '',
+        lastMessage: convData.lastMessage,
+        unreadCount: convData.unreadCount || 0,
+        contactId: convData.contactId || null
+    };
+    
+    // التحقق من أن معلومات جهة الاتصال موجودة ومكتملة
+    if (!conv.contactId || typeof conv.contactId !== 'object') {
+        // إذا كانت بيانات جهة الاتصال غير مكتملة، نقوم بعملية استعلام مباشرة لجلب التفاصيل
+        fetch(`/crm/conversations/${conv._id}/ajax?_=${new Date().getTime()}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.conversation && data.conversation.contactId) {
+                    // نسخ معلومات جهة الاتصال المكتملة
+                    conv.contactId = data.conversation.contactId;
+                    
+                    // إعادة بناء عنصر المحادثة بالمعلومات المكتملة
+                    rebuildConversationItem(conversationItem, conv);
+                }
+            })
+            .catch(() => {
+                // في حالة الفشل، نبني العنصر بالمعلومات المتاحة
+                rebuildConversationItem(conversationItem, conv);
+            });
+    } else {
+        // إذا كانت معلومات جهة الاتصال مكتملة، نقوم ببناء عنصر المحادثة مباشرة
+        rebuildConversationItem(conversationItem, conv);
+    }
+}
+
+/**
+ * إعادة بناء عنصر محادثة واحد في القائمة
+ * @param {HTMLElement} item - عنصر HTML الحالي الذي يمثل المحادثة
+ * @param {Object} conv - بيانات المحادثة
+ */
+function rebuildConversationItem(item, conv) {
+    // إضافة محتوى جديد للعنصر
+    const newHtml = createConversationItemHTML(conv);
+    
+    // تحديث المحتوى مع الحفاظ على حالة العنصر (مثل الفئة النشطة)
+    const wasActive = item.classList.contains('active');
+    
+    // استخدام DOMParser للحصول على عنصر HTML من السلسلة النصية
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(newHtml, 'text/html');
+    const newItem = doc.querySelector('button');
+    
+    // نسخ الفئات من العنصر الجديد إلى العنصر الحالي
+    item.className = newItem.className;
+    
+    // استعادة فئة 'active' إذا كانت موجودة سابقاً
+    if (wasActive) {
+        item.classList.add('active');
+    }
+    
+    // تحديث المحتوى الداخلي
+    item.innerHTML = newItem.innerHTML;
+    
+    // إعادة ربط الأحداث
+    attachSingleConversationItemEvent(item);
 }

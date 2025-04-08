@@ -229,6 +229,15 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
 
+        // تحديد اسم العميل المناسب (من جهة الاتصال فقط أو رقم الهاتف)
+        let customerDisplayName = '';
+        
+        if (conv.contactId && typeof conv.contactId === 'object' && conv.contactId.name) {
+            customerDisplayName = conv.contactId.name; // استخدام اسم جهة الاتصال فقط
+        } else {
+            customerDisplayName = conv.phoneNumber || 'رقم غير معروف'; // استخدام رقم الهاتف فقط وتجاهل customerName
+        }
+
         // تحسين عرض آخر رسالة لأنواع الوسائط المختلفة بما في ذلك الموقع
         let lastMessageContent = 'محادثة جديدة';
         let lastMessageIcon = '<i class="fas fa-info-circle me-1"></i>';
@@ -294,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="conversation-info flex-grow-1 me-2">
                         <div class="conversation-name mb-1">
                             <i class="${conv.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary'} me-1"></i>
-                            <strong>${conv.customerName || conv.phoneNumber}</strong>
+                            <strong>${customerDisplayName}</strong>
                         </div>
                         ${assigneeHtml}
                         <div class="conversation-preview">

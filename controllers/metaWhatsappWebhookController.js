@@ -419,6 +419,13 @@ exports.handleIncomingMessages = async (messages, meta) => {
           } else if (!contact) {
             logger.info('metaWhatsappWebhookController', 'لم يتم العثور على جهة اتصال ولم يتمكن من الحصول على الاسم للإنشاء التلقائي', { phone });
           }
+
+          // ربط المحادثة بجهة الاتصال إذا وجدت
+          if (contact && !conversationInstance.contactId) {
+            conversationInstance.contactId = contact._id;
+            await conversationInstance.save();
+            logger.info('metaWhatsappWebhookController', 'تم ربط المحادثة بجهة الاتصال', { conversationId: conversationInstance._id, contactId: contact._id });
+          }
         } catch (contactError) {
             logger.error('metaWhatsappWebhookController', 'خطأ أثناء التحقق أو الإنشاء التلقائي لجهة الاتصال', { error: contactError.message, phone: conversationInstance.phoneNumber });
             // استمر في معالجة الرسالة حتى لو فشل إنشاء جهة الاتصال
@@ -580,7 +587,10 @@ exports.handleIncomingMessages = async (messages, meta) => {
           messageWithMedia
         );
         
-        const updatedConversationForNotification = await Conversation.findById(conversation._id).lean();
+        const updatedConversationForNotification = await Conversation.findById(conversation._id)
+          .populate('contactId', 'name phoneNumber')
+          .lean();
+          
         if (updatedConversationForNotification) {
           socketService.notifyConversationUpdate(conversation._id.toString(), {
             _id: updatedConversationForNotification._id,
@@ -593,7 +603,8 @@ exports.handleIncomingMessages = async (messages, meta) => {
             }),
             lastMessage: messageWithMedia,
             phoneNumber: updatedConversationForNotification.phoneNumber,
-            customerName: updatedConversationForNotification.customerName
+            customerName: updatedConversationForNotification.customerName,
+            contactId: updatedConversationForNotification.contactId
           });
         }
 

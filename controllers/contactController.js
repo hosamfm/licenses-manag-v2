@@ -214,49 +214,80 @@ exports.showEditForm = async (req, res) => {
 exports.updateContact = async (req, res) => {
   try {
     const contactId = req.params.id;
-    let { name, phoneNumber, email, company, notes } = req.body;
+    const { name, phoneNumber, email, company, notes } = req.body;
     
-    // تطبيع رقم الهاتف (إضافة + إذا لم يكن موجودًا)
-    if (phoneNumber && !phoneNumber.startsWith('+')) {
-      phoneNumber = '+' + phoneNumber;
+    // تطبيع رقم الهاتف
+    let normalizedPhone = phoneNumber;
+    if (normalizedPhone && !normalizedPhone.startsWith('+')) {
+      normalizedPhone = '+' + normalizedPhone;
     }
     
-    // استرجاع جهة الاتصال
     const contact = await Contact.findById(contactId);
-    
     if (!contact) {
       req.flash('error', 'جهة الاتصال غير موجودة');
       return res.redirect('/crm/contacts');
     }
     
-    // التحقق من أن رقم الهاتف الجديد غير مستخدم من قبل جهة اتصال أخرى
-    if (phoneNumber !== contact.phoneNumber) {
-      const existingContact = await Contact.findOne({ phoneNumber });
-      if (existingContact) {
-        req.flash('error', 'توجد جهة اتصال أخرى بهذا الرقم');
-        return res.redirect(`/crm/contacts/${contactId}/edit`);
-      }
-    }
-    
-    // تحديث معلومات جهة الاتصال
+    // تحديث بيانات جهة الاتصال
     contact.name = name;
-    contact.phoneNumber = phoneNumber;
+    contact.phoneNumber = normalizedPhone;
     contact.email = email || null;
     contact.company = company || null;
     contact.notes = notes || null;
     contact.updatedAt = new Date();
     
-    // حفظ التغييرات
     await contact.save();
+    
+    // تحديث المحادثات المرتبطة بجهة الاتصال
+    await updateRelatedConversations(contact);
     
     req.flash('success', 'تم تحديث جهة الاتصال بنجاح');
     res.redirect(`/crm/contacts/${contactId}`);
   } catch (error) {
-    logger.error('contactController', 'خطأ في تحديث جهة اتصال', { error: error.message });
+    logger.error('contactController', 'خطأ في تحديث جهة الاتصال', { error: error.message });
     req.flash('error', 'حدث خطأ أثناء تحديث جهة الاتصال');
     res.redirect(`/crm/contacts/${req.params.id}/edit`);
   }
 };
+
+/**
+ * تحديث المحادثات المرتبطة بجهة الاتصال
+ * @param {Object} contact - جهة الاتصال
+ */
+async function updateRelatedConversations(contact) {
+  try {
+    // استيراد خدمة سوكت
+    const socketService = require('../services/socketService');
+    
+    // البحث عن المحادثات المرتبطة بجهة الاتصال
+    const conversations = await Conversation.find({ 
+      contactId: contact._id 
+    });
+    
+    // إرسال تحديثات للمحادثات
+    for (const conversation of conversations) {
+      // إرسال تحديث عبر سوكت للإعلام بتغيير معلومات جهة الاتصال
+      socketService.notifyConversationUpdate(conversation._id.toString(), {
+        _id: conversation._id,
+        contactId: {
+          _id: contact._id,
+          name: contact.name,
+          phoneNumber: contact.phoneNumber
+        }
+      });
+    }
+    
+    logger.info('contactController', 'تم تحديث المحادثات المرتبطة بجهة الاتصال', { 
+      contactId: contact._id, 
+      conversationsCount: conversations.length 
+    });
+  } catch (error) {
+    logger.error('contactController', 'خطأ في تحديث المحادثات المرتبطة', { 
+      contactId: contact._id, 
+      error: error.message 
+    });
+  }
+}
 
 /**
  * حذف جهة اتصال
