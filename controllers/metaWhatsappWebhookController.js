@@ -63,6 +63,35 @@ exports.handleWebhook = async (req, res) => {
         for (const entry of body.entry) {
           if (entry.changes?.length > 0) {
             for (const change of entry.changes) {
+              // معالجة معلومات جهة الاتصال للعميل إذا كانت موجودة
+              if (change.field === 'messages' && change.value.contacts?.length > 0) {
+                // استخراج معلومات الملف الشخصي
+                const contactInfo = change.value.contacts[0];
+                const phone = contactInfo.wa_id;
+                const phoneNumberId = change.value.metadata?.phone_number_id;
+                const customerName = contactInfo.profile?.name;
+                
+                if (phone && customerName) {
+                  logger.info('metaWhatsappWebhookController', 'تم استلام معلومات الملف الشخصي للعميل', { 
+                    phone, 
+                    customerName 
+                  });
+                  
+                  // البحث عن المحادثة الموجودة وتحديثها
+                  const existingConversation = await Conversation.findOne({ phoneNumber: phone });
+                  if (existingConversation) {
+                    existingConversation.customerName = customerName;
+                    existingConversation.customerData = contactInfo;
+                    await existingConversation.save();
+                    
+                    logger.info('metaWhatsappWebhookController', 'تم تحديث معلومات العميل', {
+                      conversationId: existingConversation._id,
+                      customerName
+                    });
+                  }
+                }
+              }
+
               if (change.field === 'messages') {
                 if (change.value.messages && change.value.messages.length > 0) {
                   requestType = 'message';
@@ -103,7 +132,10 @@ exports.handleWebhook = async (req, res) => {
                 await exports.handleIncomingMessages(change.value.messages, {
                   phone_number_id: change.value.metadata?.phone_number_id,
                   // أو ربما entry.messaging_product, تأكد من المصدر
-                  metadata: change.value.metadata || {}
+                  metadata: change.value.metadata || {},
+                  // تمرير معلومات جهة الاتصال إلى دالة معالجة الرسائل
+                  contactInfo: change.value.contacts && change.value.contacts.length > 0 ? 
+                               change.value.contacts[0] : null
                 });
               }
             }
@@ -324,8 +356,23 @@ exports.handleIncomingMessages = async (messages, meta) => {
           // تحديث معرف القناة ليعكس آخر قناة واردة
           conversationInstance.channelId = channel._id; 
 
+          // استخدام معلومات الملف الشخصي التي تم تمريرها من handleWebhook
+          if (meta.contactInfo) {
+            // تحديث معلومات العميل المخزنة مباشرة
+            if (meta.contactInfo.profile && meta.contactInfo.profile.name) {
+              logger.info('metaWhatsappWebhookController', 'تحديث اسم العميل من معلومات جهة الاتصال', {
+                oldName: conversationInstance.customerName,
+                newName: meta.contactInfo.profile.name,
+                phoneNumber: phone
+              });
+              conversationInstance.customerName = meta.contactInfo.profile.name;
+            }
+            
+            // تخزين معلومات الملف الشخصي كاملة
+            conversationInstance.customerData = meta.contactInfo;
+          }
           // التحقق مما إذا كانت الرسالة تحتوي على معلومات ملف تعريف
-          if (msg.contacts && msg.contacts.length > 0) {
+          else if (msg.contacts && msg.contacts.length > 0) {
             const contact = msg.contacts[0];
             
             // حفظ بيانات جهة الاتصال كاملة
@@ -383,8 +430,22 @@ exports.handleIncomingMessages = async (messages, meta) => {
             lastOpenedAt: new Date()
           };
           
+          // استخدام معلومات الملف الشخصي التي تم تمريرها من handleWebhook
+          if (meta.contactInfo) {
+            // تخزين معلومات الملف الشخصي كاملة
+            conversationData.customerData = meta.contactInfo;
+            
+            // استخراج اسم العميل من معلومات الملف الشخصي
+            if (meta.contactInfo.profile && meta.contactInfo.profile.name) {
+              logger.info('metaWhatsappWebhookController', 'تعيين اسم العميل من معلومات ملف التعريف المرفقة', {
+                name: meta.contactInfo.profile.name,
+                phoneNumber: phone
+              });
+              conversationData.customerName = meta.contactInfo.profile.name;
+            }
+          }
           // إضافة معلومات الملف الشخصي إذا كانت متوفرة
-          if (msg.contacts && msg.contacts.length > 0) {
+          else if (msg.contacts && msg.contacts.length > 0) {
             const contact = msg.contacts[0];
             
             // حفظ بيانات جهة الاتصال كاملة
