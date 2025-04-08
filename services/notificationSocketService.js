@@ -193,13 +193,38 @@ async function sendMessageNotification(conversationId, message, conversation, co
             // --- نهاية إنشاء الإشعار ---
 
             if (notification) {
-                // --- محاولة الإرسال عبر السوكت --- 
-                const sentViaSocket = await sendNotification(assignedTo, notification);
-                // --- نهاية محاولة الإرسال عبر السوكت ---
+                let sentViaSocket = false; // تتبع ما إذا تم الإرسال عبر سوكت الهيدر
                 
-                // --- إرسال ويب بوش فقط إذا لم يتم الإرسال عبر السوكت --- 
+                // --- التحقق من نشاط المستخدم قبل إرسال إشعار الهيدر --- 
+                if (!isAssignedUserActive) {
+                    logger.info('notificationSocketService', '[sendMessageNotification] User not active in conversation, attempting header notification (Socket)...', { assignedTo, conversationId });
+                    sentViaSocket = await sendNotification(assignedTo, notification); // محاولة الإرسال
+                } else {
+                    logger.info('notificationSocketService', '[sendMessageNotification] User IS active in conversation. Skipping header notification (Socket).', { assignedTo, conversationId });
+                    // نعتبر أنه تم التسليم طالما المستخدم موجود في غرفة الإشعارات العامة
+                    // هذا يمنع إرسال Web Push غير ضروري
+                    if (isSocketInRoom(`notifications-${assignedTo}`, assignedTo)) {
+                         sentViaSocket = true; 
+                         logger.info('notificationSocketService', '[sendMessageNotification] User is in general notifications room, considering socket delivery successful.', { assignedTo });
+                         // قد نحتاج لتحديث عدد غير المقروء هنا بشكل منفصل إذا لم يتم استدعاء sendNotification
+                         try {
+                             const unreadCount = await NotificationService.getUnreadCount(assignedTo);
+                             const targetRoom = `notifications-${assignedTo}`;
+                             io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
+                             logger.info('notificationSocketService', '[sendMessageNotification] Manually emitted unread-count for active user.', { assignedTo, count: unreadCount });
+                         } catch (countError) {
+                              logger.error('notificationSocketService', '[sendMessageNotification] Error manually fetching/sending unread count', { assignedTo, error: countError.message });
+                         }
+                    } else {
+                         logger.warn('notificationSocketService', '[sendMessageNotification] User active in conversation but NOT in general notifications room? Might still send Web Push.', { assignedTo });
+                         sentViaSocket = false; // لم يتم التأكد من الاتصال العام، اسمح بإمكانية إرسال Web Push
+                    }
+                }
+                // --- نهاية التحقق من نشاط المستخدم ---
+                
+                // --- إرسال ويب بوش فقط إذا لم يتم الإرسال عبر السوكت (أو لم يُعتبر كذلك) ---
                 if (!sentViaSocket) {
-                    logger.info('notificationSocketService', '[sendMessageNotification] Socket delivery likely failed or user inactive, attempting Web Push...', { assignedTo, notificationId: notification._id });
+                    logger.info('notificationSocketService', '[sendMessageNotification] Socket delivery failed or skipped, attempting Web Push...', { assignedTo, notificationId: notification._id });
                     try {
                         const user = await User.findById(assignedTo).select('webPushSubscriptions').lean();
                         if (user && user.webPushSubscriptions && user.webPushSubscriptions.length > 0) {
@@ -224,8 +249,9 @@ async function sendMessageNotification(conversationId, message, conversation, co
             const admins = await User.find({ /* ... شروط البحث عن المشرفين ... */ }).select('_id webPushSubscriptions').lean();
             // ... (الحلقة للمرور على المشرفين)
             for (const admin of admins) {
-                const isAdminActive = isSocketInRoom(`conversation-${conversationId}`, admin._id) || isSocketInRoom(`notifications-${admin._id}`, admin._id); // التحقق من النشاط
-                logger.info('notificationSocketService', 'التحقق من نشاط المشرف', { conversationId, adminId: admin._id, isAdminActive });
+                // تعديل التحقق من نشاط المشرف ليشمل غرفة الإشعارات العامة
+                const isAdminActiveInConv = isSocketInRoom(`conversation-${conversationId}`, admin._id);
+                logger.info('notificationSocketService', 'التحقق من نشاط المشرف', { conversationId, adminId: admin._id, isAdminActiveInConv });
                 
                 // إنشاء الإشعار للمشرف
                 const senderName = contact?.name || contact?.phoneNumber || 'عميل غير معروف';
@@ -242,10 +268,36 @@ async function sendMessageNotification(conversationId, message, conversation, co
                 }, conversation);
 
                 if (adminNotification) {
-                    const sentViaSocket = await sendNotification(admin._id, adminNotification);
+                    let adminSentViaSocket = false;
                     
-                    if (!sentViaSocket) {
-                        logger.info('notificationSocketService', '[sendMessageNotification] Socket delivery likely failed for admin, attempting Web Push...', { adminId: admin._id, notificationId: adminNotification._id });
+                    // --- التحقق من نشاط المشرف قبل إرسال إشعار الهيدر --- 
+                    if (!isAdminActiveInConv) {
+                         logger.info('notificationSocketService', '[sendMessageNotification] Admin not active in conversation, attempting header notification (Socket)...', { adminId: admin._id, conversationId });
+                         adminSentViaSocket = await sendNotification(admin._id, adminNotification);
+                    } else {
+                        logger.info('notificationSocketService', '[sendMessageNotification] Admin IS active in conversation. Skipping header notification (Socket).', { adminId: admin._id, conversationId });
+                         if (isSocketInRoom(`notifications-${admin._id}`, admin._id)) {
+                             adminSentViaSocket = true;
+                             logger.info('notificationSocketService', '[sendMessageNotification] Admin is in general notifications room, considering socket delivery successful.', { adminId: admin._id });
+                              // تحديث عدد غير المقروء للمشرف النشط
+                             try {
+                                 const unreadCount = await NotificationService.getUnreadCount(admin._id);
+                                 const targetRoom = `notifications-${admin._id}`;
+                                 io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
+                                 logger.info('notificationSocketService', '[sendMessageNotification] Manually emitted unread-count for active admin.', { adminId: admin._id, count: unreadCount });
+                             } catch (countError) {
+                                  logger.error('notificationSocketService', '[sendMessageNotification] Error manually fetching/sending unread count for admin', { adminId: admin._id, error: countError.message });
+                             }
+                         } else {
+                              logger.warn('notificationSocketService', '[sendMessageNotification] Admin active in conversation but NOT in general notifications room? Might still send Web Push.', { adminId: admin._id });
+                              adminSentViaSocket = false;
+                         }
+                    }
+                    // --- نهاية التحقق من نشاط المشرف ---
+                    
+                    // --- إرسال ويب بوش للمشرف فقط إذا لم يتم الإرسال عبر السوكت --- 
+                    if (!adminSentViaSocket) {
+                        logger.info('notificationSocketService', '[sendMessageNotification] Socket delivery failed or skipped for admin, attempting Web Push...', { adminId: admin._id, notificationId: adminNotification._id });
                          if (admin.webPushSubscriptions && admin.webPushSubscriptions.length > 0) {
                              await NotificationService.sendWebPushNotification(admin, adminNotification);
                              logger.info('notificationSocketService', '[sendMessageNotification] Web Push attempted for admin.', { adminId: admin._id });
@@ -253,6 +305,8 @@ async function sendMessageNotification(conversationId, message, conversation, co
                             logger.info('notificationSocketService', '[sendMessageNotification] No Web Push subscriptions found for admin.', { adminId: admin._id });
                          }
                     }
+                    // --- نهاية إرسال ويب بوش للمشرف ---
+                    
                 } else {
                    logger.warn('notificationSocketService', '[sendMessageNotification] Notification creation failed for admin', { adminId: admin._id, conversationId });
                 }
