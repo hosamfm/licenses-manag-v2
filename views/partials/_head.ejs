@@ -196,4 +196,10 @@
           window.currentUsername = 'Guest';
       </script>
     <% } %>
+
+    <!-- تضمين ملف إشعارات الويب بوش للمستخدمين المسجلين -->
+    <% if (typeof user !== 'undefined' && user && user._id || (session && session.userId)) { %>
+        <script src="/js/push-notifications.js"></script>
+    <% } %>
+
 </head>
