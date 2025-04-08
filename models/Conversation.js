@@ -22,6 +22,10 @@ const conversationSchema = new mongoose.Schema({
     type: String,
     trim: true 
   },
+  customerData: {
+    type: Object,
+    default: {} // لتخزين معلومات الملف الشخصي للعميل الواردة من واتساب
+  },
   status: { 
     type: String, 
     enum: ['open', 'assigned', 'closed'], 

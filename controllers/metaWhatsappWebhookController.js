@@ -323,6 +323,19 @@ exports.handleIncomingMessages = async (messages, meta) => {
           // تحديث معرف القناة ليعكس آخر قناة واردة
           conversationInstance.channelId = channel._id; 
 
+          // التحقق مما إذا كانت الرسالة تحتوي على معلومات ملف تعريف
+          if (msg.contacts && msg.contacts.length > 0) {
+            const contact = msg.contacts[0];
+            conversationInstance.customerData = contact;
+            
+            // تحديث اسم العميل إذا كان متوفراً
+            if (contact.name) {
+              conversationInstance.customerName = contact.name.formatted_name || 
+                                               contact.name.first_name || 
+                                               conversationInstance.customerName;
+            }
+          }
+
           // التحقق من حالة المحادثة وإعادة فتحها تلقائيًا إذا كانت مغلقة
           if (conversationInstance.status === 'closed') {
             /* logger.info('metaWhatsappWebhookController', 'إعادة فتح المحادثة المغلقة تلقائيًا', { conversationId: conversationInstance._id }); */
@@ -338,14 +351,28 @@ exports.handleIncomingMessages = async (messages, meta) => {
         } else {
           /* logger.info('metaWhatsappWebhookController', 'إنشاء محادثة جديدة', { phone, channelId: channel._id }); */
           isNewConversation = true;
-          // إنشاء محادثة جديدة باستخدام القناة الحالية
-          conversationInstance = await Conversation.create({
-            channelId: channel._id, // استخدام معرف القناة للرسالة الأولى
+          
+          // تحضير بيانات المحادثة الجديدة
+          const conversationData = {
+            channelId: channel._id,
             phoneNumber: phone,
             status: 'open',
             lastMessageAt: new Date(),
             lastOpenedAt: new Date()
-          });
+          };
+          
+          // إضافة معلومات الملف الشخصي إذا كانت متوفرة
+          if (msg.contacts && msg.contacts.length > 0) {
+            const contact = msg.contacts[0];
+            conversationData.customerData = contact;
+            
+            if (contact.name) {
+              conversationData.customerName = contact.name.formatted_name || contact.name.first_name;
+            }
+          }
+          
+          // إنشاء محادثة جديدة باستخدام القناة الحالية
+          conversationInstance = await Conversation.create(conversationData);
         }
 
         // الحصول على نسخة lean من المحادثة للاستخدام في إنشاء الرسالة (إذا لزم الأمر)
