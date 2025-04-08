@@ -548,14 +548,12 @@ function createConversationItemHTML(conv) {
       statusIcon = 'fa-user-check';
     }
 
-    // تحديد اسم العميل المناسب (من جهة الاتصال فقط أو رقم الهاتف)
-    let customerDisplayName = '';
-    
-    if (conv.contactId && typeof conv.contactId === 'object' && conv.contactId.name) {
-        customerDisplayName = conv.contactId.name; // استخدام اسم جهة الاتصال فقط
-    } else {
-        customerDisplayName = conv.phoneNumber || 'رقم غير معروف'; // استخدام رقم الهاتف فقط وتجاهل customerName
-    }
+    // استخدام الدالة المساعدة للحصول على اسم العميل المعروض
+    const customerDisplayName = window.ContactHelper 
+        ? window.ContactHelper.getContactDisplayName(conv)
+        : (conv.contactId && typeof conv.contactId === 'object' && conv.contactId.name 
+            ? conv.contactId.name 
+            : (conv.phoneNumber || 'رقم غير معروف'));
 
     return `
         <button type="button"
@@ -816,35 +814,54 @@ function updateConversationInList(convData) {
         status: convData.status || 'open',
         lastMessageAt: convData.lastMessageAt || new Date(),
         phoneNumber: convData.phoneNumber || '',
+        customerName: convData.customerName || '',
         lastMessage: convData.lastMessage,
         unreadCount: convData.unreadCount || 0,
         contactId: convData.contactId || null
     };
     
-    // التحقق من أن معلومات جهة الاتصال موجودة ومكتملة
-    if (!conv.contactId || typeof conv.contactId !== 'object') {
-        // إذا كانت بيانات جهة الاتصال غير مكتملة، نقوم بعملية استعلام مباشرة لجلب التفاصيل
-        fetch(`/crm/conversations/${conv._id}/ajax?_=${new Date().getTime()}`, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.conversation && data.conversation.contactId) {
-                    // نسخ معلومات جهة الاتصال المكتملة
-                    conv.contactId = data.conversation.contactId;
+    // إضافة displayName من الخادم إذا كان متوفرًا
+    if (convData.displayName) {
+        conv.displayName = convData.displayName;
+    }
+    
+    // استخدام الدالة المساعدة للتحقق من اكتمال معلومات جهة الاتصال
+    if (window.ContactHelper && !window.ContactHelper.hasCompleteContactInfo(conv)) {
+        // استخدام الدالة المساعدة لجلب معلومات جهة الاتصال الكاملة
+        window.ContactHelper.fetchCompleteContactInfo(conv._id)
+            .then(updatedConv => {
+                if (updatedConv) {
+                    // دمج البيانات المحدثة مع البيانات الأصلية
+                    const mergedConv = { ...conv, ...updatedConv };
+                    
+                    // التأكد من تحديد displayName باستخدام الدالة المساعدة
+                    if (window.ContactHelper && !mergedConv.displayName) {
+                        mergedConv.displayName = window.ContactHelper.getContactDisplayName(mergedConv);
+                    }
                     
                     // إعادة بناء عنصر المحادثة بالمعلومات المكتملة
+                    rebuildConversationItem(conversationItem, mergedConv);
+                } else {
+                    // في حالة الفشل، نبني العنصر بالمعلومات المتاحة ونحدد displayName إذا لم يكن موجودًا
+                    if (window.ContactHelper && !conv.displayName) {
+                        conv.displayName = window.ContactHelper.getContactDisplayName(conv);
+                    }
                     rebuildConversationItem(conversationItem, conv);
                 }
             })
             .catch(() => {
-                // في حالة الفشل، نبني العنصر بالمعلومات المتاحة
+                // في حالة الفشل، نبني العنصر بالمعلومات المتاحة ونحدد displayName إذا لم يكن موجودًا
+                if (window.ContactHelper && !conv.displayName) {
+                    conv.displayName = window.ContactHelper.getContactDisplayName(conv);
+                }
                 rebuildConversationItem(conversationItem, conv);
             });
     } else {
         // إذا كانت معلومات جهة الاتصال مكتملة، نقوم ببناء عنصر المحادثة مباشرة
+        // التأكد من تحديد displayName باستخدام الدالة المساعدة إذا لم يكن موجودًا
+        if (window.ContactHelper && !conv.displayName) {
+            conv.displayName = window.ContactHelper.getContactDisplayName(conv);
+        }
         rebuildConversationItem(conversationItem, conv);
     }
 }
@@ -855,6 +872,9 @@ function updateConversationInList(convData) {
  * @param {Object} conv - بيانات المحادثة
  */
 function rebuildConversationItem(item, conv) {
+    // إذا كان هناك displayName من الخادم، نستخدمه مباشرة
+    // وإلا سيتم استخدام الدالة المساعدة في createConversationItemHTML
+    
     // إضافة محتوى جديد للعنصر
     const newHtml = createConversationItemHTML(conv);
     

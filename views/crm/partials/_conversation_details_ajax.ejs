@@ -50,11 +50,23 @@
       </div>
       <div class="customer-details">
         <h5 class="customer-name">
-          <% if (conversation.contactId && typeof conversation.contactId === 'object' && conversation.contactId.name) { %>
-            <%= conversation.contactId.name %>
-          <% } else { %>
-            <%= conversation.phoneNumber %>
-          <% } %>
+          <% 
+            // استخدام منطق مشابه للدالة المساعدة ContactHelper.getServerDisplayName
+            let customerName = '';
+            // تفضيل اسم جهة الاتصال إذا كان موجودًا
+            if (conversation.contactId && typeof conversation.contactId === 'object' && conversation.contactId.name) {
+              customerName = conversation.contactId.name;
+            } 
+            // استخدام customerName كخيار ثاني
+            else if (conversation.customerName) {
+              customerName = conversation.customerName;
+            } 
+            // استخدام رقم الهاتف كخيار أخير
+            else {
+              customerName = conversation.phoneNumber || 'رقم غير معروف';
+            }
+          %>
+          <%= customerName %>
         </h5>
         <div class="conversation-meta">
           <% if (conversation.status === 'closed') { %>

@@ -4,6 +4,7 @@ const logger = require('./loggerService');
 const mongoose = require('mongoose');
 const webpush = require('web-push');
 const Conversation = require('../models/Conversation');
+const ContactHelper = require('../utils/contactHelper');
 
 // إعداد web-push باستخدام مفاتيح VAPID من متغيرات البيئة
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -148,20 +149,13 @@ class NotificationService {
    * يستخدم الآن createNotification ويتجاوز الفحص العام لأنه يتم في notificationSocketService
    */
   static async createMessageNotification(recipientId, conversationId, messageContent, messageId, senderName) {
-    const notificationData = {
-        recipient: recipientId,
-        type: 'message',
-        title: `رسالة جديدة من ${senderName || 'عميل'}`,
-        message: messageContent.substring(0, 100) + (messageContent.length > 100 ? '...' : ''), // اقتطاع الرسائل الطويلة
-        link: `/crm/conversations/${conversationId}?msg=${messageId}`,
-        relatedConversation: conversationId,
-        relatedMessage: messageId
-    };
-    
-    // جلب المحادثة لتمريرها لدالة التحقق
+    // الحصول على بيانات المحادثة لاستخراج اسم العميل
     let conversation = null;
     try {
-      conversation = await Conversation.findById(conversationId).select('assignedTo status').lean();
+      conversation = await Conversation.findById(conversationId)
+                        .select('assignedTo status contactId customerName phoneNumber')
+                        .populate('contactId', 'name phoneNumber')
+                        .lean();
       if (!conversation) {
         logger.warn('notificationService', '[createMessageNotification] Conversation not found', { conversationId });
         // يمكن الاستمرار بدون المحادثة، لكن التحقق سيكون أقل دقة
@@ -170,6 +164,21 @@ class NotificationService {
        logger.error('notificationService', '[createMessageNotification] Error fetching conversation', { conversationId, error: error.message });
        // يمكن الاستمرار بدون المحادثة
     }
+    
+    // استخدام الدالة المساعدة للحصول على الاسم المناسب
+    const displayName = conversation ? 
+      ContactHelper.getServerDisplayName(conversation) : 
+      (senderName || 'عميل');
+    
+    const notificationData = {
+        recipient: recipientId,
+        type: 'message',
+        title: `رسالة جديدة من ${displayName}`,
+        message: messageContent.substring(0, 100) + (messageContent.length > 100 ? '...' : ''), // اقتطاع الرسائل الطويلة
+        link: `/crm/conversations/${conversationId}?msg=${messageId}`,
+        relatedConversation: conversationId,
+        relatedMessage: messageId
+    };
 
     // استدعاء الدالة الجديدة
     notificationData.content = notificationData.message; 

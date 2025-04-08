@@ -131,6 +131,10 @@ app.use((req, res, next) => {
     res.locals.session = sess;
     res.locals.flashMessages = req.flash();
     res.locals.originalUrl = req.originalUrl;
+    
+    // إضافة مكتبة moment.js للقوالب
+    res.locals.moment = require('moment');
+    
     if (!sess.views) {
       sess.views = 1;
     } else {

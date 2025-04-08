@@ -21,6 +21,7 @@ const notificationSocketService = require('../services/notificationSocketService
 const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const whatsappMediaController = require('./whatsappMediaController');
+const ContactHelper = require('../utils/contactHelper');
 
 /**
  * استخراج المنشنات من محتوى النص
@@ -1354,13 +1355,17 @@ exports.assignConversationAPI = async (req, res) => {
     await notificationSocketService.updateConversationNotifications(conversationId, conversation);
     logger.info('conversationController', '[assignConversationAPI] Finished attempting notification update/send.', { conversationId });
     
+    // استخدام الدالة المساعدة للحصول على اسم العميل المعروض
+    const customerName = ContactHelper.getServerDisplayName(conversation);
+    
     // إرسال إشعار شخصي للمستخدم الذي تم تعيينه
     if (userId) {
       socketService.notifyUser(userId, 'conversation_assigned', {
         conversationId,
         assignedBy: req.user.full_name || req.user.username,
-        customerName: conversation.customerName,
-        phoneNumber: conversation.phoneNumber
+        customerName: customerName,
+        phoneNumber: conversation.phoneNumber,
+        displayName: customerName
       });
     }
     
@@ -1372,7 +1377,8 @@ exports.assignConversationAPI = async (req, res) => {
         _id: conversation._id,
         status: conversation.status,
         assignedTo: conversation.assignedTo,
-        assignee: assigneeData // إضافة بيانات المستخدم المعين المفصلة للاستجابة
+        assignee: assigneeData, // إضافة بيانات المستخدم المعين المفصلة للاستجابة
+        displayName: customerName // إضافة الاسم المعروض للعميل
       }
     });
   } catch (error) {
@@ -1408,13 +1414,17 @@ exports.assignToMe = async (req, res) => {
     }
     
     // التحقق من وجود المحادثة
-    const conversation = await Conversation.findById(conversationId);
+    const conversation = await Conversation.findById(conversationId)
+      .populate('contactId', 'name phoneNumber');
     if (!conversation) {
       return res.status(404).json({ 
         success: false, 
         error: 'المحادثة غير موجودة' 
       });
     }
+    
+    // الحصول على اسم العميل المعروض باستخدام الدالة المساعدة
+    const customerName = ContactHelper.getServerDisplayName(conversation);
     
     // تعيين المحادثة للمستخدم الحالي
     conversation.assignedTo = req.user._id;
@@ -1435,7 +1445,8 @@ exports.assignToMe = async (req, res) => {
       status: conversation.status,
       assignedTo: conversation.assignedTo,
       assignedBy: req.user._id,
-      assignee: assigneeData // إضافة بيانات المستخدم الكاملة
+      assignee: assigneeData, // إضافة بيانات المستخدم الكاملة
+      displayName: customerName // إضافة الاسم المعروض للعميل
     });
     
     // إرسال إشعارات لتغيير حالة المحادثة
@@ -1449,7 +1460,8 @@ exports.assignToMe = async (req, res) => {
         _id: conversation._id,
         status: conversation.status,
         assignedTo: conversation.assignedTo,
-        assignee: assigneeData // إضافة بيانات المستخدم المعين المفصلة للاستجابة
+        assignee: assigneeData, // إضافة بيانات المستخدم المعين المفصلة للاستجابة
+        displayName: customerName // إضافة الاسم المعروض للعميل
       }
     });
   } catch (error) {
@@ -1478,6 +1490,7 @@ exports.getSingleConversationAjax = async (req, res) => {
     // جلب المحادثة مع المعلومات الأساسية
     const conversation = await Conversation.findById(conversationId)
       .populate('assignedTo', 'username full_name')
+      .populate('contactId', 'name phoneNumber') // إضافة معلومات جهة الاتصال
       .lean();
     
     if (!conversation) {
@@ -1486,6 +1499,10 @@ exports.getSingleConversationAjax = async (req, res) => {
         error: 'المحادثة غير موجودة' 
       });
     }
+    
+    // استخدام الدالة المساعدة للحصول على الاسم المعروض
+    const displayName = ContactHelper.getServerDisplayName(conversation);
+    conversation.displayName = displayName;
     
     // جلب آخر رسالة
     const lastMessage = await WhatsappMessage.findOne({ conversationId })
@@ -1518,6 +1535,228 @@ exports.getSingleConversationAjax = async (req, res) => {
     });
   }
 };
+
+// إيجاد محادثة بواسطة المعرف
+exports.getConversationById = async (req, res) => {
+  try {
+    const id = req.params.id;
+    
+    // البحث عن المحادثة مع بيانات جهة الاتصال
+    const conversation = await Conversation.findById(id)
+      .populate('contactId', 'name phoneNumber email company notes')
+      .populate('assignedTo', 'username full_name');
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: 'المحادثة غير موجودة'
+      });
+    }
+
+    // استخدام الدالة المساعدة للحصول على اسم العميل
+    const customerDisplayName = ContactHelper.getServerDisplayName(conversation);
+      
+    // تجهيز البيانات للإرسال
+    const conversationData = {
+      _id: conversation._id,
+      customerName: conversation.customerName,
+      phoneNumber: conversation.phoneNumber,
+      displayName: customerDisplayName,  // إضافة الاسم المعروض الموحد
+      contactId: conversation.contactId,
+      channelId: conversation.channelId,
+      status: conversation.status,
+      assignedTo: conversation.assignedTo,
+      lastMessageAt: conversation.lastMessageAt,
+      createdAt: conversation.createdAt
+    };
+      
+    return res.status(200).json(conversationData);
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في getConversationById', { error, id: req.params.id });
+    return res.status(500).json({
+      message: 'حدث خطأ أثناء البحث عن المحادثة',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * جلب المحادثات مجمعة حسب الحالة
+ */
+exports.getGroupedConversations = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const { userId } = req;
+    
+    // تحديد شروط البحث
+    const assignedCondition = userId ? { assignedTo: userId } : {};
+    
+    // جلب المحادثات المفتوحة
+    const openConversations = await Conversation.find({
+      status: 'open',
+      ...assignedCondition
+    })
+    .populate('contactId', 'name phoneNumber')
+    .populate('assignedTo', 'username full_name')
+    .sort({ lastMessageAt: -1 })
+    .limit(limit)
+    .lean();
+    
+    // جلب المحادثات المسندة
+    const assignedConversations = await Conversation.find({
+      status: 'assigned',
+      ...assignedCondition
+    })
+    .populate('contactId', 'name phoneNumber')
+    .populate('assignedTo', 'username full_name')
+    .sort({ lastMessageAt: -1 })
+    .limit(limit)
+    .lean();
+    
+    // جلب المحادثات المغلقة
+    const closedConversations = await Conversation.find({
+      status: 'closed',
+      ...assignedCondition
+    })
+    .populate('contactId', 'name phoneNumber')
+    .populate('assignedTo', 'username full_name')
+    .sort({ lastMessageAt: -1 })
+    .limit(limit)
+    .lean();
+    
+    // إضافة الاسم المعروض لكل محادثة
+    const processedOpenConversations = openConversations.map(conv => ({
+      ...conv,
+      displayName: ContactHelper.getServerDisplayName(conv)
+    }));
+    
+    const processedAssignedConversations = assignedConversations.map(conv => ({
+      ...conv,
+      displayName: ContactHelper.getServerDisplayName(conv)
+    }));
+    
+    const processedClosedConversations = closedConversations.map(conv => ({
+      ...conv,
+      displayName: ContactHelper.getServerDisplayName(conv)
+    }));
+    
+    res.json({
+      open: processedOpenConversations,
+      assigned: processedAssignedConversations,
+      closed: processedClosedConversations
+    });
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في getGroupedConversations', { error });
+    res.status(500).json({
+      message: 'حدث خطأ أثناء استرجاع المحادثات المجمعة',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * استرجاع محادثة واحدة مع تفاصيلها
+ */
+exports.getConversation = async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+    
+    // استرجاع المحادثة مع معلومات المستخدم المعين
+    let conversation = await Conversation.findById(conversationId)
+      .populate('assignedTo', 'username full_name')
+      .populate('contactId', 'name phoneNumber email company notes')
+      .lean();
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: 'المحادثة غير موجودة'
+      });
+    }
+    
+    // التأكد من ربط المحادثة بجهة الاتصال إذا كانت موجودة
+    if (!conversation.contactId) {
+      const conversationDoc = await Conversation.findById(conversationId);
+      await ensureContactLinked(conversationDoc);
+      
+      // إعادة استرجاع المحادثة بعد التحديث
+      conversation = await Conversation.findById(conversationId)
+        .populate('assignedTo', 'username full_name')
+        .populate('contactId', 'name phoneNumber email company notes')
+        .lean();
+    }
+    
+    // استخدام الدالة المساعدة للحصول على الاسم المعروض
+    conversation.displayName = ContactHelper.getServerDisplayName(conversation);
+    
+    // استرجاع آخر 50 رسالة في المحادثة
+    const messages = await WhatsappMessage.find({ conversationId: conversationId })
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .populate('sentBy', 'username full_name')
+      .lean();
+    
+    // قلب ترتيب الرسائل لتكون الأقدم أولاً
+    messages.reverse();
+    
+    // تحديث محادثات المستخدم النشطة في الجلسة إذا كانت موجودة
+    if (req.session.activeConversations) {
+      if (!req.session.activeConversations.includes(conversationId)) {
+        req.session.activeConversations.push(conversationId);
+      }
+    } else {
+      req.session.activeConversations = [conversationId];
+    }
+    
+    res.json({
+      success: true,
+      conversation,
+      messages
+    });
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في استرجاع المحادثة', { error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ أثناء استرجاع المحادثة',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * دالة مساعدة للبحث عن جهة اتصال وربطها بالمحادثة إذا لم تكن مرتبطة
+ * @param {Object} conversation - كائن المحادثة
+ * @returns {Promise<Object>} - المحادثة بعد التحديث
+ */
+async function ensureContactLinked(conversation) {
+  try {
+    // إذا كانت المحادثة مرتبطة بالفعل بجهة اتصال، لا تفعل شيئًا
+    if (conversation.contactId) {
+      return conversation;
+    }
+
+    // البحث عن جهة اتصال بنفس رقم الهاتف
+    const Contact = require('../models/Contact');
+    const contact = await Contact.findByPhoneNumber(conversation.phoneNumber);
+
+    // إذا تم العثور على جهة اتصال، قم بربطها بالمحادثة
+    if (contact) {
+      conversation.contactId = contact._id;
+      await conversation.save();
+      logger.info('conversationController', 'تم ربط المحادثة بجهة اتصال موجودة', {
+        conversationId: conversation._id,
+        contactId: contact._id
+      });
+    }
+
+    return conversation;
+  } catch (error) {
+    logger.error('conversationController', 'خطأ في ربط المحادثة بجهة الاتصال', {
+      error: error.message,
+      conversationId: conversation._id
+    });
+    return conversation;
+  }
+}
 
 /**
  * عرض صفحة المحادثات
@@ -1574,6 +1813,12 @@ exports.showConversationsAjax = async (req, res) => {
       .populate('contactId', 'name phoneNumber')  // تحميل معلومات جهة الاتصال المرتبطة
       .lean();
     
+    // إضافة اسم العرض الموحد لكل محادثة
+    conversations = conversations.map(conv => ({
+      ...conv,
+      displayName: ContactHelper.getServerDisplayName(conv)
+    }));
+    
     // تنفيذ البحث في جهات الاتصال بشكل منفصل إذا تم تقديم البحث
     if (search) {
       const Contact = require('../models/Contact');
@@ -1594,8 +1839,14 @@ exports.showConversationsAjax = async (req, res) => {
           .populate('contactId', 'name phoneNumber')
           .lean();
         
+        // إضافة اسم العرض الموحد للمحادثات الإضافية
+        const processedAdditionalConvs = additionalConversations.map(conv => ({
+          ...conv,
+          displayName: ContactHelper.getServerDisplayName(conv)
+        }));
+        
         // دمج النتائج وإزالة التكرار
-        const allConversations = [...conversations, ...additionalConversations];
+        const allConversations = [...conversations, ...processedAdditionalConvs];
         const uniqueConversations = Array.from(
           new Map(allConversations.map(conv => [conv._id.toString(), conv])).values()
         );
@@ -1608,110 +1859,20 @@ exports.showConversationsAjax = async (req, res) => {
         conversations = uniqueConversations.slice(0, limit);
       }
     }
+    
+    // عرض الصفحة مع المحادثات
+    res.render('crm/conversations_split_ajax', {
+      title: 'المحادثات',
+      conversations,
+      user,
+      search,
+      status: statusFilter,
+      assignment: assignmentFilter,
+      selectedId: selected,
+      flashMessages: req.flash()
+    });
   } catch (error) {
     logger.error('conversationController', 'خطأ في عرض صفحة المحادثات', error);
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء عرض صفحة المحادثات' });
-  }
-};
-
-/**
- * دالة مساعدة للبحث عن جهة اتصال وربطها بالمحادثة إذا لم تكن مرتبطة
- * @param {Object} conversation - كائن المحادثة
- * @returns {Promise<Object>} - المحادثة بعد التحديث
- */
-async function ensureContactLinked(conversation) {
-  try {
-    // إذا كانت المحادثة مرتبطة بالفعل بجهة اتصال، لا تفعل شيئًا
-    if (conversation.contactId) {
-      return conversation;
-    }
-
-    // البحث عن جهة اتصال بنفس رقم الهاتف
-    const Contact = require('../models/Contact');
-    const contact = await Contact.findByPhoneNumber(conversation.phoneNumber);
-
-    // إذا تم العثور على جهة اتصال، قم بربطها بالمحادثة
-    if (contact) {
-      conversation.contactId = contact._id;
-      await conversation.save();
-      logger.info('conversationController', 'تم ربط المحادثة بجهة اتصال موجودة', {
-        conversationId: conversation._id,
-        contactId: contact._id
-      });
-    }
-
-    return conversation;
-  } catch (error) {
-    logger.error('conversationController', 'خطأ في ربط المحادثة بجهة الاتصال', {
-      error: error.message,
-      conversationId: conversation._id
-    });
-    return conversation;
-  }
-}
-
-/**
- * استرجاع محادثة واحدة مع تفاصيلها
- */
-exports.getConversation = async (req, res) => {
-  try {
-    const conversationId = req.params.id;
-    
-    // استرجاع المحادثة مع معلومات المستخدم المعين
-    let conversation = await Conversation.findById(conversationId)
-      .populate('assignedTo', 'username full_name')
-      .populate('contactId', 'name phoneNumber email company notes')
-      .lean();
-    
-    if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'المحادثة غير موجودة'
-      });
-    }
-    
-    // التأكد من ربط المحادثة بجهة الاتصال إذا كانت موجودة
-    if (!conversation.contactId) {
-      const conversationDoc = await Conversation.findById(conversationId);
-      await ensureContactLinked(conversationDoc);
-      
-      // إعادة استرجاع المحادثة بعد التحديث
-      conversation = await Conversation.findById(conversationId)
-        .populate('assignedTo', 'username full_name')
-        .populate('contactId', 'name phoneNumber email company notes')
-        .lean();
-    }
-    
-    // استرجاع آخر 50 رسالة في المحادثة
-    const messages = await WhatsappMessage.find({ conversationId: conversationId })
-      .sort({ timestamp: -1 })
-      .limit(50)
-      .populate('sentBy', 'username full_name')
-      .lean();
-    
-    // قلب ترتيب الرسائل لتكون الأقدم أولاً
-    messages.reverse();
-    
-    // تحديث محادثات المستخدم النشطة في الجلسة إذا كانت موجودة
-    if (req.session.activeConversations) {
-      if (!req.session.activeConversations.includes(conversationId)) {
-        req.session.activeConversations.push(conversationId);
-      }
-    } else {
-      req.session.activeConversations = [conversationId];
-    }
-    
-    res.json({
-      success: true,
-      conversation,
-      messages
-    });
-  } catch (error) {
-    logger.error('conversationController', 'خطأ في استرجاع المحادثة', { error: error.message });
-    res.status(500).json({
-      success: false,
-      message: 'حدث خطأ أثناء استرجاع المحادثة',
-      error: error.message
-    });
   }
 };

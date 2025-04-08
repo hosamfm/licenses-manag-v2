@@ -5,6 +5,7 @@
 const NotificationService = require('./notificationService');
 const logger = require('./loggerService');
 const User = require('../models/User');
+const ContactHelper = require('../utils/contactHelper');
 
 let io = null;
 
@@ -162,7 +163,7 @@ async function sendMessageNotification(conversationId, message, conversation, co
             }
             
             // --- إنشاء الإشعار أولاً --- 
-            const senderName = conversation?.customerName || conversation?.phoneNumber || 'عميل غير معروف';
+            const senderName = ContactHelper.getServerDisplayName(conversation);
             const messageId = message?._id || message?.id || null;
             const notification = await NotificationService.createNotification({
                 recipient: assignedTo,
@@ -242,7 +243,7 @@ async function sendMessageNotification(conversationId, message, conversation, co
                 }
                 
                 // إنشاء الإشعار للمشرف
-                const senderName = contact?.name || contact?.phoneNumber || 'عميل غير معروف';
+                const senderName = ContactHelper.getServerDisplayName(conversation, { useContact: true });
                 const messageId = message?._id || message?.id || null;
                 const adminNotification = await NotificationService.createNotification({
                     recipient: admin._id,
@@ -335,11 +336,12 @@ async function updateConversationNotifications(conversationId, conversation) {
     try {
         if (conversation.status === 'assigned' && conversation.assignedTo) {
             // إرسال إشعار للمستخدم المسند له المحادثة
+            const customerName = ContactHelper.getServerDisplayName(conversation);
             const notification = await NotificationService.createAndSendNotification({
                 recipient: conversation.assignedTo,
                 type: 'conversation',
                 title: 'تم إسناد محادثة جديدة لك',
-                content: `تم إسناد محادثة مع ${conversation.customerName || conversation.phoneNumber} إليك`,
+                content: `تم إسناد محادثة مع ${customerName} إليك`,
                 link: `/crm/conversations/ajax?selected=${conversationId}`,
                 reference: {
                     model: 'Conversation',

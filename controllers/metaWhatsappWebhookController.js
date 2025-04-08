@@ -14,6 +14,7 @@ const mediaService = require('../services/mediaService');
 const NotificationSocketService = require('../services/notificationSocketService');
 const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const Contact = require('../models/Contact');
+const ContactHelper = require('../utils/contactHelper');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -592,7 +593,8 @@ exports.handleIncomingMessages = async (messages, meta) => {
           .lean();
           
         if (updatedConversationForNotification) {
-          socketService.notifyConversationUpdate(conversation._id.toString(), {
+          // تحضير بيانات التحديث باستخدام الدالة المساعدة للاسم
+          const conversationData = {
             _id: updatedConversationForNotification._id,
             lastMessageAt: updatedConversationForNotification.lastMessageAt,
             status: updatedConversationForNotification.status,
@@ -604,8 +606,12 @@ exports.handleIncomingMessages = async (messages, meta) => {
             lastMessage: messageWithMedia,
             phoneNumber: updatedConversationForNotification.phoneNumber,
             customerName: updatedConversationForNotification.customerName,
-            contactId: updatedConversationForNotification.contactId
-          });
+            contactId: updatedConversationForNotification.contactId,
+            // إضافة الاسم المعروض الموحد
+            displayName: ContactHelper.getServerDisplayName(updatedConversationForNotification)
+          };
+          
+          socketService.notifyConversationUpdate(conversation._id.toString(), conversationData);
         }
 
         if (messageWithMedia) {

@@ -229,14 +229,12 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
 
-        // تحديد اسم العميل المناسب (من جهة الاتصال فقط أو رقم الهاتف)
-        let customerDisplayName = '';
-        
-        if (conv.contactId && typeof conv.contactId === 'object' && conv.contactId.name) {
-            customerDisplayName = conv.contactId.name; // استخدام اسم جهة الاتصال فقط
-        } else {
-            customerDisplayName = conv.phoneNumber || 'رقم غير معروف'; // استخدام رقم الهاتف فقط وتجاهل customerName
-        }
+        // تحديد اسم العميل المناسب باستخدام الدالة المساعدة
+        let customerDisplayName = window.ContactHelper 
+            ? window.ContactHelper.getContactDisplayName(conv)
+            : (conv.contactId && typeof conv.contactId === 'object' && conv.contactId.name 
+                ? conv.contactId.name 
+                : (conv.phoneNumber || 'رقم غير معروف'));
 
         // تحسين عرض آخر رسالة لأنواع الوسائط المختلفة بما في ذلك الموقع
         let lastMessageContent = 'محادثة جديدة';

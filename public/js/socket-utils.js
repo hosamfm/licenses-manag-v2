@@ -158,8 +158,15 @@ function setupAssignmentListeners(socket) {
             
             // عرض إشعار للمستخدم
             if ('Notification' in window && Notification.permission === 'granted') {
+                // الحصول على اسم العميل باستخدام الدالة المساعدة إذا كانت متاحة
+                let customerName = data.customerName || data.phoneNumber;
+                
+                if (window.ContactHelper && data) {
+                    customerName = window.ContactHelper.getContactDisplayName(data);
+                }
+                
                 const notif = new Notification('تم تعيينك لمحادثة جديدة', {
-                    body: `تم تعيينك للتعامل مع محادثة ${data.customerName || data.phoneNumber}`,
+                    body: `تم تعيينك للتعامل مع محادثة ${customerName}`,
                     icon: '/images/logo.png'
                 });
                 

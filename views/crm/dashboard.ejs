@@ -117,59 +117,54 @@
           </div>
         </div>
         
-        <!-- أحدث المحادثات -->
-        <div class="col-md-6">
-          <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <h5 class="card-title mb-0">
-                <i class="fas fa-comments me-2"></i>
-                أحدث المحادثات
-              </h5>
-              <a href="/crm/conversations/ajax" class="btn btn-sm btn-outline-primary">عرض الكل</a>
-            </div>
-            <div class="card-body p-0">
-              <% if (latestConversations && latestConversations.length > 0) { %>
-                <ul class="list-group list-group-flush">
-                  <% latestConversations.forEach(function(conversation) { %>
-                    <li class="list-group-item">
-                      <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                          <a href="/crm/conversations/ajax?selected=<%= conversation._id %>" class="text-decoration-none">
-                            <strong><%= conversation.customerName || conversation.phoneNumber %></strong>
-                          </a>
-                          <br>
-                          <small class="text-muted">
-                            <span class="status-badge status-<%= conversation.status %>">
-                              <% if (conversation.status === 'open') { %>مفتوحة<% } %>
-                              <% if (conversation.status === 'assigned') { %>مسندة<% } %>
-                              <% if (conversation.status === 'closed') { %>مغلقة<% } %>
-                            </span>
-                            <% if (conversation.assignedTo) { %>
-                              <span class="ms-2">
-                                <i class="fas fa-user-tag me-1"></i>
-                                <%= conversation.assignedTo.full_name || conversation.assignedTo.username %>
-                              </span>
-                            <% } %>
-                          </small>
-                        </div>
-                        <div>
-                          <a href="/crm/conversations/ajax?selected=<%= conversation._id %>" class="btn btn-sm btn-outline-primary">
-                            <i class="far fa-eye"></i>
-                          </a>
-                        </div>
+        <!-- عرض المحادثات الأخيرة -->
+        <% if (latestConversations && latestConversations.length > 0) { %>
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                  <i class="fas fa-comments me-2"></i>
+                  آخر المحادثات
+                </h5>
+                <a href="/crm/conversations/ajax" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+              </div>
+              <div class="card-body p-0">
+                <div class="list-group">
+                  <% latestConversations.forEach(conversation => { %>
+                    <a href="/crm/conversations/ajax?selected=<%= conversation._id %>" class="list-group-item list-group-item-action">
+                      <div class="d-flex w-100 justify-content-between">
+                        <% 
+                          // استخدام منطق مماثل للدالة المساعدة للحصول على اسم العميل
+                          let customerName = '';
+                          if (conversation.contactId && typeof conversation.contactId === 'object' && conversation.contactId.name) {
+                            customerName = conversation.contactId.name;
+                          } else if (conversation.customerName) {
+                            customerName = conversation.customerName;
+                          } else {
+                            customerName = conversation.phoneNumber || 'رقم غير معروف';
+                          }
+                        %>
+                        <strong><%= customerName %></strong>
+                        <small>
+                          <% if (conversation.lastMessageAt) { %>
+                            <%= moment(conversation.lastMessageAt).locale('ar-ly').fromNow() %>
+                          <% } else { %>
+                            غير معروف
+                          <% } %>
+                        </small>
                       </div>
-                    </li>
+                    </a>
                   <% }); %>
-                </ul>
-              <% } else { %>
-                <div class="text-center p-4 text-muted">
-                  <i class="fas fa-comment-dots mb-3" style="font-size: 2rem; opacity: 0.3;"></i>
-                  <p>لا توجد محادثات بعد</p>
                 </div>
-              <% } %>
+              </div>
             </div>
           </div>
-        </div>
+        <% } else { %>
+          <div class="text-center p-4 text-muted">
+            <i class="fas fa-comment-dots mb-3" style="font-size: 2rem; opacity: 0.3;"></i>
+            <p>لا توجد محادثات بعد</p>
+          </div>
+        <% } %>
       </div>
 
       <div class="row mt-4">

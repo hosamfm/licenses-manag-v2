@@ -43,6 +43,7 @@ router.get('/', async (req, res) => {
       .sort({ lastMessageAt: -1 })
       .limit(5)
       .populate('assignedTo', 'username full_name')
+      .populate('contactId', 'name phoneNumber')
       .lean();
     
     res.render('crm/dashboard', {
