@@ -19,6 +19,7 @@ const socketService = require('../services/socketService');
 const mediaService = require('../services/mediaService');
 const conversationService = require('../services/conversationService');
 const notificationSocketService = require('../services/notificationSocketService');
+const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 
 /**
  * استخراج المنشنات من محتوى النص
@@ -568,11 +569,52 @@ exports.replyToConversation = async (req, res) => {
     let externalId = null;
     let finalStatus = 'sent';
     try {
-      const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
       if (!metaWhatsappService.initialized) {
         await metaWhatsappService.initialize();
       }
-      const phoneNumberId = conversation.channelId?.config?.phoneNumberId || null;
+
+      // --- بداية: جلب phoneNumberId الصحيح --- 
+      let phoneNumberId = null;
+      if (conversation.channelId && conversation.channelId.settingsId) {
+          const settings = await MetaWhatsappSettings.findById(conversation.channelId.settingsId).lean(); // استخدام lean لتحسين الأداء
+          if (settings && settings.config && settings.config.phoneNumberId) {
+              phoneNumberId = settings.config.phoneNumberId;
+              logger.info('conversationController', 'تم العثور على phoneNumberId للإرسال', { 
+                  conversationId: conversation._id, 
+                  channelId: conversation.channelId._id,
+                  settingsId: conversation.channelId.settingsId,
+                  retrievedPhoneNumberId: phoneNumberId 
+              });
+          } else {
+               logger.warn('conversationController', 'لم يتم العثور على إعدادات أو phoneNumberId للقناة المرتبطة بالمحادثة', { 
+                  conversationId: conversation._id, 
+                  channelId: conversation.channelId._id,
+                  settingsId: conversation.channelId.settingsId
+               });
+          }
+      } else {
+          logger.warn('conversationController', 'لم يتم العثور على channelId أو settingsId في المحادثة لجلب phoneNumberId', { conversationId: conversation._id });
+      }
+
+      // التحقق النهائي قبل الإرسال - مهم لمنع الإرسال عبر قناة خاطئة
+      if (!phoneNumberId) {
+          finalStatus = 'failed'; // تغيير الحالة إلى فشل
+          const errorMsg = 'فشل في تحديد رقم هاتف الإرسال الصحيح للقناة المرتبطة بالمحادثة.';
+          logger.error('conversationController', errorMsg, { conversationId: conversation._id });
+          
+          // تحديث حالة الرسالة في قاعدة البيانات
+          msg.status = finalStatus;
+          msg.metadata = { ...(msg.metadata || {}), failureReason: errorMsg };
+          await msg.save();
+
+          // إرسال خطأ للعميل
+          if (isAjax) return res.json({ success: false, error: errorMsg });
+          req.flash('error', errorMsg);
+          return res.redirect(`/crm/conversations/${conversationId}`);
+          // أو يمكنك رمي خطأ لإيقاف التنفيذ تماماً إذا كان هذا مناسباً أكثر
+          // throw new Error(errorMsg); 
+      }
+      // --- نهاية: جلب phoneNumberId الصحيح ---
       
       let apiResponse;
       
