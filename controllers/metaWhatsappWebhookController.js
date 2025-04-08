@@ -12,6 +12,7 @@ const socketService = require('../services/socketService');
 const whatsappMediaController = require('./whatsappMediaController');
 const mediaService = require('../services/mediaService');
 const NotificationSocketService = require('../services/notificationSocketService');
+const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -334,6 +335,23 @@ exports.handleIncomingMessages = async (messages, meta) => {
                                                contact.name.first_name || 
                                                conversationInstance.customerName;
             }
+          } 
+          // إذا لم تكن معلومات الملف الشخصي متوفرة في الرسالة وليست متوفرة في المحادثة
+          else if (!conversationInstance.customerData || Object.keys(conversationInstance.customerData).length === 0) {
+            try {
+              // محاولة الحصول على معلومات الملف الشخصي من خدمة واتساب
+              const profileInfo = await metaWhatsappService.getCustomerProfileInfo(phone, meta.phone_number_id);
+              
+              if (profileInfo) {
+                // تخزين معلومات الملف الشخصي الأساسية
+                conversationInstance.customerData = profileInfo;
+              }
+            } catch (profileError) {
+              logger.error('metaWhatsappWebhookController', 'خطأ في الحصول على معلومات الملف الشخصي', {
+                error: profileError.message,
+                phone
+              });
+            }
           }
 
           // التحقق من حالة المحادثة وإعادة فتحها تلقائيًا إذا كانت مغلقة
@@ -368,6 +386,25 @@ exports.handleIncomingMessages = async (messages, meta) => {
             
             if (contact.name) {
               conversationData.customerName = contact.name.formatted_name || contact.name.first_name;
+            }
+          } 
+          // محاولة الحصول على معلومات الملف الشخصي من الخدمة إذا لم تكن متوفرة في الرسالة
+          else {
+            try {
+              const profileInfo = await metaWhatsappService.getCustomerProfileInfo(phone, meta.phone_number_id);
+              
+              if (profileInfo) {
+                conversationData.customerData = profileInfo;
+                // يمكن تعيين اسم افتراضي بناءً على رقم الهاتف
+                if (!conversationData.customerName) {
+                  conversationData.customerName = `عميل ${phone.substring(phone.length - 6)}`;
+                }
+              }
+            } catch (profileError) {
+              logger.error('metaWhatsappWebhookController', 'خطأ في الحصول على معلومات الملف الشخصي لمحادثة جديدة', {
+                error: profileError.message,
+                phone
+              });
             }
           }
           

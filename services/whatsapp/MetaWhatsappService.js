@@ -930,9 +930,9 @@ class MetaWhatsappService {
 
     /**
      * إرسال ملصق عبر واتساب
-     * @param {string} to - رقم الهاتف المستلم
-     * @param {string} stickerUrl - رابط الملصق أو معرف الملصق
-     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
+     * @param {string} to رقم الهاتف المستلم
+     * @param {string} stickerUrl رابط الملصق (يجب أن يكون WebP)
+     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
      * @returns {Promise<object>} نتيجة الإرسال
      */
     async sendSticker(to, stickerUrl, phoneNumberId = null) {
@@ -998,13 +998,76 @@ class MetaWhatsappService {
     }
 
     /**
-     * إرسال رد على رسالة مع وسائط
-     * @param {string} to - رقم الهاتف المستلم
-     * @param {string} mediaType - نوع الوسائط (image, document, video, audio, sticker)
-     * @param {string} mediaUrl - رابط الوسائط أو بيانات base64
-     * @param {string} replyMessageId - معرف الرسالة التي يتم الرد عليها
-     * @param {object} options - خيارات إضافية (caption, filename)
-     * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
+     * الحصول على معلومات الملف الشخصي للعميل من واتساب
+     * @param {string} phoneNumber رقم هاتف العميل
+     * @param {string} phoneNumberId معرف رقم الهاتف المستخدم للاتصال (اختياري)
+     * @returns {Promise<object>} معلومات الملف الشخصي للعميل (أو null إذا لم تتوفر)
+     */
+    async getCustomerProfileInfo(phoneNumber, phoneNumberId = null) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+
+        // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
+        let targetPhoneId = phoneNumberId;
+        let settingsToUse = this.settings;
+        
+        // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
+        if (phoneNumberId && phoneNumberId !== this.settings?.config?.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+            if (!settingsToUse) {
+                throw new Error(`لم يتم العثور على إعدادات لرقم الهاتف المحدد: ${phoneNumberId}`);
+            }
+            targetPhoneId = settingsToUse.config.phoneNumberId;
+        } else {
+            targetPhoneId = this.settings.config.phoneNumberId;
+        }
+
+        if (!targetPhoneId) {
+            throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
+        }
+
+        try {
+            // الاتصال بـ WhatsApp Business API للحصول على معلومات العميل
+            // تنبيه: هذه الميزة غير متاحة عبر واجهة برمجة التطبيقات الرسمية
+            // لذلك نقوم بإرجاع كائن يحتوي على المعلومات المتاحة فقط
+
+            // تنسيق رقم الهاتف ليكون متوافقا مع صيغة واتساب
+            // التحقق من أن الرقم يبدأ بـ + أو بدون
+            const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber.substring(1) : phoneNumber;
+
+            // في الوقت الحالي، لا توفر واجهة برمجة تطبيقات واتساب طريقة للحصول على معلومات الملف الشخصي
+            // للعملاء، لذلك نعود ببيانات أساسية فقط حتى تتاح هذه الميزة
+            logger.info('MetaWhatsappService', 'محاولة الحصول على معلومات الملف الشخصي للعميل', {
+                phoneNumber: formattedPhone,
+                phoneNumberId: targetPhoneId
+            });
+
+            // إرجاع بيانات أساسية فقط في الوقت الحالي
+            return {
+                phone: formattedPhone,
+                wa_id: formattedPhone,
+                retrieval_method: 'basic',
+                retrieval_timestamp: new Date(),
+                note: 'معلومات أساسية فقط - لا يوفر واتساب حاليًا واجهة برمجة تطبيقات للحصول على ملف تعريف كامل'
+            };
+        } catch (error) {
+            logger.error('MetaWhatsappService', 'خطأ في الحصول على معلومات الملف الشخصي للعميل', {
+                phoneNumber,
+                error: error.message
+            });
+            return null;
+        }
+    }
+
+    /**
+     * إرسال رسالة مع وسائط كرد على رسالة سابقة
+     * @param {string} to رقم الهاتف المستلم
+     * @param {string} mediaType نوع الوسائط ('image', 'document', 'video', 'audio')
+     * @param {string} mediaUrl رابط الوسائط
+     * @param {string} replyMessageId معرف الرسالة المراد الرد عليها
+     * @param {object} options خيارات إضافية (caption, filename)
+     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
      * @returns {Promise<object>} نتيجة الإرسال
      */
     async sendReplyWithMedia(to, mediaType, mediaUrl, replyMessageId, options = {}, phoneNumberId = null) {
@@ -1060,4 +1123,8 @@ class MetaWhatsappService {
     }
 }
 
-module.exports = new MetaWhatsappService();
+// إنشاء نسخة واحدة من الخدمة (singleton) للاستخدام في جميع أنحاء التطبيق
+const metaWhatsappServiceInstance = new MetaWhatsappService();
+
+// تصدير النسخة المفردة
+module.exports = metaWhatsappServiceInstance;
