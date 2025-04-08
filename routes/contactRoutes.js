@@ -14,9 +14,6 @@ router.get('/new', contactController.showCreateForm);
 // إنشاء جهة اتصال جديدة
 router.post('/', contactController.createContact);
 
-// مزامنة جهات الاتصال من المحادثات
-router.get('/sync-from-conversations', contactController.syncContactsFromConversations);
-
 // عرض تفاصيل جهة اتصال
 router.get('/:id', contactController.showContact);
 

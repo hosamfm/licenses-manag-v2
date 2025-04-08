@@ -7,10 +7,8 @@ const SemMessage = require('../models/SemMessage');
 const WhatsAppChannel = require('../models/WhatsAppChannel');
 const Conversation = require('../models/Conversation');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
-const Contact = require('../models/Contact');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
-const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const whatsappMediaController = require('./whatsappMediaController');
 const mediaService = require('../services/mediaService');
 const NotificationSocketService = require('../services/notificationSocketService');
@@ -321,92 +319,19 @@ exports.handleIncomingMessages = async (messages, meta) => {
         let conversationInstance = await Conversation.findOne({ phoneNumber: phone });
         
         let isNewConversation = false;
-        
-        // تحضير بيانات العميل من الرسالة (إذا وجدت)
-        const customerData = msg.contacts && msg.contacts.length > 0 ? msg.contacts[0] : null;
-        
-        // محاولة استخراج بيانات العميل من حقول أخرى إذا لم يكن contacts موجوداً
-        let extractedCustomerData = null;
-        if (!customerData) {
-          // محاولة استخراج من حقل profile إذا كان موجوداً
-          if (msg.profile) {
-            extractedCustomerData = {
-              name: {
-                formatted_name: msg.profile.name
-              }
-            };
-            logger.info('metaWhatsappWebhookController', 'تم استخراج بيانات العميل من حقل profile', { 
-              phoneNumber: phone,
-              name: msg.profile.name 
-            });
-          }
-          
-          // محاولة استخراج من metadata أو من بيانات أخرى
-          else if (msg.sender && typeof msg.sender === 'object') {
-            if (msg.sender.name) {
-              extractedCustomerData = {
-                name: {
-                  formatted_name: msg.sender.name
-                }
-              };
-              logger.info('metaWhatsappWebhookController', 'تم استخراج بيانات العميل من حقل sender', { 
-                phoneNumber: phone,
-                name: msg.sender.name 
-              });
-            }
-          }
-        }
-        
-        // استخدام بيانات العميل من contacts أو البيانات المستخرجة إذا وجدت
-        const effectiveCustomerData = customerData || extractedCustomerData;
-        
-        // تسجيل بيانات العميل للتتبع إذا كانت موجودة
-        if (effectiveCustomerData) {
-          logger.info('metaWhatsappWebhookController', 'بيانات العميل الواردة مع الرسالة', { 
-            phoneNumber: phone,
-            messageId: msg.id,
-            source: customerData ? 'contacts' : 'extracted',
-            customerData: JSON.stringify(effectiveCustomerData)
-          });
-        } else {
-          logger.info('metaWhatsappWebhookController', 'الرسالة لا تحتوي على بيانات العميل', { 
-            phoneNumber: phone,
-            messageId: msg.id,
-            messageType: msg.type,
-            hasProfile: msg.profile ? true : false
-          });
-          
-          // تسجيل كامل هيكل الرسالة للتحليل
-          logger.info('metaWhatsappWebhookController', 'هيكل الرسالة الواردة', { 
-            messageStructure: JSON.stringify(msg)
-          });
-        }
-        
-        // البحث عن جهة اتصال موجودة أو إنشاء واحدة جديدة
-        let contact = null;
-        try {
-          contact = await findOrCreateContact(phone, effectiveCustomerData, phoneNumberId);
-        } catch (contactError) {
-          logger.error('metaWhatsappWebhookController', 'خطأ في معالجة جهة الاتصال', contactError);
-        }
-        
         if (conversationInstance) {
           // تحديث معرف القناة ليعكس آخر قناة واردة
           conversationInstance.channelId = channel._id; 
 
-          // ربط المحادثة بجهة الاتصال إذا وجدت ولم تكن مرتبطة من قبل
-          if (contact && !conversationInstance.contactId) {
-            conversationInstance.contactId = contact._id;
-          }
-
           // التحقق مما إذا كانت الرسالة تحتوي على معلومات ملف تعريف
-          if (effectiveCustomerData) {
-            conversationInstance.customerData = effectiveCustomerData;
+          if (msg.contacts && msg.contacts.length > 0) {
+            const contact = msg.contacts[0];
+            conversationInstance.customerData = contact;
             
             // تحديث اسم العميل إذا كان متوفراً
-            if (effectiveCustomerData.name) {
-              conversationInstance.customerName = effectiveCustomerData.name.formatted_name || 
-                                               effectiveCustomerData.name.first_name || 
+            if (contact.name) {
+              conversationInstance.customerName = contact.name.formatted_name || 
+                                               contact.name.first_name || 
                                                conversationInstance.customerName;
             }
           }
@@ -436,22 +361,13 @@ exports.handleIncomingMessages = async (messages, meta) => {
             lastOpenedAt: new Date()
           };
           
-          // ربط المحادثة بجهة الاتصال إذا وجدت
-          if (contact) {
-            conversationData.contactId = contact._id;
-            
-            // استخدام اسم جهة الاتصال إذا لم يكن هناك اسم في بيانات العميل
-            if (!effectiveCustomerData || !effectiveCustomerData.name) {
-              conversationData.customerName = contact.name;
-            }
-          }
-          
           // إضافة معلومات الملف الشخصي إذا كانت متوفرة
-          if (effectiveCustomerData) {
-            conversationData.customerData = effectiveCustomerData;
+          if (msg.contacts && msg.contacts.length > 0) {
+            const contact = msg.contacts[0];
+            conversationData.customerData = contact;
             
-            if (effectiveCustomerData.name) {
-              conversationData.customerName = effectiveCustomerData.name.formatted_name || effectiveCustomerData.name.first_name;
+            if (contact.name) {
+              conversationData.customerName = contact.name.formatted_name || contact.name.first_name;
             }
           }
           
@@ -727,85 +643,5 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
     }); */
   } catch (error) {
     logger.error('metaWhatsappWebhookController', 'خطأ في معالجة نهاية إضافة الرسالة', error);
-  }
-}
-
-/**
- * البحث عن جهة اتصال أو إنشاء واحدة جديدة إذا لم تكن موجودة
- * @param {string} phoneNumber - رقم هاتف العميل
- * @param {Object} customerData - بيانات ملف تعريف العميل من واتساب
- * @param {string} phoneNumberId - معرف رقم الهاتف المستخدم للاتصال (اختياري)
- */
-async function findOrCreateContact(phoneNumber, customerData = null, phoneNumberId = null) {
-  try {
-    // البحث عن جهة اتصال موجودة بواسطة رقم الهاتف
-    let contact = await Contact.findByPhoneNumber(phoneNumber);
-    
-    // إذا لم تكن بيانات العميل متوفرة في الرسالة، نحاول الحصول عليها من API واتساب
-    if (!customerData) {
-      try {
-        logger.info('metaWhatsappWebhookController', 'جاري محاولة جلب بيانات ملف تعريف العميل من واتساب', { phoneNumber });
-        customerData = await metaWhatsappService.getContactInfo(phoneNumber, phoneNumberId);
-        logger.info('metaWhatsappWebhookController', 'نتيجة جلب بيانات ملف التعريف', { 
-          success: !!customerData,
-          hasName: customerData?.name ? true : false 
-        });
-      } catch (apiError) {
-        logger.error('metaWhatsappWebhookController', 'خطأ في جلب بيانات العميل من واتساب API', { 
-          phoneNumber, 
-          error: apiError.message 
-        });
-        // نستمر مع البيانات الموجودة حتى في حالة فشل API
-      }
-    }
-    
-    // إذا كانت جهة الاتصال موجودة ولدينا بيانات جديدة، نقوم بتحديثها
-    if (contact && customerData) {
-      let isUpdated = false;
-      
-      // استخراج الاسم من بيانات العميل
-      if (customerData.name) {
-        const newName = customerData.name.formatted_name || customerData.name.first_name;
-        if (newName && (!contact.name || contact.name === 'غير معروف')) {
-          contact.name = newName;
-          isUpdated = true;
-        }
-      }
-      
-      // تحديث البريد الإلكتروني إذا كان متوفراً ولم يكن موجوداً من قبل
-      if (customerData.emails && customerData.emails.length > 0 && !contact.email) {
-        contact.email = customerData.emails[0].email;
-        isUpdated = true;
-      }
-      
-      // حفظ التغييرات إذا كان هناك تحديث
-      if (isUpdated) {
-        contact.updatedAt = new Date();
-        await contact.save();
-      }
-    }
-    
-    // إذا لم تكن جهة الاتصال موجودة، ننشئ واحدة جديدة
-    if (!contact) {
-      // تحضير اسم العميل من بيانات الملف الشخصي
-      let name = 'غير معروف';
-      if (customerData && customerData.name) {
-        name = customerData.name.formatted_name || customerData.name.first_name || name;
-      }
-      
-      // إنشاء جهة اتصال جديدة
-      contact = await Contact.create({
-        name: name,
-        phoneNumber: phoneNumber,
-        email: customerData && customerData.emails && customerData.emails.length > 0 ? customerData.emails[0].email : null,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-    }
-    
-    return contact;
-  } catch (error) {
-    logger.error('metaWhatsappWebhookController', 'خطأ في إيجاد أو إنشاء جهة اتصال', { error: error.message });
-    throw error;
   }
 }
