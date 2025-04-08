@@ -102,10 +102,8 @@ router.post('/subscribe', async (req, res) => {
       // إضافة الاشتراك الجديد
       user.webPushSubscriptions.push(subscription);
       await user.save();
-      logger.info('notificationRoutes', 'تم إضافة اشتراك Web Push جديد للمستخدم', { userId });
       res.status(201).json({ success: true, message: 'تم الاشتراك بنجاح' });
     } else {
-      logger.info('notificationRoutes', 'اشتراك Web Push موجود بالفعل للمستخدم', { userId });
       res.status(200).json({ success: true, message: 'الاشتراك موجود بالفعل' });
     }
 

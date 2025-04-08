@@ -12,7 +12,6 @@ class SmsStatusService {
      */
     async updatePendingMessagesStatus() {
         try {
-            logger.info('SmsStatusService', 'بدء تحديث حالة الرسائل المعلقة');
             
             // الحصول على قائمة الرسائل المعلقة
             const pendingMessages = await SemMessage.find({
@@ -21,11 +20,9 @@ class SmsStatusService {
             }).sort({ createdAt: -1 }).limit(100);
             
             if (pendingMessages.length === 0) {
-                logger.info('SmsStatusService', 'لا توجد رسائل معلقة للتحديث');
                 return { success: true, updated: 0, total: 0 };
             }
             
-            logger.info('SmsStatusService', `تم العثور على ${pendingMessages.length} رسالة معلقة للتحديث`);
             
             const stats = {
                 total: pendingMessages.length,
@@ -93,7 +90,6 @@ class SmsStatusService {
                 }
             }
             
-            logger.info('SmsStatusService', 'اكتمل تحديث حالة الرسائل', stats);
             
             return {
                 success: true,

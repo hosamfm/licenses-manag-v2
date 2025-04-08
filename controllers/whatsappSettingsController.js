@@ -104,12 +104,7 @@ exports.saveWhatsappSettings = async (req, res) => {
         // حفظ الإعدادات
         await settings.save();
         
-        // تسجيل القيم بعد الحفظ للتأكد من تطبيق التغييرات
-        logger.info('whatsappSettingsController', 'تم حفظ إعدادات الواتس أب', {
-            provider: settings.provider,
-            deviceId: settings.config.semysms.device,
-            updatedBy: req.session.userId
-        });
+
         
         // التأكد من أن الإعدادات حُفظت بالفعل في قاعدة البيانات
         const updatedSettings = await WhatsappSettings.findById(settings._id);

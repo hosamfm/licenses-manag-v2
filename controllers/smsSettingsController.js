@@ -103,13 +103,6 @@ exports.saveSmsSettings = async (req, res) => {
         // حفظ الإعدادات
         await settings.save();
         
-        // تسجيل القيم بعد الحفظ للتأكد من تطبيق التغييرات
-        logger.info('smsSettingsController', 'تم حفظ إعدادات SMS', {
-            provider: settings.provider,
-            deviceId: settings.config.semysms.device,
-            updatedBy: req.session.userId
-        });
-        
         // التأكد من أن الإعدادات حُفظت بالفعل في قاعدة البيانات
         const updatedSettings = await SmsSettings.findById(settings._id);
         logger.debug('smsSettingsController', 'الإعدادات بعد الحفظ من قاعدة البيانات', {

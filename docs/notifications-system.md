@@ -108,7 +108,6 @@ function joinConversationRoom(conversationId) {
 socket.on('join', (data) => {
     if (data && data.room) {
         socket.join(data.room);
-        logger.info('socketService', 'انضمام إلى غرفة', { room: data.room, socketId: socket.id });
     }
 });
 
@@ -116,7 +115,6 @@ socket.on('join', (data) => {
 socket.on('leave', (data) => {
     if (data && data.room) {
         socket.leave(data.room);
-        logger.info('socketService', 'مغادرة غرفة', { room: data.room, socketId: socket.id });
     }
 });
 ```

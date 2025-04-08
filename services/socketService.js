@@ -51,13 +51,7 @@ function initialize(server) {
                 username: socket.username,
                 shouldJoinNotifications: true // علامة للانضمام لغرفة الإشعارات
             });
-            
-            /* logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم من الجلسة', { 
-              socketId: socket.id, 
-              userId: socket.userId, 
-              username: socket.username, 
-              userRole: socket.userRole
-            }); */
+
           } else {
             /* logger.warning('socketService', 'لم يتم العثور على المستخدم رغم وجود معرف في الجلسة', { 
               socketId: socket.id, 
@@ -83,21 +77,12 @@ function initialize(server) {
             username: socket.username,
             shouldJoinNotifications: true // علامة للانضمام لغرفة الإشعارات
         });
-        
-        /* logger.info('socketService', 'اتصال جديد بواسطة Socket.io مع معلومات المستخدم من بيانات المصادقة', { 
-          socketId: socket.id, 
-          userId: socket.userId, 
-          username: socket.username 
-        }); */
+
       } else {
         // لا توجد معلومات مستخدم متاحة
         socket.userId = 'guest';
         socket.username = 'زائر';
-        
-        /* logger.info('socketService', 'اتصال جديد بواسطة Socket.io بدون معلومات المستخدم', { 
-          socketId: socket.id,
-          source: socket.handshake.headers.referer || 'غير معروف'
-        }); */
+
       }
     } catch (error) {
       logger.error('socketService', 'خطأ في معالجة معلومات المستخدم عند الاتصال', { 
@@ -114,7 +99,6 @@ function initialize(server) {
     socket.on('join-user-room', (userId) => {
       if (userId) {
         socket.join(`user-${userId}`);
-        /* logger.info('socketService', 'انضمام المستخدم إلى غرفته الخاصة', { userId, socketId: socket.id }); */
       }
     });
 
@@ -122,7 +106,6 @@ function initialize(server) {
     socket.on('join', (data) => {
       if (data && data.room) {
         socket.join(data.room);
-        /* logger.info('socketService', 'انضمام إلى غرفة', { room: data.room, socketId: socket.id }); */
       }
     });
 
@@ -130,7 +113,6 @@ function initialize(server) {
     socket.on('leave', (data) => {
       if (data && data.room) {
         socket.leave(data.room);
-        /* logger.info('socketService', 'مغادرة غرفة', { room: data.room, socketId: socket.id }); */
       }
     });
 
@@ -138,7 +120,6 @@ function initialize(server) {
     socket.on('join-conversation', (conversationId) => {
       if (conversationId) {
         socket.join(`conversation-${conversationId}`);
-        /* logger.info('socketService', 'انضمام إلى غرفة المحادثة', { conversationId, socketId: socket.id }); */
       }
     });
 
@@ -146,12 +127,10 @@ function initialize(server) {
     socket.on('leave-conversation', (conversationId) => {
       if (conversationId) {
         socket.leave(`conversation-${conversationId}`);
-        /* logger.info('socketService', 'مغادرة غرفة المحادثة', { conversationId, socketId: socket.id }); */
       }
     });
 
     socket.on('disconnect', () => {
-      /* logger.info('socketService', 'انقطع الاتصال', { socketId: socket.id }); */
     });
 
     // استقبال إشعار بتحديث حالة الرسائل إلى "مقروءة"
@@ -170,11 +149,7 @@ function initialize(server) {
           messages: data.messages,
           timestamp: data.timestamp || new Date()
         });
-        
-        /* logger.info('socketService', 'تم استلام طلب تحديث حالة القراءة للرسائل', { 
-          conversationId: data.conversationId,
-          messagesCount: data.messages.length
-        }); */
+
       } catch (error) {
         logger.error('socketService', 'خطأ في تحديث حالة قراءة الرسائل', { 
           error: error.message,
@@ -193,19 +168,13 @@ function initialize(server) {
       
       // التأكد من أن كافة معلومات الوسائط متوفرة إذا كانت الرسالة تحتوي على وسائط
       if (message && message.mediaType) {
-        /* logger.info('socketService', 'إعادة بث إشعار برسالة جديدة مع وسائط', { 
-          conversationId: message.conversationId, 
-          mediaType: message.mediaType,
-          messageId: message._id
-        }); */
+
       }
       
       io.to(`conversation-${message.conversationId}`).emit('new-message', message);
-      /* logger.info('socketService', 'تم إعادة بث إشعار برسالة جديدة', { conversationId: message.conversationId }); */
     });
   });
 
-  /* logger.info('socketService', 'تم تهيئة خدمة Socket.io'); */
   return io;
 }
 
@@ -390,12 +359,7 @@ async function notifyConversationUpdate(conversationId, update) {
     
     // إرسال التحديث للجميع
     io.emit('conversation-list-update', updateForList);
-    
-    /* logger.info('socketService', 'تم إرسال إشعار بتحديث المحادثة', { 
-      conversationId,
-      updateType: update.type || 'غير محدد',
-      updateFields: Object.keys(update).join(', ')
-    }); */
+
   } catch (error) {
     logger.error('socketService', 'خطأ في تحديث المحادثة', { 
       conversationId,
@@ -430,12 +394,7 @@ function notifyMessageStatusUpdate(conversationId, externalId, status) {
 
   io.to(`conversation-${conversationId}`).emit('message-status-update', data);
   
-  /* logger.info('socketService', 'تم إرسال إشعار بتحديث حالة الرسالة', { 
-    conversationId, 
-    externalId, 
-    status,
-    dataObject: JSON.stringify(data)
-  }); */
+
 }
 
 /**
@@ -449,7 +408,6 @@ function notifyUser(userId, type, data) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   io.to(`user-${userId}`).emit('user-notification', { type, data });
-  /* logger.info('socketService', 'تم إرسال إشعار للمستخدم', { userId, type }); */
 }
 
 /**
@@ -462,7 +420,6 @@ function broadcastNotification(type, data) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   io.emit(type, data);
-  /* logger.info('socketService', 'تم إرسال إشعار عام', { type }); */
 }
 
 /**
@@ -476,7 +433,6 @@ function emitToRoom(roomName, eventName, data) {
     return logger.error('socketService', 'لم يتم تهيئة Socket.io بعد');
   }
   io.to(`${roomName}`).emit(eventName, data);
-  /* logger.info('socketService', 'تم إرسال إشعار إلى غرفة محددة', { roomName, eventName }); */
 }
 
 /**
@@ -501,7 +457,6 @@ function notifyMessageExternalIdUpdate(conversationId, messageId, externalId) {
     conversationId 
   });
   
-  /* logger.info('socketService', 'تم إرسال إشعار بتحديث معرف خارجي للرسالة', { conversationId, messageId, externalId }); */
 }
 
 /**
@@ -527,12 +482,7 @@ function notifyMessageReaction(conversationId, externalId, reaction) {
         reaction, 
         conversationId 
     });
-    
-    /* logger.info('socketService', 'تم إرسال تحديث بتفاعل على رسالة', { 
-        conversationId, 
-        externalId,
-        senderName: reaction.senderName 
-    }); */
+
 }
 
 /**
@@ -681,12 +631,7 @@ async function updateMessagesReadStatus(conversationId, messages, timestamp) {
       
       // تحديث عدد الرسائل غير المقروءة في المحادثة
       await updateConversationUnreadCount(conversationId);
-      
-      /* logger.info('socketService', 'تم تحديث حالة الرسائل إلى مقروءة', { 
-        conversationId,
-        messagesCount: messages.length,
-        modifiedCount: result.modifiedCount
-      }); */
+
       
       return true;
     }

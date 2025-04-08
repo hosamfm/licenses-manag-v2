@@ -155,10 +155,7 @@ async function sendMessageNotification(conversationId, message, conversation, co
             // تخطي إنشاء الإشعار تماماً إذا كان المستخدم نشطاً في المحادثة وكان نوع الإشعار هو رسالة
             // هذا سيمنع إنشاء إشعارات للرسائل الواردة عندما يكون المستخدم نشطاً في المحادثة
             if (isAssignedUserActive && message && message.direction === 'incoming') {
-                logger.info('notificationSocketService', 'تخطي إنشاء الإشعار لأن المستخدم نشط في المحادثة', {
-                    userId: assignedTo,
-                    conversationId
-                });
+
                 return; // خروج مبكر لمنع إنشاء الإشعار والعمليات اللاحقة
             }
             
@@ -235,10 +232,7 @@ async function sendMessageNotification(conversationId, message, conversation, co
                 
                 // تخطي إنشاء الإشعار تماماً إذا كان المشرف نشطاً في المحادثة وكان نوع الإشعار هو رسالة
                 if (isAdminActiveInConv && message && message.direction === 'incoming') {
-                    logger.info('notificationSocketService', 'تخطي إنشاء الإشعار للمشرف لأنه نشط في المحادثة', {
-                        adminId: admin._id,
-                        conversationId
-                    });
+
                     continue; // تخطي هذا المشرف والانتقال للتالي
                 }
                 

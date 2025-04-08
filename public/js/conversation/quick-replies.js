@@ -168,13 +168,7 @@
     }
 
     function initQuickReplies(detailsContainer) {
-        /* // إزالة أو تعليق
-        if (isInitialized) {
-            console.log("Quick Replies: Already initialized.");
-        } else {
-             console.log("Quick Replies: Initializing...");
-        }
-        */
+
        isInitialized = false; // إعادة تعيين للسماح بإعادة التهيئة إذا لزم الأمر
 
         // Find elements within the newly loaded container or globally

@@ -153,12 +153,7 @@ class SemySmsProvider extends ISmsProvider {
                 rawResponse: response
             };
             
-            // تسجيل نجاح الإرسال مع المعرفات
-            logger.info('SemySmsProvider', 'تم إرسال رسالة SMS بنجاح', { 
-                messageId: result.messageId,
-                externalMessageId: result.externalMessageId,
-                phone: phoneNumber 
-            });
+
             
             return result;
         } catch (error) {

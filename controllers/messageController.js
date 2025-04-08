@@ -84,7 +84,6 @@ async function _initializeMetaWhatsappManager() {
 const waitForMessageStatus = async (messageId, messageType = 'any', timeout = 30000) => {
   const startTime = Date.now();
   const interval = 5000;
-  logger.info(`بدء انتظار تحديث حالة الرسالة (${messageId}) من نوع ${messageType} لمدة ${timeout / 1000} ثانية`);
   
   return new Promise((resolve) => {
     const checkStatus = async () => {
@@ -109,7 +108,6 @@ const waitForMessageStatus = async (messageId, messageType = 'any', timeout = 30
         
         // إذا تم تسليم الرسالة أو استلامها أو قراءتها
         if (['delivered', 'received', 'read'].includes(message.status)) {
-          logger.info(`تم تحديث حالة الرسالة (${messageId}) إلى: ${message.status}`);
           return resolve({ success: true, status: message.status, messageType: foundMessageType });
         }
         
@@ -447,14 +445,12 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
     
     while (currentIndex < channels.length) {
       const channel = channels[currentIndex];
-      logger.info('processChannelFallback', `محاولة الإرسال عبر قناة ${channel}`);
       
       if (channel === 'sms') {
         // محاولة الإرسال عبر SMS
         const smsResult = await sendSmsAndUpdate(message, client, formattedPhone, msgContent, smsConfig);
         if (smsResult) {
           smsSent = true;
-          logger.info('processChannelFallback', 'تم إرسال رسالة SMS بنجاح');
           
           // إذا كانت قناة SMS هي المفضلة، نعتبر أننا أرسلنا عبر القناة المفضلة
           if (preferredChannel === 'sms') {
@@ -467,7 +463,6 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
         const whatsappResult = await sendWhatsappAndUpdate(message, client, formattedPhone, msgContent, whatsappConfig, true);
         if (whatsappResult.success) {
           whatsappSent = true;
-          logger.info('processChannelFallback', 'تم إرسال رسالة واتساب بنجاح');
           sentMessage = whatsappResult.messageId;
           
           // إذا كانت قناة واتساب هي المفضلة، نعتبر أننا أرسلنا عبر القناة المفضلة
@@ -486,7 +481,6 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
         const metaWhatsappResult = await sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, true);
         if (metaWhatsappResult.success) {
           metaWhatsappSent = true;
-          logger.info('processChannelFallback', 'تم إرسال رسالة واتساب ميتا الرسمي بنجاح');
           sentMessage = metaWhatsappResult.messageId;
           
           // إذا كانت قناة ميتا واتساب هي المفضلة، نعتبر أننا أرسلنا عبر القناة المفضلة
@@ -561,10 +555,6 @@ async function waitForMessageStatusAndFallback(messageId, client, formattedPhone
       
       // إذا كانت حالة الرسالة "failed"، نحاول القناة التالية
       if (message.status === 'failed' && nextChannelIndex < channels.length) {
-        logger.info('waitForMessageStatusAndFallback', 'تم اكتشاف فشل الرسالة، محاولة القناة التالية', {
-          failedMessageId: messageId,
-          nextChannel: channels[nextChannelIndex]
-        });
         
         const nextChannel = channels[nextChannelIndex];
         let result = false;
@@ -573,19 +563,16 @@ async function waitForMessageStatusAndFallback(messageId, client, formattedPhone
         if (nextChannel === 'sms') {
           result = await sendSmsAndUpdate(null, client, formattedPhone, msgContent, smsConfig);
           if (result) {
-            logger.info('waitForMessageStatusAndFallback', 'تم إرسال رسالة SMS بعد فشل القناة السابقة');
           }
         } else if (nextChannel === 'whatsapp') {
           const whatsappResult = await sendWhatsappAndUpdate(null, client, formattedPhone, msgContent, whatsappConfig, true);
           result = whatsappResult.success;
           if (result) {
-            logger.info('waitForMessageStatusAndFallback', 'تم إرسال رسالة واتساب بعد فشل القناة السابقة');
           }
         } else if (nextChannel === 'metaWhatsapp') {
           const metaWhatsappResult = await sendMetaWhatsappAndUpdate(null, client, formattedPhone, msgContent, true);
           result = metaWhatsappResult.success;
           if (result) {
-            logger.info('waitForMessageStatusAndFallback', 'تم إرسال رسالة واتساب ميتا بعد فشل القناة السابقة');
           }
         }
         
@@ -764,7 +751,6 @@ exports.sendMessage = async (req, res) => {
         
         // إذا كان لدينا قنوات متعددة، استخدم استراتيجية تحويل القنوات (fallback)
         if (hasMultipleChannels) {
-          logger.info(`استخدام استراتيجية تحويل القنوات للعميل ${client.name} مع القناة المفضلة: ${preferredChannel}`);
           await processChannelFallback(semMessage, client, formattedPhone, msg, preferredChannel);
         } 
         // إذا كان لدينا قناة واحدة فقط
@@ -773,20 +759,17 @@ exports.sendMessage = async (req, res) => {
             const smsConfig = (await SmsSettings.getActiveSettings()).getProviderConfig();
             const smsSuccess = await sendSmsAndUpdate(semMessage, client, formattedPhone, msg, smsConfig);
             if (smsSuccess) {
-              logger.info(`تم إرسال SMS بنجاح للعميل ${client.name}`);
               await updateClientBalance(client, true, false, msg);
             }
           } else if (canSendWhatsapp && whatsappInitialized) {
             const whatsappConfig = (await WhatsappSettings.getActiveSettings()).getProviderConfig();
             const whatsappResult = await sendWhatsappAndUpdate(semMessage, client, formattedPhone, msg, whatsappConfig, true);
             if (whatsappResult.success) {
-              logger.info(`تم إرسال واتساب بنجاح للعميل ${client.name}`);
               await updateClientBalance(client, false, true, msg);
             }
           } else if (canSendMetaWhatsapp && metaWhatsappInitialized) {
             const metaResult = await sendMetaWhatsappAndUpdate(semMessage, client, formattedPhone, msg, true);
             if (metaResult.success) {
-              logger.info(`تم إرسال واتساب ميتا الرسمي بنجاح للعميل ${client.name}`);
               await updateClientBalance(client, false, true, msg);
             }
           }

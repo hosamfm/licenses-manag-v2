@@ -61,9 +61,6 @@ exports.addBalance = async (req, res) => {
         // تحديث رصيد العميل
         client.balance += Number(amount);
         await client.save();
-
-        logger.info(`تم إضافة رصيد ${amount} للعميل ${client.name} بواسطة المستخدم ${userId}`);
-
         return res.status(200).json({
             success: true,
             message: 'تم إضافة الرصيد بنجاح',

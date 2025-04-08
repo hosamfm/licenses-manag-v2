@@ -102,7 +102,6 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(whatsappDat
     // التحقق من وجود الرسالة مسبقاً لتجنب التكرار
     const existingMessage = await this.findOne({ externalMessageId: id });
     if (existingMessage) {
-      logger.info('تجاهل الرسالة المكررة', { id, conversationId });
       return existingMessage;
     }
     
@@ -127,8 +126,6 @@ whatsappMessageSchema.statics.createIncomingMessage = async function(whatsappDat
     const savedMessage = await newMessage.save();
     
     // تسجيل نجاح العملية
-    logger.info('تم إنشاء رسالة واردة جديدة', { id, conversationId });
-    
     return savedMessage;
   } catch (error) {
     logger.error('خطأ في إنشاء رسالة واردة', error);

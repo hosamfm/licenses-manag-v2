@@ -9,11 +9,7 @@ const logger = require('../services/loggerService');
  */
 exports.handleStatusUpdate = async (req, res) => {
     try {
-        // سجل الحد الأدنى من المعلومات عن الطلب الوارد
-        /* logger.info('smsWebhookController', 'استلام تحديث حالة من webhook', {
-            method: req.method,
-            contentType: req.headers['content-type']
-        }); */
+
 
         // استخراج المعلومات من الطلب - قد تكون في body أو query
         const data = { ...req.query, ...req.body };
@@ -83,10 +79,7 @@ exports.handleStatusUpdate = async (req, res) => {
             }).sort({ createdAt: -1 });
             
             if (message) {
-                // تحديث السجل لمراقبة هذه الحالة
-                /* logger.info('smsWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`, {
-                    deviceId: deviceId
-                }); */
+
                 
                 // تخزين معرف SemySMS في الرسالة للمستقبل إذا كان متوفراً
                 if (id) {
@@ -106,8 +99,7 @@ exports.handleStatusUpdate = async (req, res) => {
             }).sort({ createdAt: -1 });
             
             if (message) {
-                // تحديث السجل لمراقبة هذه الحالة
-                // logger.info('smsWebhookController', `تم العثور على رسالة لرقم الهاتف ${data.phone} بمعرف ${message.messageId}`);
+
                 
                 // تخزين معرف SemySMS في الرسالة للمستقبل إذا كان متوفراً
                 if (id) {
@@ -219,14 +211,7 @@ exports.handleStatusUpdate = async (req, res) => {
             };
             
             await message.save();
-            
-            /* logger.info('smsWebhookController', `تم تحديث حالة الرسالة`, {
-                messageId: id || message.messageId,
-                deviceId: deviceId || 'غير معروف',
-                from: message.status,
-                to: newStatus,
-                phone: data.phone || message.recipient || 'غير معروف'
-            }); */
+
         }
 
         // إرسال استجابة نجاح

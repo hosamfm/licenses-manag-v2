@@ -27,18 +27,6 @@ class MetaWhatsappService {
             // استخدام الإعدادات الأولى للتوافق مع النظام القديم
             this.settings = this.allSettings.length > 0 ? this.allSettings[0] : await MetaWhatsappSettings.getActiveSettings();
             
-            // تسجيل عدد الإعدادات النشطة
-            logger.info('MetaWhatsappService', 'تم تهيئة خدمة واتساب الرسمي', {
-                activeSettingsCount: this.allSettings.length,
-                hasActiveSettings: !!this.settings,
-                activeSettings: this.allSettings.map(s => ({
-                    id: s._id,
-                    name: s.name,
-                    phoneNumberId: s.config.phoneNumberId
-                })),
-                defaultSettingName: this.settings ? this.settings.name : null
-            });
-            
             this.initialized = true;
             return this.settings && this.settings.isConfigured();
         } catch (error) {
@@ -90,10 +78,7 @@ class MetaWhatsappService {
             if (!this.settings) {
                 throw new Error('لا توجد إعدادات واتساب نشطة متاحة');
             }
-            logger.info('MetaWhatsappService', 'تم استخدام الإعدادات الافتراضية بسبب عدم تحديد معرف رقم هاتف', { 
-                defaultSettingName: this.settings.name, 
-                defaultPhoneNumberId: this.settings.config.phoneNumberId 
-            });
+
             return this.settings;
         }
         
@@ -189,11 +174,6 @@ class MetaWhatsappService {
         }
 
 
-        // تم تصحيح رسالة التسجيل واستخدام المعرف الفعلي
-        logger.info('MetaWhatsappService', 'جاري الحصول على معلومات رقم الهاتف', { 
-            phoneNumberId: actualPhoneNumberId 
-        });
-
         try {
             // استخدام المعرف الفعلي من الإعدادات في بناء عنوان URL
             const url = `${this.baseUrl}/${actualPhoneNumberId}`;
@@ -205,11 +185,7 @@ class MetaWhatsappService {
             const axios = require('axios');
             const response = await axios.get(url, { headers });
             
-            // تم تصحيح رسالة التسجيل واستخدام المعرف الفعلي
-            logger.info('MetaWhatsappService', 'تم الحصول على معلومات رقم الهاتف بنجاح', { 
-                phoneNumberId: actualPhoneNumberId, 
-                responseData: response.data
-            });
+
             
             return response.data;
         } catch (error) {
@@ -450,9 +426,6 @@ class MetaWhatsappService {
             await this.initialize();
         }
 
-        logger.info('MetaWhatsappService', 'جاري الحصول على رابط الوسائط', {
-            mediaId
-        });
 
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
         let targetPhoneId = phoneNumberId;
@@ -488,9 +461,6 @@ class MetaWhatsappService {
             await this.initialize();
         }
 
-        logger.info('MetaWhatsappService', 'بدء تحميل وسائط إلى خوادم واتساب', {
-            mimeType
-        });
         
         // التحقق من دعم نوع الملف
         if (!this.isSupportedMimeType(mimeType)) {
@@ -564,10 +534,7 @@ class MetaWhatsappService {
                     ...form.getHeaders()
                 }
             });
-            
-            logger.info('MetaWhatsappService', 'تم تحميل الوسائط بنجاح', {
-                mediaId: response.data.id
-            });
+
             
             return response.data;
         } catch (error) {
@@ -745,22 +712,13 @@ class MetaWhatsappService {
                 break;
         }
         
-        // تسجيل بداية العملية
-        logger.info('MetaWhatsappService', `بدء إرسال ${mediaType}`, {
-            isReply: !!replyMessageId,
-            to,
-            mediaType
-        });
+
         
         try {
             // تحميل الوسائط أولاً إلى خوادم واتساب للحصول على معرف الوسائط
             const uploadResponse = await this.uploadMedia(fileData, mimeType, phoneNumberId);
             const mediaId = uploadResponse.id;
-            
-            logger.info('MetaWhatsappService', `تم تحميل ${mediaType} بنجاح`, {
-                mediaId,
-                mediaType
-            });
+
             
             // هيكل البيانات العام
             const data = {
@@ -797,11 +755,7 @@ class MetaWhatsappService {
             // إرسال الطلب
             const response = await this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
             
-            logger.info('MetaWhatsappService', `تم إرسال ${mediaType} بنجاح`, {
-                mediaId,
-                messageId: response.messages?.[0]?.id,
-                isReply: !!replyMessageId
-            });
+
             
             return response;
         } catch (error) {
@@ -959,10 +913,6 @@ class MetaWhatsappService {
             throw new Error('معرف رقم الهاتف غير محدد في الإعدادات');
         }
 
-        logger.info('MetaWhatsappService', 'بدء إرسال ملصق', {
-            to,
-            isUrl: stickerUrl.startsWith('http')
-        });
 
         try {
             // هيكل البيانات للملصق
@@ -983,9 +933,7 @@ class MetaWhatsappService {
 
             const response = await this.sendRequest(`/${targetPhoneId}/messages`, 'POST', data, settingsToUse);
             
-            logger.info('MetaWhatsappService', 'تم إرسال الملصق بنجاح', {
-                messageId: response.messages?.[0]?.id
-            });
+
             
             return response;
         } catch (error) {
@@ -1028,20 +976,11 @@ class MetaWhatsappService {
         }
 
         try {
-            // الاتصال بـ WhatsApp Business API للحصول على معلومات العميل
-            // تنبيه: هذه الميزة غير متاحة عبر واجهة برمجة التطبيقات الرسمية
-            // لذلك نقوم بإرجاع كائن يحتوي على المعلومات المتاحة فقط
 
-            // تنسيق رقم الهاتف ليكون متوافقا مع صيغة واتساب
             // التحقق من أن الرقم يبدأ بـ + أو بدون
             const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber.substring(1) : phoneNumber;
 
-            // في الوقت الحالي، لا توفر واجهة برمجة تطبيقات واتساب طريقة للحصول على معلومات الملف الشخصي
-            // للعملاء، لذلك نعود ببيانات أساسية فقط حتى تتاح هذه الميزة
-            logger.info('MetaWhatsappService', 'محاولة الحصول على معلومات الملف الشخصي للعميل', {
-                phoneNumber: formattedPhone,
-                phoneNumberId: targetPhoneId
-            });
+
 
             // إرجاع بيانات أساسية فقط في الوقت الحالي
             return {

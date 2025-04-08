@@ -13,9 +13,7 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
   );
-  logger.info('notificationService', 'تم إعداد تفاصيل VAPID لـ Web Push');
 } else {
-  logger.warn('notificationService', 'لم يتم العثور على مفاتيح VAPID في متغيرات البيئة. لن تعمل إشعارات Web Push.');
 }
 
 /**
@@ -110,7 +108,6 @@ class NotificationService {
         { _id: userId },
         { $pull: { webPushSubscriptions: { endpoint: endpoint } } }
       );
-      logger.info('notificationService', 'تمت إزالة اشتراك Web Push بنجاح', { userId, endpoint });
     } catch (error) {
       logger.error('notificationService', 'خطأ في إزالة اشتراك Web Push', { userId, endpoint, error: error.message });
     }

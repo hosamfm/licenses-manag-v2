@@ -10,7 +10,6 @@ if (typeof window.loadConversationDetails !== 'function') {
      * تعريف موحد للدالة
      */
     window.loadConversationDetails = function(conversationId, skipCache = false) {
-        // console.log('استدعاء للـ loadConversationDetails مع المعرف:', conversationId);
         
         // سيتم استبدال هذه الدالة لاحقًا بالتنفيذ الكامل بعد تحميل DOM
         // حفظ للتنفيذ عندما تصبح جاهزة
@@ -18,7 +17,6 @@ if (typeof window.loadConversationDetails !== 'function') {
             window._pendingConversationLoads = [];
         }
         window._pendingConversationLoads.push({ id: conversationId, skipCache });
-        // console.log(`تم حفظ طلب تحميل المحادثة للمعرف: ${conversationId} للتنفيذ لاحقًا`);
     };
 }
 
@@ -479,7 +477,6 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} skipReRender - تخطي إعادة تحميل القائمة
      */
     function updateConversationStatus(status, skipReRender = false) {
-        // console.log('تحديث حالة المحادثة إلى:', status);
         
         // 1. محاولة العثور على مؤشر الحالة بعدة طرق ممكنة
         const statusIndicator = 
@@ -504,12 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.textContent.includes('المحادثة مغلقة') || 
             el.textContent.includes('محادثة مغلقة')
         );
-        
-        /* console.log('مؤشرات واجهة المستخدم:', { 
-            statusIndicator: statusIndicator ? statusIndicator.outerHTML : 'غير موجود', 
-            replyForm: replyForm ? true : false,
-            closedAlert: closedAlert ? closedAlert.outerHTML : 'غير موجود'
-        }); */
+
         
         if (status === 'open') {
         // تحديث مؤشر الحالة

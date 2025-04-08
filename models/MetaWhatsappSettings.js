@@ -73,23 +73,6 @@ metaWhatsappSettingsSchema.statics.getActiveSettings = async function() {
         if (allSettings.length > 0) {
             return allSettings[0];
         }
-        
-        // إذا لم تكن هناك سجلات، ننشئ سجلاً جديداً
-        console.log('لم يتم العثور على سجلات، سيتم إنشاء سجل جديد');
-        const newSettings = await this.create({
-            name: 'إعدادات واتساب الرسمي الافتراضية',
-            isActive: false,
-            config: {
-                appId: '',
-                appSecret: '',
-                accessToken: '',
-                phoneNumberId: '',
-                businessAccountId: '',
-                verifyToken: '',
-                webhookUrl: ''
-            }
-        });
-        
         return newSettings;
     } catch (error) {
         console.error('خطأ في الحصول على إعدادات واتساب:', error);

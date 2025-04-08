@@ -182,15 +182,12 @@
     </script>
     <% } else if (session && session.userId) { %>
       <script>
-        console.log("[_head.ejs] Setting currentUserId from session");
         window.currentUserId = "<%= session.userId %>";
-        console.log("[_head.ejs] window.currentUserId set to:", window.currentUserId);
         window.currentUserRole = "<%= session.role || 'guest' %>";
         window.currentUsername = "<%= session.username || 'Guest' %>";
       </script>
     <% } else { %>
       <script>
-          console.log("[_head.ejs] No user or session found, setting userId to guest");
           window.currentUserId = 'guest';
           window.currentUserRole = 'guest';
           window.currentUsername = 'Guest';

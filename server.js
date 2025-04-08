@@ -83,8 +83,6 @@ app.use('/api/whatsapp/webhook/incoming-message', upload.any(), (req, res, next)
     }
   }
   
-  // عرض بيانات الطلب الواردة للتشخيص
-  console.log(`[Whatsapp Incoming] بيانات الجسم:`, req.body);
   next();
 });
 
@@ -95,7 +93,6 @@ app.set("view engine", "ejs");
 mongoose
   .connect(process.env.DATABASE_URL)
   .then(() => {
-    console.log("Database connected successfully");
     startTelegramBot(); // بدء مستمع تيليجرام بعد نجاح الاتصال بقاعدة البيانات
   })
   .catch((err) => {
@@ -240,7 +237,6 @@ app.get("/", isAuthenticated, async (req, res) => {
 app.post('/notify-cache-load', isAuthenticated, (req, res) => {
   try {
     const { userId } = req.body;
-    console.log(`Cache load notification received for user ID: ${userId}`);
     res.status(200).json({ message: 'Cache load notification processed successfully.' });
   } catch (error) {
     console.error('Error processing cache load notification:', error.message, error.stack);
@@ -284,7 +280,6 @@ async function createWebsiteUser() {
     const websiteUser = await User.findOne({ username: 'website-registration' });
     
     if (!websiteUser) {
-      console.log('إنشاء حساب مستخدم موقع التسجيل (website-registration)...');
       
       // توليد كلمة مرور عشوائية آمنة
       const crypto = require('crypto');
@@ -308,15 +303,9 @@ async function createWebsiteUser() {
       });
       
       await newWebsiteUser.save();
-      console.log('تم إنشاء حساب مستخدم موقع التسجيل بنجاح.');
-      console.log('اسم المستخدم: website-registration');
-      console.log('كلمة المرور العشوائية: ' + randomPassword);
-      console.log('يرجى حفظ هذه المعلومات في مكان آمن.');
     } else {
-      console.log('مستخدم موقع التسجيل (website-registration) موجود بالفعل.');
     }
   } catch (error) {
-    console.error('خطأ في إنشاء حساب مستخدم الموقع:', error.message);
   }
 }
 
@@ -351,7 +340,6 @@ async function createDefaultAdmin() {
           phone_number: '0000000000',
           company_name: admin.company_name
         });
-       // console.log(`Admin account created for ${admin.username}`);
       }
     }
   } catch (error) {
@@ -379,7 +367,6 @@ createDefaultAdmin().then(() => {
   return createWebsiteUser();
 }).then(() => {
   http.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
   }).on('error', (err) => {
     console.error('Failed to start server:', err.message);
   });

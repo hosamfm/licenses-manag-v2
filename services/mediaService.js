@@ -181,10 +181,8 @@ async function linkMediaToMessage(mediaId, messageId) {
       }
       
       await message.save();
-      // logger.info('mediaService', 'تم تحديث معلومات الوسائط في الرسالة', { mediaId, messageId });
     }
     
-    // logger.info('mediaService', 'تم ربط الوسائط بالرسالة بنجاح', { mediaId, messageId });
     return true;
   } catch (error) {
     logger.error('mediaService', 'خطأ في ربط الوسائط بالرسالة', { 
@@ -332,7 +330,6 @@ async function getMediaContent(mediaId) {
     // استخدام البيانات المشفرة من metaData إن وجدت
     if (!media.fileData && media.metaData && media.metaData.base64Data) {
       media.fileData = media.metaData.base64Data;
-      // logger.info(`تم استرداد بيانات الوسائط من metaData: ${mediaId}`);
       
       // تحديث سجل الوسائط لتخزين البيانات في الحقل الصحيح
       try {
@@ -340,7 +337,6 @@ async function getMediaContent(mediaId) {
           { _id: media._id },
           { $set: { fileData: media.metaData.base64Data } }
         );
-        // logger.info(`تم تحديث حقل fileData للوسائط: ${mediaId}`);
       } catch (updateError) {
         // logger.error(`خطأ في تحديث حقل fileData للوسائط: ${updateError.message}`);
       }
@@ -374,7 +370,6 @@ async function getMediaContent(mediaId) {
  */
 async function downloadMediaFile(media) {
   // تسجيل رسالة تحذير بأن التنزيل معطل
-  // logger.info(`تم تعطيل تنزيل الوسائط - نعتمد فقط على البيانات المخزنة في قاعدة البيانات. mediaId: ${media?._id}`);
   
   // دائماً يعيد false لأن التنزيل معطل
   return false;
@@ -389,7 +384,6 @@ async function createMedia(mediaData) {
   try {
     const media = new WhatsappMedia(mediaData);
     await media.save();
-    // logger.info(`تم إنشاء سجل وسائط جديد: ${media._id}`);
     return media;
   } catch (error) {
     logger.error(`خطأ في إنشاء سجل وسائط: ${error.message}`);
@@ -412,9 +406,7 @@ async function updateMedia(mediaId, updateData) {
     );
     
     if (media) {
-      // logger.info(`تم تحديث سجل الوسائط: ${mediaId}`);
     } else {
-      // logger.warn(`لم يتم العثور على سجل الوسائط للتحديث: ${mediaId}`);
     }
     
     return media;

@@ -50,7 +50,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('countryAlpha2').value = alpha2;
             document.getElementById('countryName').value = name;
             
-            console.log(`تم تحديث إعدادات الدولة: ${name} (${alpha2}) +${code}`);
         }
     }
     

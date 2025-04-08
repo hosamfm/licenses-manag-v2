@@ -183,10 +183,8 @@ conversationSchema.methods.close = async function(userId, reason = null, note = 
     });
 
     await this.save();
-    logger.info('تم إغلاق المحادثة', { conversationId: this._id, userId });
     return this;
   } catch (error) {
-    logger.error('خطأ في إغلاق المحادثة:', { conversationId: this._id, error });
     throw error;
   } 
 };
@@ -214,10 +212,8 @@ conversationSchema.methods.reopen = async function(userId) {
     });
 
     await this.save();
-    logger.info('تم إعادة فتح المحادثة', { conversationId: this._id, userId });
     return this;
   } catch (error) {
-    logger.error('خطأ في إعادة فتح المحادثة:', { conversationId: this._id, error });
     throw error;
   }
 };
@@ -243,10 +239,8 @@ conversationSchema.methods.automaticReopen = async function() {
     });
 
     await this.save();
-    logger.info('تمت إعادة فتح المحادثة تلقائيًا', { conversationId: this._id });
     return this;
   } catch (error) {
-    logger.error('خطأ في إعادة فتح المحادثة تلقائيًا:', { conversationId: this._id, error });
     throw error;
   }
 };

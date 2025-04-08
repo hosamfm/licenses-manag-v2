@@ -72,22 +72,12 @@ exports.handleWebhook = async (req, res) => {
                 const customerName = contactInfo.profile?.name;
                 
                 if (phone && customerName) {
-                  logger.info('metaWhatsappWebhookController', 'تم استلام معلومات الملف الشخصي للعميل', { 
-                    phone, 
-                    customerName 
-                  });
-                  
                   // البحث عن المحادثة الموجودة وتحديثها
                   const existingConversation = await Conversation.findOne({ phoneNumber: phone });
                   if (existingConversation) {
                     existingConversation.customerName = customerName;
                     existingConversation.customerData = contactInfo;
                     await existingConversation.save();
-                    
-                    logger.info('metaWhatsappWebhookController', 'تم تحديث معلومات العميل', {
-                      conversationId: existingConversation._id,
-                      customerName
-                    });
                   }
                 }
               }
@@ -210,7 +200,6 @@ async function handleReactions(reactions, meta) {
     let channel = await WhatsAppChannel.getChannelByPhoneNumberId(phoneNumberId);
     if (!channel) {
       channel = await WhatsAppChannel.getDefaultChannel();
-      logger.info('metaWhatsappWebhookController', 'القناة غير موجودة، تم استخدام الافتراضية', { phoneNumberId });
     }
 
     for (const reaction of reactions) {
@@ -300,11 +289,6 @@ exports.handleIncomingMessages = async (messages, meta) => {
           // استخدام معلومات الملف الشخصي التي تم تمريرها من handleWebhook
           if (meta.contactInfo) {
             if (meta.contactInfo.profile && meta.contactInfo.profile.name) {
-              logger.info('metaWhatsappWebhookController', 'تحديث اسم العميل من معلومات جهة الاتصال', {
-                oldName: conversationInstance.customerName,
-                newName: meta.contactInfo.profile.name,
-                phoneNumber: phone
-              });
               conversationInstance.customerName = meta.contactInfo.profile.name;
             }
             conversationInstance.customerData = meta.contactInfo;
@@ -314,11 +298,6 @@ exports.handleIncomingMessages = async (messages, meta) => {
             const contact = msg.contacts[0];
             conversationInstance.customerData = contact;
             if (contact.profile && contact.profile.name) {
-              logger.info('metaWhatsappWebhookController', 'تحديث اسم العميل من معلومات الرسالة', {
-                oldName: conversationInstance.customerName,
-                newName: contact.profile.name,
-                phoneNumber: phone
-              });
               conversationInstance.customerName = contact.profile.name;
             }
           } 
@@ -359,10 +338,6 @@ exports.handleIncomingMessages = async (messages, meta) => {
           if (meta.contactInfo) {
             conversationData.customerData = meta.contactInfo;
             if (meta.contactInfo.profile && meta.contactInfo.profile.name) {
-              logger.info('metaWhatsappWebhookController', 'تعيين اسم العميل من معلومات ملف التعريف المرفقة', {
-                name: meta.contactInfo.profile.name,
-                phoneNumber: phone
-              });
               conversationData.customerName = meta.contactInfo.profile.name;
             }
           }
@@ -370,10 +345,6 @@ exports.handleIncomingMessages = async (messages, meta) => {
             const contact = msg.contacts[0];
             conversationData.customerData = contact;
             if (contact.profile && contact.profile.name) {
-              logger.info('metaWhatsappWebhookController', 'تعيين اسم العميل للمحادثة الجديدة من الرسالة', {
-                name: contact.profile.name,
-                phoneNumber: phone
-              });
               conversationData.customerName = contact.profile.name;
             }
           } 
@@ -413,23 +384,18 @@ exports.handleIncomingMessages = async (messages, meta) => {
                 phoneNumber: phone,
                 createdBy: null // يمكنك تعيين مستخدم نظام هنا إذا أردت
               });
-              logger.info('metaWhatsappWebhookController', 'تم إنشاء جهة اتصال جديدة تلقائياً', { phone, name: conversationInstance.customerName });
             } else {
-              logger.info('metaWhatsappWebhookController', 'لم يتم إنشاء جهة اتصال تلقائياً بسبب الاسم المؤقت', { phone, name: conversationInstance.customerName });
             }
           } else if (!contact) {
-            logger.info('metaWhatsappWebhookController', 'لم يتم العثور على جهة اتصال ولم يتمكن من الحصول على الاسم للإنشاء التلقائي', { phone });
           }
 
           // ربط المحادثة بجهة الاتصال إذا وجدت
           if (contact && !conversationInstance.contactId) {
             conversationInstance.contactId = contact._id;
             await conversationInstance.save();
-            logger.info('metaWhatsappWebhookController', 'تم ربط المحادثة بجهة الاتصال', { conversationId: conversationInstance._id, contactId: contact._id });
           }
         } catch (contactError) {
-            logger.error('metaWhatsappWebhookController', 'خطأ أثناء التحقق أو الإنشاء التلقائي لجهة الاتصال', { error: contactError.message, phone: conversationInstance.phoneNumber });
-            // استمر في معالجة الرسالة حتى لو فشل إنشاء جهة الاتصال
+          // تم إزالة logger.error - استمر في معالجة الرسالة حتى لو فشل إنشاء جهة الاتصال
         }
         // --- نهاية كود إنشاء جهة الاتصال التلقائي ---
 
@@ -668,12 +634,6 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
             { _id: message._id },
             { $set: { status: 'read', readAt: new Date() } }
           );
-          
-          logger.info('metaWhatsappWebhookController', 'تم وضع علامة مقروء تلقائياً على الرسالة لأن المستخدم نشط في المحادثة', {
-            messageId: message._id,
-            userId: activeUserId,
-            conversationId: conversationInstance._id.toString()
-          });
         }
       } catch (readError) {
         logger.error('metaWhatsappWebhookController', 'خطأ في وضع علامة مقروء تلقائياً', { 
@@ -684,10 +644,15 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
       }
     }
     
+    // جلب بيانات المحادثة مع بيانات جهة الاتصال الكاملة قبل إرسالها للإشعارات
+    const populatedConversation = await Conversation.findById(conversationInstance._id)
+      .populate('contactId', 'name phoneNumber')
+      .lean();
+    
     await NotificationSocketService.sendMessageNotification(
       conversationInstance._id.toString(),
       message,
-      conversationInstance,
+      populatedConversation || conversationInstance, // استخدام البيانات المجلوبة إذا كانت متاحة
       isActive
     );
     

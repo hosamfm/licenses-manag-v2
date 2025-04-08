@@ -255,13 +255,7 @@ const setMediaIdCache = (mediaHash, mediaType, mediaId, metadata = {}, ttl = 864
       metadata: metadata,
       cachedAt: new Date()
     };
-    
-    logger.info('تخزين معرف وسائط في التخزين المؤقت', { 
-      mediaHash, 
-      mediaType, 
-      mediaId,
-      ttl: `${ttl} ثواني` 
-    });
+
     
     return cache.set(cacheKey, mediaData, ttl);
   } catch (error) {
@@ -287,11 +281,7 @@ const getMediaIdCache = (mediaHash, mediaType) => {
     const cachedMedia = cache.get(cacheKey);
     
     if (cachedMedia) {
-      logger.info('تم العثور على معرف وسائط في التخزين المؤقت', { 
-        mediaHash, 
-        mediaType, 
-        mediaId: cachedMedia.id 
-      });
+
     }
     
     return cachedMedia;
@@ -317,7 +307,6 @@ const deleteMediaIdCache = (mediaHash, mediaType) => {
     const cacheKey = `media_${mediaType}_${mediaHash}`;
     
     if (cache.has(cacheKey)) {
-      logger.info('حذف معرف وسائط من التخزين المؤقت', { mediaHash, mediaType });
       return cache.del(cacheKey);
     }
     
@@ -361,12 +350,7 @@ const setMediaContentCache = (mediaHash, mediaType, mediaContent, metadata = {},
       size: Buffer.isBuffer(mediaContent) ? mediaContent.length : content.length
     };
     
-    logger.info('تخزين محتوى وسائط في التخزين المؤقت', { 
-      mediaHash, 
-      mediaType, 
-      size: mediaData.size,
-      ttl: `${ttl} ثواني` 
-    });
+
     
     return cache.set(cacheKey, mediaData, ttl);
   } catch (error) {
@@ -393,11 +377,7 @@ const getMediaContentCache = (mediaHash, mediaType, asBuffer = true) => {
     const cachedMedia = cache.get(cacheKey);
     
     if (cachedMedia) {
-      logger.info('تم العثور على محتوى وسائط في التخزين المؤقت', { 
-        mediaHash, 
-        mediaType, 
-        size: cachedMedia.size 
-      });
+
       
       // إذا طلب المحتوى كـ Buffer وكان مخزناً كـ base64
       if (asBuffer && cachedMedia.isBase64) {
@@ -428,7 +408,6 @@ const deleteMediaContentCache = (mediaHash, mediaType) => {
     const cacheKey = `media_content_${mediaType}_${mediaHash}`;
     
     if (cache.has(cacheKey)) {
-      logger.info('حذف محتوى وسائط من التخزين المؤقت', { mediaHash, mediaType });
       return cache.del(cacheKey);
     }
     
@@ -464,11 +443,7 @@ const clearMediaTypeCache = (mediaType) => {
         deletedCount++;
       }
     });
-    
-    logger.info('تم مسح التخزين المؤقت للوسائط من نوع معين', { 
-      mediaType, 
-      deletedCount 
-    });
+
     
     return deletedCount;
   } catch (error) {

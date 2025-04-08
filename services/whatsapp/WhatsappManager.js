@@ -102,9 +102,7 @@ class WhatsappManager {
                 });
                 
                 await messageRecord.save();
-                logger.info('WhatsappManager', 'تم حفظ سجل الرسالة قبل الإرسال');
             } else {
-                logger.info('WhatsappManager', 'تم تخطي حفظ سجل الرسالة (skipMessageRecord)');
             }
 
             // إرسال الرسالة عبر المزود
@@ -137,12 +135,7 @@ class WhatsappManager {
                 };
                 await messageRecord.save();
                 
-                // تسجيل معلومات الإرسال بالمعرفات الصحيحة
-                logger.info('WhatsappManager', 'تم حفظ معلومات الرسالة', {
-                    internalId: messageRecord.messageId,
-                    externalId: messageRecord.externalMessageId,
-                    deviceId: deviceId
-                });
+
                 
                 // إضافة معرف الرسالة في قاعدة البيانات إلى النتيجة
                 result.messageRecordId = messageRecord._id;
@@ -176,10 +169,7 @@ class WhatsappManager {
         }
 
         try {
-            logger.info('WhatsappManager', 'التحقق من حالة رسالة الواتساب', {
-                provider: this.activeProviderName,
-                messageId
-            });
+
 
             // البحث عن الرسالة في قاعدة البيانات - نبحث بأي من المعرفين
             let messageRecord = await SemMessage.findOne({ 
@@ -255,9 +245,7 @@ class WhatsappManager {
         }
 
         try {
-            logger.info('WhatsappManager', 'التحقق من رصيد الحساب', {
-                provider: this.activeProviderName
-            });
+
 
             return await this.activeProvider.checkAccountBalance();
         } catch (error) {
@@ -288,9 +276,7 @@ class WhatsappManager {
                 messageId: { $ne: null }
             });
             
-            logger.info('WhatsappManager', 'تحديث حالة الرسائل المعلقة', {
-                count: pendingMessages.length
-            });
+
             
             const results = {
                 total: pendingMessages.length,

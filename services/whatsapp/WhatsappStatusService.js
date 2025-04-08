@@ -69,7 +69,6 @@ exports.updatePendingMessagesStatus = async () => {
                     await message.save();
                     updatedCount++;
                     
-                    logger.info('WhatsappStatusService', `تم تحديث حالة الرسالة ${message.messageId} إلى ${newStatus}`);
                 }
             } else {
                 logger.warn('WhatsappStatusService', `فشل في تحديث حالة الرسالة ${message.messageId}: ${statusResult.error}`);

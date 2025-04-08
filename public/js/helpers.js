@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', function () {
-    console.log('DOM fully loaded and parsed - initializeFeatureSelection');
     initializeFeatureSelection();
 });
 
@@ -8,7 +7,6 @@ function initializeFeatureSelection() {
     const featureCheckboxes = document.querySelectorAll('.feature-checkbox');
     const defaultFeatures = [13, 14]; // Default selected features
 
-    console.log('Initializing feature selection');
     // Set default features as checked
     featureCheckboxes.forEach(checkbox => {
         const featureValue = parseInt(checkbox.value);
@@ -40,7 +38,6 @@ function generateFeatureCodeAndPrice() {
         totalPrice += featurePrice;
     });
 
-    console.log('Generated features code:', featuresCode, 'Total price:', totalPrice.toFixed(2));
     // Update the feature code and request price in the form
     document.getElementById('newFeaturesCode').value = featuresCode;
     document.getElementById('requestPrice').value = totalPrice.toFixed(2);
@@ -48,13 +45,11 @@ function generateFeatureCodeAndPrice() {
 
 // Function to fetch registration codes and populate data list
 async function fetchAndPopulate(inputElement, dataListElement, url) {
-    console.log('Fetching and populating data for:', inputElement.value, 'with url:', url);
     try {
         const query = inputElement.value;
         if (query.length < 3) return;
 
         const response = await fetch(`${url}?query=${query}`);
-        console.log('Fetch response status:', response.status);
         const data = await response.json();
 
         if (dataListElement) {
@@ -74,10 +69,8 @@ async function fetchAndPopulate(inputElement, dataListElement, url) {
 
 // Function to fetch license details for auto-completion
 async function fetchLicenseDetails(registrationCode) {
-    console.log('Fetching license details for:', registrationCode);
     try {
         const response = await fetch(`/licenses/previous-license-details?registrationCode=${registrationCode}`);
-        console.log('Fetch response status:', response.status);
         const license = await response.json();
 
         if (license) {
@@ -117,11 +110,9 @@ async function fetchLicenseDetails(registrationCode) {
 const baseRegistrationCodeInput = document.getElementById('baseRegistrationCode');
 if (baseRegistrationCodeInput) {
     baseRegistrationCodeInput.addEventListener('input', function () {
-        console.log('Input event on baseRegistrationCodeInput');
         fetchAndPopulate(this, document.getElementById('baseRegistrationCodeList'), '/licenses/registration-codes');
     });
     baseRegistrationCodeInput.addEventListener('change', function () {
-        console.log('Change event on baseRegistrationCodeInput');
         fetchLicenseDetails(this.value);
     });
 }
@@ -130,7 +121,6 @@ if (baseRegistrationCodeInput) {
 window.addEventListener('load', function () {
     const defaultFeatureValues = [13, 14];
     const featureCheckboxes = document.querySelectorAll('.feature-checkbox');
-    console.log('Setting default features on page load');
     featureCheckboxes.forEach(checkbox => {
         const featureValue = parseInt(checkbox.value);
         if (defaultFeatureValues.includes(featureValue)) {
@@ -175,11 +165,9 @@ if (additionalFeatureRequestForm) {
     const registrationCodeInput = document.getElementById('registrationCode');
     if (registrationCodeInput) {
         registrationCodeInput.addEventListener('input', function () {
-            console.log('Input event on registrationCodeInput');
             fetchAndPopulate(this, document.getElementById('registrationCodeList'), '/licenses/registration-codes');
         });
         registrationCodeInput.addEventListener('change', function () {
-            console.log('Change event on registrationCodeInput');
             fetchLicenseDetails(this.value);
         });
     }

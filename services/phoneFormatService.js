@@ -24,16 +24,11 @@ function setDefaultCountry(settings) {
             defaultCountryCode = defaultCountryCode.substring(1);
         }
         
-        logger.info('PhoneFormatService', 'تم تحديث رمز الدولة الافتراضي', { 
-            countryCode: defaultCountryCode 
-        });
+
     }
     
     if (settings && settings.countryAlpha2) {
         defaultCountryAlpha2 = settings.countryAlpha2.toUpperCase();
-        logger.info('PhoneFormatService', 'تم تحديث رمز الدولة الافتراضي بحرفين', { 
-            countryAlpha2: defaultCountryAlpha2 
-        });
     }
 }
 
@@ -150,10 +145,6 @@ function formatPhoneNumber(phone, countryAlpha2 = null) {
                 // محاولة أخيرة للتصحيح إذا كان الرقم غير صالح
                 // إذا كان الرقم يحتوي على أكثر من 7 أرقام، نعتبره صالحًا للاستخدام
                 if (cleanPhone.replace(/\D/g, '').length >= 7) {
-                    logger.info('PhoneFormatService', 'تم قبول الرقم رغم فشل التحقق بالمكتبة (يحتوي على أكثر من 7 أرقام)', {
-                        phone: cleanPhone
-                    });
-                    
                     return { 
                         isValid: true, 
                         phone: cleanPhone

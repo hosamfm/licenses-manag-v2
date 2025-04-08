@@ -276,11 +276,7 @@ async function updateRelatedConversations(contact) {
         }
       });
     }
-    
-    logger.info('contactController', 'تم تحديث المحادثات المرتبطة بجهة الاتصال', { 
-      contactId: contact._id, 
-      conversationsCount: conversations.length 
-    });
+
   } catch (error) {
     logger.error('contactController', 'خطأ في تحديث المحادثات المرتبطة', { 
       contactId: contact._id, 

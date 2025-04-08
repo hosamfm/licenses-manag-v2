@@ -110,10 +110,7 @@ class SmsManager {
         }
 
         try {
-            logger.info('SmsManager', 'التحقق من حالة الرسالة', {
-                provider: this.activeProviderName,
-                messageId
-            });
+
 
             return await this.activeProvider.checkMessageStatus(messageId);
         } catch (error) {
@@ -138,9 +135,7 @@ class SmsManager {
         }
 
         try {
-            logger.info('SmsManager', 'التحقق من رصيد الحساب', {
-                provider: this.activeProviderName
-            });
+
 
             return await this.activeProvider.checkAccountBalance();
         } catch (error) {
@@ -172,7 +167,6 @@ class SmsManager {
         }
 
         try {
-            logger.info('SmsManager', 'الحصول على قائمة الأجهزة من SemySMS');
             return await this.activeProvider.getDevices();
         } catch (error) {
             logger.error('SmsManager', 'خطأ في الحصول على قائمة الأجهزة', error);

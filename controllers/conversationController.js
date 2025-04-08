@@ -277,15 +277,6 @@ exports.addInternalNote = async (req, res) => {
         full_name: req.user.full_name || req.user.username
       };
     }
-    
-    // سجل تشخيصي لمعلومات المستخدم المعالجة
-    // logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
-    //   senderInfo: senderInfo ? {
-    //     _id: senderInfo._id ? senderInfo._id.toString() : null,
-    //     username: senderInfo.username
-    //   } : null
-    // });
-
     // 3. إنشاء وحفظ الملاحظة الداخلية
     const noteMsg = new WhatsappMessage({
       conversationId,
@@ -317,11 +308,6 @@ exports.addInternalNote = async (req, res) => {
     
     // 7. إرسال إشعار للمستخدمين الآخرين في غرفة المحادثة
     socketService.emitToRoom(`conversation-${conversationId}`, 'internal-note', noteWithSender);
-    // logger.info('تم إرسال إشعار إلى غرفة محددة', {
-    //   roomName: `conversation-${conversationId}`,
-    //   eventName: 'internal-note'
-    // });
-    
     // 8. إرسال استجابة ناجحة
     res.json({
       success: true,
@@ -385,28 +371,9 @@ exports.replyToConversation = async (req, res) => {
     const { conversationId } = req.params;
     const { content, replyToMessageId, mediaId, mediaType, userId, username } = req.body;
 
-    // سجل تشخيصي لمعلومات المستخدم المرسلة
-    // logger.info('conversationController', 'معلومات المستخدم المرسلة في طلب الرد', {
-    //   userId,
-    //   username,
-    //   sessionUser: req.user ? {
-    //     _id: req.user._id.toString(),
-    //     username: req.user.username
-    //   } : null
-    // });
-
-    // التحقق من معلومات المستخدم المرسلة من العميل
+       // التحقق من معلومات المستخدم المرسلة من العميل
     let senderInfo = null;
     if (userId) {
-      // تسجيل تشخيصي إضافي للمساعدة في تحديد المشكلة
-      // logger.info('conversationController', 'تحليل معرف المستخدم المستلم', {
-      //   userId: userId,
-      //   type: typeof userId,
-      //   isValid: mongoose.Types.ObjectId.isValid(userId),
-      //   userIdLength: userId.length,
-      //   hexFormat: /^[0-9a-fA-F]{24}$/.test(userId)
-      // });
-      
       // حالة خاصة: مستخدم النظام
       if (userId === 'system') {
         senderInfo = { username: username || 'مستخدم النظام' };
@@ -442,15 +409,6 @@ exports.replyToConversation = async (req, res) => {
         full_name: req.user.full_name || req.user.username
       };
     }
-    
-    // سجل تشخيصي لمعلومات المستخدم المعالجة
-    // logger.info('conversationController', 'معلومات المستخدم المرسل بعد المعالجة', {
-    //   senderInfo: senderInfo ? {
-    //     _id: senderInfo._id ? senderInfo._id.toString() : null,
-    //     username: senderInfo.username
-    //   } : null
-    // });
-
     // التحقق من وجود محتوى أو وسائط على الأقل
     if ((!content || !content.trim()) && !mediaId) {
       if (isAjax) return res.json({ success: false, error: 'لا يمكن إرسال رسالة فارغة' });
@@ -475,15 +433,6 @@ exports.replyToConversation = async (req, res) => {
       if (originalMessage) {
         // استخدام المعرف الخارجي للرسالة الأصلية للرد
         externalReplyId = originalMessage.externalMessageId;
-        
-        // تسجيل معلومات تشخيصية مفصلة
-        // logger.info('conversationController', 'معلومات الرسالة الأصلية للرد', { 
-        //   originalMessageId: originalMessage._id.toString(),
-        //   externalMessageId: originalMessage.externalMessageId,
-        //   from: originalMessage.metadata?.from,
-        //   direction: originalMessage.direction
-        // });
-        
         replyContext = {
           message_id: originalMessage.externalMessageId || replyToMessageId,
           from: originalMessage.metadata ? originalMessage.metadata.from : null
@@ -511,13 +460,6 @@ exports.replyToConversation = async (req, res) => {
         // تعيين المحادثة للمستخدم الحالي
         conversation.assignedTo = req.user._id;
         conversation.status = 'assigned';
-        
-        // logger.info('conversationController', 'تم تعيين المحادثة تلقائياً للمستخدم الحالي بعد الرد', {
-        //   conversationId,
-        //   userId: req.user._id.toString(),
-        //   username: req.user.username
-        // });
-        
         // إرسال إشعار بالتعيين
         socketService.notifyConversationUpdate(conversationId, {
           type: 'assigned',
@@ -581,12 +523,6 @@ exports.replyToConversation = async (req, res) => {
           const settings = await MetaWhatsappSettings.findById(conversation.channelId.settingsId).lean(); // استخدام lean لتحسين الأداء
           if (settings && settings.config && settings.config.phoneNumberId) {
               phoneNumberId = settings.config.phoneNumberId;
-              logger.info('conversationController', 'تم العثور على phoneNumberId للإرسال', { 
-                  conversationId: conversation._id, 
-                  channelId: conversation.channelId._id,
-                  settingsId: conversation.channelId.settingsId,
-                  retrievedPhoneNumberId: phoneNumberId 
-              });
           } else {
                logger.warn('conversationController', 'لم يتم العثور على إعدادات أو phoneNumberId للقناة المرتبطة بالمحادثة', { 
                   conversationId: conversation._id, 
@@ -632,13 +568,6 @@ exports.replyToConversation = async (req, res) => {
         if (!media) {
           throw new Error('الوسائط غير موجودة');
         }
-        
-        // logger.info('conversationController', 'إرسال رسالة مع وسائط', {
-        //   mediaId,
-        //   mediaType,
-        //   conversationId
-        // });
-        
         // تحديث معرف الرسالة في سجل الوسائط
         await whatsappMediaController.updateMessageIdForMedia(mediaId, msg._id);
         
@@ -647,13 +576,6 @@ exports.replyToConversation = async (req, res) => {
           caption: content && content.trim() ? content.trim() : undefined, // إرسال caption فقط إذا كان هناك محتوى غير فارغ
           filename: mediaType === 'document' ? media.fileName : undefined
         };
-
-        // تسجيل معلومات إضافية للتشخيص
-        // logger.info('conversationController', 'خيارات إرسال الوسائط', {
-        //   contentLength: content ? content.length : 0,
-        //   captionFromMedia: media.caption ? media.caption.length : 0,
-        //   finalCaption: options.caption ? options.caption.length : 0
-        // });
         
         // استخدام معرف الرد الخارجي إذا كان موجوداً، وإلا null للإرسال كرسالة عادية
         apiResponse = await metaWhatsappService.sendMediaMessage(
@@ -677,11 +599,6 @@ exports.replyToConversation = async (req, res) => {
               phoneNumberId
             );
             
-            // logger.info('conversationController', 'إرسال رد على رسالة', { 
-            //   originalMessageId: replyToMessageId,
-            //   externalReplyId,
-            //   phoneNumber: conversation.phoneNumber
-            // });
           } else {
             // في حالة عدم وجود معرف خارجي، نرسل رسالة عادية
             apiResponse = await metaWhatsappService.sendTextMessage(
@@ -870,15 +787,9 @@ exports.reactToMessage = async (req, res) => {
       const updatedMessage = await WhatsappMessage.updateReaction(messageIdToUse, reactionData);
       
       if (!updatedMessage) {
-        // logger.warn('conversationController', 'فشل تحديث التفاعل في قاعدة البيانات', {
-        //   messageId: messageIdToUse,
-        //   reaction: reactionData
-        // });
+
       } else {
-        // logger.info('conversationController', 'تم تحديث التفاعل في قاعدة البيانات بنجاح', {
-        //   messageId: messageIdToUse,
-        //   reactionCount: updatedMessage.reactions.length
-        // });
+
       }
 
       // إرسال إشعار عبر Socket
@@ -1115,13 +1026,7 @@ exports.listConversationsAjaxList = async (req, res) => {
       skipPagination: true,
       sort: { lastMessageAt: -1 } // الترتيب حسب آخر رسالة
     };
-    
-    // logger.info('conversationController', 'فلترة المحادثات', {
-    //   status, 
-    //   assignment, 
-    //   search,
-    //   filterOptions
-    // });
+
     
     // استخدام خدمة المحادثات للحصول على قائمة المحادثات
     const result = await conversationService.getConversationsList(
@@ -1187,7 +1092,6 @@ exports.closeConversation = async (req, res) => {
     // إرسال إشعارات لتغيير حالة المحادثة
     await notificationSocketService.updateConversationNotifications(conversationId, conversation);
 
-    // logger.info('conversationController', 'تم إغلاق المحادثة يدوياً', { conversationId, userId, reason });
     res.status(200).json({ success: true, conversation: updatedConversation });
 
   } catch (error) {
@@ -1237,7 +1141,6 @@ exports.reopenConversation = async (req, res) => {
     // إرسال إشعارات لتغيير حالة المحادثة
     await notificationSocketService.updateConversationNotifications(conversationId, conversation);
 
-    // logger.info('conversationController', 'تمت إعادة فتح المحادثة يدوياً', { conversationId, userId });
     res.status(200).json({ success: true, conversation: updatedConversation });
 
   } catch (error) {
@@ -1351,10 +1254,7 @@ exports.assignConversationAPI = async (req, res) => {
     });
     
     // إرسال إشعارات لتغيير حالة المحادثة
-    logger.info('conversationController', '[assignConversationAPI] Attempting to update/send notifications...', { conversationId, status: conversation.status });
     await notificationSocketService.updateConversationNotifications(conversationId, conversation);
-    logger.info('conversationController', '[assignConversationAPI] Finished attempting notification update/send.', { conversationId });
-    
     // استخدام الدالة المساعدة للحصول على اسم العميل المعروض
     const customerName = ContactHelper.getServerDisplayName(conversation);
     
@@ -1742,10 +1642,6 @@ async function ensureContactLinked(conversation) {
     if (contact) {
       conversation.contactId = contact._id;
       await conversation.save();
-      logger.info('conversationController', 'تم ربط المحادثة بجهة اتصال موجودة', {
-        conversationId: conversation._id,
-        contactId: contact._id
-      });
     }
 
     return conversation;

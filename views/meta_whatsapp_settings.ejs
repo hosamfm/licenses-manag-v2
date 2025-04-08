@@ -1314,28 +1314,7 @@
 
       // دالة لعرض التوست (تحتاج لمكتبة مثل Toastify أو Bootstrap Toasts)
       function showToast(message, type = 'info') {
-          // Implement your preferred toast notification logic here
-          console.log(`[Toast - ${type}]: ${message}`);
-          // مثال باستخدام Bootstrap Toasts (يتطلب تهيئة)
-          /*
-          const toastContainer = document.getElementById('toastPlacement');
-          if (toastContainer) {
-              const toastHTML = `
-              <div class="toast align-items-center text-white bg-${type === 'error' ? 'danger' : (type === 'success' ? 'success' : 'primary')} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="d-flex">
-                  <div class="toast-body">
-                    ${message}
-                  </div>
-                  <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-              </div>`;
-              const toastElement = document.createElement('div');
-              toastElement.innerHTML = toastHTML;
-              toastContainer.appendChild(toastElement.firstChild);
-              const toast = new bootstrap.Toast(toastContainer.lastElementChild);
-              toast.show();
-          }
-          */
+
            // حل بسيط باستخدام alert مؤقتًا
            alert(`${type.toUpperCase()}: ${message}`);
       }

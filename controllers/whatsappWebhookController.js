@@ -383,11 +383,7 @@ exports.handleStatusUpdate = async (req, res) => {
 
         // حفظ التغييرات
         await message.save();
-        
-        logger.info('whatsappWebhookController', `تم تحديث حالة الرسالة في جدول SemMessage من ${oldStatus} إلى ${newStatus}`, {
-            messageId: message._id,
-            externalMessageId: message.externalMessageId
-        });
+
 
         // إرسال استجابة نجاح
         return res.status(200).json({ 
@@ -436,13 +432,7 @@ exports.handleIncomingMessage = async (req, res) => {
         query: req.query,
         body: req.body
     };
-    
-    logger.info('whatsappWebhookController', `معالجة طلب جديد رقم: ${requestId}`, { 
-        ip: ipAddress,
-        method: req.method,
-        path: req.path,
-        contentType
-    });
+
     
     // استخراج البيانات من الطلب الوارد باستخدام الدالة المساعدة
     let rawData = null;
@@ -523,11 +513,7 @@ exports.handleIncomingMessage = async (req, res) => {
             let existingMessage = await WhatsappIncomingMessage.findOne({ id: id });
             
             if (existingMessage) {
-                logger.info('whatsappWebhookController', 'تم استلام رسالة مكررة', { 
-                    messageId: id, 
-                    phone: phone 
-                });
-                
+
                 return res.status(200).json({
                     success: true,
                     message: 'تم استلام هذه الرسالة مسبقًا',
@@ -567,10 +553,7 @@ exports.handleIncomingMessage = async (req, res) => {
             });
             
             await incomingMessage.save();
-            logger.info('whatsappWebhookController', 'تم حفظ رسالة واتس أب واردة جديدة بنجاح', { 
-                messageId: id, 
-                phone: phone 
-            });
+
             
             // إرسال إشعار بالرسالة الجديدة عبر Socket.io
             const socketService = require('../services/socketService');
@@ -595,11 +578,7 @@ exports.handleIncomingMessage = async (req, res) => {
                     fileSize: mediaInfo ? mediaInfo.fileSize : null
                 };
                 
-                logger.info('whatsappWebhookController', 'إرسال إشعار برسالة واردة مع وسائط', {
-                    conversationId: msg.conversationId,
-                    mediaType: msg.mediaType,
-                    messageId: msg._id
-                });
+
                 
                 socketService.notifyNewMessage(msg.conversationId, messageWithMedia);
             } else {

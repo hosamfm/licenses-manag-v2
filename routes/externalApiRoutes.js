@@ -149,15 +149,12 @@ router.post('/external-api/clients', verifySystemApiKey, async (req, res) => {
             newClient.balance += 100;
             await newClient.save();
             
-            logger.info('externalApiRoutes', `تم إضافة رصيد ترحيبي بقيمة 100 نقطة للعميل الجديد: ${newClient.name}`);
         } catch (balanceError) {
             // تسجيل الخطأ ولكن الاستمرار في العملية حتى لا تتأثر عملية إنشاء العميل
             logger.error('externalApiRoutes', 'خطأ في إضافة الرصيد الترحيبي للعميل الجديد', balanceError);
         }
         
         // تسجيل العملية
-        logger.info('externalApiRoutes', `تم إنشاء عميل جديد من نظام خارجي: ${name} (${email})`);
-        
         return res.status(201).json({
             success: true,
             message: 'تم إنشاء العميل بنجاح',

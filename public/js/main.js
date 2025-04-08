@@ -67,7 +67,6 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 const data = await window.fetchRegistrationCodes(this, dataListElement);
                 if (data.length === 0) {
-                    console.log('No registration codes found for query:', query);
                 }
             } catch (error) {
                 console.error('Error fetching registration codes:', error);

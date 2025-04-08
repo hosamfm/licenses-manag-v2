@@ -129,13 +129,6 @@ exports.saveMetaWhatsappSettings = async (req, res) => {
         settings.updatedBy = req.session && req.session.userId ? req.session.userId : null;
         await settings.save();
         
-        logger.info('metaWhatsappSettingsController', 'تم حفظ إعدادات واتساب الرسمي', {
-            userId: req.session && req.session.userId ? req.session.userId : null,
-            isActive: settings.isActive,
-            hasAppId: !!settings.config.appId,
-            hasAccessToken: !!settings.config.accessToken,
-            hasPhoneNumberId: !!settings.config.phoneNumberId
-        });
         
         req.flash('success', 'تم حفظ إعدادات واتساب الرسمي بنجاح');
         res.redirect('/admin/meta-whatsapp-settings');
@@ -190,12 +183,6 @@ exports.addMetaWhatsappSettings = async (req, res) => {
 
         await newSettings.save();
 
-        logger.info('metaWhatsappSettingsController', 'تم إضافة إعداد واتساب جديد', {
-            userId: req.session && req.session.userId ? req.session.userId : null,
-            settingsId: newSettings._id,
-            phoneNumberId: phone_number_id,
-            isActive: newSettings.isActive
-        });
 
         req.flash('success', 'تم إضافة إعداد واتساب جديد بنجاح');
         res.redirect('/admin/meta-whatsapp-settings');
@@ -302,12 +289,6 @@ exports.updateMetaWhatsappSettings = async (req, res) => {
         settings.updatedBy = req.session && req.session.userId ? req.session.userId : null;
         await settings.save();
 
-        logger.info('metaWhatsappSettingsController', 'تم تحديث إعداد واتساب', {
-            userId: req.session && req.session.userId ? req.session.userId : null,
-            settingsId: settings._id,
-            phoneNumberId: settings.config.phoneNumberId,
-            isActive: settings.isActive
-        });
 
         req.flash('success', 'تم تحديث إعداد واتساب بنجاح');
         res.redirect('/admin/meta-whatsapp-settings');
@@ -339,10 +320,6 @@ exports.deleteMetaWhatsappSettings = async (req, res) => {
         // حذف الإعداد
         await MetaWhatsappSettings.findByIdAndDelete(id);
 
-        logger.info('metaWhatsappSettingsController', 'تم حذف إعداد واتساب', {
-            userId: req.session && req.session.userId ? req.session.userId : null,
-            deletedSettingsId: id
-        });
 
         req.flash('success', 'تم حذف إعداد واتساب بنجاح');
         res.redirect('/admin/meta-whatsapp-settings');
@@ -368,11 +345,6 @@ exports.generateNewVerifyToken = async (req, res) => {
         // حفظ الإعدادات المحدثة
         settings.updatedBy = req.user ? req.user._id : null;
         await settings.save();
-        
-        logger.info('metaWhatsappSettingsController', 'تم توليد توكن تحقق جديد لواتساب الرسمي', {
-            userId: req.user ? req.user._id : null
-        });
-        
         // إرجاع التوكن الجديد
         res.json({ token: newToken });
     } catch (error) {

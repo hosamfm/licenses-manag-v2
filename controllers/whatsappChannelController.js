@@ -94,13 +94,7 @@ async function createChannel(req, res) {
       isActive,
       createdBy: req.session.userId
     });
-    
-    logger.info('whatsappChannelController', 'تم إنشاء قناة واتساب جديدة', {
-      channelId: channel._id,
-      channelName: channel.name,
-      userId: req.session.userId
-    });
-    
+   
     return res.status(201).json({
       success: true,
       data: channel,
@@ -213,11 +207,7 @@ async function updateChannel(req, res) {
     
     await channel.save();
     
-    logger.info('whatsappChannelController', 'تم تحديث قناة واتساب', {
-      channelId: channel._id,
-      channelName: channel.name,
-      userId: req.user._id
-    });
+
     
     return res.status(200).json({
       success: true,
@@ -270,10 +260,7 @@ async function deleteChannel(req, res) {
     // استخدام deleteOne بدلاً من remove (الأسلوب القديم)
     await WhatsAppChannel.deleteOne({ _id: req.params.id });
     
-    logger.info('whatsappChannelController', 'تم حذف قناة واتساب', {
-      channelId: req.params.id,
-      userId: req.session.userId
-    });
+
     
     return res.status(200).json({
       success: true,
@@ -318,13 +305,6 @@ async function renderChannelsPage(req, res) {
     const metaSettings = await MetaWhatsappSettings.find()
       .select('_id config.phoneNumberId config.businessAccountId isActive')
       .lean();
-    
-    // بيانات المستخدم الحالي
-    // إضافة طباعة تشخيصية
-    console.log('بيانات المستخدم الحالي:', {
-      userId: req.session.userId,
-      userRole: req.session.userRole
-    });
     
     return res.render('whatsapp_channels', {
       title: 'إدارة قنوات واتساب',

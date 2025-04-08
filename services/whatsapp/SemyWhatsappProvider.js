@@ -159,12 +159,7 @@ class SemyWhatsappProvider extends IWhatsappProvider {
                 rawResponse: response
             };
             
-            // تسجيل نجاح الإرسال مع المعرفات
-            logger.info('SemyWhatsappProvider', 'تم إرسال رسالة واتساب بنجاح', { 
-                messageId: result.messageId,
-                externalMessageId: result.externalMessageId,
-                phone: phoneNumber 
-            });
+
             
             return result;
         } catch (error) {

@@ -70,10 +70,6 @@ router.post('/:conversationId/reopen', ensureCanAccessConversations, conversatio
 router.post('/:conversationId/mark-as-read', ensureCanAccessConversations, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    logger.info('conversationRoutes', 'تحديث حالة قراءة المحادثة', { 
-      conversationId, 
-      userId: req.user?._id 
-    });
     res.json({ success: true, message: 'تم تحديث حالة القراءة' });
   } catch (error) {
     logger.error('conversationRoutes', 'خطأ في تحديث حالة قراءة المحادثة', error);

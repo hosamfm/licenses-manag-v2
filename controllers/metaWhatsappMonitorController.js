@@ -106,10 +106,6 @@ exports.clearOldLogs = async (req, res) => {
             timestamp: { $lt: thirtyDaysAgo }
         });
         
-        logger.info('metaWhatsappMonitorController', 'تم حذف السجلات القديمة', {
-            count: result.deletedCount
-        });
-        
         req.flash('success', `تم حذف ${result.deletedCount} سجل قديم بنجاح`);
         res.redirect('/admin/meta-whatsapp-monitor');
     } catch (error) {

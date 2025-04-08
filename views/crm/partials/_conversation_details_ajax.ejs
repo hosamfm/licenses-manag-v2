@@ -10,8 +10,6 @@
   if (typeof window.openInternalNoteModal !== 'function') {
     // تعريف نسخة مؤقتة حتى يتم تحميل النسخة الكاملة
     window.openInternalNoteModal = function() {
-      console.log('جاري تحميل نافذة التعليقات الداخلية...');
-      // سيتم استبدال هذه الدالة عندما يتم تحميل conversation-notes-utils.js
     };
   }
 </script>
@@ -417,7 +415,6 @@
     if (typeof window.setupMessageReadObserver === 'function') {
       setTimeout(() => {
         const unreadCount = window.setupMessageReadObserver();
-        console.log(`تمت إضافة ${unreadCount} رسالة واردة غير مقروءة إلى مراقب القراءة`);
       }, 500);
     }
   });
@@ -479,13 +476,11 @@
     
     // إضافة مستمع للتحميل AJAX للمحادثات
     window.addEventListener('messages-loaded', function() {
-      console.log('تم تحميل رسائل جديدة، إعادة ربط معالجات الأحداث');
       setupButtonEventListeners();
       
       // إعادة تفعيل مراقب قراءة الرسائل بعد تحميل رسائل جديدة
       if (typeof window.setupMessageReadObserver === 'function') {
         const unreadCount = window.setupMessageReadObserver();
-        console.log(`تمت إضافة ${unreadCount} رسالة واردة غير مقروءة إلى مراقب القراءة بعد التحميل`);
       }
     });
     
@@ -515,7 +510,6 @@
       const pendingMessages = document.querySelectorAll('.message.outgoing:not([data-status="read"])');
       if (pendingMessages.length === 0) return;
       
-      console.log(`فحص ${pendingMessages.length} رسالة صادرة معلقة للتحديث...`);
       
       pendingMessages.forEach(messageElem => {
         const messageId = messageElem.getAttribute('data-message-id');
@@ -529,7 +523,6 @@
             .then(response => response.ok ? response.json() : Promise.reject('فشل الجلب'))
             .then(data => {
               if (data.success && data.status && data.status !== currentStatus) {
-                console.log(`تحديث حالة الرسالة ${messageId} من ${currentStatus} إلى ${data.status}`);
                 if (typeof window.updateMessageStatus === 'function') {
                   window.updateMessageStatus(messageId, data.status);
                 }
