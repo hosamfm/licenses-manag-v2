@@ -5,15 +5,24 @@ exports.getQuickReplies = async (req, res) => {
     try {
         // افتراض أن معرف المستخدم موجود في req.user._id (يجب ضبط middleware للمصادقة)
         const userId = req.user ? req.user._id : null;
+        const isAdmin = req.user && req.user.role === 'admin'; // تحقق مما إذا كان المستخدم مسؤولاً
         
         // بناء الاستعلام
-        const query = {
-            $or: [
-                { userId: null }, // الردود العامة
-            ]
-        };
-        if (userId) {
-            query.$or.push({ userId: userId }); // الردود الخاصة بالمستخدم
+        let query = {};
+        
+        if (isAdmin) {
+            // المسؤولون يمكنهم رؤية جميع الردود السريعة
+            query = {}; // استعلام فارغ يجلب كل الردود
+        } else {
+            // المستخدمون العاديون يرون فقط الردود العامة والردود الخاصة بهم
+            query = {
+                $or: [
+                    { userId: null }, // الردود العامة
+                ]
+            };
+            if (userId) {
+                query.$or.push({ userId: userId }); // الردود الخاصة بالمستخدم
+            }
         }
 
         const quickReplies = await QuickReply.find(query).sort({ shortcut: 1 }); // ترتيب حسب الاختصار
@@ -30,8 +39,8 @@ exports.getQuickReplies = async (req, res) => {
 exports.createQuickReply = async (req, res) => {
     try {
         const { shortcut, text } = req.body;
-        // افتراض أن المستخدم يريد إنشاء رد خاص به (إذا كان مسجلاً دخوله)
-        const userId = req.user ? req.user._id : null;
+        // تعيين userId كـ null لجعل الرد عاماً يظهر لجميع المستخدمين
+        const userId = null;
 
         if (!shortcut || !text) {
             return res.status(400).json({ message: 'الاختصار ونص الرد مطلوبان' });
@@ -58,7 +67,7 @@ exports.createQuickReply = async (req, res) => {
         const newQuickReply = new QuickReply({
             shortcut: shortcut.toLowerCase(), // حفظ الاختصار بحروف صغيرة
             text,
-            userId // سيكون null إذا لم يكن المستخدم مسجل دخوله
+            userId // سيكون null لجعل الرد عاماً
         });
 
         await newQuickReply.save();
