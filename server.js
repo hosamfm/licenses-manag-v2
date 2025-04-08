@@ -40,6 +40,32 @@ if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// إضافة وسيط لتقليل السجلات في بيئة الإنتاج (Render)
+app.use((req, res, next) => {
+  // تجاهل تسجيل طلبات Socket.io
+  if (req.url.includes('/socket.io')) {
+    return next();
+  }
+  
+  // تجاهل تسجيل طلبات ملفات ثابتة
+  if (req.url.match(/\.(css|js|jpg|png|ico|svg|woff|woff2|ttf|mp3|wav)$/)) {
+    return next();
+  }
+  
+  // تجاهل التسجيل إذا كنا في بيئة الإنتاج
+  if (process.env.NODE_ENV === 'production') {
+    // تسجيل فقط لطلبات API المهمة
+    if (req.method !== 'GET' && !req.url.includes('/socket.io')) {
+      console.log(`[${req.method}] ${req.url}`);
+    }
+    return next();
+  }
+  
+  // في بيئة التطوير، تسجيل كل شيء
+  console.log(`[${req.method}] ${req.url}`);
+  next();
+});
+
 // زيادة الحد الأقصى لحجم الطلب لاستيعاب صور الملف الشخصي (Base64)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
