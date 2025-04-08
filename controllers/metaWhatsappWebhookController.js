@@ -327,13 +327,17 @@ exports.handleIncomingMessages = async (messages, meta) => {
           // التحقق مما إذا كانت الرسالة تحتوي على معلومات ملف تعريف
           if (msg.contacts && msg.contacts.length > 0) {
             const contact = msg.contacts[0];
+            
+            // حفظ بيانات جهة الاتصال كاملة
             conversationInstance.customerData = contact;
             
-            // تحديث اسم العميل إذا كان متوفراً
-            if (contact.name) {
-              conversationInstance.customerName = contact.name.formatted_name || 
-                                               contact.name.first_name || 
-                                               conversationInstance.customerName;
+            // استخراج اسم العميل من بيانات الملف الشخصي
+            if (contact.profile && contact.profile.name) {
+              logger.info('metaWhatsappWebhookController', 'تعيين اسم العميل للمحادثة الجديدة', {
+                name: contact.profile.name,
+                phoneNumber: phone
+              });
+              conversationInstance.customerName = contact.profile.name;
             }
           } 
           // إذا لم تكن معلومات الملف الشخصي متوفرة في الرسالة وليست متوفرة في المحادثة
@@ -382,10 +386,17 @@ exports.handleIncomingMessages = async (messages, meta) => {
           // إضافة معلومات الملف الشخصي إذا كانت متوفرة
           if (msg.contacts && msg.contacts.length > 0) {
             const contact = msg.contacts[0];
+            
+            // حفظ بيانات جهة الاتصال كاملة
             conversationData.customerData = contact;
             
-            if (contact.name) {
-              conversationData.customerName = contact.name.formatted_name || contact.name.first_name;
+            // استخراج اسم العميل من بيانات الملف الشخصي
+            if (contact.profile && contact.profile.name) {
+              logger.info('metaWhatsappWebhookController', 'تعيين اسم العميل للمحادثة الجديدة', {
+                name: contact.profile.name,
+                phoneNumber: phone
+              });
+              conversationData.customerName = contact.profile.name;
             }
           } 
           // محاولة الحصول على معلومات الملف الشخصي من الخدمة إذا لم تكن متوفرة في الرسالة
