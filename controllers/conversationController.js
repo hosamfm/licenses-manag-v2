@@ -11,7 +11,6 @@
 const mongoose = require('mongoose');
 const Conversation = require('../models/Conversation');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
-const WhatsappChannel = require('../models/WhatsAppChannel');
 const User = require('../models/User');
 const WhatsappMedia = require('../models/WhatsappMedia');
 const logger = require('../services/loggerService');
@@ -20,6 +19,8 @@ const mediaService = require('../services/mediaService');
 const conversationService = require('../services/conversationService');
 const notificationSocketService = require('../services/notificationSocketService');
 const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
+const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
+const whatsappMediaController = require('./whatsappMediaController');
 
 /**
  * استخراج المنشنات من محتوى النص
@@ -556,7 +557,7 @@ exports.replyToConversation = async (req, res) => {
 
     // تحديث آخر رسالة
     conversation.lastMessageAt = new Date();
-    conversation.lastMessage = content || 'مرفق وسائط';
+    conversation.lastMessage = content || (mediaId ? 'مرفق وسائط' : 'رسالة رد'); // تحديث النص ليعكس وجود وسائط
     // إذا كانت المحادثة مغلقة، نفتحها تلقائياً
     if (conversation.status === 'closed') {
       conversation.status = 'open';
@@ -621,7 +622,10 @@ exports.replyToConversation = async (req, res) => {
       // التحقق من وجود وسائط
       if (mediaId && mediaType) {
         // جلب معلومات الوسائط
-        const whatsappMediaController = require('./whatsappMediaController');
+        // --- إزالة تعريف مكرر ---
+        // const whatsappMediaController = require('./whatsappMediaController');
+        // --- نهاية الإزالة ---
+        
         const media = await WhatsappMedia.findById(mediaId);
         
         if (!media) {
