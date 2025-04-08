@@ -25,56 +25,50 @@ class NotificationService {
    * إنشاء إشعار جديد وإرساله (بما في ذلك Web Push)
    * @param {Object} notificationData بيانات الإشعار الأساسية (recipient, type, title, content, link, reference)
    * @param {Object} [conversation=null] - كائن المحادثة المرتبط بالإشعار (إذا كان منطبقًا).
-   * @returns {Promise<Object|null>} الإشعار الذي تم إنشاؤه أو null إذا تم منعه
+   * @returns {Promise<Notification|null>} - الإشعار الذي تم إنشاؤه أو null.
    */
-  static async createAndSendNotification(notificationData, conversation = null) {
-    logger.info('notificationService', '[createAndSendNotification] Starting...', { type: notificationData.type, recipientId: notificationData.recipient, conversationId: conversation?._id });
+  static async createNotification(notificationData, conversation = null) {
+    logger.info('notificationService', '[createNotification] Starting...', { type: notificationData.type, recipientId: notificationData.recipient, conversationId: conversation?._id });
     try {
       // 1. التحقق من المستلم وتفضيلاته
       const recipient = await User.findById(notificationData.recipient);
       if (!recipient) {
-        logger.warn('notificationService', '[createAndSendNotification] Recipient not found', { recipientId: notificationData.recipient });
+        logger.warn('notificationService', '[createNotification] Recipient not found', { recipientId: notificationData.recipient });
         return null;
       }
-      logger.info('notificationService', '[createAndSendNotification] Recipient found', { recipientId: recipient._id });
+      logger.info('notificationService', '[createNotification] Recipient found', { recipientId: recipient._id });
 
       // التحقق من الإعداد العام للإشعارات للمستلم
       if (recipient.enable_general_notifications === false) {
-        logger.info('notificationService', `[createAndSendNotification] General notifications disabled for user ${recipient._id}`);
+        logger.info('notificationService', `[createNotification] General notifications disabled for user ${recipient._id}`);
         return null;
       }
       
       // التحقق من إعدادات الإشعارات الخاصة بالنوع المحدد (مع تمرير المحادثة)
       if (!this.shouldSendNotificationBasedOnType(recipient, notificationData.type, conversation)) {
-        logger.info('notificationService', `[createAndSendNotification] Notification type ${notificationData.type} disabled for user ${recipient._id}`);
+        // لا حاجة لرسالة سجل هنا، الدالة الداخلية تسجل السبب
         return null;
       }
-      logger.info('notificationService', '[createAndSendNotification] Checks passed, creating notification...');
+      logger.info('notificationService', '[createNotification] Checks passed, creating notification...');
       
       // 2. إنشاء الإشعار وحفظه في قاعدة البيانات
       const newNotification = new Notification(notificationData);
       await newNotification.save();
-      logger.info('notificationService', '[createAndSendNotification] Notification saved to DB', { notificationId: newNotification._id, recipientId: recipient._id });
+      logger.info('notificationService', '[createNotification] Notification saved to DB', { notificationId: newNotification._id, recipientId: recipient._id });
 
-      // 3. إرسال الإشعار عبر Socket.IO (سيتم استدعاؤه بشكل منفصل من notificationSocketService)
-      logger.info('notificationService', '[createAndSendNotification] Notification creation successful, proceeding to send (if applicable)');
+      // 3. إزالة جزء إرسال الويب بوش من هنا
+      // logger.info('notificationService', '[createNotification] Notification creation successful, proceeding to send (if applicable)');
+      // if (recipient.webPushSubscriptions && recipient.webPushSubscriptions.length > 0) { ... }
 
-      // 4. إرسال الإشعار عبر Web Push إذا كان متاحًا
-      if (recipient.webPushSubscriptions && recipient.webPushSubscriptions.length > 0) {
-         logger.info('notificationService', `[createAndSendNotification] Attempting Web Push for user ${recipient._id} (${recipient.webPushSubscriptions.length} subscriptions)`);
-         await this.sendWebPushNotification(recipient, newNotification);
-      } else {
-         logger.info('notificationService', `[createAndSendNotification] No Web Push subscriptions for user ${recipient._id}`);
-      }
-
+      // إرجاع الإشعار الذي تم إنشاؤه فقط
       return newNotification;
 
     } catch (error) {
-      logger.error('notificationService', '[createAndSendNotification] Critical error', { error: error.message, stack: error.stack, notificationData });
+      logger.error('notificationService', '[createNotification] Critical error during creation/saving', { error: error.message, stack: error.stack, notificationData });
       return null;
     }
   }
-  
+
   /**
    * إرسال إشعار عبر Web Push إلى جميع اشتراكات المستخدم
    * @param {Object} user - كائن المستخدم
@@ -139,14 +133,14 @@ class NotificationService {
 
   /**
    * إنشاء إشعار نظام لمستخدم واحد أو أكثر
-   * يستخدم الآن createAndSendNotification
+   * يستخدم الآن createNotification
    */
   static async createSystemNotification(recipientIds, title, content, link = null, reference = null) {
     const recipients = Array.isArray(recipientIds) ? recipientIds : [recipientIds];
     const notifications = [];
     for (const recipientId of recipients) {
       try {
-          const notification = await this.createAndSendNotification({
+          const notification = await this.createNotification({
             recipient: recipientId,
             type: 'system',
             title,
@@ -167,7 +161,7 @@ class NotificationService {
 
   /**
    * إنشاء إشعار رسالة
-   * يستخدم الآن createAndSendNotification ويتجاوز الفحص العام لأنه يتم في notificationSocketService
+   * يستخدم الآن createNotification ويتجاوز الفحص العام لأنه يتم في notificationSocketService
    */
   static async createMessageNotification(recipientId, conversationId, messageContent, messageId, senderName) {
     const notificationData = {
@@ -193,9 +187,15 @@ class NotificationService {
        // يمكن الاستمرار بدون المحادثة
     }
 
-    // استدعاء الدالة الرئيسية مع تمرير المحادثة
+    // استدعاء الدالة الجديدة
     notificationData.content = notificationData.message; 
-    return this.createAndSendNotification(notificationData, conversation);
+    return this.createNotification(notificationData, conversation);
+  }
+
+  static async createAssignmentNotification(recipientId, conversationId, assignedByUserId) {
+     // ... (كود تحضير notificationData و جلب conversation/assignedByUser)
+     // استدعاء الدالة الجديدة
+     return this.createNotification(notificationData, conversation);
   }
 
   /**

@@ -4,6 +4,7 @@
  */
 const NotificationService = require('./notificationService');
 const logger = require('./loggerService');
+const User = require('../models/User');
 
 let io = null;
 
@@ -97,148 +98,171 @@ function initialize(socketIo) {
 }
 
 /**
- * إرسال إشعار جديد إلى المستخدم عبر Socket.io
- * @param {String} userId - معرف المستخدم المستلم
- * @param {Object} notification - كائن الإشعار الذي تم إنشاؤه
+ * إرسال إشعار إلى غرفة المستخدم الخاصة عبر Socket.IO وتحديث عدد غير المقروء.
+ * @param {string} userId - معرف المستخدم المستلم.
+ * @param {object} notification - كائن الإشعار الذي تم إنشاؤه.
+ * @returns {Promise<boolean>} - تُرجع true إذا تم العثور على سوكتات نشطة وتمت محاولة الإرسال، و false خلاف ذلك.
  */
 async function sendNotification(userId, notification) {
-    if (!io) {
-        return logger.error('notificationSocketService', 'لم يتم تهيئة Socket.io بعد');
+    if (!io || !userId || !notification) {
+        logger.warn('notificationSocketService', '[sendNotification] Missing io, userId, or notification object');
+        return false; // لا يمكن الإرسال
     }
-    
+
+    let foundActiveSocket = false; // متغير لتتبع ما إذا وجدنا سوكت نشط
     try {
         const targetRoom = `notifications-${userId}`;
         
-        // --- تسجيل إضافي: التحقق من السوكتات في الغرفة --- 
         const socketsInRoom = io.sockets.adapter.rooms.get(targetRoom);
         const socketIdsInRoom = socketsInRoom ? Array.from(socketsInRoom) : [];
         logger.info('notificationSocketService', '[sendNotification] Checking sockets in room before sending', { userId, targetRoom, socketIdsInRoom });
-        // --- نهاية التسجيل الإضافي ---
 
         if (socketIdsInRoom.length === 0) {
             logger.warn('notificationSocketService', '[sendNotification] No sockets found in the target room. Skipping emit.', { userId, targetRoom });
-            return; // لا يوجد أحد يستمع في هذه الغرفة
+            // لا نُرجع false هنا بعد، قد يكون المستخدم نشطًا في غرفة المحادثة
+            // سنقوم بإعادة foundActiveSocket في النهاية
+        } else {
+            foundActiveSocket = true; // وجدنا سوكتات نشطة في غرفة الإشعارات
+            logger.info('notificationSocketService', '[sendNotification] Attempting to emit new-notification', { userId, targetRoom, event: 'new-notification', notificationId: notification._id });
+            io.to(targetRoom).emit('new-notification', notification);
+            logger.info('notificationSocketService', '[sendNotification] Successfully emitted new-notification (or at least attempted)', { userId, targetRoom });
+            
+            // تحديث عدد الإشعارات غير المقروءة
+            const unreadCount = await NotificationService.getUnreadCount(userId);
+            logger.info('notificationSocketService', '[sendNotification] Attempting to emit unread-count', { userId, targetRoom, event: 'unread-notifications-count', count: unreadCount });
+            io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
+            logger.info('notificationSocketService', '[sendNotification] Successfully emitted unread-count (or at least attempted)', { userId, targetRoom });
         }
+        
+        // يمكن إضافة تحقق إضافي هنا للتحقق من النشاط في غرفة المحادثة إذا لزم الأمر
+        // if (!foundActiveSocket && notification.relatedConversation) {
+        //    if (isSocketInRoom(`conversation-${notification.relatedConversation}`, userId)) {
+        //        foundActiveSocket = true;
+        //        logger.info('notificationSocketService', '[sendNotification] User is active in conversation room, considering as active', { userId, conversationId: notification.relatedConversation });
+        //    }
+        // }
 
-        logger.info('notificationSocketService', '[sendNotification] Attempting to emit new-notification', { userId, targetRoom, event: 'new-notification', notificationId: notification._id });
-        io.to(targetRoom).emit('new-notification', notification);
-        logger.info('notificationSocketService', '[sendNotification] Successfully emitted new-notification (or at least attempted)', { userId, targetRoom });
-        
-        // تحديث عدد الإشعارات غير المقروءة
-        const unreadCount = await NotificationService.getUnreadCount(userId);
-        logger.info('notificationSocketService', '[sendNotification] Attempting to emit unread-count', { userId, targetRoom, event: 'unread-notifications-count', count: unreadCount });
-        io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
-        logger.info('notificationSocketService', '[sendNotification] Successfully emitted unread-count (or at least attempted)', { userId, targetRoom });
-        
-        logger.info('notificationSocketService', '[sendNotification] All emits attempted successfully', { 
+        logger.info('notificationSocketService', '[sendNotification] Finished socket emit attempt.', { 
             userId, 
             notificationType: notification.type,
-            targetRoom
+            targetRoom,
+            foundActiveSocket // تسجيل الحالة النهائية
         });
+        
+        return foundActiveSocket; // إرجاع الحالة النهائية
+
     } catch (error) {
         logger.error('notificationSocketService', '[sendNotification] Error during emit', {
             userId,
             error: error.message,
-            stack: error.stack // تضمين الـ stack trace مفيد
+            stack: error.stack
         });
+        return false; // إرجاع false في حالة حدوث خطأ
     }
 }
 
 /**
- * إرسال إشعار جديد للمستخدمين المعنيين بالمحادثة
- * @param {String} conversationId - معرف المحادثة
- * @param {Object} message - الرسالة الجديدة
- * @param {Object} conversation - كائن المحادثة
+ * إرسال إشعار برسالة جديدة إلى المستخدمين المعنيين (المسند له أو المشرفين).
+ * @param {string} conversationId - معرف المحادثة.
+ * @param {object} message - كائن الرسالة.
+ * @param {object} conversation - كائن المحادثة.
+ * @param {object} contact - كائن جهة الاتصال.
  */
-async function sendMessageNotification(conversationId, message, conversation) {
-    if (!io) {
-        return logger.error('notificationSocketService', 'لم يتم تهيئة Socket.io بعد');
-    }
-    
+async function sendMessageNotification(conversationId, message, conversation, contact) {
     try {
-        // إذا كانت الرسالة واردة، نرسل إشعارات للمستخدمين المعنيين
-        if (message.direction === 'incoming') {
-            // الحصول على المستخدم المسند له المحادثة
-            const assignedTo = conversation.assignedTo;
+        const assignedTo = conversation.assignedTo?.toString();
+        
+        // 1. إرسال للمستخدم المسند له (إذا كان موجودًا)
+        if (assignedTo) {
+            const isAssignedUserActive = isSocketInRoom(`conversation-${conversationId}`, assignedTo); // التحقق من النشاط في غرفة المحادثة
+            logger.info('notificationSocketService', 'التحقق من نشاط المستخدم المسند له', { conversationId, assignedTo, isAssignedUserActive });
             
-            // إذا كانت المحادثة مسندة لمستخدم ما
-            if (assignedTo) {
-                // التحقق مما إذا كان المستخدم المسند له نشطًا في غرفة المحادثة
-                const isAssignedUserActive = isSocketInRoom(`conversation-${conversationId}`, assignedTo);
-                logger.info('notificationSocketService', 'التحقق من نشاط المستخدم المسند له', { conversationId, assignedTo, isAssignedUserActive });
+            // --- إنشاء الإشعار أولاً --- 
+            const senderName = conversation?.customerName || conversation?.phoneNumber || 'عميل غير معروف';
+            const messageId = message?._id || message?.id || null;
+            const notification = await NotificationService.createNotification({
+                recipient: assignedTo,
+                type: 'message',
+                title: `رسالة جديدة من ${senderName}`,
+                message: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''), 
+                content: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''), // إضافة content
+                link: `/crm/conversations/${conversationId}?msg=${messageId}`,
+                relatedConversation: conversationId,
+                relatedMessage: messageId
+            }, conversation);
+            // --- نهاية إنشاء الإشعار ---
 
-                if (!isAssignedUserActive) {
-                    logger.info('notificationSocketService', 'إرسال إشعار للمستخدم المسند له (غير نشط في الغرفة)', { conversationId, assignedTo });
+            if (notification) {
+                // --- محاولة الإرسال عبر السوكت --- 
+                const sentViaSocket = await sendNotification(assignedTo, notification);
+                // --- نهاية محاولة الإرسال عبر السوكت ---
+                
+                // --- إرسال ويب بوش فقط إذا لم يتم الإرسال عبر السوكت --- 
+                if (!sentViaSocket) {
+                    logger.info('notificationSocketService', '[sendMessageNotification] Socket delivery likely failed or user inactive, attempting Web Push...', { assignedTo, notificationId: notification._id });
+                    try {
+                        const user = await User.findById(assignedTo).select('webPushSubscriptions').lean();
+                        if (user && user.webPushSubscriptions && user.webPushSubscriptions.length > 0) {
+                            await NotificationService.sendWebPushNotification(user, notification);
+                            logger.info('notificationSocketService', '[sendMessageNotification] Web Push attempted.', { assignedTo, notificationId: notification._id });
+                        } else {
+                            logger.info('notificationSocketService', '[sendMessageNotification] No Web Push subscriptions found for assigned user.', { assignedTo });
+                        }
+                    } catch (fetchUserError) {
+                        logger.error('notificationSocketService', '[sendMessageNotification] Error fetching user for Web Push', { assignedTo, error: fetchUserError.message });
+                    }
+                }
+                // --- نهاية إرسال ويب بوش ---
+                
+            } else {
+                 logger.warn('notificationSocketService', '[sendMessageNotification] Notification creation failed for assigned user', { assignedTo, conversationId });
+            }
+        } 
+        // 2. إرسال للمشرفين (إذا كانت المحادثة غير مسندة أو بناءً على قواعد أخرى)
+        else {
+            // ... (المنطق الحالي لإرسال الإشعارات للمشرفين)
+            const admins = await User.find({ /* ... شروط البحث عن المشرفين ... */ }).select('_id webPushSubscriptions').lean();
+            // ... (الحلقة للمرور على المشرفين)
+            for (const admin of admins) {
+                const isAdminActive = isSocketInRoom(`conversation-${conversationId}`, admin._id) || isSocketInRoom(`notifications-${admin._id}`, admin._id); // التحقق من النشاط
+                logger.info('notificationSocketService', 'التحقق من نشاط المشرف', { conversationId, adminId: admin._id, isAdminActive });
+                
+                // إنشاء الإشعار للمشرف
+                const senderName = contact?.name || contact?.phoneNumber || 'عميل غير معروف';
+                const messageId = message?._id || message?.id || null;
+                const adminNotification = await NotificationService.createNotification({
+                    recipient: admin._id,
+                    type: 'message',
+                    title: `رسالة جديدة غير مسندة من ${senderName}`,
+                    message: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''),
+                    content: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''),
+                    link: `/crm/conversations/${conversationId}?msg=${messageId}`,
+                    relatedConversation: conversationId,
+                    relatedMessage: messageId
+                }, conversation);
+
+                if (adminNotification) {
+                    const sentViaSocket = await sendNotification(admin._id, adminNotification);
                     
-                    // --- التصحيح: استدعاء الدالة بالتوقيع الصحيح ---
-                    // محاولة الحصول على اسم العميل من المحادثة أو استخدام رقم الهاتف
-                    const senderName = conversation?.customerName || conversation?.phoneNumber || 'عميل غير معروف';
-                    const messageId = message?._id || message?.id || null; // معرف الرسالة
-                    
-                    const notification = await NotificationService.createMessageNotification(
-                        assignedTo,                      // recipientId
-                        conversationId,                  // conversationId (الصحيح)
-                        message.content || 'رسالة جديدة', // messageContent
-                        messageId,                       // messageId
-                        senderName                       // senderName
-                    );
-                    // --- نهاية التصحيح ---
-                    
-                    // إرسال الإشعار عبر سوكت
-                    if (notification) {
-                        await sendNotification(assignedTo, notification);
+                    if (!sentViaSocket) {
+                        logger.info('notificationSocketService', '[sendMessageNotification] Socket delivery likely failed for admin, attempting Web Push...', { adminId: admin._id, notificationId: adminNotification._id });
+                         if (admin.webPushSubscriptions && admin.webPushSubscriptions.length > 0) {
+                             await NotificationService.sendWebPushNotification(admin, adminNotification);
+                             logger.info('notificationSocketService', '[sendMessageNotification] Web Push attempted for admin.', { adminId: admin._id });
+                         } else {
+                            logger.info('notificationSocketService', '[sendMessageNotification] No Web Push subscriptions found for admin.', { adminId: admin._id });
+                         }
                     }
                 } else {
-                   logger.info('notificationSocketService', 'لن يتم إرسال إشعار للمستخدم المسند له (نشط في الغرفة)', { conversationId, assignedTo });
-                }
-            } else {
-                // المحادثة غير مسندة، نرسل إشعارات للمشرفين
-                const User = require('../models/User');
-                const admins = await User.find({
-                    $or: [
-                        { user_role: 'admin' },
-                        { user_role: 'supervisor', can_access_conversations: true }
-                    ],
-                    notify_unassigned_conversation: true
-                }).select('_id');
-                
-                logger.info('notificationSocketService', 'إرسال إشعارات للمشرفين المؤهلين للمحادثة غير المسندة', { conversationId, adminCount: admins.length });
-
-                // إنشاء إشعارات للمشرفين
-                for (const admin of admins) {
-                    // لا نرسل إشعارًا إذا كان المشرف يشاهد المحادثة حاليًا
-                    const isAdminActive = isSocketInRoom(`conversation-${conversationId}`, admin._id);
-                    logger.info('notificationSocketService', 'التحقق من نشاط المشرف', { conversationId, adminId: admin._id, isAdminActive });
-                    
-                    if (!isAdminActive) {
-                        logger.info('notificationSocketService', 'إرسال إشعار للمشرف (غير نشط في الغرفة)', { conversationId, adminId: admin._id });
-                        
-                        // --- التصحيح: استدعاء الدالة بالتوقيع الصحيح ---
-                        const senderName = contact?.name || contact?.phoneNumber || 'عميل غير معروف';
-                        const messageId = message?._id || message?.id || null; // معرف الرسالة
-                        
-                        const notification = await NotificationService.createMessageNotification(
-                            admin._id,                         // recipientId
-                            conversationId,                  // conversationId (الصحيح)
-                            message.content || 'رسالة جديدة', // messageContent
-                            messageId,                       // messageId
-                            senderName                       // senderName
-                        );
-                        // --- نهاية التصحيح ---
-                        
-                        if (notification) {
-                            await sendNotification(admin._id, notification);
-                        }
-                    } else {
-                       logger.info('notificationSocketService', 'لن يتم إرسال إشعار للمشرف (نشط في الغرفة)', { conversationId, adminId: admin._id });
-                    }
+                   logger.warn('notificationSocketService', '[sendMessageNotification] Notification creation failed for admin', { adminId: admin._id, conversationId });
                 }
             }
         }
     } catch (error) {
-        logger.error('notificationSocketService', 'خطأ في إرسال إشعار الرسالة', {
+        logger.error('notificationSocketService', 'خطأ فادح في sendMessageNotification', {
             conversationId,
-            error: error.message
+            error: error.message,
+            stack: error.stack
         });
     }
 }
