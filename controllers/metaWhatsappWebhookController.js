@@ -314,35 +314,38 @@ exports.handleIncomingMessages = async (messages, meta) => {
           continue;
         }
         
-        // البحث عن المحادثة أو إنشاء واحدة جديدة
+        // البحث عن المحادثة باستخدام phone_number_id
         const phone = msg.from;
-        let conversationInstance = await Conversation.findOne({
-          phoneNumber: phone, 
-          channelId: channel._id 
-        });
+        let conversationInstance = await Conversation.findOne({ phoneNumber: phone });
         
         let isNewConversation = false;
-        if (!conversationInstance) {
+        if (conversationInstance) {
+          // تحديث معرف القناة ليعكس آخر قناة واردة
+          conversationInstance.channelId = channel._id; 
+
+          // التحقق من حالة المحادثة وإعادة فتحها تلقائيًا إذا كانت مغلقة
+          if (conversationInstance.status === 'closed') {
+            /* logger.info('metaWhatsappWebhookController', 'إعادة فتح المحادثة المغلقة تلقائيًا', { conversationId: conversationInstance._id }); */
+            await conversationInstance.automaticReopen();
+            // تأكد من تحديث lastMessageAt أيضاً هنا إذا لم يتم ذلك داخل automaticReopen
+            conversationInstance.lastMessageAt = new Date(); 
+          } else {
+            // إذا لم تكن مغلقة، فقط نحدث وقت آخر رسالة
+            conversationInstance.lastMessageAt = new Date();
+          }
+          // حفظ التغييرات (معرف القناة المحدث + الوقت + الحالة المحتملة)
+          await conversationInstance.save();
+        } else {
           /* logger.info('metaWhatsappWebhookController', 'إنشاء محادثة جديدة', { phone, channelId: channel._id }); */
           isNewConversation = true;
-          // إنشاء محادثة جديدة
+          // إنشاء محادثة جديدة باستخدام القناة الحالية
           conversationInstance = await Conversation.create({
-            channelId: channel._id,
+            channelId: channel._id, // استخدام معرف القناة للرسالة الأولى
             phoneNumber: phone,
             status: 'open',
             lastMessageAt: new Date(),
             lastOpenedAt: new Date()
           });
-        } else {
-          // التحقق من حالة المحادثة وإعادة فتحها تلقائيًا إذا كانت مغلقة
-          if (conversationInstance.status === 'closed') {
-            /* logger.info('metaWhatsappWebhookController', 'إعادة فتح المحادثة المغلقة تلقائيًا', { conversationId: conversationInstance._id }); */
-            await conversationInstance.automaticReopen();
-          } else {
-            // إذا لم تكن مغلقة، فقط نحدث وقت آخر رسالة
-            conversationInstance.lastMessageAt = new Date();
-            await conversationInstance.save();
-          }
         }
 
         // الحصول على نسخة lean من المحادثة للاستخدام في إنشاء الرسالة (إذا لزم الأمر)
