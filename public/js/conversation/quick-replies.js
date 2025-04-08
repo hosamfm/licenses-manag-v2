@@ -1,13 +1,20 @@
 'use strict';
 
-// وحدة الردود السريعة
+/**
+ * وحدة الردود السريعة - Quick Replies Module
+ * تضيف القدرة على البحث عن ردود سريعة واستخدامها
+ */
+
 (function(window) {
+    // تعريف المتغيرات الخاصة بالوحدة
     let quickRepliesCache = [];
     let fetchTimestamp = 0;
-    let suggestionsContainer = null;
-    let replyMessageInput = null;
-    let messageInputContainer = null;
-    let conversationMainContainer = null;
+    let replyMessageInput;
+    let suggestionsContainer;
+    let messageInputContainer;
+    let conversationMainContainer;
+    let isInitialized = false;
+    let selectedSuggestionIndex = -1;
 
     // دالة لجلب الردود السريعة
     async function fetchQuickReplies() {
