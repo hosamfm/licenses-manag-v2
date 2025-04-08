@@ -26,6 +26,11 @@ const conversationSchema = new mongoose.Schema({
     type: Object,
     default: {} // لتخزين معلومات الملف الشخصي للعميل الواردة من واتساب
   },
+  contactId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Contact',
+    default: null // معرف جهة الاتصال المرتبطة في نظام جهات الاتصال
+  },
   status: { 
     type: String, 
     enum: ['open', 'assigned', 'closed'], 

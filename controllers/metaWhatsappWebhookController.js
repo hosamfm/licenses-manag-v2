@@ -7,6 +7,7 @@ const SemMessage = require('../models/SemMessage');
 const WhatsAppChannel = require('../models/WhatsAppChannel');
 const Conversation = require('../models/Conversation');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
+const Contact = require('../models/Contact');
 const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const whatsappMediaController = require('./whatsappMediaController');
@@ -319,19 +320,35 @@ exports.handleIncomingMessages = async (messages, meta) => {
         let conversationInstance = await Conversation.findOne({ phoneNumber: phone });
         
         let isNewConversation = false;
+        
+        // تحضير بيانات العميل من الرسالة (إذا وجدت)
+        const customerData = msg.contacts && msg.contacts.length > 0 ? msg.contacts[0] : null;
+        
+        // البحث عن جهة اتصال موجودة أو إنشاء واحدة جديدة
+        let contact = null;
+        try {
+          contact = await findOrCreateContact(phone, customerData);
+        } catch (contactError) {
+          logger.error('metaWhatsappWebhookController', 'خطأ في معالجة جهة الاتصال', contactError);
+        }
+        
         if (conversationInstance) {
           // تحديث معرف القناة ليعكس آخر قناة واردة
           conversationInstance.channelId = channel._id; 
 
+          // ربط المحادثة بجهة الاتصال إذا وجدت ولم تكن مرتبطة من قبل
+          if (contact && !conversationInstance.contactId) {
+            conversationInstance.contactId = contact._id;
+          }
+
           // التحقق مما إذا كانت الرسالة تحتوي على معلومات ملف تعريف
-          if (msg.contacts && msg.contacts.length > 0) {
-            const contact = msg.contacts[0];
-            conversationInstance.customerData = contact;
+          if (customerData) {
+            conversationInstance.customerData = customerData;
             
             // تحديث اسم العميل إذا كان متوفراً
-            if (contact.name) {
-              conversationInstance.customerName = contact.name.formatted_name || 
-                                               contact.name.first_name || 
+            if (customerData.name) {
+              conversationInstance.customerName = customerData.name.formatted_name || 
+                                               customerData.name.first_name || 
                                                conversationInstance.customerName;
             }
           }
@@ -361,13 +378,22 @@ exports.handleIncomingMessages = async (messages, meta) => {
             lastOpenedAt: new Date()
           };
           
-          // إضافة معلومات الملف الشخصي إذا كانت متوفرة
-          if (msg.contacts && msg.contacts.length > 0) {
-            const contact = msg.contacts[0];
-            conversationData.customerData = contact;
+          // ربط المحادثة بجهة الاتصال إذا وجدت
+          if (contact) {
+            conversationData.contactId = contact._id;
             
-            if (contact.name) {
-              conversationData.customerName = contact.name.formatted_name || contact.name.first_name;
+            // استخدام اسم جهة الاتصال إذا لم يكن هناك اسم في بيانات العميل
+            if (!customerData || !customerData.name) {
+              conversationData.customerName = contact.name;
+            }
+          }
+          
+          // إضافة معلومات الملف الشخصي إذا كانت متوفرة
+          if (customerData) {
+            conversationData.customerData = customerData;
+            
+            if (customerData.name) {
+              conversationData.customerName = customerData.name.formatted_name || customerData.name.first_name;
             }
           }
           
@@ -643,5 +669,66 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
     }); */
   } catch (error) {
     logger.error('metaWhatsappWebhookController', 'خطأ في معالجة نهاية إضافة الرسالة', error);
+  }
+}
+
+/**
+ * البحث عن جهة اتصال أو إنشاء واحدة جديدة إذا لم تكن موجودة
+ * @param {string} phoneNumber - رقم هاتف العميل
+ * @param {Object} customerData - بيانات ملف تعريف العميل من واتساب
+ */
+async function findOrCreateContact(phoneNumber, customerData = null) {
+  try {
+    // البحث عن جهة اتصال موجودة بواسطة رقم الهاتف
+    let contact = await Contact.findByPhoneNumber(phoneNumber);
+    
+    // إذا كانت جهة الاتصال موجودة ولدينا بيانات جديدة، نقوم بتحديثها
+    if (contact && customerData) {
+      let isUpdated = false;
+      
+      // استخراج الاسم من بيانات العميل
+      if (customerData.name) {
+        const newName = customerData.name.formatted_name || customerData.name.first_name;
+        if (newName && (!contact.name || contact.name === 'غير معروف')) {
+          contact.name = newName;
+          isUpdated = true;
+        }
+      }
+      
+      // تحديث البريد الإلكتروني إذا كان متوفراً ولم يكن موجوداً من قبل
+      if (customerData.emails && customerData.emails.length > 0 && !contact.email) {
+        contact.email = customerData.emails[0].email;
+        isUpdated = true;
+      }
+      
+      // حفظ التغييرات إذا كان هناك تحديث
+      if (isUpdated) {
+        contact.updatedAt = new Date();
+        await contact.save();
+      }
+    }
+    
+    // إذا لم تكن جهة الاتصال موجودة، ننشئ واحدة جديدة
+    if (!contact) {
+      // تحضير اسم العميل من بيانات الملف الشخصي
+      let name = 'غير معروف';
+      if (customerData && customerData.name) {
+        name = customerData.name.formatted_name || customerData.name.first_name || name;
+      }
+      
+      // إنشاء جهة اتصال جديدة
+      contact = await Contact.create({
+        name: name,
+        phoneNumber: phoneNumber,
+        email: customerData && customerData.emails && customerData.emails.length > 0 ? customerData.emails[0].email : null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
+    
+    return contact;
+  } catch (error) {
+    logger.error('metaWhatsappWebhookController', 'خطأ في إيجاد أو إنشاء جهة اتصال', { error: error.message });
+    throw error;
   }
 }

@@ -284,3 +284,83 @@ exports.deleteContact = async (req, res) => {
     res.redirect('/crm/contacts');
   }
 };
+
+/**
+ * تحديث أو إنشاء جهات اتصال من المحادثات الموجودة
+ * هذه الوظيفة يمكن استخدامها في لوحة التحكم لترحيل البيانات
+ */
+exports.syncContactsFromConversations = async (req, res) => {
+  try {
+    // عدد جهات الاتصال التي تم تحديثها وإنشاؤها
+    let updatedCount = 0;
+    let createdCount = 0;
+    
+    // الحصول على جميع المحادثات التي ليس لها جهة اتصال مرتبطة
+    const conversations = await Conversation.find({
+      $or: [
+        { contactId: null },
+        { contactId: { $exists: false } }
+      ]
+    }).limit(1000); // تحديد العدد لتجنب استخدام الذاكرة بشكل مفرط
+    
+    for (const conversation of conversations) {
+      // البحث عن جهة اتصال موجودة بواسطة رقم الهاتف
+      let contact = await Contact.findByPhoneNumber(conversation.phoneNumber);
+      
+      // تحضير معلومات جهة الاتصال من بيانات المحادثة
+      let name = conversation.customerName || 'غير معروف';
+      let email = null;
+      
+      // استخراج البريد الإلكتروني من بيانات العميل إذا كانت موجودة
+      if (conversation.customerData && conversation.customerData.emails && conversation.customerData.emails.length > 0) {
+        email = conversation.customerData.emails[0].email;
+      }
+      
+      if (contact) {
+        // تحديث جهة الاتصال الموجودة إذا كانت البيانات أفضل
+        let isUpdated = false;
+        
+        // تحديث الاسم إذا كان فارغاً أو مجهولاً
+        if ((!contact.name || contact.name === 'غير معروف') && name !== 'غير معروف') {
+          contact.name = name;
+          isUpdated = true;
+        }
+        
+        // تحديث البريد الإلكتروني إذا كان فارغاً
+        if (!contact.email && email) {
+          contact.email = email;
+          isUpdated = true;
+        }
+        
+        // حفظ التغييرات إذا كان هناك تحديث
+        if (isUpdated) {
+          contact.updatedAt = new Date();
+          await contact.save();
+          updatedCount++;
+        }
+        
+      } else {
+        // إنشاء جهة اتصال جديدة
+        contact = await Contact.create({
+          name: name,
+          phoneNumber: conversation.phoneNumber,
+          email: email,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        createdCount++;
+      }
+      
+      // ربط المحادثة بجهة الاتصال
+      conversation.contactId = contact._id;
+      await conversation.save();
+    }
+    
+    req.flash('success', `تم مزامنة جهات الاتصال: تم إنشاء ${createdCount} وتحديث ${updatedCount} وربطها بالمحادثات`);
+    res.redirect('/crm/contacts');
+  } catch (error) {
+    logger.error('contactController', 'خطأ في مزامنة جهات الاتصال', { error: error.message });
+    req.flash('error', 'حدث خطأ أثناء مزامنة جهات الاتصال');
+    res.redirect('/crm/contacts');
+  }
+};
