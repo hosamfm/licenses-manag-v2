@@ -28,43 +28,31 @@ class NotificationService {
    * @returns {Promise<Notification|null>} - الإشعار الذي تم إنشاؤه أو null.
    */
   static async createNotification(notificationData, conversation = null) {
-    logger.info('notificationService', '[createNotification] Starting...', { type: notificationData.type, recipientId: notificationData.recipient, conversationId: conversation?._id });
     try {
-      // 1. التحقق من المستلم وتفضيلاته
-      const recipient = await User.findById(notificationData.recipient);
-      if (!recipient) {
+      // 1. التحقق من وجود المستخدم
+      const user = await User.findById(notificationData.recipient).lean();
+      if (!user) {
         logger.warn('notificationService', '[createNotification] Recipient not found', { recipientId: notificationData.recipient });
         return null;
       }
-      logger.info('notificationService', '[createNotification] Recipient found', { recipientId: recipient._id });
-
-      // التحقق من الإعداد العام للإشعارات للمستلم
-      if (recipient.enable_general_notifications === false) {
-        logger.info('notificationService', `[createNotification] General notifications disabled for user ${recipient._id}`);
+      
+      // 2. التحقق من تفضيلات المستخدم للإشعارات
+      const shouldSend = this.shouldSendNotificationBasedOnType(user, notificationData.type, conversation);
+      if (!shouldSend) {
         return null;
       }
       
-      // التحقق من إعدادات الإشعارات الخاصة بالنوع المحدد (مع تمرير المحادثة)
-      if (!this.shouldSendNotificationBasedOnType(recipient, notificationData.type, conversation)) {
-        // لا حاجة لرسالة سجل هنا، الدالة الداخلية تسجل السبب
-        return null;
-      }
-      logger.info('notificationService', '[createNotification] Checks passed, creating notification...');
+      // 3. إنشاء الإشعار
+      const notification = new Notification(notificationData);
+      await notification.save();
       
-      // 2. إنشاء الإشعار وحفظه في قاعدة البيانات
-      const newNotification = new Notification(notificationData);
-      await newNotification.save();
-      logger.info('notificationService', '[createNotification] Notification saved to DB', { notificationId: newNotification._id, recipientId: recipient._id });
-
-      // 3. إزالة جزء إرسال الويب بوش من هنا
-      // logger.info('notificationService', '[createNotification] Notification creation successful, proceeding to send (if applicable)');
-      // if (recipient.webPushSubscriptions && recipient.webPushSubscriptions.length > 0) { ... }
-
-      // إرجاع الإشعار الذي تم إنشاؤه فقط
-      return newNotification;
-
+      return notification;
     } catch (error) {
-      logger.error('notificationService', '[createNotification] Critical error during creation/saving', { error: error.message, stack: error.stack, notificationData });
+      logger.error('notificationService', '[createNotification] Error', { 
+        error: error.message, 
+        stack: error.stack, 
+        data: notificationData 
+      });
       return null;
     }
   }
@@ -75,7 +63,6 @@ class NotificationService {
    * @param {Object} notification - كائن الإشعار
    */
   static async sendWebPushNotification(user, notification) {
-    logger.info('notificationService', '[sendWebPushNotification] Starting...', { userId: user._id, notificationId: notification._id });
     if (!user || !notification || !user.webPushSubscriptions || user.webPushSubscriptions.length === 0) {
       return;
     }
@@ -95,9 +82,7 @@ class NotificationService {
 
     const promises = user.webPushSubscriptions.map(async (subscription) => {
       try {
-        logger.info('notificationService', `إرسال Web Push إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`);
         await webpush.sendNotification(subscription, payload);
-        logger.info('notificationService', `تم إرسال Web Push بنجاح إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`);
       } catch (error) {
         logger.error('notificationService', `خطأ في إرسال Web Push إلى ${subscription.endpoint.substring(0, 30)}... للمستخدم ${user._id}`, { errorMessage: error.message, statusCode: error.statusCode });
         
@@ -111,7 +96,6 @@ class NotificationService {
     });
 
     await Promise.all(promises);
-     logger.info('notificationService', `اكتملت محاولة إرسال Web Push لجميع اشتراكات المستخدم ${user._id}`);
   }
 
   /**
@@ -324,7 +308,6 @@ class NotificationService {
    */
   static shouldSendNotificationBasedOnType(user, notificationType, conversation = null) {
     if (!user || user.enable_general_notifications === false) {
-      logger.info('notificationService', `[shouldSendNotificationBasedOnType] Blocking: General notifications disabled for user ${user._id}`);
       return false; // الإشعارات العامة معطلة
     }
 
@@ -332,7 +315,6 @@ class NotificationService {
       case 'message':
         // إذا كان notify_any_message مفعلًا، أرسل دائمًا
         if (user.notify_any_message === true) {
-          logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${user._id} (notify_any_message enabled)`);
           return true;
         }
         
@@ -341,22 +323,18 @@ class NotificationService {
           const isAssignedToCurrentUser = conversation.assignedTo && conversation.assignedTo.toString() === user._id.toString();
           
           if (isAssignedToCurrentUser && user.notify_assigned_conversation === true) {
-            logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${user._id} (conversation assigned and notify_assigned_conversation enabled)`);
             return true; // المحادثة معينة له ويريد إشعارات المحادثات المعينة
           } else if (!conversation.assignedTo && user.notify_unassigned_conversation === true) {
-            logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing message notification for user ${user._id} (conversation unassigned and notify_unassigned_conversation enabled)`);
             return true; // المحادثة غير معينة ويريد إشعارات المحادثات غير المعينة
           }
         }
         
         // إذا لم يتحقق أي من الشروط السابقة، لا ترسل
-        logger.info('notificationService', `[shouldSendNotificationBasedOnType] Blocking message notification for user ${user._id} based on assignment and preferences. Conversation assigned: ${!!conversation?.assignedTo}, Assigned to self: ${conversation?.assignedTo?.toString() === user._id.toString()}, Notify assigned: ${user.notify_assigned_conversation}, Notify unassigned: ${user.notify_unassigned_conversation}`);
         return false;
 
       case 'assignment':
         // إشعارات التعيين تُرسل دائمًا إذا كانت الإشعارات العامة مفعلة
         // يمكن إضافة تفضيل خاص بها لاحقًا إذا لزم الأمر
-        logger.info('notificationService', `[shouldSendNotificationBasedOnType] Allowing assignment notification for user ${user._id} (general enabled)`);
         return true;
         
       // أضف حالات لأنواع إشعارات أخرى هنا

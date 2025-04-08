@@ -263,8 +263,6 @@
     // التحقق من وجود الرسالة مسبقاً حسب معرفها النهائي
     const messageExists = document.querySelector(`.message[data-message-id="${messageData._id}"]`);
     if (messageExists) {
-      console.log('الرسالة موجودة بالفعل، تحديث حالتها فقط:', messageData._id);
-      
       // تحديث حالة الرسالة الموجودة
       messageExists.setAttribute('data-status', messageData.status || 'sent');
       
@@ -298,8 +296,6 @@
       const pendingMsgContent = pendingMsg.querySelector('.message-text')?.textContent;
       
       if (pendingMsgContent === messageData.content) {
-        console.log('تحديث رسالة مؤقتة برسالة مستلمة من السيرفر', messageData._id);
-        
         // تحديث معرف الرسالة
         pendingMsg.setAttribute('data-message-id', messageData._id);
         

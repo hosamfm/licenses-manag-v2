@@ -55,8 +55,6 @@
     
     // إعداد مستمعات أحداث تحميل الرسائل الجديدة
     document.addEventListener('messages-loaded', function(e) {
-      console.log('تم تحميل رسائل جديدة:', e.detail);
-      
       // تنسيق التواريخ للرسائل الجديدة
       if (typeof window.formatAllMessageTimes === 'function') {
         setTimeout(window.formatAllMessageTimes, 300);

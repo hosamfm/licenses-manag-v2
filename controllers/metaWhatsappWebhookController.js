@@ -13,6 +13,7 @@ const whatsappMediaController = require('./whatsappMediaController');
 const mediaService = require('../services/mediaService');
 const NotificationSocketService = require('../services/notificationSocketService');
 const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
+const Contact = require('../models/Contact');
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -397,6 +398,33 @@ exports.handleIncomingMessages = async (messages, meta) => {
 
         const conversation = conversationInstance.toObject();
 
+        // --- إضافة كود إنشاء جهة الاتصال التلقائي ---
+        try {
+          const phone = conversationInstance.phoneNumber;
+          let contact = await Contact.findByPhoneNumber(phone);
+
+          if (!contact && conversationInstance.customerName) { // أنشئ فقط إذا لم يكن موجوداً ولدينا اسم
+            // تحقق أن الاسم ليس هو الاسم المؤقت
+            const temporaryNamePattern = /^عميل \d{6}$/;
+            if (!temporaryNamePattern.test(conversationInstance.customerName)) {
+              contact = await Contact.create({
+                name: conversationInstance.customerName,
+                phoneNumber: phone,
+                createdBy: null // يمكنك تعيين مستخدم نظام هنا إذا أردت
+              });
+              logger.info('metaWhatsappWebhookController', 'تم إنشاء جهة اتصال جديدة تلقائياً', { phone, name: conversationInstance.customerName });
+            } else {
+              logger.info('metaWhatsappWebhookController', 'لم يتم إنشاء جهة اتصال تلقائياً بسبب الاسم المؤقت', { phone, name: conversationInstance.customerName });
+            }
+          } else if (!contact) {
+            logger.info('metaWhatsappWebhookController', 'لم يتم العثور على جهة اتصال ولم يتمكن من الحصول على الاسم للإنشاء التلقائي', { phone });
+          }
+        } catch (contactError) {
+            logger.error('metaWhatsappWebhookController', 'خطأ أثناء التحقق أو الإنشاء التلقائي لجهة الاتصال', { error: contactError.message, phone: conversationInstance.phoneNumber });
+            // استمر في معالجة الرسالة حتى لو فشل إنشاء جهة الاتصال
+        }
+        // --- نهاية كود إنشاء جهة الاتصال التلقائي ---
+
         const messageData = {
           conversationId: conversation._id.toString(),
           externalMessageId: msg.id,
@@ -597,6 +625,47 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
     const isActive = socketService.io ? 
       socketService.io.sockets.adapter.rooms.has(`conversation-${conversationInstance._id.toString()}`) : 
       false;
+    
+    // إذا كانت المحادثة نشطة، قم بتحديث الرسالة كمقروءة تلقائياً
+    if (isActive && message.direction === 'incoming') {
+      // وضع علامة "مقروءة" على الرسالة إذا كان هناك مستخدم مشاهد للمحادثة حالياً
+      try {
+        // إيجاد أول مستخدم نشط في الغرفة
+        let activeUserId = null;
+        const roomName = `conversation-${conversationInstance._id.toString()}`;
+        const room = socketService.io.sockets.adapter.rooms.get(roomName);
+        
+        if (room) {
+          for (const socketId of room) {
+            const socket = socketService.io.sockets.sockets.get(socketId);
+            if (socket && socket.userId && socket.userId !== 'guest') {
+              activeUserId = socket.userId;
+              break;
+            }
+          }
+        }
+        
+        if (activeUserId) {
+          // استخدام الوظيفة الموجودة لتحديث حالة الرسالة
+          await require('../models/WhatsappMessageModel').updateOne(
+            { _id: message._id },
+            { $set: { status: 'read', readAt: new Date() } }
+          );
+          
+          logger.info('metaWhatsappWebhookController', 'تم وضع علامة مقروء تلقائياً على الرسالة لأن المستخدم نشط في المحادثة', {
+            messageId: message._id,
+            userId: activeUserId,
+            conversationId: conversationInstance._id.toString()
+          });
+        }
+      } catch (readError) {
+        logger.error('metaWhatsappWebhookController', 'خطأ في وضع علامة مقروء تلقائياً', { 
+          error: readError.message, 
+          messageId: message._id,
+          conversationId: conversationInstance._id.toString()
+        });
+      }
+    }
     
     await NotificationSocketService.sendMessageNotification(
       conversationInstance._id.toString(),

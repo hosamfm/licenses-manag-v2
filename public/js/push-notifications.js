@@ -45,7 +45,6 @@ function checkSupport() {
 async function registerServiceWorker() {
   try {
     const registration = await navigator.serviceWorker.register('/js/service-worker.js');
-    console.log('Service Worker تم تسجيله بنجاح:', registration);
     return registration;
   } catch (error) {
     console.error('فشل تسجيل Service Worker:', error);
@@ -59,7 +58,6 @@ async function registerServiceWorker() {
 async function requestNotificationPermission() {
   try {
     const permission = await Notification.requestPermission();
-    console.log('حالة إذن الإشعارات:', permission);
     if (permission !== 'granted') {
       console.warn('لم يتم منح إذن الإشعارات.');
       // يمكنك عرض رسالة للمستخدم هنا لتوضيح أهمية الإشعارات
@@ -83,7 +81,6 @@ async function subscribeUserToPush(registration) {
       userVisibleOnly: true,
       applicationServerKey: applicationServerKey
     });
-    console.log('تم الاشتراك بنجاح:', subscription);
     return subscription;
   } catch (error) {
     if (Notification.permission === 'denied') {
@@ -114,7 +111,6 @@ async function sendSubscriptionToServer(subscription) {
     }
 
     const data = await response.json();
-    console.log('تم إرسال الاشتراك بنجاح:', data);
   } catch (error) {
     console.error('خطأ في إرسال الاشتراك للخادم:', error);
   }
@@ -158,11 +154,6 @@ async function initializePushNotifications() {
 
 // استدعاء دالة التهيئة عند تحميل الصفحة أو عند حدث معين (مثل تسجيل الدخول)
 document.addEventListener('DOMContentLoaded', () => {
-  // --- تسجيل إضافي للتحقق ---
-  console.log('[Push Init] DOMContentLoaded event fired.');
-  console.log('[Push Init] Checking VAPID Key:', VAPID_PUBLIC_KEY);
-  // --- نهاية التسجيل ---
-  
   // تأكد من وجود VAPID_PUBLIC_KEY قبل المتابعة
   if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'YOUR_VAPID_PUBLIC_KEY') {
     console.error('خطأ: لم يتم تعيين VAPID_PUBLIC_KEY في public/js/push-notifications.js');
@@ -170,18 +161,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return; 
   }
   
-  // --- تسجيل إضافي للتحقق ---
-  console.log('[Push Init] Checking window.currentUserId:', window.currentUserId);
-  // --- نهاية التسجيل ---
-  
-  // يمكنك تأخير الاستدعاء حتى يتأكد المستخدم من تسجيل الدخول
-  // أو ربطه بزر لتفعيل الإشعارات
   // على سبيل المثال, يمكنك استدعاؤه بعد التحقق من وجود window.currentUserId
   if (window.currentUserId && window.currentUserId !== 'guest') { 
-    console.log('[Push Init] User ID found, calling initializePushNotifications()...');
     initializePushNotifications();
-  } else {
-    console.log('[Push Init] User ID not found or is guest. Postponing initialization.');
-    // يمكنك إضافة مستمع لحدث تسجيل الدخول لاستدعاء initializePushNotifications()
   }
 }); 

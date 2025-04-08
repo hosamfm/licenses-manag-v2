@@ -8,7 +8,6 @@
     let replyMessageInput = null;
     let messageInputContainer = null;
     let conversationMainContainer = null;
-    let isInitialized = false;
 
     // دالة لجلب الردود السريعة
     async function fetchQuickReplies() {

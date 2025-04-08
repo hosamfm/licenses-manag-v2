@@ -17,10 +17,8 @@ function initializeSocketIO() {
     // إنشاء الاتصال إذا لم يكن موجودًا
     if (!socket) {
         socket = io(); // افتراض الاتصال بنفس الخادم
-        console.log('جارٍ إنشاء اتصال Socket.IO...');
 
         socket.on('connect', () => {
-            console.log('تم الاتصال بـ Socket.IO بنجاح!');
             // بعد الاتصال، انضم لغرفة الإشعارات
             joinNotificationsRoom(); 
             // إضافة مستمعي الأحداث من Socket.IO
@@ -28,7 +26,6 @@ function initializeSocketIO() {
         });
 
         socket.on('disconnect', () => {
-            console.log('تم قطع الاتصال بـ Socket.IO');
             // يمكن محاولة إعادة الاتصال هنا إذا لزم الأمر
         });
 
@@ -42,7 +39,6 @@ function initializeSocketIO() {
 function joinNotificationsRoom() {
     if (socket && socket.connected) { // التأكد من أن السوكت متصل
         socket.emit('join-notifications');
-        console.log('تم إرسال طلب الانضمام لغرفة الإشعارات.');
     } else {
         console.warn('محاولة الانضمام لغرفة الإشعارات قبل الاتصال.');
     }
@@ -52,8 +48,6 @@ function joinNotificationsRoom() {
 function attachSocketListeners() {
     if (!socket) return;
 
-    console.log('[attachSocketListeners] محاولة إرفاق المستمعين...');
-
     // إزالة المستمعين القدامى لتجنب التكرار عند إعادة الاتصال
     socket.off('new-notification');
     socket.off('unread-notifications-count');
@@ -61,13 +55,8 @@ function attachSocketListeners() {
 
     // معالج لاستقبال الإشعارات الجديدة
     socket.on('new-notification', (notification) => {
-        // --- تسجيل إضافي هنا ---
-        console.log('%c[Client Socket Received] new-notification received!', 'color: magenta; font-weight: bold;', notification);
-        // --- نهاية التسجيل الإضافي ---
-        
         playNotificationSound();
         if (window.notificationSystem) {
-            console.log('[Client Socket Received] Calling notificationSystem.addNewNotification...');
             window.notificationSystem.addNewNotification(notification);
         } else {
             console.warn('[Client Socket Received] window.notificationSystem is not available.');
@@ -76,8 +65,6 @@ function attachSocketListeners() {
 
     // معالج لعدد الإشعارات غير المقروءة
     socket.on('unread-notifications-count', (data) => {
-        // --- تسجيل داخل المستمع ---
-        console.log('%c[Socket Event Received] unread-notifications-count', 'color: blue; font-weight: bold;', data);
         if (window.notificationSystem) {
             window.notificationSystem.updateUnreadCount(data.count);
         }
@@ -85,21 +72,16 @@ function attachSocketListeners() {
     
     // --- إضافة مستمع للحدث الجديد userId-set ---
     socket.on('userId-set', (data) => {
-        console.log('%c[Socket Event Received] userId-set', 'color: purple; font-weight: bold;', data);
         // تخزين userId في كائن النافذة للاستخدام لاحقًا إذا لم يكن موجودًا
         if (data.userId && (!window.currentUserId || window.currentUserId === 'guest')) {
             window.currentUserId = data.userId;
-            console.log(`[userId-set] تم تعيين window.currentUserId إلى ${data.userId}`);
         }
         
         // إذا كان shouldJoinNotifications صحيح، انضم لغرفة الإشعارات
         if (data.shouldJoinNotifications) {
-            console.log('[userId-set] إعادة محاولة الانضمام لغرفة الإشعارات بعد تعيين userId');
             joinNotificationsRoom();
         }
     });
-    
-    console.log('[attachSocketListeners] تم إرفاق المستمعين لأحداث new-notification و unread-notifications-count و userId-set.');
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -128,7 +110,6 @@ function playNotificationSound() {
         audio.volume = 0.5;
         audio.play().catch(e => {
             // تجاهل أخطاء تشغيل الصوت التي قد تحدث بسبب سياسات المتصفح
-            console.log('لم يتم تشغيل صوت الإشعار:', e.message);
         });
     } catch (error) {
         console.error('خطأ في تشغيل صوت الإشعار:', error);
@@ -230,7 +211,6 @@ class NotificationSystem {
             this.viewAllNotificationsLink.addEventListener('click', (e) => {
                 e.preventDefault();
                 // يمكن هنا تنفيذ انتقال إلى صفحة مخصصة للإشعارات أو فتح مودال
-                console.log('عرض كل الإشعارات - يمكن تنفيذ انتقال أو فتح مودال');
             });
         }
     }
@@ -365,13 +345,29 @@ class NotificationSystem {
      * تعيين جميع الإشعارات كمقروءة
      */
     async markAllAsRead() {
+        // التحقق إذا كان هناك شيء لتحديثه
+        if (this.unreadCount === 0 || this.isLoading) {
+            return;
+        }
+
+        // 1. تحديث الواجهة فوراً للاستجابة السريعة
+        const previousUnreadCount = this.unreadCount;
+        const previouslyUnreadElements = this.notificationsList.querySelectorAll('.notification-item.unread');
+        
+        this.unreadCount = 0;
+        this.updateUnreadBadge();
+        previouslyUnreadElements.forEach(el => el.classList.remove('unread'));
+        
+        // تعطيل الزر مؤقتًا وإظهار مؤشر العمل
+        if (this.markAllReadBtn) {
+            this.markAllReadBtn.disabled = true;
+            this.markAllReadBtn.textContent = 'جاري المعالجة...'; // تغيير نص الزر
+        }
+        this.showLoading(); // إظهار المؤشر العام إذا لزم الأمر
+        this.isLoading = true;
+
         try {
-            if (this.unreadCount === 0) {
-                return;
-            }
-            
-            this.showLoading();
-            
+            // 2. إرسال الطلب إلى الخادم في الخلفية
             const response = await fetch('/api/notifications/mark-all-read', {
                 method: 'PUT',
                 headers: {
@@ -381,24 +377,36 @@ class NotificationSystem {
             
             const data = await response.json();
             
-            if (data.success) {
-                // تحديث الواجهة لتعكس التغييرات
-                this.notifications.forEach(notification => {
-                    notification.isRead = true;
-                });
-                
-                this.unreadCount = 0;
-                this.updateUI();
-                
-                // تحديث وقت آخر تحديث
-                this.lastUpdated = new Date().getTime();
-            } else {
-                console.error('فشل في تعيين جميع الإشعارات كمقروءة:', data.message);
+            if (!response.ok || !data.success) {
+                // 3. في حالة الفشل، إعادة الحالة السابقة
+                console.error('فشل في تعيين جميع الإشعارات كمقروءة:', data.message || 'خطأ غير معروف');
+                this.unreadCount = previousUnreadCount; // استعادة العدد
+                this.updateUnreadBadge();
+                previouslyUnreadElements.forEach(el => el.classList.add('unread')); // استعادة حالة عدم القراءة للعناصر
+                // عرض رسالة خطأ للمستخدم
+                if (window.showToast) {
+                    window.showToast('حدث خطأ أثناء تحديث الإشعارات', 'error');
+                }
             }
+            // في حالة النجاح، لا يلزم فعل شيء إضافي لأن الواجهة تم تحديثها بالفعل
+            
         } catch (error) {
-            console.error('خطأ في تعيين جميع الإشعارات كمقروءة:', error);
+            // 3. في حالة حدوث خطأ في الشبكة، إعادة الحالة السابقة
+            console.error('خطأ في الشبكة أثناء تعيين جميع الإشعارات كمقروءة:', error);
+            this.unreadCount = previousUnreadCount;
+            this.updateUnreadBadge();
+            previouslyUnreadElements.forEach(el => el.classList.add('unread'));
+            if (window.showToast) {
+                window.showToast('خطأ في الشبكة، يرجى المحاولة مرة أخرى', 'error');
+            }
         } finally {
+            // 4. إعادة تفعيل الزر وإخفاء المؤشر دائماً
+            this.isLoading = false;
             this.hideLoading();
+            if (this.markAllReadBtn) {
+                this.markAllReadBtn.disabled = false;
+                this.markAllReadBtn.textContent = 'تعيين الكل كمقروء'; // استعادة النص الأصلي للزر
+            }
         }
     }
     
@@ -456,8 +464,9 @@ class NotificationSystem {
         // تحديث شارة الإشعارات غير المقروءة
         this.updateUnreadBadge();
         
-        // تحديث قائمة الإشعارات
-        this.renderNotifications();
+        // تحديث قائمة الإشعارات (تحسين محتمل هنا)
+        // بدلاً من renderNotifications الكامل، يمكننا تحديث العناصر الموجودة أو إضافة/إزالة حسب الحاجة
+        this.renderNotifications(); 
     }
     
     /**
@@ -671,13 +680,61 @@ class NotificationSystem {
         // إضافة الإشعار في بداية المصفوفة
         this.notifications.unshift(notification);
         
-        // تحديث عدد الإشعارات غير المقروءة
-        if (!notification.isRead) {
-            this.unreadCount++;
+        // التأكد من أن القائمة لا تتجاوز الحد الأقصى المعقول للعرض المباشر
+        const maxNotificationsInMemory = 50; // مثال: حد أقصى 50 إشعار في الذاكرة
+        if (this.notifications.length > maxNotificationsInMemory) {
+            this.notifications.pop(); // إزالة أقدم إشعار من الذاكرة
         }
         
-        // تحديث الواجهة
-        this.updateUI();
+        // تحديث عدد الإشعارات غير المقروءة إذا كان الإشعار الجديد غير مقروء
+        if (!notification.isRead) {
+            this.unreadCount++;
+            this.updateUnreadBadge(); // تحديث الشارة فوراً
+        }
+        
+        // إضافة الإشعار الجديد إلى واجهة المستخدم بطريقة فعالة
+        this.prependNotificationElement(notification);
+        
+        // تحديث حالة الفراغ إذا كانت القائمة فارغة قبل الإضافة
+        this.updateEmptyStateVisibility();
+    }
+    
+    /**
+     * إضافة عنصر إشعار جديد في بداية القائمة
+     * @param {Object} notification - بيانات الإشعار
+     */
+    prependNotificationElement(notification) {
+        if (!this.notificationsList) return;
+        
+        const notificationElement = this.createNotificationElement(notification);
+        this.notificationsList.insertBefore(notificationElement, this.notificationsList.firstChild);
+        
+        // إزالة عنصر حالة الفراغ إذا كان موجودًا
+        const emptyState = this.notificationsList.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+        
+        // إزالة أقدم عنصر إذا تجاوزت القائمة الحد المرئي (اختياري)
+        const maxVisibleNotifications = 20; // مثال: حد أقصى 20 عنصر مرئي
+        if (this.notificationsList.children.length > maxVisibleNotifications) {
+            this.notificationsList.removeChild(this.notificationsList.lastChild);
+        }
+    }
+    
+    /**
+     * تحديث رؤية حالة الفراغ
+     */
+    updateEmptyStateVisibility() {
+        if (!this.notificationsList) return;
+        const hasNotifications = this.notificationsList.querySelector('.notification-item');
+        const emptyState = this.notificationsList.querySelector('.empty-state');
+        
+        if (!hasNotifications && !emptyState) {
+            this.notificationsList.appendChild(this.createEmptyState());
+        } else if (hasNotifications && emptyState) {
+            emptyState.remove();
+        }
     }
     
     /**

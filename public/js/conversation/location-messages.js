@@ -25,12 +25,9 @@ window.testLocationMessage = function() {
         status: 'delivered'
     };
     
-    console.log('محاكاة رسالة موقع جديدة:', testMessage);
-    
     // محاكاة استلام رسالة جديدة
     if (typeof window.addMessageToConversation === 'function') {
         window.addMessageToConversation(testMessage);
-        console.log('تم إضافة رسالة الموقع الاختبارية');
     } else {
         console.error('وظيفة addMessageToConversation غير متاحة');
     }
@@ -79,7 +76,6 @@ window.initMaps = function() {
 function initializeAllMaps() {
     // التحقق من تحميل خرائط Google
     if (!window.googleMapsLoaded || typeof google === 'undefined' || !google.maps) {
-        console.warn('خرائط Google غير جاهزة بعد. سيتم إعادة المحاولة لاحقًا.');
         setTimeout(initializeAllMaps, 1000); // إعادة المحاولة بعد ثانية
         return;
     }
@@ -139,7 +135,6 @@ function initializeMapFromContent(messageId, content, container) {
     const coordinates = extractCoordinates(content);
     
     if (!coordinates || !coordinates.lat || !coordinates.lng) {
-        console.warn(`تعذر استخراج إحداثيات صالحة من محتوى الرسالة: ${content}`);
         container.innerHTML = '<div class="map-error">تعذر تحميل الخريطة: إحداثيات غير صالحة</div>';
         return;
     }
@@ -190,7 +185,6 @@ function initializeMapFromContent(messageId, content, container) {
         // إضافة تلميح عند تحويم المؤشر
         container.title = 'انقر لفتح الموقع في خرائط Google';
     } catch (error) {
-        console.error('خطأ في إنشاء الخريطة:', error);
         container.innerHTML = '<div class="map-error">تعذر تحميل الخريطة</div>';
     }
 }
@@ -231,7 +225,6 @@ function extractCoordinates(content) {
         // فشل في استخراج الإحداثيات
         return null;
     } catch (error) {
-        console.error('خطأ في استخراج الإحداثيات:', error);
         return null;
     }
 }

@@ -21,8 +21,6 @@ function initialize(socketIo) {
         
         // معالج الانضمام لغرفة الإشعارات الخاصة بالمستخدم
         socket.on('join-notifications', () => {
-            logger.info('notificationSocketService', '[join-notifications] Received join request', { userId: socket.userId, socketId: socket.id });
-            
             // فحص وجود userId للانضمام للغرفة الصحيحة
             if (socket.userId && socket.userId !== 'guest') {
                 // لدينا userId متاح بالفعل، انضم للغرفة مباشرة
@@ -36,8 +34,6 @@ function initialize(socketIo) {
         
         // مستمع جديد لحدث تحديث userId (يتم استدعاؤه من middleware أو socketService عند تعيين userId)
         socket.on('userId-set', (data) => {
-            logger.info('notificationSocketService', '[userId-set] تم تعيين userId للسوكت', { userId: data.userId, socketId: socket.id, userRole: data.userRole });
-            
             // إذا كان المفترض الانضمام للغرفة (من محاولة سابقة) أو تم تحديد ذلك في البيانات
             if (socket._shouldJoinNotificationsWhenUserIdAvailable || data.shouldJoinNotifications) {
                 joinUserToNotificationRoom(socket, data.userId);
@@ -93,7 +89,6 @@ function initialize(socketIo) {
         });
     });
     
-    logger.info('notificationSocketService', 'تم تهيئة خدمة سوكت الإشعارات');
     return io;
 }
 
@@ -115,7 +110,6 @@ async function sendNotification(userId, notification) {
         
         const socketsInRoom = io.sockets.adapter.rooms.get(targetRoom);
         const socketIdsInRoom = socketsInRoom ? Array.from(socketsInRoom) : [];
-        logger.info('notificationSocketService', '[sendNotification] Checking sockets in room before sending', { userId, targetRoom, socketIdsInRoom });
 
         if (socketIdsInRoom.length === 0) {
             logger.warn('notificationSocketService', '[sendNotification] No sockets found in the target room. Skipping emit.', { userId, targetRoom });
@@ -123,31 +117,12 @@ async function sendNotification(userId, notification) {
             // سنقوم بإعادة foundActiveSocket في النهاية
         } else {
             foundActiveSocket = true; // وجدنا سوكتات نشطة في غرفة الإشعارات
-            logger.info('notificationSocketService', '[sendNotification] Attempting to emit new-notification', { userId, targetRoom, event: 'new-notification', notificationId: notification._id });
             io.to(targetRoom).emit('new-notification', notification);
-            logger.info('notificationSocketService', '[sendNotification] Successfully emitted new-notification (or at least attempted)', { userId, targetRoom });
             
             // تحديث عدد الإشعارات غير المقروءة
             const unreadCount = await NotificationService.getUnreadCount(userId);
-            logger.info('notificationSocketService', '[sendNotification] Attempting to emit unread-count', { userId, targetRoom, event: 'unread-notifications-count', count: unreadCount });
             io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
-            logger.info('notificationSocketService', '[sendNotification] Successfully emitted unread-count (or at least attempted)', { userId, targetRoom });
         }
-        
-        // يمكن إضافة تحقق إضافي هنا للتحقق من النشاط في غرفة المحادثة إذا لزم الأمر
-        // if (!foundActiveSocket && notification.relatedConversation) {
-        //    if (isSocketInRoom(`conversation-${notification.relatedConversation}`, userId)) {
-        //        foundActiveSocket = true;
-        //        logger.info('notificationSocketService', '[sendNotification] User is active in conversation room, considering as active', { userId, conversationId: notification.relatedConversation });
-        //    }
-        // }
-
-        logger.info('notificationSocketService', '[sendNotification] Finished socket emit attempt.', { 
-            userId, 
-            notificationType: notification.type,
-            targetRoom,
-            foundActiveSocket // تسجيل الحالة النهائية
-        });
         
         return foundActiveSocket; // إرجاع الحالة النهائية
 
@@ -175,7 +150,16 @@ async function sendMessageNotification(conversationId, message, conversation, co
         // 1. إرسال للمستخدم المسند له (إذا كان موجودًا)
         if (assignedTo) {
             const isAssignedUserActive = isSocketInRoom(`conversation-${conversationId}`, assignedTo); // التحقق من النشاط في غرفة المحادثة
-            logger.info('notificationSocketService', 'التحقق من نشاط المستخدم المسند له', { conversationId, assignedTo, isAssignedUserActive });
+            
+            // تخطي إنشاء الإشعار تماماً إذا كان المستخدم نشطاً في المحادثة وكان نوع الإشعار هو رسالة
+            // هذا سيمنع إنشاء إشعارات للرسائل الواردة عندما يكون المستخدم نشطاً في المحادثة
+            if (isAssignedUserActive && message && message.direction === 'incoming') {
+                logger.info('notificationSocketService', 'تخطي إنشاء الإشعار لأن المستخدم نشط في المحادثة', {
+                    userId: assignedTo,
+                    conversationId
+                });
+                return; // خروج مبكر لمنع إنشاء الإشعار والعمليات اللاحقة
+            }
             
             // --- إنشاء الإشعار أولاً --- 
             const senderName = conversation?.customerName || conversation?.phoneNumber || 'عميل غير معروف';
@@ -197,21 +181,17 @@ async function sendMessageNotification(conversationId, message, conversation, co
                 
                 // --- التحقق من نشاط المستخدم قبل إرسال إشعار الهيدر --- 
                 if (!isAssignedUserActive) {
-                    logger.info('notificationSocketService', '[sendMessageNotification] User not active in conversation, attempting header notification (Socket)...', { assignedTo, conversationId });
                     sentViaSocket = await sendNotification(assignedTo, notification); // محاولة الإرسال
                 } else {
-                    logger.info('notificationSocketService', '[sendMessageNotification] User IS active in conversation. Skipping header notification (Socket).', { assignedTo, conversationId });
                     // نعتبر أنه تم التسليم طالما المستخدم موجود في غرفة الإشعارات العامة
                     // هذا يمنع إرسال Web Push غير ضروري
                     if (isSocketInRoom(`notifications-${assignedTo}`, assignedTo)) {
                          sentViaSocket = true; 
-                         logger.info('notificationSocketService', '[sendMessageNotification] User is in general notifications room, considering socket delivery successful.', { assignedTo });
                          // قد نحتاج لتحديث عدد غير المقروء هنا بشكل منفصل إذا لم يتم استدعاء sendNotification
                          try {
                              const unreadCount = await NotificationService.getUnreadCount(assignedTo);
                              const targetRoom = `notifications-${assignedTo}`;
                              io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
-                             logger.info('notificationSocketService', '[sendMessageNotification] Manually emitted unread-count for active user.', { assignedTo, count: unreadCount });
                          } catch (countError) {
                               logger.error('notificationSocketService', '[sendMessageNotification] Error manually fetching/sending unread count', { assignedTo, error: countError.message });
                          }
@@ -224,14 +204,10 @@ async function sendMessageNotification(conversationId, message, conversation, co
                 
                 // --- إرسال ويب بوش فقط إذا لم يتم الإرسال عبر السوكت (أو لم يُعتبر كذلك) ---
                 if (!sentViaSocket) {
-                    logger.info('notificationSocketService', '[sendMessageNotification] Socket delivery failed or skipped, attempting Web Push...', { assignedTo, notificationId: notification._id });
                     try {
                         const user = await User.findById(assignedTo).select('webPushSubscriptions').lean();
                         if (user && user.webPushSubscriptions && user.webPushSubscriptions.length > 0) {
                             await NotificationService.sendWebPushNotification(user, notification);
-                            logger.info('notificationSocketService', '[sendMessageNotification] Web Push attempted.', { assignedTo, notificationId: notification._id });
-                        } else {
-                            logger.info('notificationSocketService', '[sendMessageNotification] No Web Push subscriptions found for assigned user.', { assignedTo });
                         }
                     } catch (fetchUserError) {
                         logger.error('notificationSocketService', '[sendMessageNotification] Error fetching user for Web Push', { assignedTo, error: fetchUserError.message });
@@ -245,13 +221,25 @@ async function sendMessageNotification(conversationId, message, conversation, co
         } 
         // 2. إرسال للمشرفين (إذا كانت المحادثة غير مسندة أو بناءً على قواعد أخرى)
         else {
-            // ... (المنطق الحالي لإرسال الإشعارات للمشرفين)
-            const admins = await User.find({ /* ... شروط البحث عن المشرفين ... */ }).select('_id webPushSubscriptions').lean();
+            // البحث عن المستخدمين النشطين الذين لديهم صلاحية الوصول للمحادثات
+            const admins = await User.find({
+              account_status: 'active',
+              can_access_conversations: true
+            }).select('_id webPushSubscriptions').lean();
+            
             // ... (الحلقة للمرور على المشرفين)
             for (const admin of admins) {
                 // تعديل التحقق من نشاط المشرف ليشمل غرفة الإشعارات العامة
                 const isAdminActiveInConv = isSocketInRoom(`conversation-${conversationId}`, admin._id);
-                logger.info('notificationSocketService', 'التحقق من نشاط المشرف', { conversationId, adminId: admin._id, isAdminActiveInConv });
+                
+                // تخطي إنشاء الإشعار تماماً إذا كان المشرف نشطاً في المحادثة وكان نوع الإشعار هو رسالة
+                if (isAdminActiveInConv && message && message.direction === 'incoming') {
+                    logger.info('notificationSocketService', 'تخطي إنشاء الإشعار للمشرف لأنه نشط في المحادثة', {
+                        adminId: admin._id,
+                        conversationId
+                    });
+                    continue; // تخطي هذا المشرف والانتقال للتالي
+                }
                 
                 // إنشاء الإشعار للمشرف
                 const senderName = contact?.name || contact?.phoneNumber || 'عميل غير معروف';
@@ -272,19 +260,15 @@ async function sendMessageNotification(conversationId, message, conversation, co
                     
                     // --- التحقق من نشاط المشرف قبل إرسال إشعار الهيدر --- 
                     if (!isAdminActiveInConv) {
-                         logger.info('notificationSocketService', '[sendMessageNotification] Admin not active in conversation, attempting header notification (Socket)...', { adminId: admin._id, conversationId });
                          adminSentViaSocket = await sendNotification(admin._id, adminNotification);
                     } else {
-                        logger.info('notificationSocketService', '[sendMessageNotification] Admin IS active in conversation. Skipping header notification (Socket).', { adminId: admin._id, conversationId });
                          if (isSocketInRoom(`notifications-${admin._id}`, admin._id)) {
                              adminSentViaSocket = true;
-                             logger.info('notificationSocketService', '[sendMessageNotification] Admin is in general notifications room, considering socket delivery successful.', { adminId: admin._id });
                               // تحديث عدد غير المقروء للمشرف النشط
                              try {
                                  const unreadCount = await NotificationService.getUnreadCount(admin._id);
                                  const targetRoom = `notifications-${admin._id}`;
                                  io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
-                                 logger.info('notificationSocketService', '[sendMessageNotification] Manually emitted unread-count for active admin.', { adminId: admin._id, count: unreadCount });
                              } catch (countError) {
                                   logger.error('notificationSocketService', '[sendMessageNotification] Error manually fetching/sending unread count for admin', { adminId: admin._id, error: countError.message });
                              }
@@ -297,12 +281,8 @@ async function sendMessageNotification(conversationId, message, conversation, co
                     
                     // --- إرسال ويب بوش للمشرف فقط إذا لم يتم الإرسال عبر السوكت --- 
                     if (!adminSentViaSocket) {
-                        logger.info('notificationSocketService', '[sendMessageNotification] Socket delivery failed or skipped for admin, attempting Web Push...', { adminId: admin._id, notificationId: adminNotification._id });
                          if (admin.webPushSubscriptions && admin.webPushSubscriptions.length > 0) {
                              await NotificationService.sendWebPushNotification(admin, adminNotification);
-                             logger.info('notificationSocketService', '[sendMessageNotification] Web Push attempted for admin.', { adminId: admin._id });
-                         } else {
-                            logger.info('notificationSocketService', '[sendMessageNotification] No Web Push subscriptions found for admin.', { adminId: admin._id });
                          }
                     }
                     // --- نهاية إرسال ويب بوش للمشرف ---
@@ -395,26 +375,19 @@ function joinUserToNotificationRoom(socket, userId) {
     
     try {
         const notificationRoom = `notifications-${userId}`;
-        logger.info('notificationSocketService', '[joinUserToNotificationRoom] Attempting to join room...', { userId: userId, room: notificationRoom, socketId: socket.id });
         
         // مغادرة الغرفة الخاطئة إذا كان قد انضم إليها سابقًا
         if (socket.rooms.has('notifications-unknown')) {
             socket.leave('notifications-unknown');
-            logger.info('notificationSocketService', '[joinUserToNotificationRoom] تمت مغادرة الغرفة الخاطئة', { oldRoom: 'notifications-unknown', socketId: socket.id });
         }
         
         // الانضمام للغرفة الصحيحة
         socket.join(notificationRoom);
         
-        // التأكد من الانضمام
-        const roomsUserIsIn = Array.from(socket.rooms);
-        logger.info('notificationSocketService', '[joinUserToNotificationRoom] Successfully joined room. Rooms user is now in:', { userId: userId, rooms: roomsUserIsIn, socketId: socket.id });
-        
         // إرسال عدد الإشعارات غير المقروءة عند الانضمام
         NotificationService.getUnreadCount(userId)
             .then(unreadCount => {
                 socket.emit('unread-notifications-count', { count: unreadCount });
-                logger.info('notificationSocketService', '[joinUserToNotificationRoom] تم إرسال عدد الإشعارات غير المقروءة', { userId, count: unreadCount });
             })
             .catch(error => {
                 logger.error('notificationSocketService', '[joinUserToNotificationRoom] خطأ في جلب عدد الإشعارات غير المقروءة', {

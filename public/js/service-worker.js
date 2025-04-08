@@ -1,14 +1,11 @@
 self.addEventListener('push', event => {
-  console.log('[Service Worker] Push Received.');
-  
+ 
   let notificationData = {};
   try {
     // محاولة قراءة البيانات كـ JSON
     if (event.data) {
       notificationData = event.data.json();
-      console.log('[Service Worker] Push data:', notificationData);
     } else {
-      console.log('[Service Worker] Push event but no data');
       // إعداد بيانات افتراضية إذا لم تكن هناك بيانات
       notificationData = {
         title: 'إشعار جديد',
@@ -44,8 +41,6 @@ self.addEventListener('push', event => {
 
 // التعامل مع نقر المستخدم على الإشعار
 self.addEventListener('notificationclick', event => {
-  console.log('[Service Worker] Notification click Received.');
-
   // إغلاق الإشعار
   event.notification.close();
 
@@ -75,14 +70,9 @@ self.addEventListener('notificationclick', event => {
 
 // مستمع للتفعيل - يمكن استخدامه لتنظيف الكاش القديم مثلاً
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Activate');
-  // هنا يمكنك إضافة منطق لتنظيف الكاشات القديمة إذا لزم الأمر
-  // event.waitUntil(caches.keys().then(...));
+
 });
 
 // مستمع للتثبيت - يمكن استخدامه لتخزين الملفات الأساسية مؤقتًا
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Install');
-  // يمكن إضافة منطق لتخزين بعض الملفات الأساسية مؤقتًا هنا
-  // event.waitUntil(caches.open(CACHE_NAME).then(...));
 }); 
