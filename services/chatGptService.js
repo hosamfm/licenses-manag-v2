@@ -536,7 +536,27 @@ class ChatGptService {
       
       // التحقق من وجود وسائط صوتية وتفعيل الدعم
       if (mediaType === 'audio' && mediaUrl && this.enableAudioSupport) {
-        const transcribedText = await this.transcribeAudio(mediaUrl);
+        let accessibleAudioUrl = mediaUrl;
+        // التحقق مما إذا كان الرابط معرف ميتا أو رابط داخلي
+        const isMetaIdAudio = /^\d+$/.test(accessibleAudioUrl) || (accessibleAudioUrl.includes('/') && /^\d+$/.test(accessibleAudioUrl.split('/').pop()));
+        if (isMetaIdAudio || !accessibleAudioUrl.startsWith('http')) {
+          // إذا كان معرف، حاول بناء رابط API
+          if (message._id) {
+            const baseUrl = process.env.BASE_URL || 'https://lic.tic-ly.com';
+            accessibleAudioUrl = `${baseUrl}/whatsapp/media/content/${message._id}`;
+            logger.info('chatGptService', `تم تحويل رابط الصوت إلى: ${accessibleAudioUrl}`);
+          } else {
+            logger.warn('chatGptService', 'تعذر تحويل رابط الصوت - لا يوجد معرّف رسالة');
+            accessibleAudioUrl = null; // لا يمكن المتابعة بدون رابط صالح
+          }
+        }
+        
+        // محاولة التحويل فقط إذا كان لدينا رابط صالح
+        let transcribedText = null;
+        if (accessibleAudioUrl) {
+          transcribedText = await this.transcribeAudio(accessibleAudioUrl);
+        }
+        
         if (transcribedText) {
           logger.info('chatGptService', 'تم تحويل الرسالة الصوتية إلى النص:', transcribedText);
           // استخدام النص المحول كمحتوى للرسالة
