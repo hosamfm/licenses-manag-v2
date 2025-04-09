@@ -700,6 +700,8 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
           });
           
           // تمرير معلمة التعيين التلقائي إلى معالج الذكاء الاصطناعي
+          // سيرد الذكاء الاصطناعي فقط إذا كانت المحادثة مسندة له أو سيتم تعيينها له تلقائياً
+          // إذا كانت autoAssignAI=false، فسيتم تجاهل معالجة الرسائل للمحادثات غير المسندة
           aiConversationController.processIncomingMessage(message, conversationInstance, autoAssignAI)
             .catch(error => {
               logger.error('metaWhatsappWebhookController', 'خطأ في معالجة الذكاء الاصطناعي', {

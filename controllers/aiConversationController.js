@@ -154,9 +154,23 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
       logger.info('aiConversationController', 'تم تجاوز التعيين التلقائي للذكاء الاصطناعي', { 
         conversationId: conversation._id
       });
+      
+      // المحادثة غير معينة للذكاء الاصطناعي ولا نرغب في التعيين التلقائي، لذا لا نعالج الرسالة
+      logger.info('aiConversationController', 'تجاوز معالجة الرسالة لأن المحادثة غير معينة للذكاء الاصطناعي', {
+        conversationId: conversation._id
+      });
+      return null;
     }
     
-    // الحصول على رد الذكاء الاصطناعي (بغض النظر عن حالة التعيين)
+    // التحقق من أن المحادثة معينة للذكاء الاصطناعي قبل معالجة الرسالة
+    if (!conversation.assignedTo || conversation.assignedTo.toString() !== chatGptService.aiUserId.toString()) {
+      logger.info('aiConversationController', 'تجاوز معالجة الرسالة لأن المحادثة غير معينة للذكاء الاصطناعي', {
+        conversationId: conversation._id
+      });
+      return null;
+    }
+    
+    // الحصول على رد الذكاء الاصطناعي (فقط إذا كانت المحادثة معينة للذكاء الاصطناعي)
     const aiResponseMessage = await chatGptService.processIncomingMessage(conversation, message);
     
     if (aiResponseMessage && aiResponseMessage.content) {
@@ -191,18 +205,58 @@ async function sendAiResponseToCustomer(conversation, response, existingMessage 
     // 2. إرسال الرد عبر واتساب
     const phoneNumber = conversation.phoneNumber;
     
-    // استخدام خدمة ميتا لإرسال الرسالة
+    // --- بداية: جلب phoneNumberId الصحيح ---
+    let phoneNumberId = null;
+    const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
+    
+    if (channel && channel.settingsId) {
+      const settings = await MetaWhatsappSettings.findById(channel.settingsId).lean();
+      if (settings && settings.config && settings.config.phoneNumberId) {
+        phoneNumberId = settings.config.phoneNumberId;
+        logger.info('aiConversationController', 'تم تحديد رقم الهاتف للإرسال من القناة', { 
+          channelId: channel._id,
+          settingsId: channel.settingsId,
+          phoneNumberId
+        });
+      } else {
+        logger.warn('aiConversationController', 'لم يتم العثور على إعدادات أو phoneNumberId للقناة المرتبطة بالمحادثة', {
+          conversationId: conversation._id,
+          channelId: channel._id,
+          settingsId: channel.settingsId
+        });
+      }
+    } else {
+      logger.warn('aiConversationController', 'لم يتم العثور على settingsId في القناة لجلب phoneNumberId', {
+        conversationId: conversation._id,
+        channelId: conversation.channelId
+      });
+    }
+    
+    // التحقق النهائي قبل الإرسال
+    if (!phoneNumberId) {
+      logger.error('aiConversationController', 'فشل في تحديد رقم هاتف الإرسال الصحيح للقناة', {
+        conversationId: conversation._id,
+        channelId: conversation.channelId
+      });
+      
+      // محاولة استخدام الرقم الافتراضي من المتغير المخزن في channel.phoneNumberId كاختيار ثانوي
+      phoneNumberId = channel.phoneNumberId || null;
+    }
+    // --- نهاية: جلب phoneNumberId الصحيح ---
+    
+    // استخدام خدمة ميتا لإرسال الرسالة مع تمرير phoneNumberId
     const messageResult = await metaWhatsappService.sendTextMessage(
       phoneNumber,
       response,
-      channel.phoneNumberId
+      phoneNumberId
     );
     
     if (!messageResult) {
       logger.error('aiConversationController', 'فشل في إرسال رد الذكاء الاصطناعي', { 
         conversationId: conversation._id,
         channelId: channel._id,
-        phoneNumber
+        phoneNumber,
+        phoneNumberId
       });
       return null;
     }
