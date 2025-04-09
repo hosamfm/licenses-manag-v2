@@ -691,6 +691,35 @@ async function updateConversationUnreadCount(conversationId) {
   }
 }
 
+/**
+ * التحقق مما إذا كان سوكت المستخدم موجودًا في غرفة معينة
+ * @param {String} roomName - اسم الغرفة
+ * @param {String} userId - معرف المستخدم
+ * @returns {Boolean} نتيجة التحقق
+ */
+function isSocketInRoom(roomName, userId) {
+  if (!io) return false;
+  
+  try {
+    const room = io.sockets.adapter.rooms.get(roomName);
+    if (!room) return false;
+    
+    for (const socketId of room) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket && socket.userId && socket.userId.toString() === userId.toString()) {
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    logger.error('socketService', 'خطأ في التحقق من وجود المستخدم في الغرفة', {
+      roomName, userId, error: error.message
+    });
+    return false;
+  }
+}
+
 module.exports = {
   initialize,
   notifyNewMessage,
@@ -703,5 +732,6 @@ module.exports = {
   notifyMessageExternalIdUpdate,
   updateMessagesReadStatus,
   updateConversationUnreadCount,
-  notifyMessageReply
+  notifyMessageReply,
+  isSocketInRoom
 };

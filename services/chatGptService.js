@@ -8,6 +8,7 @@ const logger = require('./loggerService');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const User = require('../models/User');
 const NotificationService = require('./notificationService');
+const socketService = require('./socketService');
 require('dotenv').config();
 
 class ChatGptService {
@@ -705,6 +706,25 @@ class ChatGptService {
     } catch (error) {
       logger.error('chatGptService', 'خطأ في جلب محادثات العميل السابقة:', error);
       return [];
+    }
+  }
+
+  /**
+   * التحقق مما إذا كان سوكت المستخدم موجودًا في غرفة معينة
+   * @param {String} roomName - اسم الغرفة
+   * @param {String} userId - معرف المستخدم
+   * @returns {Boolean} نتيجة التحقق
+   */
+  isSocketInRoom(roomName, userId) {
+    try {
+      return socketService.isSocketInRoom ? 
+        socketService.isSocketInRoom(roomName, userId) : 
+        false;
+    } catch (error) {
+      logger.warn('chatGptService', 'خطأ في التحقق من وجود المستخدم في الغرفة', {
+        roomName, userId, error: error.message
+      });
+      return false;
     }
   }
 }

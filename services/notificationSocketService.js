@@ -100,28 +100,50 @@ function initialize(socketIo) {
  */
 async function sendNotification(userId, notification) {
     if (!io || !userId || !notification) {
-        logger.warn('notificationSocketService', '[sendNotification] Missing io, userId, or notification object');
+        logger.warn('notificationSocketService', '[sendNotification] Missing io, userId, or notification object', {
+            hasIo: !!io,
+            hasUserId: !!userId,
+            hasNotification: !!notification
+        });
         return false; // لا يمكن الإرسال
     }
 
     let foundActiveSocket = false; // متغير لتتبع ما إذا وجدنا سوكت نشط
     try {
         const targetRoom = `notifications-${userId}`;
+        logger.info('notificationSocketService', `[sendNotification] محاولة إرسال إشعار للمستخدم ${userId}`, {
+            notificationType: notification.type,
+            title: notification.title,
+            targetRoom
+        });
         
         const socketsInRoom = io.sockets.adapter.rooms.get(targetRoom);
         const socketIdsInRoom = socketsInRoom ? Array.from(socketsInRoom) : [];
 
         if (socketIdsInRoom.length === 0) {
-            logger.warn('notificationSocketService', '[sendNotification] No sockets found in the target room. Skipping emit.', { userId, targetRoom });
-            // لا نُرجع false هنا بعد، قد يكون المستخدم نشطًا في غرفة المحادثة
-            // سنقوم بإعادة foundActiveSocket في النهاية
+            logger.warn('notificationSocketService', '[sendNotification] No sockets found in the target room. Switching to Web Push.', { 
+                userId, 
+                targetRoom,
+                notificationId: notification._id
+            });
+            // ستتم محاولة إرسال إشعار Web Push لاحقًا إذا كان لدى المستخدم اشتراكات
         } else {
             foundActiveSocket = true; // وجدنا سوكتات نشطة في غرفة الإشعارات
+            logger.info('notificationSocketService', `[sendNotification] Found ${socketIdsInRoom.length} active sockets in room. Emitting.`, {
+                userId,
+                socketCount: socketIdsInRoom.length
+            });
+            
             io.to(targetRoom).emit('new-notification', notification);
             
             // تحديث عدد الإشعارات غير المقروءة
             const unreadCount = await NotificationService.getUnreadCount(userId);
             io.to(targetRoom).emit('unread-notifications-count', { count: unreadCount });
+            
+            logger.info('notificationSocketService', '[sendNotification] Successfully emitted notification to sockets', {
+                userId,
+                notificationId: notification._id
+            });
         }
         
         return foundActiveSocket; // إرجاع الحالة النهائية
