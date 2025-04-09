@@ -254,7 +254,7 @@
           <div class="col-md-6">
             <label for="seed" class="form-label">بذرة عشوائية (Seed)</label>
             <input type="number" class="form-control" id="seed" name="seed" min="0" max="9999999" step="1" value="<%= aiSettings.seed !== null ? aiSettings.seed : '' %>" placeholder="تركه فارغًا = عشوائي">
-            <div class="form-text">رقم تحكم للحصول على نتائج متسقة عند استخدام نفس المدخلات. اتركه فارغًا للسلوك العشوائي الطبيعي.</div>
+            <div class="form-text">رقم تحكم للحصول على نتائج متسقة عند استخدام نفس المدخلات. اتركها فارغة للحصول على ردود متنوعة.</div>
           </div>
         </div>
         
@@ -377,14 +377,14 @@
         
         <div class="row mb-3">
           <div class="col-md-4">
-            <label for="seed" class="form-label">قيمة البذرة (Seed)</label>
-            <input type="number" class="form-control" id="seed" name="seed" value="<%= aiSettings.seed || '' %>">
+            <label for="seed_advanced" class="form-label">قيمة البذرة (Seed)</label>
+            <input type="number" class="form-control" id="seed_advanced" name="seed" value="<%= aiSettings.seed || '' %>">
             <div class="form-text">قيمة عشوائية لجعل ردود النموذج أكثر قابلية للتنبؤ. اتركها فارغة للحصول على ردود متنوعة.</div>
           </div>
           
           <div class="col-md-4">
-            <label for="responseFormat" class="form-label">تنسيق الاستجابة</label>
-            <select class="form-select" id="responseFormat" name="responseFormat">
+            <label for="responseFormat_advanced" class="form-label">تنسيق الاستجابة</label>
+            <select class="form-select" id="responseFormat_advanced" name="responseFormat">
               <option value="" <%= !aiSettings.responseFormat ? 'selected' : '' %>>افتراضي</option>
               <option value="text" <%= aiSettings.responseFormat === 'text' ? 'selected' : '' %>>نص عادي</option>
               <option value="json_object" <%= aiSettings.responseFormat === 'json_object' ? 'selected' : '' %>>كائن JSON</option>
@@ -393,18 +393,18 @@
           </div>
           
           <div class="col-md-4">
-            <label for="userIdentifier" class="form-label">معرّف المستخدم</label>
-            <input type="text" class="form-control" id="userIdentifier" name="userIdentifier" value="<%= aiSettings.userIdentifier || '' %>">
+            <label for="userIdentifier_advanced" class="form-label">معرّف المستخدم</label>
+            <input type="text" class="form-control" id="userIdentifier_advanced" name="userIdentifier" value="<%= aiSettings.userIdentifier || '' %>">
             <div class="form-text">معرّف للمستخدم النهائي لتتبع استخدام API (اختياري).</div>
           </div>
         </div>
         
         <div class="row mb-3">
           <div class="col-md-4">
-            <label for="stream" class="form-label">التدفق (Streaming)</label>
+            <label for="stream_advanced" class="form-label">التدفق (Streaming)</label>
             <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="stream" name="stream" <%= aiSettings.stream ? 'checked' : '' %>>
-              <label class="form-check-label" for="stream">تفعيل التدفق</label>
+              <input class="form-check-input" type="checkbox" id="stream_advanced" name="stream" <%= aiSettings.stream ? 'checked' : '' %>>
+              <label class="form-check-label" for="stream_advanced">تفعيل التدفق</label>
             </div>
             <div class="form-text">بث ردود النماذج كلمة بكلمة بدلاً من انتظار الرد الكامل.</div>
           </div>

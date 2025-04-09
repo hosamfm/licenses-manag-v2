@@ -306,13 +306,15 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     
     // تحديث الإعدادات الجديدة
     // تحديث بذرة العشوائية
-    aiSettings.seed = seed && seed.trim() !== '' ? parseInt(seed) : null;
+    aiSettings.seed = seed ? 
+      (typeof seed === 'string' ? (seed.trim() !== '' ? parseInt(seed) : null) : (seed || null)) 
+      : null;
     
     // تحديث تنسيق الاستجابة
     aiSettings.responseFormat = responseFormat && responseFormat !== '' ? responseFormat : null;
     
     // تحديث معرّف المستخدم
-    aiSettings.userIdentifier = userIdentifier && userIdentifier.trim() !== '' ? userIdentifier : null;
+    aiSettings.userIdentifier = userIdentifier && typeof userIdentifier === 'string' && userIdentifier.trim() !== '' ? userIdentifier.trim() : null;
     
     // تحديث خيار التدفق
     aiSettings.stream = !!stream; // تحويل إلى boolean

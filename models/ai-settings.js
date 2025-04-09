@@ -244,15 +244,54 @@ aiSettingsSchema.statics.getSettings = async function() {
       truncation: process.env.AI_TRUNCATION || 'disabled',
       toolChoice: process.env.AI_TOOL_CHOICE || 'auto',
       
-      transferKeywords: Array.isArray(JSON.parse(process.env.AI_TRANSFER_KEYWORDS || '[]')) ? 
-        JSON.parse(process.env.AI_TRANSFER_KEYWORDS || '[]') : 
-        [
-          "تحدث مع مندوب",
-          "تكلم مع شخص حقيقي",
-          "أريد التحدث مع شخص",
-          "مساعدة من مندوب",
-          "تواصل مع مسؤول"
-        ]
+      transferKeywords: (() => {
+        try {
+          const keywords = process.env.AI_TRANSFER_KEYWORDS;
+          if (!keywords) return [
+            "تحدث مع مندوب",
+            "تكلم مع شخص حقيقي",
+            "أريد التحدث مع شخص",
+            "مساعدة من مندوب",
+            "تواصل مع مسؤول"
+          ];
+          
+          // محاولة تحليل النص كـ JSON
+          try {
+            const parsed = JSON.parse(keywords);
+            if (Array.isArray(parsed)) return parsed;
+          } catch (e) {
+            // إذا فشل التحليل كـ JSON، نفترض أنه نص عادي
+            console.log(`تعذر تحليل transferKeywords كـ JSON، استخدام القيمة كنص عادي: ${e.message}`);
+          }
+          
+          // التعامل مع النص كقائمة مفصولة بفواصل
+          if (typeof keywords === 'string') {
+            if (keywords.includes(',')) {
+              return keywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
+            }
+            // إذا كانت كلمة واحدة، نضعها في مصفوفة
+            return [keywords.trim()];
+          }
+          
+          // إرجاع القيم الافتراضية إذا لم نتمكن من تحليل القيمة
+          return [
+            "تحدث مع مندوب",
+            "تكلم مع شخص حقيقي",
+            "أريد التحدث مع شخص",
+            "مساعدة من مندوب",
+            "تواصل مع مسؤول"
+          ];
+        } catch (e) {
+          console.error("خطأ أثناء معالجة transferKeywords:", e);
+          return [
+            "تحدث مع مندوب",
+            "تكلم مع شخص حقيقي",
+            "أريد التحدث مع شخص",
+            "مساعدة من مندوب",
+            "تواصل مع مسؤول"
+          ];
+        }
+      })()
     });
   }
   
