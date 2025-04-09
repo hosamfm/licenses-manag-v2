@@ -269,76 +269,78 @@ class ChatGptService {
     formattedMessages.push({ role: 'system', content: systemMessageContent });
 
     // إضافة رسائل المحادثة
-    for (const message of messages) {
-      let role = 'user'; // افتراضي للرسائل الواردة من العميل
-      if (message.direction === 'outgoing') {
-        role = 'assistant';
-      } else if (message.direction === 'internal') {
-        continue; // تجاهل الملاحظات الداخلية
+    for (let i = 0; i < messages.length; i++) {
+      const message = messages[i];
+      
+      // تحديد الدور (مستخدم أو مساعد)
+      const role = message.direction === 'incoming' ? 'user' : 'assistant';
+      
+      // محتوى الرسالة
+      let content = message.content || '';
+      
+      // إضافة وصف للوسائط إذا كانت موجودة ولم يكن هناك محتوى نصي
+      if (message.mediaType && !content) {
+        content = this.getMediaDescription(message.mediaType);
       }
       
-      // تخطي الرسائل التي لا تحتوي على محتوى نصي أو وسائط مدعومة
-      if (!message.content && !message.mediaType) continue;
-      
-      let contentPayload = [];
-
-      // 1. إضافة المحتوى النصي (إن وجد)
-      if (message.content) {
-        contentPayload.push({ type: 'text', text: message.content });
+      // تخطي الرسالة إذا لم يكن هناك محتوى نصي أو وسائط صور صالحة
+      if (!content.trim() && !(message.mediaType === 'image' && message.mediaUrl)) {
+        continue;
       }
-
-      // 2. إضافة الوسائط (الصوت تم تحويله سابقاً، لذا نركز على الصور)
-      if (message.mediaType === 'image' && message.mediaUrl && this.enableVisionSupport && this.isVisionCapableModel(this.model)) {
-        let accessibleImageUrl = message.mediaUrl;
+      
+      // معالجة خاصة للصور إذا كانت موجودة ونموذج الذكاء الاصطناعي يدعم الرؤية
+      if (message.mediaType === 'image' && message.mediaUrl && this.isVisionCapableModel(this.model)) {
+        // إنشاء مصفوفة content للصور
+        const imgContent = [];
         let skipImageProcessing = false;
-        
-        // التحقق مما إذا كان الرابط يحتوي على معرف ميتا واتساب (معرف رقمي فقط)
-        const isMetaId = /^\d+$/.test(accessibleImageUrl) || (accessibleImageUrl.includes('/') && /^\d+$/.test(accessibleImageUrl.split('/').pop()));
-        
+
+        // إضافة النص إذا وجد وكان مختلفاً عن الوصف الافتراضي للصورة
+        if (content && content !== '[صورة]') {
+          imgContent.push({ type: 'text', text: content });
+        }
+
+        // التحقق من رابط الصورة وتكوينه إذا لزم الأمر
+        let accessibleImageUrl = message.mediaUrl;
+        const isMetaId = /^\\d+$/.test(accessibleImageUrl) || (accessibleImageUrl.includes('/') && /^\\d+$/.test(accessibleImageUrl.split('/').pop()));
+
         if (!accessibleImageUrl.startsWith('data:image/') && (isMetaId || !accessibleImageUrl.startsWith('http'))) {
-          logger.info('chatGptService', 'تحويل رابط غير مباشر للصورة في formatMessagesForChatGPT');
-          
-          // محاولة تحويل الرابط إلى عنوان صحيح
           if (message._id) {
             const baseUrl = process.env.BASE_URL || 'https://lic.tic-ly.com';
             accessibleImageUrl = `${baseUrl}/whatsapp/media/content/${message._id}`;
-            logger.info('chatGptService', `تم تحويل رابط الصورة إلى: ${accessibleImageUrl}`);
+            logger.info('chatGptService (formatMessages v2)', `تم تحويل رابط الصورة إلى: ${accessibleImageUrl}`);
           } else {
-            logger.warn('chatGptService', 'لا يمكن تحويل رابط الصورة - لا يوجد معرّف رسالة');
+            logger.warn('chatGptService (formatMessages v2)', 'لا يمكن تحويل رابط الصورة - لا يوجد معرّف رسالة');
             skipImageProcessing = true;
-            
-            // إضافة وصف نصي بديل
-            if (contentPayload.length === 0) {
-              contentPayload.push({ type: 'text', text: '[صورة غير متاحة]' });
+            // إضافة وصف نصي بديل إذا لم يكن هناك نص أصلاً
+            if (imgContent.length === 0) {
+              imgContent.push({ type: 'text', text: '[صورة غير متاحة]' });
             }
           }
         }
         
-        if (!skipImageProcessing) {
-          contentPayload.push({
+        // إضافة الصورة فقط إذا لم يتم تخطي المعالجة وكان الرابط صالحاً
+        if (!skipImageProcessing && accessibleImageUrl) {
+          imgContent.push({
             type: 'image_url',
-            image_url: {
+            image_url: { 
               url: accessibleImageUrl,
-              detail: "auto"
+              detail: "auto" 
             }
           });
         }
-      } else if (message.mediaType && !(message.mediaType === 'image' && this.enableVisionSupport && this.isVisionCapableModel(this.model))) {
-        // إذا كانت هناك وسائط أخرى غير مدعومة للتحليل (أو الرؤية معطلة/النموذج غير قادر)
-        // نضيف وصفًا نصيًا لها كما كان سابقًا
-        const mediaDescription = this.getMediaDescription(message.mediaType);
-        // إذا لم يكن هناك نص أصلاً، نستخدم الوصف كمحتوى رئيسي
-        if (contentPayload.length === 0) {
-          contentPayload.push({ type: 'text', text: mediaDescription });
-        } else {
-          // إذا كان هناك نص، نضيف الوصف إليه
-          contentPayload[0].text = `${mediaDescription}${contentPayload[0].text ? ': ' + contentPayload[0].text : ''}`;
+        
+        // إضافة الرسالة بمحتوى الصورة أو الوصف النصي
+        if (imgContent.length > 0) { 
+          formattedMessages.push({
+            role,
+            content: imgContent
+          });
         }
-      }
-
-      // التأكد من وجود محتوى قبل إضافته
-      if (contentPayload.length > 0) {
-        formattedMessages.push({ role, content: contentPayload });
+      } else if (content.trim()) { // إضافة الرسالة النصية فقط إذا كان هناك محتوى نصي
+        formattedMessages.push({
+          role,
+          content
+        });
       }
     }
     
@@ -880,37 +882,65 @@ class ChatGptService {
         // محتوى الرسالة
         let content = message.content || '';
         
-        // إضافة وصف للوسائط إذا كانت موجودة
+        // إضافة وصف للوسائط إذا كانت موجودة ولم يكن هناك محتوى نصي
         if (message.mediaType && !content) {
           content = this.getMediaDescription(message.mediaType);
         }
         
-        // تخطي الرسائل الفارغة
-        if (!content.trim()) continue;
+        // تخطي الرسالة إذا لم يكن هناك محتوى نصي أو وسائط صور صالحة
+        if (!content.trim() && !(message.mediaType === 'image' && message.mediaUrl)) {
+          continue;
+        }
         
         // معالجة خاصة للصور إذا كانت موجودة ونموذج الذكاء الاصطناعي يدعم الرؤية
         if (message.mediaType === 'image' && message.mediaUrl && this.isVisionCapableModel(this.model)) {
           // إنشاء مصفوفة content للصور
           const imgContent = [];
-          
-          // إضافة النص إذا وجد
+          let skipImageProcessing = false;
+
+          // إضافة النص إذا وجد وكان مختلفاً عن الوصف الافتراضي للصورة
           if (content && content !== '[صورة]') {
             imgContent.push({ type: 'text', text: content });
           }
+
+          // التحقق من رابط الصورة وتكوينه إذا لزم الأمر
+          let accessibleImageUrl = message.mediaUrl;
+          const isMetaId = /^\\d+$/.test(accessibleImageUrl) || (accessibleImageUrl.includes('/') && /^\\d+$/.test(accessibleImageUrl.split('/').pop()));
+
+          if (!accessibleImageUrl.startsWith('data:image/') && (isMetaId || !accessibleImageUrl.startsWith('http'))) {
+            if (message._id) {
+              const baseUrl = process.env.BASE_URL || 'https://lic.tic-ly.com';
+              accessibleImageUrl = `${baseUrl}/whatsapp/media/content/${message._id}`;
+              logger.info('chatGptService (formatMessages v2)', `تم تحويل رابط الصورة إلى: ${accessibleImageUrl}`);
+            } else {
+              logger.warn('chatGptService (formatMessages v2)', 'لا يمكن تحويل رابط الصورة - لا يوجد معرّف رسالة');
+              skipImageProcessing = true;
+              // إضافة وصف نصي بديل إذا لم يكن هناك نص أصلاً
+              if (imgContent.length === 0) {
+                imgContent.push({ type: 'text', text: '[صورة غير متاحة]' });
+              }
+            }
+          }
           
-          // إضافة الصورة
-          imgContent.push({
-            type: 'image_url',
-            image_url: { url: message.mediaUrl }
-          });
+          // إضافة الصورة فقط إذا لم يتم تخطي المعالجة وكان الرابط صالحاً
+          if (!skipImageProcessing && accessibleImageUrl) {
+            imgContent.push({
+              type: 'image_url',
+              image_url: { 
+                url: accessibleImageUrl,
+                detail: "auto" 
+              }
+            });
+          }
           
-          // إضافة الرسالة بمحتوى الصورة
-          formattedMessages.push({
-            role,
-            content: imgContent
-          });
-        } else {
-          // إضافة رسالة نصية عادية
+          // إضافة الرسالة بمحتوى الصورة أو الوصف النصي
+          if (imgContent.length > 0) { 
+            formattedMessages.push({
+              role,
+              content: imgContent
+            });
+          }
+        } else if (content.trim()) { // إضافة الرسالة النصية فقط إذا كان هناك محتوى نصي
           formattedMessages.push({
             role,
             content
@@ -1076,28 +1106,30 @@ class ChatGptService {
       
       // استخدام تعليمات محددة لإنشاء رسالة ترحيب مخصصة
       const prompt = `
-مهمتك هي إنشاء رسالة ترحيب قصيرة ومهذبة للعميل${customerName ? ' ' + customerName : ''}. 
-لا تتجاوز الرسالة سطرين كحد أقصى.
+مهمتك هي إنشاء رسالة ترحيب ودية وغير رسمية للعميل${customerName ? ' ' + customerName : ''}، كأنك تتحدث مع صديق.
+لا تتجاوز الرسالة سطرين أو ثلاثة كحد أقصى.
+ابدأ بالسؤال عن حاله (مثال: كيف حالك؟ أو شخبارك؟).
+ثم اسأله "كيف نخدمك اليوم؟".
 إذا كان الاسم عربياً، استخدم الاسم الأول فقط (مثال: "حسام الدين" يصبح "حسام").
 إذا كان الاسم بالإنجليزية، حاول استخدام المقابل العربي (مثال: "Mohamed" يصبح "محمد").
-لا تستخدم عبارات تقليدية مثل "كيف يمكنني مساعدتك؟" واستخدم أسلوباً أكثر احترافية وودية.
-استخدم رمز تعبيري (إيموجي) مناسب في نهاية الرسالة.
-أجب باللغة العربية فقط.`;
+تجنب تمامًا عبارة "كيف يمكنني مساعدتك؟" وأي عبارات رسمية أخرى.
+استخدم رمز تعبيري (إيموجي) ودود في نهاية الرسالة.
+أجب باللغة العربية فقط وبلهجة بسيطة ومفهومة.`;
 
       // إنشاء رسالة مخصصة باستخدام OpenAI
       const requestData = {
         model: 'gpt-3.5-turbo', // استخدام نموذج أسرع للردود البسيطة
         messages: [
-          // استخدام تعليمات موجزة لدور النظام
+          // تعديل: تحديث دور النظام ليعكس النبرة الودية
           { 
             role: "system", 
-            content: "أنت مساعد خدمة عملاء مهذب ومحترف لشركة الترابط التقني. اكتب رسائل ترحيب قصيرة باللغة العربية."
+            content: "أنت مساعد ودود وغير رسمي لشركة الترابط التقني. مهمتك كتابة رسائل ترحيب قصيرة وودية باللغة العربية."
           },
           { role: "user", content: prompt }
         ],
-        temperature: 0.7, // درجة حرارة متوسطة للتنوع المناسب
+        temperature: 0.8, // زيادة طفيفة للودية
         max_tokens: 100, // حد مناسب لرسالة قصيرة
-        presence_penalty: 0.3 // لتشجيع التنوع وتجنب العبارات المكررة
+        presence_penalty: 0.4 // تشجيع أكبر للتنوع
       };
 
       // إرسال الطلب إلى واجهة برمجة التطبيقات
@@ -1133,13 +1165,14 @@ class ChatGptService {
         firstName = nameParts[0].length > 1 ? nameParts[0] : customerName;
         
         // إزالة أي علامات خاصة قد تكون موجودة
-        firstName = firstName.replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+        firstName = firstName.replace(/[^\\p{L}\\p{N}\\s]/gu, '').trim();
       }
       
+      // تعديل: تحديث الرسالة الافتراضية لتكون ودية وغير رسمية
       if (firstName) {
-        return `مرحباً ${firstName}، كيف يمكنني مساعدتك اليوم؟ 😊`;
+        return `يا ${firstName}! كيف حالك؟ وكيف نقدر نخدمك اليوم؟ 👋`;
       } else {
-        return 'مرحباً، كيف يمكنني مساعدتك اليوم؟ 😊';
+        return 'يا هلا! كيف حالك؟ وكيف نقدر نخدمك اليوم؟ 👋';
       }
     }
   }
