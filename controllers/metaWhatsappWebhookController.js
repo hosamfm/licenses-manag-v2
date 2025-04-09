@@ -319,27 +319,14 @@ exports.handleIncomingMessages = async (messages, meta) => {
 
           // التحقق من حالة المحادثة وإعادة فتحها تلقائيًا إذا كانت مغلقة
           if (conversationInstance.status === 'closed') {
-            logger.info('metaWhatsappWebhookController', 'محاولة إعادة فتح محادثة مغلقة تلقائيًا', {
-              conversationId: conversationInstance._id.toString(),
-              phoneNumber: phone,
-              previousStatus: 'closed'
-            });
-            
             try {
               await conversationInstance.automaticReopen();
-              logger.info('metaWhatsappWebhookController', 'تم إعادة فتح المحادثة بنجاح', {
-                conversationId: conversationInstance._id.toString(),
-                phoneNumber: phone,
-                newStatus: conversationInstance.status
-              });
             } catch (reopenError) {
               logger.error('metaWhatsappWebhookController', 'فشل في إعادة فتح المحادثة تلقائيًا', {
                 conversationId: conversationInstance._id.toString(),
-                error: reopenError.message,
-                stack: reopenError.stack
+                error: reopenError.message
               });
             }
-            
             conversationInstance.lastMessageAt = new Date();
           } else {
             conversationInstance.lastMessageAt = new Date();
@@ -390,29 +377,17 @@ exports.handleIncomingMessages = async (messages, meta) => {
           
           // تسجيل حدث فتح المحادثة الجديدة
           try {
-            logger.debug('metaWhatsappWebhookController', 'محاولة تسجيل حدث إنشاء محادثة جديدة', { 
-              conversationId: conversationInstance._id.toString(),
-              phoneNumber: phone
-            });
-            
             await ConversationEvent.create({
               conversationId: conversationInstance._id,
               eventType: 'opened',
               timestamp: new Date(),
-              userId: null // لا يوجد مستخدم مرتبط بالإنشاء الأولي
-            });
-            
-            logger.info('metaWhatsappWebhookController', 'تم تسجيل حدث إنشاء محادثة جديدة بنجاح', { 
-              conversationId: conversationInstance._id.toString(),
-              phoneNumber: phone
+              userId: null
             });
           } catch (eventError) {
             logger.error('metaWhatsappWebhookController', 'فشل في تسجيل حدث إنشاء محادثة جديدة', {
               conversationId: conversationInstance._id.toString(),
-              error: eventError.message,
-              stack: eventError.stack
+              error: eventError.message
             });
-            // استمر في العملية حتى مع فشل تسجيل الحدث
           }
         }
 
