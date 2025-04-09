@@ -104,22 +104,54 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
         });
         
         try {
-          // إرسال إشعار لجميع الموظفين المؤهلين
+          // إرسال إشعار لجميع الموظفين المؤهلين (المستخدمين البشريين فقط)
           const messagePreview = message.content?.substring(0, 100) || '[رسالة وسائط]';
+          
+          // تأكد من تهيئة chatGptService بشكل صحيح
+          if (!chatGptService.initialized) {
+            await chatGptService.initialize();
+          }
+          
+          // إرسال إشعار لجميع المستخدمين البشريين المؤهلين باستخدام قناة الإشعارات المناسبة
+          logger.info('aiConversationController', 'إرسال إشعارات للمستخدمين المؤهلين للتدخل البشري', {
+            conversationId: conversation._id
+          });
+          
           await chatGptService.notifyEligibleUsers(
             conversation._id,
             'ai_detected_transfer_request',
             messagePreview
           );
           
+          // إضافة حدث إلى سجل المحادثة ليظهر أن الذكاء الاصطناعي طلب تدخل بشري
+          try {
+            const ConversationEvent = require('../models/ConversationEvent');
+            await new ConversationEvent({
+              conversationId: conversation._id,
+              eventType: 'ai_requested_human_help',
+              initiatedBy: chatGptService.aiUserId,
+              timestamp: new Date(),
+              metadata: {
+                reason: 'استشعار حاجة للتدخل البشري',
+                messagePreview: messagePreview
+              }
+            }).save();
+          } catch (eventError) {
+            logger.warn('aiConversationController', 'فشل تسجيل حدث طلب التدخل البشري', {
+              conversationId: conversation._id,
+              error: eventError.message
+            });
+          }
+          
           // إرسال رسالة للعميل
-          const transferMessage = 'سنقوم بتحويلك إلى مندوب خدمة عملاء بشري في أقرب وقت. شكراً لصبرك.';
+          const transferMessage = 'شكراً لتواصلك معنا. سنقوم بتحويلك إلى مندوب خدمة عملاء حقيقي في أقرب وقت.';
           await sendAiResponseToCustomer(conversation, transferMessage);
           
         } catch (notifyError) {
           logger.error('aiConversationController', 'خطأ في إرسال إشعار للموظفين المؤهلين', {
             conversationId: conversation._id,
-            error: notifyError.message
+            error: notifyError.message,
+            stack: notifyError.stack
           });
         }
       }

@@ -683,7 +683,37 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
     });
     
     // إرسال إشعارات بالرسالة الجديدة للمستخدمين المعنيين
-    notificationSocketService.sendMessageNotification(conversationInstance._id.toString(), message, conversationInstance);
+    // تحقق من أن المحادثة ليست مسندة للذكاء الاصطناعي قبل إرسال إشعار الرسالة
+    try {
+      // الحصول على معرف مستخدم الذكاء الاصطناعي إن وجد
+      let aiUserId = null;
+      if (global.chatGptServiceInstance && global.chatGptServiceInstance.aiUserId) {
+        aiUserId = global.chatGptServiceInstance.aiUserId;
+      } else if (require('../services/chatGptService').aiUserId) {
+        aiUserId = require('../services/chatGptService').aiUserId;
+      }
+      
+      // إرسال إشعار الرسالة فقط إذا لم تكن المحادثة مسندة للذكاء الاصطناعي
+      if (!conversationInstance.assignedTo || 
+          (aiUserId && conversationInstance.assignedTo.toString() !== aiUserId.toString())) {
+        // إرسال الإشعار فقط للمستخدمين البشريين
+        notificationSocketService.sendMessageNotification(
+          conversationInstance._id.toString(), 
+          message, 
+          conversationInstance
+        );
+      } else {
+        logger.info('metaWhatsappWebhookController', 'تم تجاوز إرسال إشعار الرسالة لأن المحادثة مسندة للذكاء الاصطناعي', {
+          conversationId: conversationInstance._id,
+          assignedTo: conversationInstance.assignedTo
+        });
+      }
+    } catch (notificationError) {
+      logger.error('metaWhatsappWebhookController', 'خطأ في معالجة إشعارات الرسائل', {
+        error: notificationError.message,
+        conversationId: conversationInstance._id
+      });
+    }
     
     // استخدام معالج الذكاء الاصطناعي للرسائل الواردة الجديدة
     if (message.direction === 'incoming') {
