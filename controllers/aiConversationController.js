@@ -272,12 +272,36 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
       conversationId: conversation._id,
       phoneNumber: phoneNumber,
       phoneNumberId: phoneNumberId,
+      responseType: typeof response,
+      responseLength: response ? response.length : 0
     });
+    
+    // التأكد من أن نص الرسالة هو سلسلة نصية
+    let messageText = '';
+    if (typeof response === 'string') {
+      messageText = response;
+    } else if (response) {
+      // محاولة تحويل الكائن إلى سلسلة نصية إذا لم يكن سلسلة
+      try {
+        messageText = String(response);
+        logger.debug('aiConversationController', 'تم تحويل نص الرسالة إلى سلسلة نصية', {
+          originalType: typeof response,
+          convertedText: messageText.substring(0, 50) + (messageText.length > 50 ? '...' : '')
+        });
+      } catch (conversionError) {
+        logger.error('aiConversationController', 'فشل تحويل نص الرسالة إلى سلسلة نصية', {
+          error: conversionError.message
+        });
+        messageText = 'عذراً، حدث خطأ في معالجة الرسالة.';
+      }
+    } else {
+      messageText = 'عذراً، لم يتم إنشاء رد.';
+    }
     
     // إرسال الرسالة عبر خدمة ميتا واتساب
     const messageResult = await metaWhatsappService.sendTextMessage(
       phoneNumber,  // رقم الهاتف المستلم (المعلمة الأولى)
-      response,     // نص الرسالة (المعلمة الثانية)
+      messageText,  // نص الرسالة (المعلمة الثانية) - بعد التأكد من أنه سلسلة نصية
       phoneNumberId // معرف رقم الهاتف المرسل (المعلمة الثالثة)
     );
     
