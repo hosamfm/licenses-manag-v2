@@ -151,27 +151,115 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
       conversationId: conversation._id 
     });
     
-    // جلب معلومات قناة واتساب
-    const channel = await WhatsAppChannel.findById(conversation.channelId);
+    // === بداية التعديل: استخدام نفس منطق النظام البشري لاستخراج phoneNumberId ===
+    // جلب رقم هاتف العميل
+    const phoneNumber = conversation.phoneNumber;
     
-    if (!channel) {
-      logger.error('aiConversationController', 'لم يتم العثور على قناة واتساب', { 
-        conversationId: conversation._id,
-        channelId: conversation.channelId 
-      });
-      return null;
+    // استخراج معرف رقم الهاتف وتوكن الوصول
+    let phoneNumberId = null;
+    let accessToken = null;
+    
+    // 1. محاولة الحصول على إعدادات من MetaWhatsappSettings
+    const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
+    
+    // تحديد settingsId من channelId
+    let settingsId = null;
+    
+    if (conversation.channelId) {
+      // يمكن أن يكون channelId كائن أو قيمة _id
+      if (typeof conversation.channelId === 'object') {
+        settingsId = conversation.channelId.settingsId;
+      } else {
+        // محاولة استخراج المعرف من WhatsAppChannel
+        try {
+          const channel = await WhatsAppChannel.findById(conversation.channelId);
+          if (channel && channel.settingsId) {
+            settingsId = channel.settingsId;
+          }
+        } catch (channelError) {
+          logger.warn('aiConversationController', 'خطأ في استخراج settingsId من channelId', {
+            conversationId: conversation._id,
+            error: channelError.message
+          });
+        }
+      }
     }
     
-    // جلب رقم الهاتف ومعرف هاتف العميل
-    const phoneNumber = conversation.phoneNumber;
-    // استخدام معرف رقم الهاتف من تكوين القناة
-    const phoneNumberId = channel.config.phoneNumberId || channel.whatsappBusinessPhoneNumberId;
-    // استخدام توكن الوصول من تكوين القناة
-    const accessToken = channel.config.accessToken || channel.accessToken;
+    // استخراج الإعدادات من settingsId إذا كان متوفرًا
+    if (settingsId) {
+      try {
+        const settings = await MetaWhatsappSettings.findById(settingsId).lean();
+        if (settings && settings.config) {
+          phoneNumberId = settings.config.phoneNumberId;
+          accessToken = settings.config.accessToken;
+          
+          logger.debug('aiConversationController', 'تم استخراج بيانات القناة من MetaWhatsappSettings', {
+            conversationId: conversation._id,
+            phoneNumberId,
+            settingsId
+          });
+        }
+      } catch (settingsError) {
+        logger.warn('aiConversationController', 'خطأ في استخراج بيانات من MetaWhatsappSettings', {
+          conversationId: conversation._id,
+          settingsId,
+          error: settingsError.message
+        });
+      }
+    }
+    
+    // 2. إذا لم نتمكن من الحصول على البيانات، نحاول استخدام طريقة النظام القديم
+    if (!phoneNumberId || !accessToken) {
+      try {
+        const channel = await WhatsAppChannel.findById(conversation.channelId);
+        
+        if (channel) {
+          phoneNumberId = channel.config?.phoneNumberId || channel.whatsappBusinessPhoneNumberId;
+          accessToken = channel.config?.accessToken || channel.accessToken;
+          
+          logger.debug('aiConversationController', 'تم استخراج بيانات القناة من طريقة النظام القديم', {
+            conversationId: conversation._id,
+            phoneNumberId,
+            channelId: conversation.channelId
+          });
+        }
+      } catch (error) {
+        logger.warn('aiConversationController', 'فشل جميع طرق استخراج بيانات القناة', {
+          conversationId: conversation._id,
+          error: error.message
+        });
+      }
+    }
+    
+    // 3. إذا كانت البيانات غير متوفرة بعد، نحاول استخدام خدمة metaWhatsappService مباشرة
+    if (!phoneNumberId || !accessToken) {
+      try {
+        // تهيئة الخدمة إذا لم تكن مهيأة
+        if (!metaWhatsappService.initialized) {
+          await metaWhatsappService.initialize();
+        }
+        
+        // محاولة استخدام الإعدادات الافتراضية
+        phoneNumberId = metaWhatsappService.settings?.config?.phoneNumberId;
+        accessToken = metaWhatsappService.settings?.config?.accessToken;
+        
+        logger.debug('aiConversationController', 'تم استخدام الإعدادات الافتراضية من metaWhatsappService', {
+          conversationId: conversation._id,
+          phoneNumberId
+        });
+      } catch (serviceError) {
+        logger.error('aiConversationController', 'خطأ في استخدام الإعدادات الافتراضية', {
+          conversationId: conversation._id,
+          error: serviceError.message
+        });
+      }
+    }
+    // === نهاية التعديل ===
     
     // التحقق من وجود البيانات المطلوبة
     if (!phoneNumber || !phoneNumberId || !accessToken) {
       logger.error('aiConversationController', 'بيانات القناة أو العميل غير مكتملة', {
+        conversationId: conversation._id,
         phoneNumber: !!phoneNumber,
         phoneNumberId: !!phoneNumberId,
         accessTokenExists: !!accessToken
@@ -181,7 +269,7 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
     
     // سجل البيانات للتصحيح
     logger.debug('aiConversationController', 'بيانات إرسال الرسالة', {
-      channelId: conversation.channelId,
+      conversationId: conversation._id,
       phoneNumber: phoneNumber,
       phoneNumberId: phoneNumberId,
     });
@@ -197,7 +285,6 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
     if (!messageResult || !messageResult.messages || messageResult.messages.length === 0) {
       logger.error('aiConversationController', 'فشل في إرسال رسالة الذكاء الاصطناعي للعميل', {
         conversationId: conversation._id,
-        channelId: channel._id,
         phoneNumber,
         phoneNumberId
       });
