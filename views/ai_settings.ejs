@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <%- include('partials/_head') %>
+  <title>إعدادات الذكاء الاصطناعي</title>
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .container {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-top: 20px;
+      margin-bottom: 20px;
+    }
+    .form-section {
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #eee;
+    }
+    .form-section:last-child {
+      border-bottom: none;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #3c4b64;
+    }
+    .form-label {
+      font-weight: bold;
+    }
+    .form-text {
+      margin-top: 5px;
+      font-size: 0.85rem;
+    }
+    .range-value {
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .btn-ai {
+      background-color: #6f42c1;
+      color: white;
+    }
+    .btn-ai:hover {
+      background-color: #5a32a3;
+      color: white;
+    }
+    .header-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .keyword-badge {
+      display: inline-block;
+      background-color: #e9ecef;
+      padding: 5px 10px;
+      margin: 5px;
+      border-radius: 15px;
+    }
+    .keyword-badge .remove-keyword {
+      margin-right: 5px;
+      cursor: pointer;
+      color: #dc3545;
+    }
+    #transferKeywords {
+      min-height: 150px;
+    }
+    #systemInstructions {
+      min-height: 250px;
+    }
+    .token-counter {
+      font-size: 0.85rem;
+      color: #6c757d;
+      text-align: left;
+      margin-top: 5px;
+    }
+    .instructions-info {
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/_header') %>
+  <div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1><i class="fas fa-robot"></i> إعدادات الذكاء الاصطناعي</h1>
+      <div class="header-buttons">
+        <button type="button" class="btn btn-warning" id="resetDefaults">
+          <i class="fas fa-undo"></i> استعادة الإعدادات الافتراضية
+        </button>
+        <a href="/settings" class="btn btn-secondary">
+          <i class="fas fa-arrow-right"></i> العودة لإعدادات النظام
+        </a>
+      </div>
+    </div>
+
+    <% if (flashMessages.error) { %>
+      <div class="alert alert-danger"><%= flashMessages.error %></div>
+    <% } %>
+    <% if (flashMessages.success) { %>
+      <div class="alert alert-success"><%= flashMessages.success %></div>
+    <% } %>
+
+    <form action="/settings/ai-detailed-settings" method="POST">
+      <!-- إعدادات API -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-key"></i> إعدادات واجهة برمجة التطبيقات (API)</h2>
+        <div class="row mb-3">
+          <div class="col-md-8">
+            <label for="apiKey" class="form-label">مفتاح API (OpenAI API Key)</label>
+            <input type="password" class="form-control" id="apiKey" name="apiKey" value="<%= aiSettings.apiKey %>" required>
+            <div class="form-text">مفتاح API الخاص بحساب OpenAI. هذا المفتاح ضروري لاستخدام خدمة الذكاء الاصطناعي.</div>
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-secondary mb-3" id="toggleApiKey">
+              <i class="fas fa-eye"></i> إظهار/إخفاء المفتاح
+            </button>
+          </div>
+        </div>
+        
+        <div class="row mb-3">
+          <div class="col-md-8">
+            <label for="apiEndpoint" class="form-label">نقطة نهاية API (API Endpoint)</label>
+            <input type="text" class="form-control" id="apiEndpoint" name="apiEndpoint" value="<%= aiSettings.apiEndpoint %>" required>
+            <div class="form-text">عنوان URL لواجهة برمجة التطبيقات. عادة ما يكون https://api.openai.com/v1/chat/completions</div>
+          </div>
+          <div class="col-md-4">
+            <label for="model" class="form-label">نموذج الذكاء الاصطناعي</label>
+            <select class="form-select" id="model" name="model">
+              <!-- النماذج الرئيسية -->
+              <optgroup label="النماذج الرئيسية (الأحدث)">
+                <option value="gpt-4.5-preview" <%= aiSettings.model === 'gpt-4.5-preview' ? 'selected' : '' %>>GPT-4.5 Preview - أحدث وأكبر نموذج من OpenAI</option>
+                <option value="gpt-4o" <%= aiSettings.model === 'gpt-4o' ? 'selected' : '' %>>GPT-4o - الإصدار المحسن والمتعدد الوسائط</option>
+                <option value="o1" <%= aiSettings.model === 'o1' ? 'selected' : '' %>>o1 - نموذج التفكير المنطقي للمهام المعقدة</option>
+                <option value="o1-mini" <%= aiSettings.model === 'o1-mini' ? 'selected' : '' %>>o1-mini - إصدار أصغر من o1 بتكلفة أقل</option>
+                <option value="o3-mini" <%= aiSettings.model === 'o3-mini' ? 'selected' : '' %>>o3-mini - نموذج خفيف يوازن بين الأداء والتكلفة</option>
+                <option value="o1-pro" <%= aiSettings.model === 'o1-pro' ? 'selected' : '' %>>o1-pro - إصدار محسن من o1 للردود الأفضل</option>
+              </optgroup>
+              
+              <!-- نماذج الاستدلال -->
+              <optgroup label="نماذج الاستدلال (o-series)">
+                <option value="o3-mini" <%= aiSettings.model === 'o3-mini' ? 'selected' : '' %>>o3-mini - نموذج استدلالي سريع ومرن</option>
+                <option value="o1" <%= aiSettings.model === 'o1' ? 'selected' : '' %>>o1 - نموذج استدلالي عالي الذكاء</option>
+                <option value="o1-mini" <%= aiSettings.model === 'o1-mini' ? 'selected' : '' %>>o1-mini - إصدار أسرع وأكثر اقتصادية من o1</option>
+                <option value="o1-pro" <%= aiSettings.model === 'o1-pro' ? 'selected' : '' %>>o1-pro - إصدار محسن من o1 للردود الأفضل</option>
+              </optgroup>
+              
+              <!-- نماذج الوقت الفعلي -->
+              <optgroup label="نماذج الوقت الفعلي">
+                <option value="gpt-4o-realtime-preview" <%= aiSettings.model === 'gpt-4o-realtime-preview' ? 'selected' : '' %>>GPT-4o Realtime - دعم النص والصوت بالوقت الفعلي</option>
+                <option value="gpt-4o-mini-realtime-preview" <%= aiSettings.model === 'gpt-4o-mini-realtime-preview' ? 'selected' : '' %>>GPT-4o mini Realtime - إصدار اقتصادي للوقت الفعلي</option>
+              </optgroup>
+              
+              <!-- النماذج القديمة -->
+              <optgroup label="النماذج القديمة (مدعومة)">
+                <option value="gpt-4-turbo" <%= aiSettings.model === 'gpt-4-turbo' ? 'selected' : '' %>>GPT-4 Turbo</option>
+                <option value="gpt-4" <%= aiSettings.model === 'gpt-4' ? 'selected' : '' %>>GPT-4</option>
+                <option value="gpt-3.5-turbo" <%= aiSettings.model === 'gpt-3.5-turbo' ? 'selected' : '' %>>GPT-3.5 Turbo</option>
+                <option value="gpt-3.5-turbo-16k" <%= aiSettings.model === 'gpt-3.5-turbo-16k' ? 'selected' : '' %>>GPT-3.5 Turbo (16K)</option>
+              </optgroup>
+            </select>
+            <div class="form-text">نموذج OpenAI المستخدم. النماذج الأحدث تكون أكثر قدرة لكن أعلى تكلفة. لاحظ أن بعض النماذج قد تتطلب ترقية حسابك لدى OpenAI.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- إعدادات الوسائط المتعددة -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-photo-video"></i> إعدادات الوسائط المتعددة</h2>
+        <p class="text-muted">هذه الإعدادات تسمح للذكاء الاصطناعي بتحليل ومعالجة الصور والتسجيلات الصوتية التي يرسلها العملاء.</p>
+        
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="enableVisionSupport" name="enableVisionSupport" <%= aiSettings.enableVisionSupport ? 'checked' : '' %>>
+              <label class="form-check-label" for="enableVisionSupport">تفعيل تحليل الصور ومقاطع الفيديو</label>
+            </div>
+            <div class="form-text mb-3">
+              تمكين دعم تحليل الصور يسمح للذكاء الاصطناعي بفهم ووصف الصور المرسلة من العملاء. هذه الميزة تعمل فقط مع النماذج التي تدعم الرؤية مثل GPT-4o.
+            </div>
+          </div>
+          
+          <div class="col-md-6">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="enableAudioSupport" name="enableAudioSupport" <%= aiSettings.enableAudioSupport ? 'checked' : '' %>>
+              <label class="form-check-label" for="enableAudioSupport">تفعيل تحليل التسجيلات الصوتية</label>
+            </div>
+            <div class="form-text mb-3">
+              تمكين دعم تحليل الصوت يسمح للذكاء الاصطناعي بتحويل الرسائل الصوتية إلى نص، ومن ثم الرد عليها.
+            </div>
+          </div>
+        </div>
+        
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="audioToTextModel" class="form-label">نموذج تحويل الصوت إلى نص</label>
+            <select class="form-select" id="audioToTextModel" name="audioToTextModel">
+              <option value="whisper-1" <%= aiSettings.audioToTextModel === 'whisper-1' ? 'selected' : '' %>>Whisper-1 (المتوازن)</option>
+              <option value="whisper-2" <%= aiSettings.audioToTextModel === 'whisper-2' ? 'selected' : '' %>>Whisper-2 (الأحدث والأدق)</option>
+            </select>
+            <div class="form-text">نموذج Whisper المستخدم لتحويل الصوت إلى نص. النماذج الأحدث تكون أكثر دقة.</div>
+          </div>
+          
+          <div class="col-md-6">
+            <label for="textToSpeechModel" class="form-label">نموذج تحويل النص إلى صوت</label>
+            <select class="form-select" id="textToSpeechModel" name="textToSpeechModel">
+              <option value="tts-1" <%= aiSettings.textToSpeechModel === 'tts-1' ? 'selected' : '' %>>TTS-1 (الأساسي)</option>
+              <option value="tts-1-hd" <%= aiSettings.textToSpeechModel === 'tts-1-hd' ? 'selected' : '' %>>TTS-1-HD (جودة عالية)</option>
+            </select>
+            <div class="form-text">نموذج تحويل النص إلى صوت للرد على العملاء بتسجيلات صوتية عند الحاجة.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- إعدادات التوليد -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-sliders-h"></i> إعدادات جودة التوليد</h2>
+        <p class="text-muted">هذه الإعدادات تؤثر على جودة وطبيعة الردود التي ينتجها الذكاء الاصطناعي. تعديلها يمكن أن يحسن الردود حسب احتياجات خدمة العملاء.</p>
+        
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="temperature" class="form-label">درجة الحرارة (Temperature): <span id="temperatureValue" class="range-value"><%= aiSettings.temperature %></span></label>
+            <input type="range" class="form-range" id="temperature" name="temperature" min="0" max="2" step="0.1" value="<%= aiSettings.temperature %>">
+            <div class="form-text">تتحكم في درجة إبداعية الردود. القيم المنخفضة تنتج ردوداً أكثر تحديداً وأقل مخاطرة، والقيم العالية تزيد من الإبداع والتنوع.</div>
+          </div>
+          <div class="col-md-6">
+            <label for="maxTokens" class="form-label">الحد الأقصى للرموز (Max Tokens): <span id="maxTokensValue" class="range-value"><%= aiSettings.maxTokens %></span></label>
+            <input type="range" class="form-range" id="maxTokens" name="maxTokens" min="100" max="4000" step="50" value="<%= aiSettings.maxTokens %>">
+            <div class="form-text">الحد الأقصى لطول الرد. الرموز هي وحدات النص التي يعالجها الذكاء الاصطناعي. حوالي 750 رمز تساوي 500 كلمة عربية.</div>
+          </div>
+        </div>
+        
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="topP" class="form-label">أعلى احتمالية (Top P): <span id="topPValue" class="range-value"><%= aiSettings.topP %></span></label>
+            <input type="range" class="form-range" id="topP" name="topP" min="0" max="1" step="0.05" value="<%= aiSettings.topP %>">
+            <div class="form-text">تتحكم في تنوع الكلمات المختارة. استخدم قيمة أقل (مثل 0.5) للحصول على إجابات أكثر تركيزاً، وقيمة أعلى للمزيد من الاحتمالات.</div>
+          </div>
+          <div class="col-md-6">
+            <label for="frequencyPenalty" class="form-label">عقوبة التكرار (Frequency Penalty): <span id="frequencyPenaltyValue" class="range-value"><%= aiSettings.frequencyPenalty %></span></label>
+            <input type="range" class="form-range" id="frequencyPenalty" name="frequencyPenalty" min="-2" max="2" step="0.1" value="<%= aiSettings.frequencyPenalty %>">
+            <div class="form-text">تثبيط تكرار نفس الكلمات والعبارات. القيم الموجبة تشجع التنوع في المفردات والموضوعات.</div>
+          </div>
+        </div>
+        
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="presencePenalty" class="form-label">عقوبة الحضور (Presence Penalty): <span id="presencePenaltyValue" class="range-value"><%= aiSettings.presencePenalty %></span></label>
+            <input type="range" class="form-range" id="presencePenalty" name="presencePenalty" min="-2" max="2" step="0.1" value="<%= aiSettings.presencePenalty %>">
+            <div class="form-text">تشجيع التحدث عن مواضيع جديدة. القيم الموجبة تساعد على تجنب تكرار الأفكار والمواضيع نفسها.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- إعدادات السياق -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-history"></i> إعدادات السياق والتاريخ</h2>
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="conversationHistoryLimit" class="form-label">حد تاريخ المحادثة الحالية: <span id="conversationHistoryLimitValue" class="range-value"><%= aiSettings.conversationHistoryLimit %></span></label>
+            <input type="range" class="form-range" id="conversationHistoryLimit" name="conversationHistoryLimit" min="5" max="50" step="1" value="<%= aiSettings.conversationHistoryLimit %>">
+            <div class="form-text">عدد الرسائل السابقة التي سيتذكرها الذكاء الاصطناعي في المحادثة الحالية. القيمة الأعلى تحسن السياق لكن تزيد التكلفة.</div>
+          </div>
+          <div class="col-md-6">
+            <label for="previousConversationsLimit" class="form-label">حد المحادثات السابقة: <span id="previousConversationsLimitValue" class="range-value"><%= aiSettings.previousConversationsLimit %></span></label>
+            <input type="range" class="form-range" id="previousConversationsLimit" name="previousConversationsLimit" min="0" max="10" step="1" value="<%= aiSettings.previousConversationsLimit %>">
+            <div class="form-text">عدد المحادثات السابقة المكتملة التي سيتم تزويد الذكاء الاصطناعي بملخص عنها. القيمة 0 تعني تجاهل المحادثات السابقة.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- كلمات التحويل للمندوب البشري -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-exchange-alt"></i> كلمات التحويل للمندوب البشري</h2>
+        <p class="text-muted">عند اكتشاف أي من هذه الكلمات أو العبارات في رسالة العميل، سيتم تحويل المحادثة تلقائياً إلى مندوب بشري.</p>
+        
+        <div class="row mb-3">
+          <div class="col-md-12">
+            <div class="instructions-info">
+              <p><i class="fas fa-info-circle"></i> <strong>تعليمات:</strong> أضف كلمات أو عبارات منفصلة بسطور جديدة. عندما يكتب العميل إحدى هذه العبارات، سيتم تحويله لمندوب بشري.</p>
+            </div>
+            <textarea class="form-control" id="transferKeywords" name="transferKeywords" rows="8"><%= aiSettings.transferKeywords.join('\n') %></textarea>
+            <div class="form-text">
+              أمثلة: "أريد التحدث مع شخص"، "تحويل إلى موظف"، "مشكلة معقدة"، إلخ.
+              <br>
+              <strong>ملاحظة:</strong> اكتب كل كلمة أو عبارة في سطر منفصل.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- تعليمات النظام للذكاء الاصطناعي -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-brain"></i> تعليمات النظام للذكاء الاصطناعي</h2>
+        
+        <div class="instructions-info">
+          <p><strong>ماذا تعني تعليمات النظام؟</strong></p>
+          <p>تعليمات النظام هي التوجيهات الرئيسية للذكاء الاصطناعي التي تحدد كيفية تصرفه وطبيعة ردوده على العملاء. يمكنك تعديل هذه التعليمات لتخصيص طريقة تعامل الذكاء الاصطناعي مع العملاء.</p>
+          <p><strong>نصائح لكتابة تعليمات فعالة:</strong></p>
+          <ul>
+            <li>حدد هوية المساعد الآلي بوضوح (الاسم والدور)</li>
+            <li>اشرح طبيعة اللغة والأسلوب المتوقع استخدامه</li>
+            <li>وضح السياق والقيود المطلوبة</li>
+            <li>أضف توجيهات حول كيفية التعامل مع الاستفسارات المختلفة</li>
+          </ul>
+        </div>
+        
+        <div class="row mb-3">
+          <div class="col-md-12">
+            <textarea class="form-control" id="systemInstructions" name="systemInstructions" rows="12"><%= aiSettings.systemInstructions %></textarea>
+            <div class="token-counter">عدد الأحرف: <span id="charCount">0</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-ai btn-lg">
+          <i class="fas fa-save"></i> حفظ إعدادات الذكاء الاصطناعي
+        </button>
+      </div>
+    </form>
+
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // تحديث قيم النطاقات عند التغيير
+      const rangeInputs = document.querySelectorAll('input[type="range"]');
+      rangeInputs.forEach(input => {
+        const valueSpan = document.getElementById(`${input.id}Value`);
+        input.addEventListener('input', function() {
+          valueSpan.textContent = this.value;
+        });
+      });
+
+      // عداد الأحرف لتعليمات النظام
+      const systemInstructions = document.getElementById('systemInstructions');
+      const charCount = document.getElementById('charCount');
+      
+      function updateCharCount() {
+        charCount.textContent = systemInstructions.value.length;
+      }
+      
+      systemInstructions.addEventListener('input', updateCharCount);
+      updateCharCount(); // تحديث أولي
+      
+      // إظهار/إخفاء مفتاح API
+      const toggleApiKey = document.getElementById('toggleApiKey');
+      const apiKeyInput = document.getElementById('apiKey');
+      
+      toggleApiKey.addEventListener('click', function() {
+        if (apiKeyInput.type === 'password') {
+          apiKeyInput.type = 'text';
+        } else {
+          apiKeyInput.type = 'password';
+        }
+      });
+      
+      // استعادة الإعدادات الافتراضية
+      document.getElementById('resetDefaults').addEventListener('click', function() {
+        if (confirm('هل أنت متأكد من استعادة جميع الإعدادات إلى قيمها الافتراضية؟')) {
+          window.location.href = '/settings/ai-settings-reset';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

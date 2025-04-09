@@ -51,6 +51,15 @@
       color: #666;
       margin-bottom: 15px;
     }
+    .btn-outline-purple {
+      color: #6f42c1;
+      border-color: #6f42c1;
+    }
+    .btn-outline-purple:hover {
+      color: #fff;
+      background-color: #6f42c1;
+      border-color: #6f42c1;
+    }
   </style>
 </head>
 <body>
@@ -176,7 +185,12 @@
               </p>
             </div>
 
-            <button type="submit" class="btn btn-primary">حفظ إعدادات الذكاء الاصطناعي</button>
+            <div class="d-flex justify-content-between">
+              <button type="submit" class="btn btn-primary">حفظ إعدادات الذكاء الاصطناعي</button>
+              <a href="/settings/ai-settings" class="btn btn-outline-purple">
+                <i class="fas fa-cog"></i> الإعدادات المتقدمة للذكاء الاصطناعي
+              </a>
+            </div>
           </form>
         </div>
       </div>

@@ -7,33 +7,34 @@ const axios = require('axios');
 const logger = require('./loggerService');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const User = require('../models/User');
+const AISettings = require('../models/AISettings');
 const socketService = require('./socketService');
+const FormData = require('form-data');
 require('dotenv').config();
 
 class ChatGptService {
   constructor() {
-    // إعدادات API
-    this.apiKey = process.env.OPENAI_API_KEY;
-    this.apiEndpoint = process.env.OPENAI_API_ENDPOINT || 'https://api.openai.com/v1/chat/completions';
-    this.model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+    // إعدادات API (سيتم تحميلها من قاعدة البيانات)
+    this.apiKey = null;
+    this.apiEndpoint = null;
+    this.model = null;
     
-    // إعدادات الجودة
-    this.temperature = parseFloat(process.env.AI_TEMPERATURE || '0.7');
-    this.maxTokens = parseInt(process.env.AI_MAX_TOKENS || '800');
-    this.topP = parseFloat(process.env.AI_TOP_P || '0.9');
-    this.presencePenalty = parseFloat(process.env.AI_PRESENCE_PENALTY || '0.6');
-    this.frequencyPenalty = parseFloat(process.env.AI_FREQUENCY_PENALTY || '0.5');
+    // إعدادات الجودة (سيتم تحميلها من قاعدة البيانات)
+    this.temperature = null;
+    this.maxTokens = null;
+    this.topP = null;
+    this.presencePenalty = null;
+    this.frequencyPenalty = null;
     
-    // إعدادات السياق والتاريخ
-    this.conversationHistoryLimit = parseInt(process.env.AI_HISTORY_LIMIT || '15');
-    this.previousConversationsLimit = parseInt(process.env.AI_PREVIOUS_CONVERSATIONS_LIMIT || '3');
+    // إعدادات السياق والتاريخ (سيتم تحميلها من قاعدة البيانات)
+    this.conversationHistoryLimit = null;
+    this.previousConversationsLimit = null;
     
-    // تعليمات الذكاء الاصطناعي
-    this.systemInstructions = process.env.AI_SYSTEM_INSTRUCTIONS || `أنت مساعد ذكاء اصطناعي مفيد في خدمة العملاء باسم "مساعد". 
-مهمتك مساعدة العملاء بلغة عربية فصيحة ومهذبة. استخدم لهجة احترافية ولطيفة.`;
+    // تعليمات الذكاء الاصطناعي (سيتم تحميلها من قاعدة البيانات)
+    this.systemInstructions = null;
     
-    // كلمات تحويل المحادثة لمندوب بشري
-    this.transferKeywords = (process.env.AI_TRANSFER_KEYWORDS || '').split(',').filter(k => k.trim() !== '');
+    // كلمات تحويل المحادثة لمندوب بشري (سيتم تحميلها من قاعدة البيانات)
+    this.transferKeywords = [];
     
     // حالة التهيئة
     this.initialized = false;
@@ -44,22 +45,103 @@ class ChatGptService {
    * تهيئة الخدمة والتأكد من وجود مستخدم الذكاء الاصطناعي
    */
   async initialize() {
-    if (!this.apiKey) {
-      logger.error('chatGptService', 'مفتاح API غير موجود. يرجى ضبط OPENAI_API_KEY في ملف البيئة.');
-      return false;
-    }
-
     try {
+      // تحميل إعدادات الذكاء الاصطناعي من قاعدة البيانات
+      await this.loadSettings();
+      
+      if (!this.apiKey) {
+        logger.error('chatGptService', 'مفتاح API غير موجود. يرجى إعداد مفتاح API في إعدادات الذكاء الاصطناعي.');
+        return false;
+      }
+
       // التأكد من وجود مستخدم AI
       const aiUser = await this.ensureAiUserExists();
       this.aiUserId = aiUser._id;
       this.initialized = true;
-      logger.info('chatGptService', `تم تهيئة خدمة الذكاء الاصطناعي بنجاح. مستخدم AI ID: ${this.aiUserId}`);
+      logger.info('chatGptService', `تم تهيئة خدمة الذكاء الاصطناعي بنجاح. مستخدم AI ID: ${this.aiUserId} | نموذج: ${this.model}`);
       return true;
     } catch (error) {
       logger.error('chatGptService', 'فشل في تهيئة خدمة الذكاء الاصطناعي:', error);
       return false;
     }
+  }
+
+  /**
+   * تحميل إعدادات الذكاء الاصطناعي من قاعدة البيانات
+   */
+  async loadSettings() {
+    try {
+      // الحصول على إعدادات الذكاء الاصطناعي من قاعدة البيانات
+      const settings = await AISettings.getSettings();
+      
+      if (settings) {
+        // تحميل إعدادات API
+        this.apiKey = settings.apiKey;
+        this.model = settings.model;
+        
+        // تحديد نقطة النهاية المناسبة حسب النموذج
+        this.apiEndpoint = this.determineApiEndpoint(settings.model, settings.apiEndpoint);
+        
+        // تحميل إعدادات الوسائط المتعددة
+        this.enableVisionSupport = settings.enableVisionSupport;
+        this.enableAudioSupport = settings.enableAudioSupport;
+        this.audioToTextModel = settings.audioToTextModel;
+        this.textToSpeechModel = settings.textToSpeechModel;
+        
+        // تحميل إعدادات الجودة
+        this.temperature = settings.temperature;
+        this.maxTokens = settings.maxTokens;
+        this.topP = settings.topP;
+        this.presencePenalty = settings.presencePenalty;
+        this.frequencyPenalty = settings.frequencyPenalty;
+        
+        // تحميل إعدادات السياق والتاريخ
+        this.conversationHistoryLimit = settings.conversationHistoryLimit;
+        this.previousConversationsLimit = settings.previousConversationsLimit;
+        
+        // تحميل تعليمات الذكاء الاصطناعي
+        this.systemInstructions = settings.systemInstructions;
+        
+        // تحميل كلمات التحويل
+        this.transferKeywords = settings.transferKeywords || [];
+        
+        logger.info('chatGptService', 'تم تحميل إعدادات الذكاء الاصطناعي من قاعدة البيانات بنجاح');
+        return true;
+      } else {
+        logger.error('chatGptService', 'لم يتم العثور على إعدادات الذكاء الاصطناعي في قاعدة البيانات');
+        return false;
+      }
+    } catch (error) {
+      logger.error('chatGptService', 'خطأ في تحميل إعدادات الذكاء الاصطناعي:', error);
+      return false;
+    }
+  }
+
+  /**
+   * تحديد نقطة النهاية المناسبة بناءً على النموذج
+   * @param {String} model اسم النموذج
+   * @param {String} defaultEndpoint نقطة النهاية الافتراضية
+   * @returns {String} نقطة النهاية المناسبة للنموذج
+   */
+  determineApiEndpoint(model, defaultEndpoint) {
+    // نقطة النهاية الافتراضية إذا لم يتم تحديدها في الإعدادات
+    const fallbackEndpoint = defaultEndpoint || 'https://api.openai.com/v1/chat/completions';
+    
+    // تحديد النقطة بناءً على اسم النموذج
+    if (model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) {
+      // جميع نماذج الدردشة والاستدلال الحالية تستخدم هذه النقطة
+      return 'https://api.openai.com/v1/chat/completions';
+    } else if (model.startsWith('whisper')) {
+      // نماذج تحويل الكلام إلى نص
+      return 'https://api.openai.com/v1/audio/transcriptions';
+    } else if (model.startsWith('tts')) {
+      // نماذج تحويل النص إلى كلام
+      return 'https://api.openai.com/v1/audio/speech';
+    }
+    // يمكنك إضافة نقاط نهاية أخرى هنا إذا لزم الأمر (مثل التضمين)
+    
+    // إرجاع نقطة النهاية الافتراضية من الإعدادات أو الـ fallback
+    return fallbackEndpoint;
   }
 
   /**
@@ -159,95 +241,126 @@ class ChatGptService {
    * @param {Array} previousConversations سجل المحادثات السابقة (اختياري)
    */
   formatMessagesForChatGPT(messages, customerInfo = null, previousConversations = []) {
-    // تحويل المحادثة إلى تنسيق مناسب لـ ChatGPT
     const formattedMessages = [];
     
-    // إنشاء رسالة النظام مع معلومات العميل
+    // إنشاء رسالة النظام مع معلومات العميل وسجل المحادثات السابقة
+    let systemMessageContent = this.buildSystemMessage(customerInfo, previousConversations);
+    formattedMessages.push({ role: 'system', content: systemMessageContent });
+
+    // إضافة رسائل المحادثة
+    for (const message of messages) {
+      let role = 'user'; // افتراضي للرسائل الواردة من العميل
+      if (message.direction === 'outgoing') {
+        role = 'assistant';
+      } else if (message.direction === 'internal') {
+        continue; // تجاهل الملاحظات الداخلية
+      }
+      
+      // تخطي الرسائل التي لا تحتوي على محتوى نصي أو وسائط مدعومة
+      if (!message.content && !message.mediaType) continue;
+      
+      let contentPayload = [];
+
+      // 1. إضافة المحتوى النصي (إن وجد)
+      if (message.content) {
+        contentPayload.push({ type: 'text', text: message.content });
+      }
+
+      // 2. إضافة الوسائط (الصوت تم تحويله سابقاً، لذا نركز على الصور)
+      if (message.mediaType === 'image' && message.mediaUrl && this.enableVisionSupport && this.isVisionCapableModel(this.model)) {
+        contentPayload.push({
+          type: 'image_url',
+          image_url: {
+            url: message.mediaUrl,
+            // يمكن إضافة detail هنا (low, high, auto) إذا لزم الأمر
+            // detail: "auto"
+          }
+        });
+      } else if (message.mediaType && !(message.mediaType === 'image' && this.enableVisionSupport && this.isVisionCapableModel(this.model))) {
+        // إذا كانت هناك وسائط أخرى غير مدعومة للتحليل (أو الرؤية معطلة/النموذج غير قادر)
+        // نضيف وصفًا نصيًا لها كما كان سابقًا
+        const mediaDescription = this.getMediaDescription(message.mediaType);
+        // إذا لم يكن هناك نص أصلاً، نستخدم الوصف كمحتوى رئيسي
+        if (contentPayload.length === 0) {
+          contentPayload.push({ type: 'text', text: mediaDescription });
+        } else {
+          // إذا كان هناك نص، نضيف الوصف إليه
+          contentPayload[0].text = `${mediaDescription}${contentPayload[0].text ? ': ' + contentPayload[0].text : ''}`;
+        }
+      }
+
+      // التأكد من وجود محتوى قبل إضافته
+      if (contentPayload.length > 0) {
+        formattedMessages.push({ role, content: contentPayload });
+      }
+    }
+    
+    return formattedMessages;
+  }
+
+  /**
+   * بناء محتوى رسالة النظام
+   * @param {Object} customerInfo معلومات العميل
+   * @param {Array} previousConversations سجل المحادثات السابقة
+   * @returns {String} محتوى رسالة النظام
+   */
+  buildSystemMessage(customerInfo, previousConversations) {
     let systemMessage = this.systemInstructions;
 
-    // إضافة معلومات العميل إذا كانت متوفرة
+    // إضافة معلومات العميل
     if (customerInfo) {
       systemMessage += `\n\nمعلومات العميل:`;
-      
-      if (customerInfo.name) {
-        systemMessage += `\n- الاسم: ${customerInfo.name}`;
-      }
-      
-      if (customerInfo.phoneNumber) {
-        systemMessage += `\n- رقم الهاتف: ${customerInfo.phoneNumber}`;
-      }
-      
-      if (customerInfo.email) {
-        systemMessage += `\n- البريد الإلكتروني: ${customerInfo.email}`;
-      }
-      
-      if (customerInfo.company) {
-        systemMessage += `\n- الشركة: ${customerInfo.company}`;
-      }
-      
-      if (customerInfo.notes) {
-        systemMessage += `\n- ملاحظات: ${customerInfo.notes}`;
-      }
+      if (customerInfo.name) systemMessage += `\n- الاسم: ${customerInfo.name}`;
+      if (customerInfo.phoneNumber) systemMessage += `\n- رقم الهاتف: ${customerInfo.phoneNumber}`;
+      if (customerInfo.email) systemMessage += `\n- البريد الإلكتروني: ${customerInfo.email}`;
+      if (customerInfo.company) systemMessage += `\n- الشركة: ${customerInfo.company}`;
+      if (customerInfo.notes) systemMessage += `\n- ملاحظات: ${customerInfo.notes}`;
     } else {
       systemMessage += `\n\nلا توجد معلومات مسبقة عن هذا العميل. حاول جمع المعلومات الأساسية مثل الاسم أثناء المحادثة.`;
     }
-    
-    // إضافة سجل المحادثات السابقة إذا كان متوفراً
+
+    // إضافة سجل المحادثات السابقة
     if (previousConversations && previousConversations.length > 0) {
       systemMessage += `\n\nسجل المحادثات السابقة مع العميل:`;
-      
       previousConversations.forEach((conv, index) => {
         systemMessage += `\n\nمحادثة سابقة #${index + 1} (${conv.date}):`;
         systemMessage += `\n- بدأت بـ: "${conv.firstMessage.substring(0, 100)}${conv.firstMessage.length > 100 ? '...' : ''}"`;
         systemMessage += `\n- انتهت بـ: "${conv.lastMessage.substring(0, 100)}${conv.lastMessage.length > 100 ? '...' : ''}"`;
         systemMessage += `\n- عدد الرسائل: ${conv.messageCount}`;
       });
-      
       systemMessage += `\n\nاستخدم هذه المعلومات للتعامل بشكل أفضل مع العميل وتذكر تفاصيل التواصل السابق إذا كان ذلك مناسباً.`;
     }
-    
+
+    // تعليمات خاصة بمعالجة اسم العميل
+    const customerName = customerInfo?.name || 'العميل';
+    systemMessage += `\n\nتعليمات خاصة بمعالجة اسم العميل:
+1. قمت بتزويدك باسم العميل: "${customerName}"
+2. يجب عليك تحليل هذا الاسم لتحديد ما إذا كان اسم شخص فعلاً أو شيء آخر (مثل اسم شركة أو معرّف)
+3. إذا كان اسم شخص، استخدم الاسم الأول فقط عند مخاطبته (مثلاً: إذا كان الاسم "حسام الدين مظلوم"، خاطبه بـ "حسام" فقط)
+4. إذا كان الاسم باللغة اللاتينية وتتحدث مع العميل بالعربية، حاول استخدام الاسم بالعربية إذا أمكن
+5. إذا لم يكن اسم شخص أو لا تستطيع تحديد ذلك بشكل واضح، استخدم كلمة "عزيزي العميل" أو لا تستخدم الاسم مطلقاً
+6. تجنب استخدام الاسم الكامل في المخاطبة، فهذا يبدو رسمياً وغير طبيعي`;
+
     // إضافة تعليمات التعامل مع العميل
     systemMessage += `\n\nتعليمات التعامل مع العميل:
-1. ناديه باسمه: "${customerInfo?.name || 'العميل'}" عند بدء المحادثة
-2. كن مفيداً ودقيقاً ومختصراً في ردودك
-3. إذا طلب معلومات تقنية معقدة أو كانت المشكلة تحتاج لتدخل بشري، أخبره بلطف أنك ستقوم بتحويله لمندوب خدمة عملاء
-4. لا تخترع معلومات غير موجودة عن العميل أو عن خدماتنا
-5. حافظ على أدب الحوار دائماً مهما كانت طريقة التحدث من قبل العميل
-6. ذكّر العميل بأنك مساعد آلي إذا سأل عن طبيعتك`;
-    
-    // إضافة رسالة النظام
-    formattedMessages.push({
-      role: 'system',
-      content: systemMessage
-    });
+1. كن مفيداً ودقيقاً ومختصراً في ردودك
+2. إذا طلب معلومات تقنية معقدة أو كانت المشكلة تحتاج لتدخل بشري، أخبره بلطف أنك ستقوم بتحويله لمندوب خدمة عملاء
+3. لا تخترع معلومات غير موجودة عن العميل أو عن خدماتنا
+4. حافظ على أدب الحوار دائماً مهما كانت طريقة التحدث من قبل العميل
+5. ذكّر العميل بأنك مساعد آلي إذا سأل عن طبيعتك`;
 
-    // إضافة رسائل المحادثة
-    for (const message of messages) {
-      // تحديد الدور بناءً على اتجاه الرسالة
-      let role = 'user'; // افتراضي للرسائل الواردة من العميل
-      
-      if (message.direction === 'outgoing') {
-        role = 'assistant'; // للردود السابقة من النظام أو المندوبين
-      } else if (message.direction === 'internal') {
-        continue; // تجاهل الملاحظات الداخلية
-      }
-      
-      // تجاهل الرسائل الفارغة
-      if (!message.content && !message.mediaType) continue;
-      
-      // إضافة محتوى الرسالة
-      let content = message.content || '';
-      
-      // إضافة وصف للوسائط إذا وجدت
-      if (message.mediaType) {
-        const mediaDescription = this.getMediaDescription(message.mediaType);
-        content = `${mediaDescription}${content ? ': ' + content : ''}`;
-      }
-      
-      formattedMessages.push({ role, content });
-    }
-    
-    return formattedMessages;
+    return systemMessage;
+  }
+  
+  /**
+   * التحقق مما إذا كان النموذج يدعم الرؤية
+   * @param {String} model اسم النموذج
+   * @returns {Boolean}
+   */
+  isVisionCapableModel(model) {
+    // قائمة النماذج المعروفة بدعم الرؤية
+    const visionModels = ['gpt-4o', 'gpt-4.5-preview', 'gpt-4-turbo']; // قد تحتاج للتحديث
+    return visionModels.some(vm => model.startsWith(vm));
   }
 
   /**
@@ -275,18 +388,46 @@ class ChatGptService {
       if (!this.initialized || !this.apiKey) {
         throw new Error('لم يتم تهيئة خدمة الذكاء الاصطناعي بشكل صحيح');
       }
-      
-      const response = await axios.post(
-        this.apiEndpoint,
-        {
+
+      // إعداد متغيرات الطلب
+      let apiUrl = this.apiEndpoint;
+      let data = {
+        model: this.model,
+        messages: formattedMessages,
+        temperature: this.temperature,
+        max_tokens: this.maxTokens,
+        top_p: this.topP,
+        presence_penalty: this.presencePenalty,
+        frequency_penalty: this.frequencyPenalty
+      };
+
+      // تعديل هيكل الطلب حسب النموذج
+      if (this.model.startsWith('o1') || this.model.startsWith('o3')) {
+        // نماذج الاستدلال تستخدم بنية مختلفة للطلب
+        data = {
           model: this.model,
-          messages: formattedMessages,
+          input: {
+            messages: formattedMessages
+          },
           temperature: this.temperature,
           max_tokens: this.maxTokens,
           top_p: this.topP,
-          presence_penalty: this.presencePenalty,
-          frequency_penalty: this.frequencyPenalty
-        },
+        };
+      }
+      
+      // التحقق إذا كانت الرسائل تحتوي على صور والتأكد من دعم النموذج
+      const containsImages = this.checkIfMessagesContainImages(formattedMessages);
+      const supportsVision = this.isVisionCapableModel(this.model);
+      
+      if (containsImages && !supportsVision) {
+        logger.warn('chatGptService', `تم اكتشاف صور في الرسائل ولكن النموذج ${this.model} لا يدعم الرؤية. يفضل استخدام نموذج مثل gpt-4o.`);
+      }
+      
+      logger.info('chatGptService', `إرسال طلب إلى OpenAI: نموذج=${this.model}, دعم الرؤية=${supportsVision}, تحتوي على صور=${containsImages}`);
+      
+      const response = await axios.post(
+        apiUrl,
+        data,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -295,15 +436,61 @@ class ChatGptService {
         }
       );
       
-      if (response.data && response.data.choices && response.data.choices.length > 0) {
-        return response.data.choices[0].message.content;
+      // معالجة الاستجابة حسب نوع النموذج
+      if (this.model.startsWith('o1') || this.model.startsWith('o3')) {
+        // نماذج الاستدلال لها بنية استجابة مختلفة
+        if (response.data && response.data.output && response.data.output.message) {
+          return response.data.output.message.content;
+        }
       } else {
-        throw new Error('لم يتم الحصول على رد من ChatGPT');
+        // معالجة الاستجابة للنماذج القياسية
+        if (response.data && response.data.choices && response.data.choices.length > 0) {
+          // رد النموذج قد يكون محتوى نصيًا أو كائن محتوى
+          const message = response.data.choices[0].message;
+          
+          if (typeof message.content === 'string') {
+            return message.content;
+          } else if (Array.isArray(message.content)) {
+            // استخراج النصوص من كائن المحتوى المركب
+            return message.content
+              .filter(item => item.type === 'text')
+              .map(item => item.text)
+              .join('\n');
+          }
+        }
       }
+
+      // إذا لم نجد الرد في أي من الحالات
+      throw new Error('لم يتم الحصول على رد من OpenAI');
+      
     } catch (error) {
-      logger.error('chatGptService', 'خطأ في الحصول على رد من ChatGPT:', error.response?.data || error.message);
+      const errorDetails = error.response?.data || error.message;
+      logger.error('chatGptService', `خطأ في الحصول على رد من OpenAI: ${JSON.stringify(errorDetails)}`);
       return null;
     }
+  }
+
+  /**
+   * التحقق مما إذا كانت الرسائل تحتوي على صور
+   * @param {Array} messages الرسائل المنسقة
+   * @returns {Boolean}
+   */
+  checkIfMessagesContainImages(messages) {
+    if (!messages || !Array.isArray(messages)) {
+      return false;
+    }
+    
+    for (const message of messages) {
+      if (message.content && Array.isArray(message.content)) {
+        for (const contentItem of message.content) {
+          if (contentItem.type === 'image_url') {
+            return true;
+          }
+        }
+      }
+    }
+    
+    return false;
   }
 
   /**
@@ -317,18 +504,45 @@ class ChatGptService {
         await this.initialize();
       }
       
-      // التحقق إذا كانت الرسالة تحتاج لتدخل بشري
+      let messageContent = message.content;
+      let mediaType = message.mediaType;
+      let mediaUrl = message.mediaUrl;
+      
+      // التحقق من وجود وسائط صوتية وتفعيل الدعم
+      if (mediaType === 'audio' && mediaUrl && this.enableAudioSupport) {
+        const transcribedText = await this.transcribeAudio(mediaUrl);
+        if (transcribedText) {
+          logger.info('chatGptService', 'تم تحويل الرسالة الصوتية إلى النص:', transcribedText);
+          // استخدام النص المحول كمحتوى للرسالة
+          messageContent = transcribedText;
+          // يمكن إزالة الوسائط أو تغيير نوعها إلى نص
+          mediaType = null; 
+          mediaUrl = null;
+        } else {
+          logger.warn('chatGptService', 'فشل تحويل الرسالة الصوتية، سيتم تجاهل محتواها الصوتي.');
+          // إذا فشل التحويل، يمكنك اختيار تجاهل الرسالة أو إرسال رسالة خطأ بسيطة
+          // في الوقت الحالي، سنتجاهل المحتوى الصوتي ونعتمد على النص إن وجد
+          if (!messageContent) {
+            // إذا لم يكن هناك نص مرفق، قد نرسل رسالة تفيد بعدم القدرة على معالجة الصوت
+            // return await this.sendProcessingErrorMessage(conversation, "لم نتمكن من معالجة الرسالة الصوتية.");
+            return null; // أو ببساطة نتجاهل الرسالة
+          }
+        }
+      } 
+      // لاحقًا: أضف هنا معالجة الصور إذا كان mediaType === 'image' و enableVisionSupport مفعل
+      
+      // التحقق إذا كانت الرسالة تحتاج لتدخل بشري (بعد تحويل الصوت إذا لزم الأمر)
       logger.info('chatGptService', 'فحص حاجة العميل للتدخل البشري', { 
         conversationId: conversation._id,
-        messageContent: message.content?.substring(0, 50) 
+        messageContent: messageContent?.substring(0, 50) || `[${mediaType}]` // عرض نوع الوسائط إذا لم يكن هناك نص
       });
       
-      const needsHumanIntervention = await this.shouldTransferToHuman(message.content);
+      const needsHumanInterventionCheck = await this.shouldTransferToHuman(messageContent);
       
-      if (needsHumanIntervention) {
+      if (needsHumanInterventionCheck) {
         logger.info('chatGptService', 'تم اكتشاف حاجة لتدخل بشري:', { 
           conversationId: conversation._id, 
-          messagePreview: message.content?.substring(0, 100) || '[رسالة وسائط]' 
+          messagePreview: messageContent.substring(0, 100)
         });
         
         // إنشاء رسالة تنبيه للعميل
@@ -351,8 +565,16 @@ class ChatGptService {
       // جلب سجل المحادثة السابقة
       const conversationHistory = await this.getConversationHistory(conversation._id, this.conversationHistoryLimit);
       
-      // إضافة الرسالة الجديدة الواردة إلى نهاية السجل
-      conversationHistory.push(message);
+      // إنشاء كائن رسالة جديد بمعلومات محدثة (نص محول، بدون وسائط صوتية)
+      const processedMessage = {
+        ...message,
+        content: messageContent,
+        mediaType: mediaType,
+        mediaUrl: mediaUrl
+      };
+      
+      // إضافة الرسالة الجديدة (المعالجة) الواردة إلى نهاية السجل
+      conversationHistory.push(processedMessage);
       
       // تحويل المحادثة إلى تنسيق مناسب لـ ChatGPT مع إضافة معلومات العميل
       const formattedMessages = this.formatMessagesForChatGPT(
@@ -393,38 +615,8 @@ class ChatGptService {
       
       // التأكد من وجود كلمات التحويل
       if (!this.transferKeywords || this.transferKeywords.length === 0) {
-        // إضافة كلمات التحويل الافتراضية إذا لم يتم تعبئتها من ملف البيئة
-        this.transferKeywords = [
-          // كلمات صريحة لطلب التحدث مع موظف
-          'أريد التحدث مع شخص',
-          'أريد التحدث إلى مندوب',
-          'تحويل إلى موظف',
-          'موظف حقيقي',
-          'انسان حقيقي',
-          'شخص حقيقي',
-          'تواصل مع موظف',
-          'مندوب خدمة',
-          'مساعدة بشرية',
-          'تحدث معي',
-          
-          // عبارات تعبر عن عدم الرضا
-          'مساعد غير مفيد',
-          'روبوت غبي',
-          'لا تفهمني',
-          'لم أفهم',
-          'لست مفيد',
-          'لم تجب على سؤالي',
-          
-          // طلبات خاصة قد تحتاج لتدخل بشري
-          'مشكلة معقدة',
-          'مشكلة في الفاتورة',
-          'أطلب استرداد المبلغ',
-          'إلغاء الطلب',
-          'شكوى',
-          'أود رفع شكوى',
-          'خطأ في الطلب',
-          'تأخير في التوصيل'
-        ];
+        // تحميل الإعدادات من قاعدة البيانات إذا لم تكن كلمات التحويل متوفرة
+        await this.loadSettings();
       }
       
       // تحويل النص إلى أحرف صغيرة للمقارنة الدقيقة
@@ -581,15 +773,69 @@ class ChatGptService {
         logger.warn('chatGptService', 'لا يوجد مندوبين بشريين مؤهلين للتعيين');
         return null;
       }
-      
-      // ملاحظة: يمكن تحسين آلية الاختيار هنا لاختيار أفضل مندوب متاح
-      // مثلاً، باستخدام قواعد توزيع الحمل، أو تحليل نشاط المندوبين، إلخ.
-      
-      // حاليًا، نختار مندوبًا عشوائيًا من المندوبين المؤهلين
       const randomIndex = Math.floor(Math.random() * eligibleUsers.length);
       return eligibleUsers[randomIndex];
     } catch (error) {
       logger.error('chatGptService', 'خطأ في الحصول على مندوب بشري متاح:', error);
+      return null;
+    }
+  }
+
+  /**
+   * تحويل ملف صوتي إلى نص باستخدام OpenAI Whisper API
+   * @param {String} audioUrl رابط الملف الصوتي
+   * @returns {Promise<String|null>} النص المحول أو null في حالة الفشل
+   */
+  async transcribeAudio(audioUrl) {
+    if (!this.enableAudioSupport || !audioUrl) {
+      return null;
+    }
+
+    try {
+      logger.info('chatGptService', `بدء تحويل الصوت من الرابط: ${audioUrl}`);
+      
+      // 1. تحميل الملف الصوتي كـ Buffer
+      const audioResponse = await axios({
+        method: 'get',
+        url: audioUrl,
+        responseType: 'arraybuffer' 
+      });
+
+      if (audioResponse.status !== 200) {
+        throw new Error(`فشل تحميل الملف الصوتي: ${audioResponse.statusText}`);
+      }
+      const audioBuffer = Buffer.from(audioResponse.data);
+
+      // 2. إعداد بيانات الطلب لـ OpenAI باستخدام form-data
+      const formData = new FormData();
+      formData.append('file', audioBuffer, { filename: 'audio.ogg' }); // تمرير Buffer واسم الملف
+      formData.append('model', this.audioToTextModel);
+      formData.append('response_format', 'text'); // نريد نصاً مباشراً
+
+      // 3. إرسال الطلب إلى OpenAI
+      const transcriptionEndpoint = 'https://api.openai.com/v1/audio/transcriptions';
+      const transcriptionResponse = await axios.post(
+        transcriptionEndpoint,
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(), // مكتبة form-data توفر هذه الدالة
+            'Authorization': `Bearer ${this.apiKey}`
+          }
+        }
+      );
+
+      if (transcriptionResponse.status === 200 && typeof transcriptionResponse.data === 'string') {
+        logger.info('chatGptService', 'تم تحويل الصوت إلى نص بنجاح');
+        return transcriptionResponse.data; // OpenAI ترجع النص مباشرة
+      } else {
+        throw new Error(`فشل تحويل الصوت: ${JSON.stringify(transcriptionResponse.data)}`);
+      }
+
+    } catch (error) {
+      const errorDetails = error.response?.data || error.message;
+      logger.error('chatGptService', `خطأ في تحويل الصوت: ${JSON.stringify(errorDetails)}`);
+      // قد نضيف رسالة خطأ بسيطة للعميل هنا إذا لزم الأمر
       return null;
     }
   }

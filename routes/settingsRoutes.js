@@ -13,6 +13,7 @@ const smsSettingsController = require('../controllers/smsSettingsController');
 const smsWebhookController = require('../controllers/smsWebhookController');
 const whatsappSettingsController = require('../controllers/whatsappSettingsController');
 const whatsappWebhookController = require('../controllers/whatsappWebhookController');
+const AISettings = require('../models/AISettings');
 
 function handleError(req, res, error, message, redirectPath) {
   console.error(message, error.message, error.stack);
@@ -220,6 +221,120 @@ router.post('/settings/ai-assistant-settings', [isAuthenticated, checkRole(['adm
     res.redirect('/settings');
   } catch (error) {
     handleError(req, res, error, 'حدث خطأ أثناء حفظ إعدادات مساعد الذكاء الاصطناعي.', '/settings');
+  }
+});
+
+// مسار صفحة إعدادات الذكاء الاصطناعي المفصلة
+router.get('/settings/ai-settings', [isAuthenticated, checkRole(['admin'])], async (req, res) => {
+  try {
+    // الحصول على إعدادات الذكاء الاصطناعي
+    const aiSettings = await AISettings.getSettings();
+    
+    res.render('ai_settings', {
+      aiSettings,
+      session: req.session,
+      flashMessages: req.flash()
+    });
+  } catch (error) {
+    handleError(req, res, error, 'حدث خطأ أثناء تحميل إعدادات الذكاء الاصطناعي.', '/settings');
+  }
+});
+
+// مسار حفظ إعدادات الذكاء الاصطناعي المفصلة
+router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admin'])], async (req, res) => {
+  try {
+    // استخراج البيانات من النموذج
+    const {
+      apiKey,
+      apiEndpoint,
+      model,
+      enableVisionSupport,
+      enableAudioSupport,
+      audioToTextModel,
+      textToSpeechModel,
+      temperature,
+      maxTokens,
+      topP,
+      presencePenalty,
+      frequencyPenalty,
+      conversationHistoryLimit,
+      previousConversationsLimit,
+      transferKeywords,
+      systemInstructions
+    } = req.body;
+    
+    // الحصول على إعدادات الذكاء الاصطناعي أو إنشاء كائن جديد إذا لم تكن موجودة
+    let aiSettings = await AISettings.findOne();
+    if (!aiSettings) {
+      aiSettings = new AISettings();
+    }
+    
+    // تحديث إعدادات API
+    aiSettings.apiKey = apiKey;
+    aiSettings.apiEndpoint = apiEndpoint;
+    aiSettings.model = model;
+    
+    // تحديث إعدادات الوسائط المتعددة
+    aiSettings.enableVisionSupport = !!enableVisionSupport; // تحويل إلى boolean
+    aiSettings.enableAudioSupport = !!enableAudioSupport; // تحويل إلى boolean
+    aiSettings.audioToTextModel = audioToTextModel;
+    aiSettings.textToSpeechModel = textToSpeechModel;
+    
+    // تحديث إعدادات الجودة
+    aiSettings.temperature = Math.min(Math.max(parseFloat(temperature), 0), 2);
+    aiSettings.maxTokens = Math.min(Math.max(parseInt(maxTokens), 100), 4000);
+    aiSettings.topP = Math.min(Math.max(parseFloat(topP), 0), 1);
+    aiSettings.presencePenalty = Math.min(Math.max(parseFloat(presencePenalty), -2), 2);
+    aiSettings.frequencyPenalty = Math.min(Math.max(parseFloat(frequencyPenalty), -2), 2);
+    
+    // تحديث إعدادات السياق والتاريخ
+    aiSettings.conversationHistoryLimit = Math.min(Math.max(parseInt(conversationHistoryLimit), 5), 50);
+    aiSettings.previousConversationsLimit = Math.min(Math.max(parseInt(previousConversationsLimit), 0), 10);
+    
+    // تحديث كلمات التحويل (تقسيم النص إلى مصفوفة بالأسطر)
+    aiSettings.transferKeywords = transferKeywords
+      .split('\n')
+      .map(keyword => keyword.trim())
+      .filter(keyword => keyword.length > 0);
+    
+    // تحديث تعليمات النظام
+    aiSettings.systemInstructions = systemInstructions;
+    
+    // تحديث مستخدم التحديث
+    aiSettings.updatedBy = req.session.userId;
+    
+    // حفظ الإعدادات
+    await aiSettings.save();
+    
+    // إعادة تهيئة خدمة الذكاء الاصطناعي
+    // هذا يتطلب استدعاء خدمة الذكاء الاصطناعي وإعادة تحميل إعداداتها
+    const chatGptService = require('../services/chatGptService');
+    await chatGptService.loadSettings();
+    
+    req.flash('success', 'تم حفظ إعدادات الذكاء الاصطناعي المفصلة بنجاح');
+    res.redirect('/settings/ai-settings');
+  } catch (error) {
+    handleError(req, res, error, 'حدث خطأ أثناء حفظ إعدادات الذكاء الاصطناعي المفصلة.', '/settings/ai-settings');
+  }
+});
+
+// مسار إعادة تعيين إعدادات الذكاء الاصطناعي إلى القيم الافتراضية
+router.get('/settings/ai-settings-reset', [isAuthenticated, checkRole(['admin'])], async (req, res) => {
+  try {
+    // حذف الإعدادات الحالية
+    await AISettings.deleteOne({});
+    
+    // ستقوم الدالة getSettings() بإنشاء إعدادات جديدة بالقيم الافتراضية
+    await AISettings.getSettings();
+    
+    // إعادة تهيئة خدمة الذكاء الاصطناعي
+    const chatGptService = require('../services/chatGptService');
+    await chatGptService.loadSettings();
+    
+    req.flash('success', 'تم إعادة تعيين إعدادات الذكاء الاصطناعي إلى القيم الافتراضية بنجاح');
+    res.redirect('/settings/ai-settings');
+  } catch (error) {
+    handleError(req, res, error, 'حدث خطأ أثناء إعادة تعيين إعدادات الذكاء الاصطناعي.', '/settings/ai-settings');
   }
 });
 

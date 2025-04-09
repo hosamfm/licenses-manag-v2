@@ -131,7 +131,7 @@
     "flat": "^5.0.2",
     "for-each": "^0.3.3",
     "forever-agent": "^0.6.1",
-    "form-data": "^2.5.2",
+    "form-data": "^2.5.3",
     "formdata-polyfill": "^4.0.10",
     "formidable": "^3.5.1",
     "forwarded": "^0.2.0",
