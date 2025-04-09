@@ -276,10 +276,9 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
     
     // إرسال الرسالة عبر خدمة ميتا واتساب
     const messageResult = await metaWhatsappService.sendTextMessage(
-      accessToken,
-      phoneNumberId,
-      phoneNumber,
-      response
+      phoneNumber,  // رقم الهاتف المستلم (المعلمة الأولى)
+      response,     // نص الرسالة (المعلمة الثانية)
+      phoneNumberId // معرف رقم الهاتف المرسل (المعلمة الثالثة)
     );
     
     if (!messageResult || !messageResult.messages || messageResult.messages.length === 0) {
