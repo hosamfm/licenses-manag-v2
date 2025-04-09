@@ -461,8 +461,6 @@ function updateConversationsUI(conversations) {
         
         if (include) {
             filteredConversations.push(conv);
-        } else {
-            console.log(`استبعاد المحادثة ${conv._id} من التحديث لأنها لا تطابق فلتر الحالة الحالي: ${currentStatus}`);
         }
     });
     
@@ -890,12 +888,9 @@ function updateConversationInList(convData) {
     
     // إذا كانت المحادثة لا تطابق فلتر الحالة، نتجاهلها
     if (!matchesStatusFilter) {
-        console.log(`تجاهل تحديث المحادثة ${convData._id} لأنها لا تطابق فلتر الحالة الحالي: ${currentStatusFilter}`);
-        
         // إزالة العنصر من القائمة إذا كان موجوداً
         const conversationItem = conversationsList.querySelector(`.conversation-item[data-conversation-id="${convData._id}"]`);
         if (conversationItem) {
-            console.log(`إزالة المحادثة ${convData._id} من القائمة لأنها لا تطابق فلتر الحالة الحالي`);
             conversationItem.remove();
         }
         

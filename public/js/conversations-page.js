@@ -89,7 +89,6 @@ window.checkAndRemoveDuplicateConversations = function(container) {
             conversationItems.set(convId, item);
         } else {
             // ظهور مكرر، نحذفه
-            console.log(`حذف محادثة مكررة: ${convId}`);
             item.remove();
         }
     });
@@ -502,15 +501,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkFilters(conv, filters) {
         if (!conv) return false;
 
-        // تسجيل المعلومات للتشخيص
-        console.log(`فحص فلترة للمحادثة ${conv._id}:`, { 
-            محادثة_حالة: conv.status, 
-            فلتر_حالة: filters.status,
-            تعيين_المحادثة: conv.assignee ? conv.assignee._id : 'غير معينة',
-            فلتر_تعيين: filters.assignment,
-            كلمة_بحث: filters.searchTerm
-        });
-
         // فلتر الحالة - تطبيق بشكل صارم
         let statusMatch = false; // نبدأ بافتراض عدم المطابقة
         if (filters.status === 'closed') {
@@ -529,7 +519,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // لا نستمر إذا لم تتطابق الحالة - توفير الوقت
         if (!statusMatch) {
-            console.log(`المحادثة ${conv._id} لا تطابق فلتر الحالة: ${filters.status}`);
             return false;
         }
         
@@ -543,7 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // لا نستمر إذا لم يتطابق التعيين
         if (!assignmentMatch) {
-            console.log(`المحادثة ${conv._id} لا تطابق فلتر التعيين: ${filters.assignment}`);
             return false;
         }
 
@@ -555,12 +543,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             (conv.contactId && conv.contactId.name && conv.contactId.name.toLowerCase().includes(searchTerm));
 
         if (!searchMatch) {
-            console.log(`المحادثة ${conv._id} لا تطابق كلمة البحث: ${filters.searchTerm}`);
             return false;
         }
 
         // المحادثة تطابق جميع الفلاتر
-        console.log(`المحادثة ${conv._id} تطابق جميع الفلاتر`);
         return true;
     }
 
