@@ -146,7 +146,11 @@ class ChatGptService {
         return;
       }
       
-      logger.info('chatGptService', `إرسال إشعارات إلى ${eligibleUsers.length} مستخدم مؤهل`, { conversationId, reason });
+      logger.info('chatGptService', `إرسال إشعارات إلى ${eligibleUsers.length} مستخدم مؤهل`, { 
+        conversationId, 
+        reason,
+        userIds: eligibleUsers.map(u => u._id)
+      });
       
       // إنشاء عنوان ومحتوى الإشعار بناءً على السبب
       let title, content;
@@ -173,26 +177,71 @@ class ChatGptService {
         conversation = await Conversation.findById(conversationId)
           .select('assignedTo status contactId customerName phoneNumber')
           .lean();
+        
+        logger.info('chatGptService', 'تم العثور على معلومات المحادثة', { 
+          conversationId,
+          customerName: conversation?.customerName,
+          phoneNumber: conversation?.phoneNumber
+        });
       } catch (err) {
         logger.warn('chatGptService', 'لم يتم العثور على بيانات المحادثة للإشعار', { conversationId });
       }
       
       // إرسال إشعار لكل مستخدم مؤهل
+      let successCount = 0;
+      let failCount = 0;
+      
       for (const user of eligibleUsers) {
-        await NotificationService.createAndSendNotification({
-          recipient: user._id,
-          type: 'conversation',
-          title: title,
-          content: content,
-          link: `/crm/conversations/${conversationId}`,
-          reference: {
-            model: 'Conversation',
-            id: conversationId
+        try {
+          logger.info('chatGptService', `محاولة إرسال إشعار للمستخدم ${user._id}`, {
+            username: user.username,
+            fullName: user.full_name
+          });
+          
+          // محاولة جلب معلومات إضافية عن المستخدم (مثل اشتراكات Web Push)
+          const userDetails = await User.findById(user._id)
+            .select('_id username full_name webPushSubscriptions')
+            .lean();
+          
+          const hasWebPushSubscriptions = !!(userDetails?.webPushSubscriptions?.length);
+          
+          logger.info('chatGptService', `معلومات المستخدم ${user._id}`, {
+            hasWebPushSubscriptions,
+            subscriptionCount: userDetails?.webPushSubscriptions?.length || 0
+          });
+          
+          // إرسال الإشعار
+          const notification = await NotificationService.createAndSendNotification({
+            recipient: user._id,
+            type: 'conversation',
+            title: title,
+            content: content,
+            link: `/crm/conversations/${conversationId}`,
+            reference: {
+              model: 'Conversation',
+              id: conversationId
+            }
+          }, conversation);
+          
+          if (notification) {
+            successCount++;
+            logger.info('chatGptService', `تم إنشاء الإشعار بنجاح للمستخدم ${user._id}`, {
+              notificationId: notification._id
+            });
+          } else {
+            failCount++;
+            logger.warn('chatGptService', `فشل إنشاء الإشعار للمستخدم ${user._id}`);
           }
-        }, conversation);
+        } catch (userError) {
+          failCount++;
+          logger.error('chatGptService', `خطأ في إرسال الإشعار للمستخدم ${user._id}`, {
+            error: userError.message,
+            stack: userError.stack?.split('\n')[0]
+          });
+        }
       }
       
-      logger.info('chatGptService', 'تم إرسال الإشعارات بنجاح لجميع المستخدمين المؤهلين');
+      logger.info('chatGptService', `تم إرسال الإشعارات: ${successCount} ناجح, ${failCount} فاشل`);
     } catch (error) {
       logger.error('chatGptService', 'خطأ في إرسال الإشعارات للمستخدمين المؤهلين:', error);
     }
@@ -386,6 +435,11 @@ class ChatGptService {
       }
       
       // التحقق إذا كانت الرسالة تحتاج لتدخل بشري
+      logger.info('chatGptService', 'فحص حاجة العميل للتدخل البشري', { 
+        conversationId: conversation._id,
+        messageContent: message.content?.substring(0, 50) 
+      });
+      
       const needsHumanIntervention = await this.shouldTransferToHuman(message.content);
       
       if (needsHumanIntervention) {
@@ -394,14 +448,30 @@ class ChatGptService {
           messagePreview: message.content?.substring(0, 100) || '[رسالة وسائط]' 
         });
         
-        // إرسال إشعار للمستخدمين المؤهلين
-        await this.notifyEligibleUsers(
-          conversation._id,
-          'ai_detected_transfer_request',
-          message.content?.substring(0, 100) || '[رسالة وسائط]'
-        );
+        try {
+          // الحصول على المستخدمين المؤهلين للإشعار (للتأكد من وجودهم)
+          const eligibleUsers = await this.getEligibleUsers();
+          logger.info('chatGptService', `تم العثور على ${eligibleUsers.length} مستخدم مؤهل للإشعار`, {
+            userIds: eligibleUsers.map(u => u._id)
+          });
+          
+          // إرسال إشعار للمستخدمين المؤهلين
+          logger.info('chatGptService', 'محاولة إرسال إشعارات للمستخدمين المؤهلين');
+          await this.notifyEligibleUsers(
+            conversation._id,
+            'ai_detected_transfer_request',
+            message.content?.substring(0, 100) || '[رسالة وسائط]'
+          );
+          logger.info('chatGptService', 'تم استكمال عملية محاولة إرسال الإشعارات');
+        } catch (notifyError) {
+          logger.error('chatGptService', 'خطأ أثناء محاولة إرسال إشعارات المستخدمين المؤهلين:', {
+            error: notifyError.message,
+            stack: notifyError.stack
+          });
+        }
         
         // إنشاء رسالة تنبيه للعميل
+        logger.info('chatGptService', 'إنشاء رسالة تنبيه للعميل بالتحويل');
         const responseMessage = await WhatsappMessage.createOutgoingMessage(
           conversation._id,
           'شكراً لتواصلك معنا. سيتم تحويلك لمندوب خدمة عملاء حقيقي في أقرب وقت.',
