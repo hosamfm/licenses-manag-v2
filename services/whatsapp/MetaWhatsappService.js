@@ -1078,11 +1078,37 @@ class MetaWhatsappService {
                 return null;
             }
             
+            // استيراد نموذج WhatsAppChannel
+            const WhatsAppChannel = require('../../models/WhatsAppChannel');
+            
             // البحث عن القناة في قاعدة البيانات
-            const settings = await MetaWhatsappSettings.findById(channelId);
+            const channel = await WhatsAppChannel.findById(channelId);
+            
+            if (!channel) {
+                logger.error('MetaWhatsappService', 'لم يتم العثور على قناة بالمعرف المحدد', { channelId });
+                return null;
+            }
+            
+            // الحصول على معرف إعدادات القناة
+            const settingsId = channel.settingsId;
+            
+            if (!settingsId) {
+                logger.error('MetaWhatsappService', 'لا يوجد معرف إعدادات للقناة', { 
+                    channelId,
+                    channelName: channel.name
+                });
+                return null;
+            }
+            
+            // البحث عن الإعدادات باستخدام معرف الإعدادات
+            const settings = await MetaWhatsappSettings.findById(settingsId);
             
             if (!settings) {
-                logger.error('MetaWhatsappService', 'لم يتم العثور على قناة بالمعرف المحدد', { channelId });
+                logger.error('MetaWhatsappService', 'لم يتم العثور على إعدادات للقناة', { 
+                    channelId,
+                    settingsId,
+                    channelName: channel.name
+                });
                 return null;
             }
             
