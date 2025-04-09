@@ -67,6 +67,34 @@ if (typeof window.formatRelativeTime !== 'function') {
     };
 }
 
+/**
+ * دالة عامة لفحص وجود عناصر مكررة في DOM وتنظيفها
+ * تستدعى عند بدء تحميل الصفحة وقبل كل تحديث للقائمة
+ * @param {HTMLElement} container - حاوية قائمة المحادثات
+ */
+window.checkAndRemoveDuplicateConversations = function(container) {
+    if (!container) return;
+    
+    // إنشاء خريطة للعناصر حسب معرف المحادثة
+    const conversationItems = new Map();
+    const items = container.querySelectorAll('.conversation-item');
+    
+    // تصنيف العناصر والكشف عن التكرارات
+    items.forEach(item => {
+        const convId = item.getAttribute('data-conversation-id');
+        if (!convId) return;
+        
+        if (!conversationItems.has(convId)) {
+            // أول ظهور للمحادثة، نحتفظ بها
+            conversationItems.set(convId, item);
+        } else {
+            // ظهور مكرر، نحذفه
+            console.log(`حذف محادثة مكررة: ${convId}`);
+            item.remove();
+        }
+    });
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Element References ---
     const conversationListContainer = document.getElementById('conversationList');
@@ -93,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(conversationListOverlay);
 
     // فحص وإزالة المحادثات المكررة عند تحميل الصفحة
-    checkAndRemoveDuplicateConversations();
+    window.checkAndRemoveDuplicateConversations(conversationListContainer);
 
     // --- Utility Functions ---
 
@@ -125,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!conversationListContainer || !conversationListLoader || !noConversationsMessage) return;
 
         // فحص وإزالة المحادثات المكررة قبل تحميل قائمة جديدة
-        checkAndRemoveDuplicateConversations();
+        window.checkAndRemoveDuplicateConversations(conversationListContainer);
 
         // إظهار مؤشر التحميل وإخفاء رسالة عدم وجود نتائج
         conversationListLoader.classList.remove('d-none');
@@ -352,11 +380,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!conversationListContainer || !updatedConv || !updatedConv._id) return;
 
         // إزالة أي عناصر مكررة قبل إجراء التحديث
-        const duplicateItems = conversationListContainer.querySelectorAll(`.conversation-item[data-conversation-id="${updatedConv._id}"]`);
-        if (duplicateItems.length > 1) {
-            // الاحتفاظ بالعنصر الأول فقط وإزالة البقية
-            for (let i = 1; i < duplicateItems.length; i++) {
-                duplicateItems[i].remove();
+        if (typeof window.checkAndRemoveDuplicateConversations === 'function') {
+            window.checkAndRemoveDuplicateConversations(conversationListContainer);
+        } else {
+            const duplicateItems = conversationListContainer.querySelectorAll(`.conversation-item[data-conversation-id="${updatedConv._id}"]`);
+            if (duplicateItems.length > 1) {
+                // الاحتفاظ بالعنصر الأول فقط وإزالة البقية
+                for (let i = 1; i < duplicateItems.length; i++) {
+                    duplicateItems[i].remove();
+                }
             }
         }
 
@@ -470,18 +502,35 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkFilters(conv, filters) {
         if (!conv) return false;
 
-        // فلتر الحالة
-        let statusMatch = true;
-        if (filters.status) {
-            if (filters.status === 'closed') {
-                statusMatch = conv.status === 'closed';
-            } else if (filters.status === 'open') {
-                statusMatch = conv.status !== 'closed';
-            } else if (filters.status === 'all') {
-                statusMatch = true; // 'all' يطابق كل الحالات
-            } else {
-                statusMatch = filters.status === conv.status;
-            }
+        // تسجيل المعلومات للتشخيص
+        console.log(`فحص فلترة للمحادثة ${conv._id}:`, { 
+            محادثة_حالة: conv.status, 
+            فلتر_حالة: filters.status,
+            تعيين_المحادثة: conv.assignee ? conv.assignee._id : 'غير معينة',
+            فلتر_تعيين: filters.assignment,
+            كلمة_بحث: filters.searchTerm
+        });
+
+        // فلتر الحالة - تطبيق بشكل صارم
+        let statusMatch = false; // نبدأ بافتراض عدم المطابقة
+        if (filters.status === 'closed') {
+            // فقط المحادثات المغلقة تظهر في فلتر "مغلقة"
+            statusMatch = conv.status === 'closed';
+        } else if (filters.status === 'open') {
+            // فقط المحادثات غير المغلقة تظهر في فلتر "مفتوحة"
+            statusMatch = conv.status !== 'closed';
+        } else if (filters.status === 'all') {
+            // 'all' يطابق كل الحالات
+            statusMatch = true;
+        } else {
+            // مطابقة حالة محددة أخرى إذا كانت موجودة
+            statusMatch = filters.status === conv.status;
+        }
+        
+        // لا نستمر إذا لم تتطابق الحالة - توفير الوقت
+        if (!statusMatch) {
+            console.log(`المحادثة ${conv._id} لا تطابق فلتر الحالة: ${filters.status}`);
+            return false;
         }
         
         // فلتر التعيين
@@ -492,13 +541,27 @@ document.addEventListener('DOMContentLoaded', () => {
             assignmentMatch = !conv.assignee;
         } // 'all' يطابق كل شيء
 
-        // فلتر البحث (فحص بسيط للاسم/الهاتف)
+        // لا نستمر إذا لم يتطابق التعيين
+        if (!assignmentMatch) {
+            console.log(`المحادثة ${conv._id} لا تطابق فلتر التعيين: ${filters.assignment}`);
+            return false;
+        }
+
+        // فلتر البحث (فحص الاسم/الهاتف)
         const searchTerm = filters.searchTerm ? filters.searchTerm.trim().toLowerCase() : '';
         const searchMatch = !searchTerm ||
                             (conv.customerName && conv.customerName.toLowerCase().includes(searchTerm)) ||
-                            (conv.phoneNumber && conv.phoneNumber.toLowerCase().includes(searchTerm));
+                            (conv.phoneNumber && conv.phoneNumber.toLowerCase().includes(searchTerm)) ||
+                            (conv.contactId && conv.contactId.name && conv.contactId.name.toLowerCase().includes(searchTerm));
 
-        return statusMatch && assignmentMatch && searchMatch;
+        if (!searchMatch) {
+            console.log(`المحادثة ${conv._id} لا تطابق كلمة البحث: ${filters.searchTerm}`);
+            return false;
+        }
+
+        // المحادثة تطابق جميع الفلاتر
+        console.log(`المحادثة ${conv._id} تطابق جميع الفلاتر`);
+        return true;
     }
 
     /**
@@ -1283,30 +1346,3 @@ document.addEventListener('DOMContentLoaded', () => {
     // ... (الكود الموجود لمعالجة Socket.IO)
     // ...
 }); 
-
-/**
- * دالة لفحص وجود عناصر مكررة في DOM وتنظيفها
- * تستدعى عند بدء تحميل الصفحة وقبل كل تحديث للقائمة
- */
-function checkAndRemoveDuplicateConversations() {
-    if (!conversationListContainer) return;
-    
-    // إنشاء خريطة للعناصر حسب معرف المحادثة
-    const conversationItems = new Map();
-    const items = conversationListContainer.querySelectorAll('.conversation-item');
-    
-    // تصنيف العناصر والكشف عن التكرارات
-    items.forEach(item => {
-        const convId = item.getAttribute('data-conversation-id');
-        if (!convId) return;
-        
-        if (!conversationItems.has(convId)) {
-            // أول ظهور للمحادثة، نحتفظ بها
-            conversationItems.set(convId, item);
-        } else {
-            // ظهور مكرر، نحذفه
-            console.log(`حذف محادثة مكررة: ${convId}`);
-            item.remove();
-        }
-    });
-} 

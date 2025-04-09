@@ -421,19 +421,53 @@ function updateConversationsUI(conversations) {
     const conversationsList = document.querySelector('.conversations-list');
     if (!conversationsList) return;
     
-    // إزالة أي عناصر مكررة في DOM قبل التحديث
-    const conversationIdsMap = new Map();
-    conversationsList.querySelectorAll('.conversation-item').forEach(item => {
-        const convId = item.getAttribute('data-conversation-id');
-        if (convId) {
-            if (!conversationIdsMap.has(convId)) {
-                conversationIdsMap.set(convId, item);
-            } else {
-                // إزالة العناصر المكررة والاحتفاظ بالعنصر الأول فقط
-                item.remove();
+    // استخدام الدالة العامة لإزالة المحادثات المكررة إذا كانت متاحة
+    if (typeof window.checkAndRemoveDuplicateConversations === 'function') {
+        window.checkAndRemoveDuplicateConversations(conversationsList);
+    } else {
+        // استخدام المنطق القديم كاحتياط
+        // إزالة أي عناصر مكررة في DOM قبل التحديث
+        const conversationIdsMap = new Map();
+        conversationsList.querySelectorAll('.conversation-item').forEach(item => {
+            const convId = item.getAttribute('data-conversation-id');
+            if (convId) {
+                if (!conversationIdsMap.has(convId)) {
+                    conversationIdsMap.set(convId, item);
+                } else {
+                    // إزالة العناصر المكررة والاحتفاظ بالعنصر الأول فقط
+                    item.remove();
+                }
             }
+        });
+    }
+    
+    // تطبيق فلتر الحالة الحالي على المحادثات قبل التحديث
+    const filteredConversations = [];
+    const currentStatus = document.getElementById('filterStatus') ? 
+                         document.getElementById('filterStatus').value : 'open';
+    
+    // فلترة المحادثات حسب الحالة الحالية للقائمة
+    conversations.forEach(conv => {
+        if (!conv) return;
+        
+        let include = false;
+        if (currentStatus === 'open') {
+            include = conv.status !== 'closed';
+        } else if (currentStatus === 'closed') {
+            include = conv.status === 'closed';
+        } else if (currentStatus === 'all') {
+            include = true;
+        }
+        
+        if (include) {
+            filteredConversations.push(conv);
+        } else {
+            console.log(`استبعاد المحادثة ${conv._id} من التحديث لأنها لا تطابق فلتر الحالة الحالي: ${currentStatus}`);
         }
     });
+    
+    // استخدام المحادثات المفلترة بدلاً من الكل
+    const conversationsToShow = filteredConversations;
     
     // إنشاء خريطة للعناصر الموجودة لسهولة الوصول
     const existingItemsMap = new Map();
@@ -444,8 +478,8 @@ function updateConversationsUI(conversations) {
         }
     });
     
-    // حلقة على المحادثات الواردة من الخادم (يجب أن تكون مرتبة حسب آخر تحديث)
-    conversations.forEach((conversation, index) => {
+    // حلقة على المحادثات المفلترة
+    conversationsToShow.forEach((conversation, index) => {
         const convId = conversation._id;
         let listItem = existingItemsMap.get(convId);
         
@@ -832,8 +866,44 @@ function appendInternalNote(note) {
 function updateConversationInList(convData) {
     if (!convData || !convData._id) return;
     
+    // الحصول على حاوية قائمة المحادثات
+    const conversationsList = document.querySelector('.conversations-list');
+    if (!conversationsList) return;
+    
+    // استخدام الدالة العامة لإزالة المحادثات المكررة إذا كانت متاحة
+    if (typeof window.checkAndRemoveDuplicateConversations === 'function') {
+        window.checkAndRemoveDuplicateConversations(conversationsList);
+    }
+    
+    // تطبيق فلتر الحالة - التحقق من أن المحادثة تطابق فلتر الحالة الحالي
+    const filterStatusSelect = document.getElementById('filterStatus');
+    const currentStatusFilter = filterStatusSelect ? filterStatusSelect.value : 'open';
+    
+    let matchesStatusFilter = false;
+    if (currentStatusFilter === 'open') {
+        matchesStatusFilter = convData.status !== 'closed';
+    } else if (currentStatusFilter === 'closed') {
+        matchesStatusFilter = convData.status === 'closed';
+    } else if (currentStatusFilter === 'all') {
+        matchesStatusFilter = true;
+    }
+    
+    // إذا كانت المحادثة لا تطابق فلتر الحالة، نتجاهلها
+    if (!matchesStatusFilter) {
+        console.log(`تجاهل تحديث المحادثة ${convData._id} لأنها لا تطابق فلتر الحالة الحالي: ${currentStatusFilter}`);
+        
+        // إزالة العنصر من القائمة إذا كان موجوداً
+        const conversationItem = conversationsList.querySelector(`.conversation-item[data-conversation-id="${convData._id}"]`);
+        if (conversationItem) {
+            console.log(`إزالة المحادثة ${convData._id} من القائمة لأنها لا تطابق فلتر الحالة الحالي`);
+            conversationItem.remove();
+        }
+        
+        return;
+    }
+    
     // البحث عن عنصر المحادثة في القائمة
-    const conversationItem = document.querySelector(`.conversation-item[data-conversation-id="${convData._id}"]`);
+    const conversationItem = conversationsList.querySelector(`.conversation-item[data-conversation-id="${convData._id}"]`);
     if (!conversationItem) {
         // إذا لم يتم العثور على العنصر، نقوم بتحديث القائمة بالكامل
         updateConversationsList();
