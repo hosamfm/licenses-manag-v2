@@ -49,52 +49,9 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
           conversation.status = 'assigned';
           await conversation.save();
           
-          // إرسال إشعار بالتعيين
-          socketService.notifyConversationUpdate(conversation._id.toString(), {
-            type: 'assigned',
-            status: conversation.status,
-            assignedTo: humanAgent._id,
-            assignedBy: chatGptService.aiUserId,
-            assignee: {
-              _id: humanAgent._id,
-              username: humanAgent.username,
-              full_name: humanAgent.full_name
-            }
-          });
-          
           // إرسال رسالة للعميل بأنه تم تحويله لمندوب بشري
           const transferMessage = 'سيتم تحويلك الآن إلى مندوب خدمة عملاء للمساعدة.';
           await sendAiResponseToCustomer(conversation, transferMessage);
-          
-          // إشعار المندوب البشري المعين بالتعيين
-          socketService.notifyUser(humanAgent._id, 'conversation_assigned', {
-            conversationId: conversation._id,
-            assignedBy: 'مساعد الذكاء الاصطناعي',
-            customerName: conversation.customerName || conversation.phoneNumber,
-            phoneNumber: conversation.phoneNumber
-          });
-        }
-        
-        // إرسال إشعار لجميع الموظفين المؤهلين بأن هناك محادثة تحتاج لتدخل بشري
-        // حتى وإن لم يكن هناك مندوب متاح للتعيين التلقائي أو تم تعيين مندوب محدد
-        try {
-          const messagePreview = message.content?.substring(0, 100) || '[رسالة وسائط]';
-          logger.info('aiConversationController', 'إرسال إشعار لجميع الموظفين المؤهلين بطلب التدخل البشري', {
-            conversationId: conversation._id,
-            messagePreview: messagePreview
-          });
-          
-          // استخدام خدمة chatGptService لإرسال إشعار لجميع الموظفين المؤهلين
-          await chatGptService.notifyEligibleUsers(
-            conversation._id,
-            'ai_detected_transfer_request',
-            messagePreview
-          );
-        } catch (notifyError) {
-          logger.error('aiConversationController', 'خطأ في إرسال إشعار للموظفين المؤهلين', {
-            conversationId: conversation._id,
-            error: notifyError.message
-          });
         }
       } else if (shouldTransfer && conversation.assignedTo && 
                  conversation.assignedTo.toString() === chatGptService.aiUserId.toString()) {
@@ -103,57 +60,9 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
           conversationId: conversation._id
         });
         
-        try {
-          // إرسال إشعار لجميع الموظفين المؤهلين (المستخدمين البشريين فقط)
-          const messagePreview = message.content?.substring(0, 100) || '[رسالة وسائط]';
-          
-          // تأكد من تهيئة chatGptService بشكل صحيح
-          if (!chatGptService.initialized) {
-            await chatGptService.initialize();
-          }
-          
-          // إرسال إشعار لجميع المستخدمين البشريين المؤهلين باستخدام قناة الإشعارات المناسبة
-          logger.info('aiConversationController', 'إرسال إشعارات للمستخدمين المؤهلين للتدخل البشري', {
-            conversationId: conversation._id
-          });
-          
-          await chatGptService.notifyEligibleUsers(
-            conversation._id,
-            'ai_detected_transfer_request',
-            messagePreview
-          );
-          
-          // إضافة حدث إلى سجل المحادثة ليظهر أن الذكاء الاصطناعي طلب تدخل بشري
-          try {
-            const ConversationEvent = require('../models/ConversationEvent');
-            await new ConversationEvent({
-              conversationId: conversation._id,
-              eventType: 'ai_requested_human_help',
-              initiatedBy: chatGptService.aiUserId,
-              timestamp: new Date(),
-              metadata: {
-                reason: 'استشعار حاجة للتدخل البشري',
-                messagePreview: messagePreview
-              }
-            }).save();
-          } catch (eventError) {
-            logger.warn('aiConversationController', 'فشل تسجيل حدث طلب التدخل البشري', {
-              conversationId: conversation._id,
-              error: eventError.message
-            });
-          }
-          
-          // إرسال رسالة للعميل
-          const transferMessage = 'شكراً لتواصلك معنا. سنقوم بتحويلك إلى مندوب خدمة عملاء حقيقي في أقرب وقت.';
-          await sendAiResponseToCustomer(conversation, transferMessage);
-          
-        } catch (notifyError) {
-          logger.error('aiConversationController', 'خطأ في إرسال إشعار للموظفين المؤهلين', {
-            conversationId: conversation._id,
-            error: notifyError.message,
-            stack: notifyError.stack
-          });
-        }
+        // إرسال رسالة للعميل فقط
+        const transferMessage = 'سنقوم بتحويلك إلى مندوب خدمة عملاء بشري في أقرب وقت. شكراً لصبرك.';
+        await sendAiResponseToCustomer(conversation, transferMessage);
       }
       
       return null;
@@ -171,13 +80,6 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
       conversation.assignedTo = chatGptService.aiUserId;
       conversation.status = 'assigned';
       await conversation.save();
-      
-      socketService.notifyConversationUpdate(conversation._id.toString(), {
-        type: 'assigned',
-        status: conversation.status,
-        assignedTo: chatGptService.aiUserId,
-        assignedBy: chatGptService.aiUserId
-      });
       
       logger.info('aiConversationController', 'تم تعيين المحادثة تلقائياً للذكاء الاصطناعي', { 
         conversationId: conversation._id
@@ -299,7 +201,7 @@ async function sendAiResponseToCustomer(conversation, response, existingMessage 
     
     let savedMessage;
     
-    // 4. معالجة تخزين وإرسال الرسالة
+    // 4. معالجة تخزين الرسالة
     if (existingMessage && existingMessage._id) {
       // إذا كانت الرسالة موجودة بالفعل، نقوم فقط بتحديثها بمعرف الرسالة الخارجي
       savedMessage = await WhatsappMessage.findByIdAndUpdate(
@@ -347,12 +249,10 @@ async function sendAiResponseToCustomer(conversation, response, existingMessage 
       });
     }
     
-    // 5. إرسال إشعار عبر السوكت لجميع المستخدمين لتحديث واجهة المستخدم
+    // 5. إرسال إشعار عبر السوكت فقط لتحديث واجهة المستخدم
     const currentDate = new Date();
     const isoDateString = currentDate.toISOString();
     
-    // 1. إرسال الرسالة كما هي للمستخدمين المتصلين في غرفة المحادثة
-    // ملاحظة: يجب أن يكون شكل messageData متطابقًا مع ما تتوقعه addMessageToConversation
     socketService.notifyNewMessage(conversation._id.toString(), {
       _id: savedMessage._id.toString(),
       conversationId: conversation._id.toString(),
@@ -375,7 +275,7 @@ async function sendAiResponseToCustomer(conversation, response, existingMessage 
       createdAt: isoDateString
     });
     
-    // 2. إرسال تحديث للمحادثة لتحديث آخر رسالة في قائمة المحادثات
+    // تحديث واجهة المستخدم لقائمة المحادثات
     socketService.notifyConversationUpdate(conversation._id.toString(), {
       _id: conversation._id.toString(),
       status: conversation.status,

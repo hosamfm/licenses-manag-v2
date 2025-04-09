@@ -169,6 +169,13 @@ async function sendMessageNotification(conversationId, message, conversation, co
     try {
         const assignedTo = conversation.assignedTo?.toString();
         
+        // فحص إذا كانت المحادثة معينة للذكاء الاصطناعي
+        const isAssignedToAI = await checkIfAssignedToAI(assignedTo);
+        if (isAssignedToAI) {
+            // تخطي إرسال الإشعارات تماماً إذا كانت المحادثة معينة للذكاء الاصطناعي
+            return;
+        }
+        
         // 1. إرسال للمستخدم المسند له (إذا كان موجودًا)
         if (assignedTo) {
             const isAssignedUserActive = isSocketInRoom(`conversation-${conversationId}`, assignedTo); // التحقق من النشاط في غرفة المحادثة
@@ -176,7 +183,6 @@ async function sendMessageNotification(conversationId, message, conversation, co
             // تخطي إنشاء الإشعار تماماً إذا كان المستخدم نشطاً في المحادثة وكان نوع الإشعار هو رسالة
             // هذا سيمنع إنشاء إشعارات للرسائل الواردة عندما يكون المستخدم نشطاً في المحادثة
             if (isAssignedUserActive && message && message.direction === 'incoming') {
-
                 return; // خروج مبكر لمنع إنشاء الإشعار والعمليات اللاحقة
             }
             
@@ -253,7 +259,6 @@ async function sendMessageNotification(conversationId, message, conversation, co
                 
                 // تخطي إنشاء الإشعار تماماً إذا كان المشرف نشطاً في المحادثة وكان نوع الإشعار هو رسالة
                 if (isAdminActiveInConv && message && message.direction === 'incoming') {
-
                     continue; // تخطي هذا المشرف والانتقال للتالي
                 }
                 
@@ -318,6 +323,24 @@ async function sendMessageNotification(conversationId, message, conversation, co
 }
 
 /**
+ * التحقق مما إذا كان المستخدم المعين هو الذكاء الاصطناعي
+ * @param {String} userId - معرف المستخدم المعين
+ * @returns {Promise<Boolean>} - ما إذا كان المستخدم هو الذكاء الاصطناعي
+ */
+async function checkIfAssignedToAI(userId) {
+    if (!userId) return false;
+    
+    try {
+        const aiUser = await User.findOne({ username: 'ai-assistant' }).select('_id').lean();
+        if (!aiUser) return false;
+        
+        return userId.toString() === aiUser._id.toString();
+    } catch (error) {
+        return false;
+    }
+}
+
+/**
  * التحقق مما إذا كان سوكت المستخدم موجودًا في غرفة معينة
  * @param {String} roomName - اسم الغرفة
  * @param {String} userId - معرف المستخدم
@@ -345,10 +368,16 @@ function isSocketInRoom(roomName, userId) {
  * @param {Object} conversation - كائن المحادثة المحدثة
  */
 async function updateConversationNotifications(conversationId, conversation) {
-    // تنفيذ منطق تحديث الإشعارات عند تغيير حالة المحادثة
-    // مثلاً، وضع علامة قراءة للإشعارات المتعلقة بهذه المحادثة
-    
     try {
+        // فحص ما إذا كانت المحادثة معينة للذكاء الاصطناعي
+        if (conversation.assignedTo) {
+            const isAssignedToAI = await checkIfAssignedToAI(conversation.assignedTo.toString());
+            if (isAssignedToAI) {
+                // تجاهل تحديث الإشعارات إذا كانت المحادثة معينة للذكاء الاصطناعي
+                return;
+            }
+        }
+        
         if (conversation.status === 'assigned' && conversation.assignedTo) {
             // إرسال إشعار للمستخدم المسند له المحادثة
             const customerName = ContactHelper.getServerDisplayName(conversation);

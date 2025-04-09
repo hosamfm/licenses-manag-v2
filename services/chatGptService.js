@@ -7,7 +7,6 @@ const axios = require('axios');
 const logger = require('./loggerService');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const User = require('../models/User');
-const NotificationService = require('./notificationService');
 const socketService = require('./socketService');
 require('dotenv').config();
 
@@ -113,164 +112,21 @@ class ChatGptService {
   }
 
   /**
-   * الحصول على جميع المستخدمين المؤهلين للوصول إلى المحادثات وتلقي إشعارات عنها
+   * الحصول على جميع المستخدمين المؤهلين للوصول إلى المحادثات
    * @returns {Promise<Array>} قائمة المستخدمين المؤهلين
    */
   async getEligibleUsers() {
     try {
-      // الحصول على المستخدمين النشطين الذين:
-      // 1. لديهم صلاحية الوصول للمحادثات
-      // 2. مفعلين استلام إشعارات المحادثات غير المعينة
-      // 3. ليسوا مستخدم الذكاء الاصطناعي نفسه
       return await User.find({
         account_status: 'active',
         can_access_conversations: true,
-        notify_unassigned_conversation: true, // إضافة هذا الشرط لضمان إرسال الإشعارات فقط لمن فعل هذا الخيار
         _id: { $ne: this.aiUserId } // استثناء مستخدم الذكاء الاصطناعي
       })
-      .select('_id username full_name user_role webPushSubscriptions')
+      .select('_id username full_name user_role')
       .lean();
     } catch (error) {
       logger.error('chatGptService', 'خطأ في الحصول على المستخدمين المؤهلين:', error);
       return [];
-    }
-  }
-
-  /**
-   * إرسال إشعار لجميع المستخدمين المؤهلين عن محادثة تحتاج للتدخل
-   * @param {String} conversationId معرف المحادثة
-   * @param {String} reason سبب الإشعار (طلب عميل، اكتشاف آلي، محادثة جديدة)
-   * @param {String} messagePreview مقتطف من الرسالة
-   */
-  async notifyEligibleUsers(conversationId, reason, messagePreview) {
-    try {
-      // الحصول على المستخدمين المؤهلين (المستخدمين البشريين مع صلاحيات الوصول للمحادثات)
-      const eligibleUsers = await this.getEligibleUsers();
-      
-      if (!eligibleUsers || eligibleUsers.length === 0) {
-        logger.warn('chatGptService', 'لا يوجد مستخدمين مؤهلين لإرسال الإشعارات إليهم');
-        return;
-      }
-      
-      logger.info('chatGptService', `إرسال إشعارات إلى ${eligibleUsers.length} مستخدم مؤهل بخصوص محادثة تحتاج للتدخل`, { 
-        conversationId, 
-        reason,
-        userCount: eligibleUsers.length
-      });
-      
-      // إنشاء عنوان ومحتوى الإشعار بناءً على السبب
-      let title, content;
-      
-      switch (reason) {
-        case 'ai_detected_transfer_request':
-          title = 'طلب تدخل بشري (تم اكتشافه تلقائياً)';
-          content = `اكتشف الذكاء الاصطناعي حاجة لتدخل بشري في المحادثة. محتوى الرسالة: "${messagePreview}"`;
-          break;
-        case 'customer_requested_human':
-          title = 'طلب التحدث مع مندوب بشري';
-          content = `طلب العميل التحدث مع مندوب بشري. محتوى الرسالة: "${messagePreview}"`;
-          break;
-        case 'new_conversation':
-        default:
-          title = 'محادثة جديدة تحتاج إلى رد';
-          content = `هناك محادثة جديدة غير معينة تحتاج إلى الرد. محتوى الرسالة: "${messagePreview}"`;
-      }
-      
-      // محاولة جلب بيانات المحادثة للإشعار
-      let conversation = null;
-      try {
-        const Conversation = require('../models/Conversation');
-        conversation = await Conversation.findById(conversationId)
-          .select('assignedTo status contactId customerName phoneNumber')
-          .lean();
-        
-        if (conversation) {
-          logger.info('chatGptService', 'تم العثور على معلومات المحادثة', { 
-            conversationId,
-            customerName: conversation?.customerName,
-            phoneNumber: conversation?.phoneNumber
-          });
-        }
-      } catch (err) {
-        logger.warn('chatGptService', 'لم يتم العثور على بيانات المحادثة للإشعار', { conversationId });
-      }
-      
-      // استخدام notificationSocketService للوصول المباشر إلى إشعارات الهيدر
-      const notificationSocketService = require('./notificationSocketService');
-      const NotificationService = require('./notificationService');
-      
-      // جمع معرفات المستخدمين لإنشاء إشعار جماعي
-      const userIds = eligibleUsers.map(user => user._id);
-      
-      // إنشاء إشعار جماعي في النظام
-      await NotificationService.createSystemNotification(
-        userIds,
-        title,
-        content,
-        `/crm/conversations/${conversationId}`,
-        {
-          model: 'Conversation',
-          id: conversationId
-        }
-      );
-      
-      // إحصائيات لتتبع نجاح/فشل الإشعارات
-      let successCount = 0;
-      let failCount = 0;
-      
-      // إرسال إشعار فردي لكل مستخدم مؤهل للظهور في الهيدر والإشعارات
-      for (const user of eligibleUsers) {
-        try {
-          // تجاهل الذكاء الاصطناعي نفسه (تحقق إضافي)
-          if (user._id.toString() === this.aiUserId?.toString()) {
-            logger.warn('chatGptService', 'تم تجاهل إرسال إشعار للذكاء الاصطناعي نفسه', { userId: user._id });
-            continue;
-          }
-          
-          // إنشاء إشعار في قاعدة البيانات
-          const notification = await NotificationService.createNotification({
-            recipient: user._id,
-            type: 'conversation', // نوع الإشعار: محادثة (مهم لظهور الإشعار في الهيدر)
-            title: title,
-            content: content,
-            link: `/crm/conversations/${conversationId}`,
-            reference: {
-              model: 'Conversation',
-              id: conversationId
-            },
-            relatedConversation: conversationId,
-            isRead: false
-          }, conversation);
-          
-          if (notification) {
-            // محاولة إرسال إشعار عبر Socket.io (للهيدر)
-            const sentViaSocket = await notificationSocketService.sendNotification(
-              user._id.toString(), 
-              notification
-            );
-            
-            // إذا المستخدم غير متصل بالسوكت، نرسل إشعار ويب بوش
-            if (!sentViaSocket && user.webPushSubscriptions && user.webPushSubscriptions.length > 0) {
-              await NotificationService.sendWebPushNotification(user, notification);
-              logger.info('chatGptService', `تم إرسال إشعار Web Push للمستخدم ${user._id}`);
-            }
-            
-            successCount++;
-          } else {
-            failCount++;
-            logger.warn('chatGptService', `فشل إنشاء الإشعار للمستخدم ${user._id}`);
-          }
-        } catch (userError) {
-          failCount++;
-          logger.error('chatGptService', `خطأ في إرسال الإشعار للمستخدم ${user._id}`, {
-            error: userError.message
-          });
-        }
-      }
-      
-      logger.info('chatGptService', `اكتملت عملية إرسال الإشعارات: ${successCount} ناجح, ${failCount} فاشل`);
-    } catch (error) {
-      logger.error('chatGptService', 'خطأ في إرسال الإشعارات للمستخدمين المؤهلين:', error);
     }
   }
 
@@ -474,28 +330,6 @@ class ChatGptService {
           conversationId: conversation._id, 
           messagePreview: message.content?.substring(0, 100) || '[رسالة وسائط]' 
         });
-        
-        try {
-          // الحصول على المستخدمين المؤهلين للإشعار (للتأكد من وجودهم)
-          const eligibleUsers = await this.getEligibleUsers();
-          logger.info('chatGptService', `تم العثور على ${eligibleUsers.length} مستخدم مؤهل للإشعار`, {
-            userIds: eligibleUsers.map(u => u._id)
-          });
-          
-          // إرسال إشعار للمستخدمين المؤهلين
-          logger.info('chatGptService', 'محاولة إرسال إشعارات للمستخدمين المؤهلين');
-          await this.notifyEligibleUsers(
-            conversation._id,
-            'ai_detected_transfer_request',
-            message.content?.substring(0, 100) || '[رسالة وسائط]'
-          );
-          logger.info('chatGptService', 'تم استكمال عملية محاولة إرسال الإشعارات');
-        } catch (notifyError) {
-          logger.error('chatGptService', 'خطأ أثناء محاولة إرسال إشعارات المستخدمين المؤهلين:', {
-            error: notifyError.message,
-            stack: notifyError.stack
-          });
-        }
         
         // إنشاء رسالة تنبيه للعميل
         logger.info('chatGptService', 'إنشاء رسالة تنبيه للعميل بالتحويل');
@@ -732,25 +566,6 @@ class ChatGptService {
     } catch (error) {
       logger.error('chatGptService', 'خطأ في جلب محادثات العميل السابقة:', error);
       return [];
-    }
-  }
-
-  /**
-   * التحقق مما إذا كان سوكت المستخدم موجودًا في غرفة معينة
-   * @param {String} roomName - اسم الغرفة
-   * @param {String} userId - معرف المستخدم
-   * @returns {Boolean} نتيجة التحقق
-   */
-  isSocketInRoom(roomName, userId) {
-    try {
-      return socketService.isSocketInRoom ? 
-        socketService.isSocketInRoom(roomName, userId) : 
-        false;
-    } catch (error) {
-      logger.warn('chatGptService', 'خطأ في التحقق من وجود المستخدم في الغرفة', {
-        roomName, userId, error: error.message
-      });
-      return false;
     }
   }
 
