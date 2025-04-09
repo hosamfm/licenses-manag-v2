@@ -259,6 +259,16 @@
                         </div>
                     </a>
                 <% } %>
+                
+                <% if (session.userRole === 'admin' || (session.user && session.user.can_access_conversations === true)) { %>
+                    <a href="/crm" class="action-card">
+                        <i class="fas fa-users"></i>
+                        <div>
+                            <h3>نظام CRM</h3>
+                            <p>إدارة العملاء والمحادثات في نظام المراسلات</p>
+                        </div>
+                    </a>
+                <% } %>
             </div>
         <% } %>
     </div>

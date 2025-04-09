@@ -43,11 +43,11 @@
                             <span>إدارة التراخيص</span>
                         </a>
                     </li>
-                    <% if (session.userRole === 'admin' || session.userPermissions?.can_access_conversations) { %>
+                    <% if (session.userRole === 'admin' || (session.user && session.user.can_access_conversations === true)) { %>
                     <li class="nav-item">
                         <a class="nav-link <%= (typeof originalUrl !== 'undefined' && originalUrl.includes('/crm')) ? 'active' : '' %>" href="/crm">
                             <i class="fas fa-users"></i>
-                            <span>CRM</span>
+                            <span>نظام CRM</span>
                         </a>
                     </li>
                     <% } %>

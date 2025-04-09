@@ -28,7 +28,6 @@ function initialize(socketIo) {
                 joinUserToNotificationRoom(socket, socket.userId);
             } else {
                 // تسجيل التحذير وتخزين المعلومة أنه يجب الانضمام للغرفة عندما يصبح userId متاحًا
-                logger.warn('notificationSocketService', '[join-notifications] userId غير متوفر وقت استدعاء join-notifications', { socketId: socket.id });
                 socket._shouldJoinNotificationsWhenUserIdAvailable = true;
             }
         });
