@@ -31,6 +31,7 @@ const telegramMessagesRoutes = require('./routes/telegramMessages'); // استي
 const conversationRoutes = require('./routes/conversationRoutes'); // استيراد مسارات المحادثات
 const profileRoutes = require('./routes/profileRoutes'); // استيراد مسارات الملف الشخصي
 const notificationRoutes = require('./routes/notificationRoutes'); // استيراد مسارات الإشعارات
+const chatGptService = require('./services/chatGptService'); // استيراد خدمة ChatGPT
 
 if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
   console.error("Error: config environment variables not set. Please create/edit .env configuration file.");
@@ -40,29 +41,15 @@ if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// إضافة وسيط لتقليل السجلات في بيئة الإنتاج (Render)
+// إضافة وسيط لتسجيل كل طلبات النظام بشكل كامل
 app.use((req, res, next) => {
-  // تجاهل تسجيل طلبات Socket.io
-  if (req.url.includes('/socket.io')) {
-    return next();
-  }
-  
-  // تجاهل تسجيل طلبات ملفات ثابتة
+  // تجاهل تسجيل طلبات ملفات ثابتة فقط للتقليل من الضوضاء
   if (req.url.match(/\.(css|js|jpg|png|ico|svg|woff|woff2|ttf|mp3|wav)$/)) {
     return next();
   }
   
-  // تجاهل التسجيل إذا كنا في بيئة الإنتاج
-  if (process.env.NODE_ENV === 'production') {
-    // تسجيل فقط لطلبات API المهمة
-    if (req.method !== 'GET' && !req.url.includes('/socket.io')) {
-      console.log(`[${req.method}] ${req.url}`);
-    }
-    return next();
-  }
-  
-  // في بيئة التطوير، تسجيل كل شيء
-  console.log(`[${req.method}] ${req.url}`);
+  // تسجيل كل الطلبات بتفاصيلها
+  console.log(`[${new Date().toISOString()}] [${req.method}] ${req.url}`);
   next();
 });
 
@@ -120,6 +107,17 @@ mongoose
   .connect(process.env.DATABASE_URL)
   .then(() => {
     startTelegramBot(); // بدء مستمع تيليجرام بعد نجاح الاتصال بقاعدة البيانات
+    
+    // تهيئة خدمة الذكاء الاصطناعي
+    chatGptService.initialize().then(initialized => {
+      if (initialized) {
+        console.log('خدمة الذكاء الاصطناعي ChatGPT تم تهيئتها بنجاح');
+      } else {
+        console.warn('خدمة الذكاء الاصطناعي ChatGPT لم تتم تهيئتها بشكل كامل');
+      }
+    }).catch(err => {
+      console.error('فشل في تهيئة خدمة الذكاء الاصطناعي ChatGPT:', err);
+    });
   })
   .catch((err) => {
     console.error(`Database connection error: ${err.message}`);

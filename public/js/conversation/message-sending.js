@@ -436,12 +436,36 @@
     }
     
     // إضافة معلومات الوقت والحالة
+    // معالجة آمنة للتاريخ لتجنب الأخطاء
+    const messageTimestamp = messageData.timestamp || messageData.createdAt || new Date().toISOString();
+    let messageDate, messageTime, timestampMs, formattedISODate;
+    
+    try {
+      const dateObj = new Date(messageTimestamp);
+      // التحقق من صحة التاريخ
+      if (isNaN(dateObj.getTime())) {
+        throw new Error('تاريخ غير صالح');
+      }
+      messageDate = dateObj.toLocaleString();
+      messageTime = dateObj.toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' });
+      timestampMs = dateObj.getTime();
+      formattedISODate = dateObj.toISOString().split('T')[0];
+    } catch (e) {
+      // استخدام التاريخ الحالي إذا كان هناك خطأ
+      const now = new Date();
+      messageDate = now.toLocaleString();
+      messageTime = now.toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' });
+      timestampMs = now.getTime();
+      formattedISODate = now.toISOString().split('T')[0];
+      console.warn('تم استخدام التاريخ الحالي بسبب تنسيق غير صالح في الرسالة', messageData._id);
+    }
+    
     messageHTML += `
       <div class="message-meta">
-        <span class="message-time" title="${new Date(messageData.timestamp || messageData.createdAt).toLocaleString()}" 
-              data-timestamp="${new Date(messageData.timestamp || messageData.createdAt).getTime()}"
-              data-date="${new Date(messageData.timestamp || messageData.createdAt).toISOString().split('T')[0]}">
-          ${new Date(messageData.timestamp || messageData.createdAt).toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })}
+        <span class="message-time" title="${messageDate}" 
+              data-timestamp="${timestampMs}"
+              data-date="${formattedISODate}">
+          ${messageTime}
         </span>
     `;
     

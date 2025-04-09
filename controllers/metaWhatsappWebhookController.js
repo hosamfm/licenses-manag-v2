@@ -11,11 +11,13 @@ const logger = require('../services/loggerService');
 const socketService = require('../services/socketService');
 const whatsappMediaController = require('./whatsappMediaController');
 const mediaService = require('../services/mediaService');
-const NotificationSocketService = require('../services/notificationSocketService');
+const notificationSocketService = require('../services/notificationSocketService');
 const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const Contact = require('../models/Contact');
 const ContactHelper = require('../utils/contactHelper');
 const ConversationEvent = require('../models/ConversationEvent'); // إضافة استيراد ConversationEvent
+const aiConversationController = require('./aiConversationController');
+const SystemSettings = require('../models/SystemSettings'); // إضافة استيراد إعدادات النظام
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -651,35 +653,70 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
           }
         }
         
+        // تحديث حالة الرسالة وتسجيل القارئ
         if (activeUserId) {
-          // استخدام الوظيفة الموجودة لتحديث حالة الرسالة
-          await require('../models/WhatsappMessageModel').updateOne(
-            { _id: message._id },
-            { $set: { status: 'read', readAt: new Date() } }
-          );
+          await WhatsappMessage.findByIdAndUpdate(message._id, {
+            status: 'read',
+            readAt: new Date(),
+            readBy: activeUserId
+          });
         }
-      } catch (readError) {
-        logger.error('metaWhatsappWebhookController', 'خطأ في وضع علامة مقروء تلقائياً', { 
-          error: readError.message, 
+      } catch (updateError) {
+        logger.error('metaWhatsappWebhookController', 'خطأ في تحديث حالة قراءة الرسالة', updateError);
+      }
+    }
+
+    // تحديث عدد الرسائل غير المقروءة للمحادثة للإشعارات
+    const unreadCount = await WhatsappMessage.countDocuments({
+      conversationId: conversationInstance._id,
+      direction: 'incoming',
+      $or: [
+        { status: { $ne: 'read' } },
+        { status: { $exists: false } }
+      ]
+    });
+    
+    // إشعار المستخدمين بعدد الرسائل غير المقروءة
+    socketService.broadcastNotification('conversation_unread_count', {
+      conversationId: conversationInstance._id.toString(),
+      unreadCount
+    });
+    
+    // إرسال إشعارات بالرسالة الجديدة للمستخدمين المعنيين
+    notificationSocketService.sendMessageNotification(conversationInstance._id.toString(), message, conversationInstance);
+    
+    // استخدام معالج الذكاء الاصطناعي للرسائل الواردة الجديدة
+    if (message.direction === 'incoming') {
+      try {
+        // معالجة الرسالة بالذكاء الاصطناعي فقط إذا كانت الإعدادات تسمح بذلك
+        const systemSettings = await SystemSettings.findOne() || {};
+        const aiEnabled = systemSettings.aiAssistantEnabled !== false;  // افتراضياً ممكّن
+
+        if (aiEnabled) {
+          logger.info('metaWhatsappWebhookController', 'إرسال الرسالة لمعالجة الذكاء الاصطناعي', {
+            conversationId: conversationInstance._id,
+            messageId: message._id
+          });
+          
+          // معالجة الرسالة بواسطة الذكاء الاصطناعي بشكل غير متزامن
+          aiConversationController.processIncomingMessage(message, conversationInstance)
+            .catch(error => {
+              logger.error('metaWhatsappWebhookController', 'خطأ في معالجة الذكاء الاصطناعي', {
+                conversationId: conversationInstance._id,
+                messageId: message._id,
+                error: error.message
+              });
+            });
+        }
+      } catch (aiError) {
+        logger.error('metaWhatsappWebhookController', 'خطأ عام في معالجة الذكاء الاصطناعي', {
+          conversationId: conversationInstance._id,
           messageId: message._id,
-          conversationId: conversationInstance._id.toString()
+          error: aiError.message
         });
       }
     }
-    
-    // جلب بيانات المحادثة مع بيانات جهة الاتصال الكاملة قبل إرسالها للإشعارات
-    const populatedConversation = await Conversation.findById(conversationInstance._id)
-      .populate('contactId', 'name phoneNumber')
-      .lean();
-    
-    await NotificationSocketService.sendMessageNotification(
-      conversationInstance._id.toString(),
-      message,
-      populatedConversation || conversationInstance, // استخدام البيانات المجلوبة إذا كانت متاحة
-      isActive
-    );
-    
   } catch (error) {
-    logger.error('metaWhatsappWebhookController', 'خطأ في معالجة نهاية إضافة الرسالة', error);
+    logger.error('metaWhatsappWebhookController', 'خطأ في معالجة الرسالة الجديدة', error);
   }
 }

@@ -149,6 +149,29 @@
       </div>
     </div>
 
+    <!-- قسم إعدادات الذكاء الاصطناعي -->
+    <div class="settings-section">
+      <h2><i class="fas fa-robot"></i> إعدادات مساعد الذكاء الاصطناعي</h2>
+      <div class="card">
+        <div class="card-body">
+          <form action="/settings/ai-assistant-settings" method="POST">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" role="switch" id="aiAssistantEnabled" name="aiAssistantEnabled" <%= systemSettings && systemSettings.aiAssistantEnabled ? 'checked' : '' %>>
+              <label class="form-check-label" for="aiAssistantEnabled">تفعيل مساعد الذكاء الاصطناعي</label>
+            </div>
+            <div class="mb-3">
+              <p class="text-muted">
+                عند تفعيل هذا الخيار، سيقوم مساعد الذكاء الاصطناعي بالرد تلقائياً على المحادثات الجديدة غير المعينة لأي موظف.
+                <br>
+                يمكن للمساعد الذكي أيضاً تحويل المحادثة إلى موظف عند الحاجة.
+              </p>
+            </div>
+            <button type="submit" class="btn btn-primary">حفظ إعدادات الذكاء الاصطناعي</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <!-- قسم الميزات -->
     <div class="settings-section">
       <h2>تعديل أو إضافة ميزات لنظام كريستال/سراج</h2>

@@ -71,6 +71,45 @@ class LoggerService {
      */
     log(level, module, message, data = {}) {
         const timestamp = new Date().toISOString();
+        
+        // تنسيق المعلومات بشكل أكثر وضوحاً
+        const displayData = Object.keys(data).length > 0 ? JSON.stringify(data) : '';
+        
+        // تنسيق مستوى السجل بألوان مختلفة (للطرفية التي تدعم ANSI colors)
+        let colorPrefix = '';
+        let colorSuffix = '\x1b[0m'; // إعادة تعيين اللون
+        
+        switch (level) {
+            case 'ERROR':
+                colorPrefix = '\x1b[31m'; // أحمر
+                break;
+            case 'WARN':
+                colorPrefix = '\x1b[33m'; // أصفر
+                break;
+            case 'INFO':
+                colorPrefix = '\x1b[36m'; // سماوي
+                break;
+            case 'DEBUG':
+                colorPrefix = '\x1b[90m'; // رمادي
+                break;
+            default:
+                colorPrefix = '';
+                colorSuffix = '';
+        }
+        
+        // تنسيق السجل للعرض
+        const formattedLog = `${colorPrefix}[${timestamp}] [${level}] [${module}] ${message} ${displayData}${colorSuffix}`;
+        
+        // تسجيل الرسالة وفقاً للمستوى
+        if (level === 'ERROR') {
+            console.error(formattedLog);
+        } else if (level === 'WARN') {
+            console.warn(formattedLog);
+        } else {
+            console.log(formattedLog);
+        }
+        
+        // الاحتفاظ بنسخة JSON للسجل (يمكن استخدامها لمصادر أخرى مثل قاعدة البيانات)
         const logEntry = {
             timestamp,
             level,
@@ -79,14 +118,7 @@ class LoggerService {
             data
         };
         
-        // تسجيل جميع الرسائل إلى وحدة التحكم
-        if (level === 'ERROR') {
-            console.error(JSON.stringify(logEntry, null, 0));
-        } else if (level === 'WARN') {
-            console.warn(JSON.stringify(logEntry, null, 0));
-        } else {
-            console.log(JSON.stringify(logEntry, null, 0));
-        }
+        // يمكن هنا إضافة كود لتخزين السجلات في قاعدة البيانات أو ملف إذا رغبت
     }
 }
 

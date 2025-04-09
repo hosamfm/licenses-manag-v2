@@ -32,6 +32,7 @@ router.get('/settings', [isAuthenticated, checkRole(['admin'])], async (req, res
       suppliers,
       crystalSupplier: systemSettings ? systemSettings.crystalSupplier : null,
       sirajSupplier: systemSettings ? systemSettings.sirajSupplier : null,
+      systemSettings,
       users,
       flashMessages: req.flash()
     });
@@ -198,5 +199,27 @@ router.post('/api/whatsapp/webhook/status-update', whatsappWebhookController.han
 
 // مسار webhook لاستقبال الرسائل الواردة من الواتس أب - لا يتطلب مصادقة
 router.post('/api/whatsapp/webhook/incoming-message', whatsappWebhookController.handleIncomingMessage);
+
+// مسار حفظ إعدادات مساعد الذكاء الاصطناعي
+router.post('/settings/ai-assistant-settings', [isAuthenticated, checkRole(['admin'])], async (req, res) => {
+  try {
+    const { aiAssistantEnabled } = req.body;
+    
+    // الحصول على إعدادات النظام أو إنشاء كائن جديد إذا لم تكن موجودة
+    let systemSettings = await SystemSettings.findOne();
+    if (!systemSettings) {
+      systemSettings = new SystemSettings();
+    }
+    
+    // تحديث إعدادات الذكاء الاصطناعي
+    systemSettings.aiAssistantEnabled = !!aiAssistantEnabled; // تحويل القيمة إلى boolean
+    await systemSettings.save();
+    
+    req.flash('success', 'تم حفظ إعدادات مساعد الذكاء الاصطناعي بنجاح');
+    res.redirect('/settings');
+  } catch (error) {
+    handleError(req, res, error, 'حدث خطأ أثناء حفظ إعدادات مساعد الذكاء الاصطناعي.', '/settings');
+  }
+});
 
 module.exports = router;

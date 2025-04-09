@@ -114,6 +114,47 @@ class NotificationService {
   }
 
   /**
+   * إنشاء وإرسال إشعار (متضمنًا إمكانية إرسال Web Push)
+   * @param {Object} notificationData - بيانات الإشعار الأساسية
+   * @param {Object} [conversation=null] - كائن المحادثة المرتبط بالإشعار (إذا كان منطبقًا)
+   * @returns {Promise<Notification|null>} - الإشعار الذي تم إنشاؤه أو null
+   */
+  static async createAndSendNotification(notificationData, conversation = null) {
+    try {
+      // إنشاء الإشعار
+      const notification = await this.createNotification(notificationData, conversation);
+      
+      if (notification) {
+        // إرسال الإشعار عبر Web Push إذا كان لدى المستخدم اشتراكات نشطة
+        try {
+          const user = await User.findById(notification.recipient)
+            .select('webPushSubscriptions')
+            .lean();
+          
+          if (user && user.webPushSubscriptions && user.webPushSubscriptions.length > 0) {
+            await this.sendWebPushNotification(user, notification);
+          }
+        } catch (pushError) {
+          logger.error('notificationService', 'خطأ في إرسال إشعار Web Push', { 
+            recipientId: notification.recipient, 
+            error: pushError.message 
+          });
+          // استمر حتى لو فشل إرسال Web Push
+        }
+      }
+      
+      return notification;
+    } catch (error) {
+      logger.error('notificationService', 'خطأ في إنشاء وإرسال الإشعار', { 
+        error: error.message, 
+        stack: error.stack, 
+        data: notificationData 
+      });
+      return null;
+    }
+  }
+
+  /**
    * إنشاء إشعار نظام لمستخدم واحد أو أكثر
    * يستخدم الآن createNotification
    */

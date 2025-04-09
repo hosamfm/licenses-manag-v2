@@ -10,6 +10,10 @@ const systemSettingsSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Supplier',
     required: false
+  },
+  aiAssistantEnabled: {
+    type: Boolean,
+    default: true
   }
 }, { timestamps: true });
 
