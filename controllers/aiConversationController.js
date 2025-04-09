@@ -450,7 +450,7 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
       // إنشاء كائن رسالة جديد
       const newMessage = new WhatsappMessage({
         conversationId: conversation._id,
-        content: response,
+        content: typeof response === 'object' ? response.content : response,
         direction: 'outgoing',
         timestamp: new Date(),
         status: 'sent',
@@ -464,7 +464,8 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
             userId: chatGptService.aiUserId,
             username: aiUser ? aiUser.username : 'ai-assistant',
             full_name: aiUser ? aiUser.full_name : 'مساعد الذكاء الاصطناعي'
-          }
+          },
+          ...(typeof response === 'object' && response.metadata ? { aiResponseMeta: response.metadata } : {})
         }
       });
       
