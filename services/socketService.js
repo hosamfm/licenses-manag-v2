@@ -301,6 +301,30 @@ async function notifyConversationUpdate(conversationId, update) {
   if (conversationId && typeof conversationId === 'object') {
     conversationId = conversationId.toString();
   }
+  
+  // إنشاء قفل زمني لمنع التحديثات المتكررة للمحادثة نفسها
+  const updateLock = `${conversationId}-lock`;
+  if (global._conversationUpdateLocks && global._conversationUpdateLocks[updateLock]) {
+    const lastUpdateTime = global._conversationUpdateLocks[updateLock];
+    const now = Date.now();
+    // منع التحديثات المتكررة للمحادثة نفسها في أقل من 300 مللي ثانية
+    if (now - lastUpdateTime < 300) {
+      return;
+    }
+  }
+  
+  // إنشاء أو تحديث قفل التحديث
+  if (!global._conversationUpdateLocks) {
+    global._conversationUpdateLocks = {};
+  }
+  global._conversationUpdateLocks[updateLock] = Date.now();
+  
+  // تعيين مؤقت لإزالة القفل بعد مرور الوقت
+  setTimeout(() => {
+    if (global._conversationUpdateLocks && global._conversationUpdateLocks[updateLock]) {
+      delete global._conversationUpdateLocks[updateLock];
+    }
+  }, 1000); // القفل يزول بعد ثانية واحدة
 
   try {
     // إذا لم تكن هناك معلومات contactId في التحديث، نقوم بجلبها من قاعدة البيانات

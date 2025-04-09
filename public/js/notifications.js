@@ -89,6 +89,10 @@ function initializeSocketConnection() {
 function setupNotificationListeners(socket) {
     if (!socket) return;
     
+    // منع تكرار معالجة التحديثات من Socket.io
+    const processedUpdates = new Set();
+    const updateProcessingTimeout = 200; // مهلة معالجة التحديثات (مللي ثانية)
+    
     // استقبال تحديث برسالة جديدة
     socket.on('new-message', function(data) {
         // التعامل مع بنيتين مختلفتين للبيانات
@@ -134,7 +138,21 @@ function setupNotificationListeners(socket) {
     });
     
     // استقبال تحديث المحادثة
-    socket.on('conversation-update', function(data) {        
+    socket.on('conversation-update', function(data) {       
+        // تجنب معالجة نفس التحديث عدة مرات خلال فترة زمنية قصيرة
+        const updateId = `${data._id}-${Date.now()}`;
+        if (processedUpdates.has(data._id)) {
+            return; // تخطي التحديثات المتكررة للمحادثة نفسها
+        }
+        
+        // تسجيل أن هذه المحادثة تم تحديثها مؤخرًا
+        processedUpdates.add(data._id);
+        
+        // إزالة المحادثة من القائمة بعد فترة
+        setTimeout(() => {
+            processedUpdates.delete(data._id);
+        }, updateProcessingTimeout);
+         
         updateConversationInfo(data);
         
         // تحديث قائمة المحادثات إذا كانت الرسالة تحتوي على آخر رسالة
@@ -402,6 +420,20 @@ function updateConversationsList() {
 function updateConversationsUI(conversations) {
     const conversationsList = document.querySelector('.conversations-list');
     if (!conversationsList) return;
+    
+    // إزالة أي عناصر مكررة في DOM قبل التحديث
+    const conversationIdsMap = new Map();
+    conversationsList.querySelectorAll('.conversation-item').forEach(item => {
+        const convId = item.getAttribute('data-conversation-id');
+        if (convId) {
+            if (!conversationIdsMap.has(convId)) {
+                conversationIdsMap.set(convId, item);
+            } else {
+                // إزالة العناصر المكررة والاحتفاظ بالعنصر الأول فقط
+                item.remove();
+            }
+        }
+    });
     
     // إنشاء خريطة للعناصر الموجودة لسهولة الوصول
     const existingItemsMap = new Map();

@@ -92,6 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
     conversationListOverlay.className = 'conversation-list-overlay';
     document.body.appendChild(conversationListOverlay);
 
+    // فحص وإزالة المحادثات المكررة عند تحميل الصفحة
+    checkAndRemoveDuplicateConversations();
+
     // --- Utility Functions ---
 
     /**
@@ -120,6 +123,9 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function fetchAndRenderConversations(filters = window.currentFilters) {
         if (!conversationListContainer || !conversationListLoader || !noConversationsMessage) return;
+
+        // فحص وإزالة المحادثات المكررة قبل تحميل قائمة جديدة
+        checkAndRemoveDuplicateConversations();
 
         // إظهار مؤشر التحميل وإخفاء رسالة عدم وجود نتائج
         conversationListLoader.classList.remove('d-none');
@@ -344,6 +350,15 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     window.updateConversationInList = function(updatedConv, skipReRender = false) {
         if (!conversationListContainer || !updatedConv || !updatedConv._id) return;
+
+        // إزالة أي عناصر مكررة قبل إجراء التحديث
+        const duplicateItems = conversationListContainer.querySelectorAll(`.conversation-item[data-conversation-id="${updatedConv._id}"]`);
+        if (duplicateItems.length > 1) {
+            // الاحتفاظ بالعنصر الأول فقط وإزالة البقية
+            for (let i = 1; i < duplicateItems.length; i++) {
+                duplicateItems[i].remove();
+            }
+        }
 
         let conversationItem = conversationListContainer.querySelector(`.conversation-item[data-conversation-id="${updatedConv._id}"]`);
         const newHTML = createConversationItemHTML(updatedConv); // إنشاء HTML جديد من البيانات المحدثة
@@ -1268,3 +1283,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // ... (الكود الموجود لمعالجة Socket.IO)
     // ...
 }); 
+
+/**
+ * دالة لفحص وجود عناصر مكررة في DOM وتنظيفها
+ * تستدعى عند بدء تحميل الصفحة وقبل كل تحديث للقائمة
+ */
+function checkAndRemoveDuplicateConversations() {
+    if (!conversationListContainer) return;
+    
+    // إنشاء خريطة للعناصر حسب معرف المحادثة
+    const conversationItems = new Map();
+    const items = conversationListContainer.querySelectorAll('.conversation-item');
+    
+    // تصنيف العناصر والكشف عن التكرارات
+    items.forEach(item => {
+        const convId = item.getAttribute('data-conversation-id');
+        if (!convId) return;
+        
+        if (!conversationItems.has(convId)) {
+            // أول ظهور للمحادثة، نحتفظ بها
+            conversationItems.set(convId, item);
+        } else {
+            // ظهور مكرر، نحذفه
+            console.log(`حذف محادثة مكررة: ${convId}`);
+            item.remove();
+        }
+    });
+} 

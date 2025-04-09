@@ -70,8 +70,24 @@ function joinConversationRoom(conversationId) {
 function setupAssignmentListeners(socket) {
     if (!socket) return;
     
+    // لمنع معالجة التحديثات المتكررة
+    const processedUpdates = new Map(); // خريطة لتخزين آخر وقت معالجة لكل محادثة
+    const updateDebounceTime = 300; // الوقت بالمللي ثانية بين التحديثات
+    
     // الاستماع لأحداث تحديث المحادثة (بما في ذلك التعيين)
     socket.on('conversation-update', function(data) {
+        // التحقق من تكرار التحديث خلال فترة زمنية قصيرة
+        const now = Date.now();
+        const lastUpdateTime = processedUpdates.get(data._id);
+        
+        if (lastUpdateTime && (now - lastUpdateTime) < updateDebounceTime) {
+            console.log(`تجاهل تحديث متكرر للمحادثة ${data._id}`);
+            return; // تجاهل التحديثات المتكررة في وقت قصير
+        }
+        
+        // تسجيل وقت المعالجة الحالية
+        processedUpdates.set(data._id, now);
+        
         // التأكد من أن التحديث يتعلق بالتعيين
         if (data && data.type === 'assigned') {
             // إذا كانت المحادثة المفتوحة حالياً
