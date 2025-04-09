@@ -113,17 +113,22 @@ class ChatGptService {
   }
 
   /**
-   * الحصول على جميع المستخدمين المؤهلين للوصول إلى المحادثات
+   * الحصول على جميع المستخدمين المؤهلين للوصول إلى المحادثات وتلقي إشعارات عنها
    * @returns {Promise<Array>} قائمة المستخدمين المؤهلين
    */
   async getEligibleUsers() {
     try {
+      // الحصول على المستخدمين النشطين الذين:
+      // 1. لديهم صلاحية الوصول للمحادثات
+      // 2. مفعلين استلام إشعارات المحادثات غير المعينة
+      // 3. ليسوا مستخدم الذكاء الاصطناعي نفسه
       return await User.find({
         account_status: 'active',
         can_access_conversations: true,
+        notify_unassigned_conversation: true, // إضافة هذا الشرط لضمان إرسال الإشعارات فقط لمن فعل هذا الخيار
         _id: { $ne: this.aiUserId } // استثناء مستخدم الذكاء الاصطناعي
       })
-      .select('_id username full_name user_role')
+      .select('_id username full_name user_role webPushSubscriptions')
       .lean();
     } catch (error) {
       logger.error('chatGptService', 'خطأ في الحصول على المستخدمين المؤهلين:', error);
@@ -139,7 +144,7 @@ class ChatGptService {
    */
   async notifyEligibleUsers(conversationId, reason, messagePreview) {
     try {
-      // الحصول على المستخدمين المؤهلين
+      // الحصول على المستخدمين المؤهلين (المستخدمين البشريين مع صلاحيات الوصول للمحادثات)
       const eligibleUsers = await this.getEligibleUsers();
       
       if (!eligibleUsers || eligibleUsers.length === 0) {
@@ -147,10 +152,10 @@ class ChatGptService {
         return;
       }
       
-      logger.info('chatGptService', `إرسال إشعارات إلى ${eligibleUsers.length} مستخدم مؤهل بغض النظر عن نشاطهم`, { 
+      logger.info('chatGptService', `إرسال إشعارات إلى ${eligibleUsers.length} مستخدم مؤهل بخصوص محادثة تحتاج للتدخل`, { 
         conversationId, 
         reason,
-        userIds: eligibleUsers.map(u => u._id)
+        userCount: eligibleUsers.length
       });
       
       // إنشاء عنوان ومحتوى الإشعار بناءً على السبب
@@ -179,21 +184,27 @@ class ChatGptService {
           .select('assignedTo status contactId customerName phoneNumber')
           .lean();
         
-        logger.info('chatGptService', 'تم العثور على معلومات المحادثة', { 
-          conversationId,
-          customerName: conversation?.customerName,
-          phoneNumber: conversation?.phoneNumber
-        });
+        if (conversation) {
+          logger.info('chatGptService', 'تم العثور على معلومات المحادثة', { 
+            conversationId,
+            customerName: conversation?.customerName,
+            phoneNumber: conversation?.phoneNumber
+          });
+        }
       } catch (err) {
         logger.warn('chatGptService', 'لم يتم العثور على بيانات المحادثة للإشعار', { conversationId });
       }
       
-      // استخدام NotificationService مباشرة للإشعارات الجماعية
+      // استخدام notificationSocketService للوصول المباشر إلى إشعارات الهيدر
+      const notificationSocketService = require('./notificationSocketService');
       const NotificationService = require('./notificationService');
       
-      // إنشاء إشعار جماعي لجميع المستخدمين المؤهلين
+      // جمع معرفات المستخدمين لإنشاء إشعار جماعي
+      const userIds = eligibleUsers.map(user => user._id);
+      
+      // إنشاء إشعار جماعي في النظام
       await NotificationService.createSystemNotification(
-        eligibleUsers.map(u => u._id),
+        userIds,
         title,
         content,
         `/crm/conversations/${conversationId}`,
@@ -203,43 +214,45 @@ class ChatGptService {
         }
       );
       
-      // إرسال إشعار لكل مستخدم مؤهل
+      // إحصائيات لتتبع نجاح/فشل الإشعارات
       let successCount = 0;
       let failCount = 0;
       
-      // استخدام notificationSocketService للوصول المباشر إلى إشعارات الهيدر
-      const notificationSocketService = require('./notificationSocketService');
-      
+      // إرسال إشعار فردي لكل مستخدم مؤهل للظهور في الهيدر والإشعارات
       for (const user of eligibleUsers) {
         try {
-          // إنشاء إشعار مستخدم في قاعدة البيانات
+          // تجاهل الذكاء الاصطناعي نفسه (تحقق إضافي)
+          if (user._id.toString() === this.aiUserId?.toString()) {
+            logger.warn('chatGptService', 'تم تجاهل إرسال إشعار للذكاء الاصطناعي نفسه', { userId: user._id });
+            continue;
+          }
+          
+          // إنشاء إشعار في قاعدة البيانات
           const notification = await NotificationService.createNotification({
             recipient: user._id,
-            type: 'conversation', // هنا نستخدم النوع "conversation" بدلاً من "message"
+            type: 'conversation', // نوع الإشعار: محادثة (مهم لظهور الإشعار في الهيدر)
             title: title,
             content: content,
-            message: content, // تكرار المحتوى في حقل message للتوافق
             link: `/crm/conversations/${conversationId}`,
             reference: {
               model: 'Conversation',
               id: conversationId
             },
-            relatedConversation: conversationId
+            relatedConversation: conversationId,
+            isRead: false
           }, conversation);
           
           if (notification) {
-            // محاولة إرسال إشعار مباشر عبر Socket.io (للهيدر)
-            const sentViaSocket = await notificationSocketService.sendNotification(user._id.toString(), notification);
+            // محاولة إرسال إشعار عبر Socket.io (للهيدر)
+            const sentViaSocket = await notificationSocketService.sendNotification(
+              user._id.toString(), 
+              notification
+            );
             
-            // إذا لم يتم إرسال الإشعار عبر Socket.io، نحاول عبر Web Push
-            if (!sentViaSocket) {
-              const userDetails = await User.findById(user._id)
-                .select('webPushSubscriptions')
-                .lean();
-                
-              if (userDetails?.webPushSubscriptions?.length > 0) {
-                await NotificationService.sendWebPushNotification(userDetails, notification);
-              }
+            // إذا المستخدم غير متصل بالسوكت، نرسل إشعار ويب بوش
+            if (!sentViaSocket && user.webPushSubscriptions && user.webPushSubscriptions.length > 0) {
+              await NotificationService.sendWebPushNotification(user, notification);
+              logger.info('chatGptService', `تم إرسال إشعار Web Push للمستخدم ${user._id}`);
             }
             
             successCount++;
@@ -250,13 +263,12 @@ class ChatGptService {
         } catch (userError) {
           failCount++;
           logger.error('chatGptService', `خطأ في إرسال الإشعار للمستخدم ${user._id}`, {
-            error: userError.message,
-            stack: userError.stack?.split('\n')[0]
+            error: userError.message
           });
         }
       }
       
-      logger.info('chatGptService', `تم إرسال الإشعارات: ${successCount} ناجح, ${failCount} فاشل`);
+      logger.info('chatGptService', `اكتملت عملية إرسال الإشعارات: ${successCount} ناجح, ${failCount} فاشل`);
     } catch (error) {
       logger.error('chatGptService', 'خطأ في إرسال الإشعارات للمستخدمين المؤهلين:', error);
     }
