@@ -1082,6 +1082,56 @@ class ChatGptService {
   }
 
   /**
+   * إنشاء رسالة استقبال مخصصة باستخدام إعدادات النظام
+   * @param {String} customerName اسم العميل (اختياري)
+   * @returns {Promise<String>} رسالة الاستقبال المخصصة
+   */
+  async getInitialGreeting(customerName = '') {
+    try {
+      const settings = await AISettings.getSettings();
+      
+      // استخدام تعليمات النظام من الإعدادات لإنشاء سؤال للذكاء الاصطناعي
+      const prompt = `${settings.systemInstructions}
+      
+مهمتك هي إنشاء رسالة ترحيب قصيرة ومهذبة للعميل${customerName ? ' ' + customerName : ''}. 
+لا تتجاوز الرسالة ثلاثة أسطر كحد أقصى.
+لا تستخدم عبارات جاهزة مثل "كيف يمكنني مساعدتك؟" وكن أكثر احترافية.`;
+
+      // إنشاء رسالة مخصصة باستخدام OpenAI
+      const requestData = {
+        model: 'gpt-3.5-turbo', // استخدام نموذج أسرع للردود البسيطة
+        messages: [
+          { role: "system", content: settings.systemInstructions },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.5, // درجة حرارة منخفضة للحصول على ردود أكثر تناسقاً
+        max_tokens: 100 // الحد من طول الرد
+      };
+
+      // استدعاء OpenAI للحصول على الرد
+      const headers = {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      };
+
+      const response = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        requestData,
+        { headers }
+      );
+
+      // استخراج الرد من استجابة OpenAI
+      const greeting = response.data.choices[0].message.content.trim();
+      
+      return greeting;
+    } catch (error) {
+      logger.error('chatGptService', 'خطأ في إنشاء رسالة استقبال مخصصة:', error);
+      // إرجاع رسالة افتراضية بسيطة في حالة الخطأ
+      return 'مرحباً، كيف يمكنني مساعدتك اليوم؟';
+    }
+  }
+
+  /**
    * تحويل ملف صوتي إلى نص باستخدام OpenAI Whisper API
    * @param {String} audioUrl رابط الملف الصوتي
    * @returns {Promise<String|null>} النص المحول أو null في حالة الفشل
