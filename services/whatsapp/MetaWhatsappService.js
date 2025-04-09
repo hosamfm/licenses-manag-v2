@@ -1060,6 +1060,41 @@ class MetaWhatsappService {
         // استخدام sendMediaMessage لإرسال الوسائط الأخرى (image, document, video, audio)
         return this.sendMediaMessage(to, mediaType, mediaUrl, options, replyMessageId, phoneNumberId);
     }
+
+    /**
+     * الحصول على إعدادات القناة حسب معرف القناة
+     * @param {string} channelId معرف القناة
+     * @returns {object} إعدادات القناة إذا وجدت، وإلا ترجع null
+     */
+    async getChannelById(channelId) {
+        if (!this.initialized) {
+            await this.initialize();
+        }
+        
+        try {
+            // التحقق من وجود channelId
+            if (!channelId) {
+                logger.error('MetaWhatsappService', 'معرف القناة غير موجود', { channelId });
+                return null;
+            }
+            
+            // البحث عن القناة في قاعدة البيانات
+            const settings = await MetaWhatsappSettings.findById(channelId);
+            
+            if (!settings) {
+                logger.error('MetaWhatsappService', 'لم يتم العثور على قناة بالمعرف المحدد', { channelId });
+                return null;
+            }
+            
+            return settings;
+        } catch (error) {
+            logger.error('MetaWhatsappService', 'خطأ في الحصول على القناة حسب المعرف', {
+                channelId,
+                error: error.message
+            });
+            return null;
+        }
+    }
 }
 
 // إنشاء نسخة واحدة من الخدمة (singleton) للاستخدام في جميع أنحاء التطبيق
