@@ -25,7 +25,7 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
     }
 
     // فحص إذا كان يجب تعيين المحادثة لمندوب بشري
-    const shouldTransfer = message.content && await chatGptService.shouldTransferToHuman(message.content);
+    const shouldTransfer = message.content && await exports.shouldTransferToHuman(message.content);
     
     // التحقق من حالة المحادثة
     const assignedToOtherAgent = conversation.assignedTo && 
@@ -534,3 +534,65 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
     return null;
   }
 }
+
+/**
+ * التحقق مما إذا كان يجب تحويل المحادثة إلى مندوب بشري
+ * @param {String} messageContent محتوى الرسالة
+ * @returns {Boolean} إذا كان يجب تحويل المحادثة
+ */
+exports.shouldTransferToHuman = async (messageContent) => {
+  try {
+    if (!messageContent) return false;
+    
+    // قائمة الكلمات المفتاحية التي تشير إلى الحاجة للتواصل مع مندوب بشري
+    const transferKeywords = [
+      'تحدث مع شخص',
+      'مساعدة بشرية',
+      'مندوب',
+      'خدمة عملاء',
+      'موظف',
+      'عميل بشري',
+      'وكيل',
+      'مشرف',
+      'تحويل',
+      'متخصص',
+      'مسؤول',
+      'مساعد حقيقي'
+    ];
+    
+    // تحويل النص إلى أحرف صغيرة للمقارنة
+    const lowerCaseMessage = messageContent.toLowerCase();
+    
+    // البحث عن الكلمات المفتاحية في الرسالة
+    for (const keyword of transferKeywords) {
+      if (lowerCaseMessage.includes(keyword.toLowerCase())) {
+        logger.info('aiConversationController', 'تم اكتشاف طلب للتحويل لمندوب بشري', { 
+          keyword,
+          messagePreview: messageContent.substring(0, 100)
+        });
+        return true;
+      }
+    }
+    
+    // فحص علامات الغضب أو الإحباط
+    const angerIndicators = ['!!!', '???', '؟؟؟', '!!!؟؟؟', 'غير مقبول', 'سيء', 'خدمة سيئة'];
+    
+    for (const indicator of angerIndicators) {
+      if (lowerCaseMessage.includes(indicator.toLowerCase())) {
+        // إذا كانت الرسالة طويلة وتحتوي على علامات غضب، فقد تحتاج لتدخل بشري
+        if (messageContent.length > 100) {
+          logger.info('aiConversationController', 'تم اكتشاف علامات إحباط/غضب في رسالة طويلة', { 
+            indicator,
+            messageLength: messageContent.length
+          });
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    logger.error('aiConversationController', 'خطأ في تحليل محتوى الرسالة:', error);
+    return false;
+  }
+};
