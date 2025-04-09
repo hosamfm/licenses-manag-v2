@@ -203,7 +203,7 @@ router.post('/api/whatsapp/webhook/incoming-message', whatsappWebhookController.
 // مسار حفظ إعدادات مساعد الذكاء الاصطناعي
 router.post('/settings/ai-assistant-settings', [isAuthenticated, checkRole(['admin'])], async (req, res) => {
   try {
-    const { aiAssistantEnabled } = req.body;
+    const { aiAssistantEnabled, autoAssignAI } = req.body;
     
     // الحصول على إعدادات النظام أو إنشاء كائن جديد إذا لم تكن موجودة
     let systemSettings = await SystemSettings.findOne();
@@ -213,6 +213,7 @@ router.post('/settings/ai-assistant-settings', [isAuthenticated, checkRole(['adm
     
     // تحديث إعدادات الذكاء الاصطناعي
     systemSettings.aiAssistantEnabled = !!aiAssistantEnabled; // تحويل القيمة إلى boolean
+    systemSettings.autoAssignAI = !!autoAssignAI; // تحويل القيمة إلى boolean
     await systemSettings.save();
     
     req.flash('success', 'تم حفظ إعدادات مساعد الذكاء الاصطناعي بنجاح');

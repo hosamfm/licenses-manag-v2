@@ -14,6 +14,10 @@ const systemSettingsSchema = new mongoose.Schema({
   aiAssistantEnabled: {
     type: Boolean,
     default: true
+  },
+  autoAssignAI: {
+    type: Boolean,
+    default: true
   }
 }, { timestamps: true });
 

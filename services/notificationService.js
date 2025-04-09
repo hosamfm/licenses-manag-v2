@@ -384,6 +384,52 @@ class NotificationService {
         // يمكن إضافة تفضيل خاص بها لاحقًا إذا لزم الأمر
         return true;
         
+      case 'conversation':
+        // نوع خاص للإشعارات المتعلقة بالمحادثات التي تحتاج للتدخل البشري
+        
+        // 1. إذا كان المستخدم مندوب أو مشرف ويمتلك صلاحية الوصول للمحادثات
+        if (user.can_access_conversations) {
+          // 2. حتى إذا كانت المحادثة معينة للذكاء الاصطناعي، نريد إرسال إشعار للمندوبين البشريين
+          if (conversation && conversation.assignedTo) {
+            try {
+              const mongoose = require('mongoose');
+              
+              // التحقق مما إذا كانت المحادثة معينة للمستخدم الحالي
+              const isAssignedToCurrentUser = conversation.assignedTo.toString() === user._id.toString();
+              
+              // إذا كانت المحادثة معينة للمستخدم الحالي، أرسل الإشعار
+              if (isAssignedToCurrentUser) {
+                return true;
+              }
+              
+              // محاولة تحديد ما إذا كانت المحادثة معينة لمستخدم الذكاء الاصطناعي
+              const User = require('../models/User');
+              const aiUser = await User.findOne({ username: 'ai-assistant' }).select('_id').lean();
+              
+              if (aiUser && conversation.assignedTo.toString() === aiUser._id.toString()) {
+                // المحادثة معينة للذكاء الاصطناعي - أرسل إشعارًا لجميع الموظفين المؤهلين
+                logger.info('notificationService', 'إرسال إشعار للمستخدم رغم أن المحادثة معينة للذكاء الاصطناعي', {
+                  userId: user._id,
+                  conversationId: conversation._id
+                });
+                return true;
+              }
+            } catch (error) {
+              logger.error('notificationService', 'خطأ أثناء التحقق مما إذا كانت المحادثة معينة للذكاء الاصطناعي', {
+                error: error.message,
+                conversationId: conversation?._id
+              });
+            }
+          }
+          
+          // المحادثة غير معينة لأحد - أرسل إشعارًا للمستخدمين المؤهلين
+          if (!conversation || !conversation.assignedTo) {
+            return true;
+          }
+        }
+
+        // الافتراضي: إرسال الإشعار إذا كان للمستخدم صلاحية الوصول للمحادثات 
+        return !!user.can_access_conversations;
       // أضف حالات لأنواع إشعارات أخرى هنا
       // case 'status_change': ...
 

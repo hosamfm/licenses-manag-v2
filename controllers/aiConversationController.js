@@ -14,8 +14,9 @@ const User = require('../models/User');
  * معالجة رسالة واردة جديدة باستخدام الذكاء الاصطناعي
  * @param {Object} message الرسالة الواردة
  * @param {Object} conversation المحادثة
+ * @param {Boolean} autoAssignAI ما إذا كان يجب تعيين المحادثة تلقائياً للذكاء الاصطناعي
  */
-exports.processIncomingMessage = async (message, conversation) => {
+exports.processIncomingMessage = async (message, conversation, autoAssignAI = true) => {
   try {
     // تهيئة خدمة الذكاء الاصطناعي
     if (!chatGptService.initialized) {
@@ -65,12 +66,60 @@ exports.processIncomingMessage = async (message, conversation) => {
           const transferMessage = 'سيتم تحويلك الآن إلى مندوب خدمة عملاء للمساعدة.';
           await sendAiResponseToCustomer(conversation, transferMessage);
           
-          // إشعار المندوب البشري بالتعيين
+          // إشعار المندوب البشري المعين بالتعيين
           socketService.notifyUser(humanAgent._id, 'conversation_assigned', {
             conversationId: conversation._id,
             assignedBy: 'مساعد الذكاء الاصطناعي',
             customerName: conversation.customerName || conversation.phoneNumber,
             phoneNumber: conversation.phoneNumber
+          });
+        }
+        
+        // إرسال إشعار لجميع الموظفين المؤهلين بأن هناك محادثة تحتاج لتدخل بشري
+        // حتى وإن لم يكن هناك مندوب متاح للتعيين التلقائي أو تم تعيين مندوب محدد
+        try {
+          const messagePreview = message.content?.substring(0, 100) || '[رسالة وسائط]';
+          logger.info('aiConversationController', 'إرسال إشعار لجميع الموظفين المؤهلين بطلب التدخل البشري', {
+            conversationId: conversation._id,
+            messagePreview: messagePreview
+          });
+          
+          // استخدام خدمة chatGptService لإرسال إشعار لجميع الموظفين المؤهلين
+          await chatGptService.notifyEligibleUsers(
+            conversation._id,
+            'ai_detected_transfer_request',
+            messagePreview
+          );
+        } catch (notifyError) {
+          logger.error('aiConversationController', 'خطأ في إرسال إشعار للموظفين المؤهلين', {
+            conversationId: conversation._id,
+            error: notifyError.message
+          });
+        }
+      } else if (shouldTransfer && conversation.assignedTo && 
+                 conversation.assignedTo.toString() === chatGptService.aiUserId.toString()) {
+        // المحادثة معينة للذكاء الاصطناعي ولكن تحتاج للتدخل البشري
+        logger.info('aiConversationController', 'المحادثة معينة للذكاء الاصطناعي ولكن تحتاج لتدخل بشري', {
+          conversationId: conversation._id
+        });
+        
+        try {
+          // إرسال إشعار لجميع الموظفين المؤهلين
+          const messagePreview = message.content?.substring(0, 100) || '[رسالة وسائط]';
+          await chatGptService.notifyEligibleUsers(
+            conversation._id,
+            'ai_detected_transfer_request',
+            messagePreview
+          );
+          
+          // إرسال رسالة للعميل
+          const transferMessage = 'سنقوم بتحويلك إلى مندوب خدمة عملاء بشري في أقرب وقت. شكراً لصبرك.';
+          await sendAiResponseToCustomer(conversation, transferMessage);
+          
+        } catch (notifyError) {
+          logger.error('aiConversationController', 'خطأ في إرسال إشعار للموظفين المؤهلين', {
+            conversationId: conversation._id,
+            error: notifyError.message
           });
         }
       }
@@ -81,11 +130,12 @@ exports.processIncomingMessage = async (message, conversation) => {
     // معالجة الرسالة الواردة وإرسال رد الذكاء الاصطناعي
     logger.info('aiConversationController', 'معالجة رسالة واردة باستخدام الذكاء الاصطناعي', { 
       conversationId: conversation._id,
-      messageId: message._id
+      messageId: message._id,
+      autoAssignAI: autoAssignAI
     });
     
-    // تعيين المحادثة لمستخدم الذكاء الاصطناعي إذا لم تكن معينة
-    if (!conversation.assignedTo) {
+    // تعيين المحادثة لمستخدم الذكاء الاصطناعي إذا لم تكن معينة وكان التعيين التلقائي مفعلاً
+    if (!conversation.assignedTo && autoAssignAI) {
       conversation.assignedTo = chatGptService.aiUserId;
       conversation.status = 'assigned';
       await conversation.save();
@@ -96,9 +146,17 @@ exports.processIncomingMessage = async (message, conversation) => {
         assignedTo: chatGptService.aiUserId,
         assignedBy: chatGptService.aiUserId
       });
+      
+      logger.info('aiConversationController', 'تم تعيين المحادثة تلقائياً للذكاء الاصطناعي', { 
+        conversationId: conversation._id
+      });
+    } else if (!conversation.assignedTo && !autoAssignAI) {
+      logger.info('aiConversationController', 'تم تجاوز التعيين التلقائي للذكاء الاصطناعي', { 
+        conversationId: conversation._id
+      });
     }
     
-    // الحصول على رد الذكاء الاصطناعي
+    // الحصول على رد الذكاء الاصطناعي (بغض النظر عن حالة التعيين)
     const aiResponseMessage = await chatGptService.processIncomingMessage(conversation, message);
     
     if (aiResponseMessage && aiResponseMessage.content) {

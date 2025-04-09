@@ -727,6 +727,31 @@ class ChatGptService {
       return false;
     }
   }
+
+  /**
+   * الحصول على مندوب بشري متاح يمكن تعيين المحادثة له
+   * @returns {Promise<Object|null>} كائن المستخدم المندوب أو null إذا لم يتم العثور على أحد
+   */
+  async getAvailableHumanAgent() {
+    try {
+      const eligibleUsers = await this.getEligibleUsers();
+      
+      if (!eligibleUsers || eligibleUsers.length === 0) {
+        logger.warn('chatGptService', 'لا يوجد مندوبين بشريين مؤهلين للتعيين');
+        return null;
+      }
+      
+      // ملاحظة: يمكن تحسين آلية الاختيار هنا لاختيار أفضل مندوب متاح
+      // مثلاً، باستخدام قواعد توزيع الحمل، أو تحليل نشاط المندوبين، إلخ.
+      
+      // حاليًا، نختار مندوبًا عشوائيًا من المندوبين المؤهلين
+      const randomIndex = Math.floor(Math.random() * eligibleUsers.length);
+      return eligibleUsers[randomIndex];
+    } catch (error) {
+      logger.error('chatGptService', 'خطأ في الحصول على مندوب بشري متاح:', error);
+      return null;
+    }
+  }
 }
 
 // إنشاء نسخة واحدة من الخدمة للاستخدام في جميع أنحاء التطبيق
