@@ -5,7 +5,7 @@
 /* تخطيط CRM الأساسي */
 .crm-container {
   display: flex;
-  min-height: calc(100vh - 60px);
+  height: 100%;
   background-color: #f8fafc; /* خلفية فاتحة مماثلة لخلفية المحادثة */
 }
 
@@ -23,6 +23,9 @@
   flex: 1;
   padding: 20px;
   background-color: #f8fafc; /* تغيير للتناسق مع خلفية حاوية الرسائل */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .crm-sidebar-nav {
@@ -217,84 +220,114 @@
   background-color: #f8fafc;
 }
 
-/* ----- وضع الموبايل ----- */
+/* ----- وضع الموبايل (تحسين الشريط الجانبي الرئيسي) ----- */
 @media (max-width: 991.98px) {
   .crm-container {
     flex-direction: column;
-    min-height: auto;
+    height: 100%;
+    position: relative; /* ضروري لتحديد موقع القائمة الجانبية */
+    overflow-x: hidden; /* منع التمرير الأفقي غير المرغوب */
   }
 
   .crm-sidebar {
-    width: 100%;
-    height: auto;
-    border-left: none;
-    border-bottom: 1px solid #e2e8f0;
-    margin-bottom: 1rem;
-    padding: 0;
-    display: flex;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
+    /* إعادة تعريف كامل للسلوك */
+    position: fixed; /* أو absolute إذا كان الرأس غير ثابت */
+    top: 0;
+    left: -280px; /* إخفاء القائمة خارج الشاشة مبدئيًا (قليلاً أعرض من السابق) */
+    width: 280px; /* تحديد عرض ثابت للقائمة الجانبية */
+    height: 100vh;
     background-color: #ffffff;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  }
-  
-  /* تحويل القائمة إلى أفقية في الموبايل */
-  .crm-sidebar-nav {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    padding: 0.75rem;
-    margin: 0;
-    width: 100%;
-  }
-  
-  .crm-sidebar-nav li {
+    border-right: 1px solid #e2e8f0; /* تغيير الحد لليمين عند الظهور */
+    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1); /* ظل أوضح */
+    z-index: 1040; /* تأكد من ظهوره فوق المحتوى ولكن تحت أي Modals */
+    transition: left 0.3s ease-in-out; /* إضافة حركة الانزلاق */
+    padding: 20px 0; /* إعادة الهامش الداخلي العمودي */
+    /* إلغاء الأنماط الأفقية السابقة */
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
     margin-bottom: 0;
-    margin-left: 0.75rem;
-    white-space: nowrap;
+    border-bottom: none;
   }
-  
-  /* تحسين أسلوب العناصر في الموبايل */
-  .crm-sidebar-nav a {
-    display: flex;
+
+  .crm-sidebar.open {
+    left: 0; /* إظهار القائمة */
+  }
+
+  /* جعل القائمة تعود رأسية */
+  .crm-sidebar-nav {
+    display: block; /* العودة إلى التنسيق العمودي */
     flex-direction: column;
+    flex-wrap: nowrap;
+    padding: 0 10px;
+    width: auto;
+  }
+
+  .crm-sidebar-nav li {
+    margin-left: 0; /* إلغاء الهامش الأفقي */
+    margin-bottom: 8px;
+    white-space: normal;
+  }
+
+  /* إعادة تنسيق الروابط لتناسب القائمة الرأسية */
+  .crm-sidebar-nav a {
+    display: block;
+    flex-direction: row; /* العودة إلى الوضع الافتراضي */
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 0.75rem 1rem;
-    border-radius: 0.75rem;
-    background-color: #f8fafc;
-    border: 1px solid #e2e8f0;
-    min-width: 5rem;
-    font-size: 0.85rem;
-    transition: all 0.3s ease;
+    justify-content: flex-start;
+    text-align: right;
+    padding: 10px 20px;
+    border-radius: 8px;
+    background-color: transparent;
+    border: none;
+    min-width: auto;
+    font-size: 0.9rem; /* تعديل حجم الخط قليلاً */
     color: #475569;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+    box-shadow: none;
   }
-  
+
   .crm-sidebar-nav a i {
-    font-size: 1.3rem;
-    margin-bottom: 0.4rem;
-    margin-left: 0;
+    font-size: 1.1rem;
+    margin-bottom: 0;
+    margin-left: 10px; /* إعادة الهامش للأيقونة */
   }
-  
+
   .crm-sidebar-nav a.active {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: white;
-    border-color: #2563eb;
-    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.4);
+    border-color: transparent;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
   }
-  
+
   .crm-sidebar-nav a:hover {
-    background-color: #eef2ff;
-    transform: translateY(-3px);
+    background-color: rgba(37, 99, 235, 0.08);
+    transform: none; /* إلغاء تأثير التحريك */
+    color: #2563eb;
   }
-  
+
   .crm-sidebar-nav a.active:hover {
     background: linear-gradient(135deg, #3b82f6, #1d4ed8);
   }
-  
+
+  /* إضافة خلفية معتمة عند فتح القائمة */
+  .crm-sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1039; /* خلف القائمة الجانبية */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+  }
+
+  .crm-sidebar-overlay.show {
+    opacity: 1;
+    visibility: visible;
+  }
+
   /* تخطيط المحتوى في الموبايل */
   .crm-content > .row {
     flex-direction: column;
@@ -303,6 +336,8 @@
   /* تحسين الهامش بين العناصر في الموبايل */
   .crm-content {
     padding: 15px;
+    height: 100%;
+    flex: 1;
   }
   
   .crm-content .card,

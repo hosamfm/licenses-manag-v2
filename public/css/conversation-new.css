@@ -6,7 +6,7 @@
 
 /* تنسيق حاوية الصفحة */
 .conversations-view-container {
-  height: calc(100vh - 130px);
+  height: 100%; /* جعلها تملأ الحاوية الأم */
 }
 
 /* تنسيق عمود قائمة المحادثات */
@@ -31,7 +31,8 @@
 
 /* تنسيق حاوية المحادثة الرئيسية */
 .conversation-main-container {
-  height: calc(100vh - 150px);
+  /* height: calc(100vh - 120px); */ /* إزالة الحساب المباشر */
+  flex: 1; /* جعلها تملأ المساحة المتاحة في عمود التفاصيل */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -276,9 +277,9 @@
   overflow-y: auto;
   background-color: #f0f2f5;
   padding: 12px;
-  height: calc(100vh - 280px);
-  min-height: 200px;
-  max-height: 600px;
+  /* height: calc(100vh - 280px); */ /* إزالة الارتفاع المحدد */
+  /* min-height: 200px; */ /* إزالة الحد الأدنى للارتفاع أيضًا */
+  /* max-height: 600px; */ /* إزالة الحد الأقصى لأنه قد يتعارض مع flex: 1 أيضًا */
   scrollbar-width: thin;
 }
 
@@ -494,8 +495,8 @@
 .message-input-container {
   background-color: white;
   border-top: 1px solid #e1e4e8;
-  padding: 10px;
-  margin-top: auto;
+  padding: 10px 10px 0;
+  /* margin-top: auto; */ /* إزالة الدفع التلقائي للأسفل */
 }
 
 .reply-form-content {
@@ -561,6 +562,11 @@
 /* معاينة الملفات المرفقة */
 .media-preview {
   margin-top: 8px;
+  display: none; /* الإخفاء الافتراضي عبر CSS */
+}
+
+.media-preview.visible {
+  display: block; /* الإظهار عند إضافة فئة visible */
 }
 
 .media-preview .card {
@@ -737,21 +743,94 @@
 /* 8. تنسيقات تكيفية للشاشات المختلفة */
 /* =========================== */
 
-@media (max-width: 992px) {
+@media (max-width: 991.98px) {
   .conversation-main-container {
-    height: calc(100vh - 120px);
+    /* لا حاجة لتعديل الارتفاع هنا بعد الآن */
+    /* height: calc(100vh - 120px); */
   }
-  
+
   .messages-container {
-    height: calc(100vh - 240px);
+    /* height: calc(100vh - 240px); */ /* إزالة الارتفاع المحدد */
   }
-  
+
   .conversations-view-container {
-    height: calc(100vh - 100px);
+    /* height: calc(100vh - 100px); */ /* إزالة الحساب المباشر */
+    /* height: 100% هنا أيضًا للتأكيد */
+    height: 100%;
+    position: relative; /* لتحديد موقع القائمة */
+    overflow-x: hidden; /* منع التمرير */
+  }
+
+  /* تعديل عمود قائمة المحادثات ليصبح Off-canvas */
+  .conversations-list-column {
+    position: fixed; /* أو absolute إذا كان الرأس غير ثابت */
+    top: 0; /* أو ارتفاع الرأس إذا كان ثابتًا */
+    right: -300px; /* الإخفاء إلى اليمين */
+    width: 300px; /* عرض القائمة */
+    height: 100vh; /* ارتفاع كامل */
+    background-color: #fff;
+    z-index: 1030; /* أقل من الشريط الجانبي الرئيسي */
+    border-left: none;
+    border-right: 1px solid #dee2e6;
+    box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+    transition: right 0.3s ease-in-out;
+    display: flex; /* استخدام flex للحفاظ على الهيكل الداخلي */
+    flex-direction: column;
+    overflow: hidden; /* منع التمرير داخل العمود الرئيسي */
+  }
+
+  .conversations-list-column.open {
+    right: 0;
+  }
+
+  /* تأكد من أن القائمة الداخلية قابلة للتمرير */
+  .conversations-list-column .conversations-sidebar {
+    height: 100%;
+    overflow: hidden; /* منع التمرير في الحاوية */
   }
   
-  .conversations-list {
-    height: calc(100vh - 260px);
+  .conversations-list-column .conversations-list {
+      height: calc(100vh - 150px); /* تعديل الارتفاع ليناسب 100vh */
+      flex-grow: 1;
+      overflow-y: auto;
+  }
+
+  /* جعل عمود التفاصيل يأخذ العرض الكامل */
+  .conversation-details-column {
+    width: 100%;
+    height: 100%; /* تأكد من أنه يملأ الارتفاع */
+  }
+
+  /* تنسيق زر تبديل قائمة المحادثات */
+  .conversation-list-toggler {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10; /* فوق المحتوى */
+  }
+
+  /* إخفاء الفئة المساعدة الأولية (إذا استخدمت) */
+  .conversations-list-column.mobile-hidden {
+      /* لا حاجة لإخفائه هنا، position fixed يعتني بذلك */
+  }
+
+  /* خلفية معتمة لقائمة المحادثات */
+  .conversation-list-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4); /* أخف قليلاً */
+    z-index: 1029; /* خلف قائمة المحادثات */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+  }
+
+  .conversation-list-overlay.show {
+    opacity: 1;
+    visibility: visible;
   }
 }
 
@@ -761,11 +840,12 @@
   }
   
   .conversation-main-container {
-    height: calc(100vh - 100px);
+    /* لا حاجة لتعديل الارتفاع هنا بعد الآن */
+    /* height: calc(100vh - 100px); */
   }
   
   .messages-container {
-    height: calc(100vh - 220px);
+    /* height: calc(100vh - 220px); */ /* إزالة الارتفاع المحدد */
   }
   
   .conversation-header {
@@ -780,7 +860,8 @@
   }
   
   .conversations-view-container {
-    height: auto;
+    /* height: auto; */ /* استبداله بـ 100% لملء المساحة دائمًا */
+    height: 100%;
   }
   
   .conversations-list-column {
@@ -793,8 +874,8 @@
   }
   
   .conversation-details-column {
-    height: calc(100vh - 520px);
-    min-height: 500px;
+    /* height: calc(100vh - 520px); */ /* إزالة الارتفاع المحسوب المتعارض */
+    /* min-height: 500px; */ /* إزالة الحد الأدنى المتعارض */
   }
   
   .google-map-container {

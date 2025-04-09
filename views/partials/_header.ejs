@@ -10,9 +10,19 @@
             </div>
         </a>
 
-        <!-- Mobile Toggle Button -->
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <!-- متغير مساعد لتحديد ما إذا كنا في صفحة CRM -->
+        <% const isCrmPage = typeof originalUrl !== 'undefined' && originalUrl.includes('/crm'); %>
+
+        <!-- Mobile Toggle Button for Main Nav -->
+        <!-- إظهار هذا الزر فقط خارج صفحات CRM على الموبايل -->
+        <button class="navbar-toggler <%= isCrmPage ? 'd-none d-lg-inline-block' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
             <i class="fas fa-bars"></i>
+        </button>
+
+        <!-- Mobile Toggle Button for CRM Sidebar -->
+        <!-- إظهار هذا الزر فقط داخل صفحات CRM على الموبايل -->
+        <button class="navbar-toggler <%= isCrmPage ? '' : 'd-none' %> d-lg-none" type="button" id="crmSidebarToggler" aria-label="Toggle CRM Sidebar">
+            <i class="fas fa-users"></i>
         </button>
 
         <!-- Navigation Menu -->

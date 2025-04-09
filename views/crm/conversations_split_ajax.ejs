@@ -66,7 +66,8 @@
     });
   </script>
 </head>
-<body>
+<!-- إضافة فئة page-fills-height للتحكم في الهامش السفلي -->
+<body class="page-fills-height">
   <%- include('../partials/_header') %>
 
   <div class="crm-container">
@@ -91,7 +92,7 @@
 
       <div class="row conversations-view-container">
         <!-- العمود الأيمن: قائمة المحادثات -->
-        <div class="col-lg-4 conversations-list-column">
+        <div class="col-lg-4 conversations-list-column mobile-hidden">
           <div class="conversations-sidebar h-100">
             <div class="conversations-header">
               <h5><i class="fas fa-comments me-2 text-primary"></i> المحادثات</h5>
@@ -142,6 +143,10 @@
 
         <!-- العمود الأيسر: تفاصيل المحادثة -->
         <div class="col-lg-8 conversation-details-column">
+          <!-- إضافة زر تبديل قائمة المحادثات هنا، مرئي فقط على الجوال -->
+          <button class="btn btn-sm btn-outline-secondary d-lg-none conversation-list-toggler" type="button" id="conversationListToggler" aria-label="Toggle Conversation List">
+            <i class="fas fa-list"></i> عرض المحادثات
+          </button>
           <div class="conversation-details-container" id="conversationDetailsContainer">
             <div class="conversation-welcome">
               <i class="fas fa-comments welcome-icon"></i>

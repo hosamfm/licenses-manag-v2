@@ -34,3 +34,42 @@
     </li>
   </ul>
 </div>
+
+<!-- سكريبت لتحسين سلوك القائمة الجانبية على الجوال -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const crmSidebar = document.querySelector('.crm-sidebar');
+        const crmSidebarToggler = document.getElementById('crmSidebarToggler');
+        let crmSidebarOverlay = document.querySelector('.crm-sidebar-overlay');
+
+        // إنشاء Overlay إذا لم يكن موجودًا
+        if (!crmSidebarOverlay) {
+            crmSidebarOverlay = document.createElement('div');
+            crmSidebarOverlay.className = 'crm-sidebar-overlay';
+            document.body.appendChild(crmSidebarOverlay);
+        }
+
+        if (crmSidebarToggler && crmSidebar && crmSidebarOverlay) {
+            crmSidebarToggler.addEventListener('click', (event) => {
+                event.stopPropagation(); // منع الانتشار إلى مستمع الـ body
+                crmSidebar.classList.toggle('open');
+                crmSidebarOverlay.classList.toggle('show');
+            });
+
+            crmSidebarOverlay.addEventListener('click', () => {
+                crmSidebar.classList.remove('open');
+                crmSidebarOverlay.classList.remove('show');
+            });
+            
+            // إغلاق القائمة عند النقر خارجها (على الـ body)
+            // document.body.addEventListener('click', (event) => {
+            //     if (crmSidebar.classList.contains('open') && 
+            //         !crmSidebar.contains(event.target) && 
+            //         event.target !== crmSidebarToggler) {
+            //         crmSidebar.classList.remove('open');
+            //         crmSidebarOverlay.classList.remove('show');
+            //     }
+            // });
+        }
+    });
+</script>

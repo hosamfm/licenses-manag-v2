@@ -63,11 +63,6 @@ window.initMaps = function() {
     
     // البحث عن جميع عناصر الخرائط في الصفحة وتهيئتها
     initializeAllMaps();
-    
-    // إضافة زر اختبار للمطورين
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.search.includes('debug=true')) {
-        addTestButton();
-    }
 };
 
 /**

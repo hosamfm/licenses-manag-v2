@@ -77,6 +77,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterAssignmentSelect = document.getElementById('filterAssignment');
     const searchInput = document.getElementById('conversationSearchInput');
 
+    // عناصر الأزرار والقوائم الجانبية الجديدة
+    const crmSidebar = document.querySelector('.crm-sidebar');
+    const crmSidebarToggler = document.getElementById('crmSidebarToggler');
+    const conversationListColumn = document.querySelector('.conversations-list-column');
+    const conversationListToggler = document.getElementById('conversationListToggler');
+
+    // إنشاء عناصر Overlay ديناميكيًا
+    const crmSidebarOverlay = document.createElement('div');
+    crmSidebarOverlay.className = 'crm-sidebar-overlay';
+    document.body.appendChild(crmSidebarOverlay);
+
+    const conversationListOverlay = document.createElement('div');
+    conversationListOverlay.className = 'conversation-list-overlay';
+    document.body.appendChild(conversationListOverlay);
+
     // --- Utility Functions ---
 
     /**
@@ -1127,9 +1142,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /**
-     * تهيئة الصفحة
-     */
+    // --- Mobile Sidebar Toggling Logic ---
+    function setupMobileToggles() {
+        // Toggle Conversation List Sidebar
+        if (conversationListToggler && conversationListColumn) {
+            conversationListToggler.addEventListener('click', () => {
+                conversationListColumn.classList.toggle('open');
+                conversationListOverlay.classList.toggle('show');
+                // قد ترغب في إخفاء زر التبديل عندما تكون القائمة مفتوحة
+                // conversationListToggler.style.display = conversationListColumn.classList.contains('open') ? 'none' : 'block';
+            });
+
+            conversationListOverlay.addEventListener('click', () => {
+                conversationListColumn.classList.remove('open');
+                conversationListOverlay.classList.remove('show');
+                // conversationListToggler.style.display = 'block'; // إعادة إظهار الزر
+            });
+            
+            // إغلاق قائمة المحادثات عند تحديد محادثة
+            conversationListContainer.addEventListener('click', (event) => {
+                if (event.target.closest('.conversation-item')) {
+                    // التحقق مما إذا كنا في وضع الموبايل
+                    if (window.innerWidth < 992) {
+                        conversationListColumn.classList.remove('open');
+                        conversationListOverlay.classList.remove('show');
+                    }
+                }
+            });
+        }
+    }
+
+    // --- Initialization ---
     function initializePage() {
         // تهيئة حالة الفلتر العامة للتطبيق
         window.currentFilters = window.currentFilters || {
@@ -1185,8 +1228,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 5000); // انتظار 5 ثوان
         }
+
+        // تحميل المحادثات الأولية
+        fetchAndRenderConversations(window.currentFilters);
+
+        // التحقق من وجود معرف محادثة في URL عند تحميل الصفحة
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialConversationId = urlParams.get('selected');
+        if (initialConversationId) {
+            // تأخير بسيط للتأكد من تحميل القائمة الأولية
+            setTimeout(() => {
+                window.loadConversationDetails(initialConversationId);
+            }, 200);
+        }
+
+        // تهيئة الاتصال بـ Socket.IO
+        initializeSocketConnection();
+
+        // تهيئة تبديل القوائم الجانبية للموبايل
+        setupMobileToggles();
+        
+        // معالجة تغيير حجم النافذة (قد تحتاج لتحسينات)
+        // window.addEventListener('resize', () => {
+        //     // إغلاق القوائم إذا كبرت الشاشة عن نقطة العرض
+        //     if (window.innerWidth >= 992) {
+        //         if (crmSidebar) crmSidebar.classList.remove('open');
+        //         if (crmSidebarOverlay) crmSidebarOverlay.classList.remove('show');
+        //         if (conversationListColumn) conversationListColumn.classList.remove('open');
+        //         if (conversationListOverlay) conversationListOverlay.classList.remove('show');
+        //     }
+        // });
+
     }
 
+    // تنفيذ التهيئة
     initializePage();
 
-}); // نهاية DOMContentLoaded 
+    // --- Socket.IO Event Handlers ---
+    // ... (الكود الموجود لمعالجة Socket.IO)
+    // ...
+}); 

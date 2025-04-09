@@ -83,7 +83,7 @@
       }
       
       // إظهار معاينة الملف
-      mediaPreview.style.display = 'block';
+      mediaPreview.classList.add('visible');
       
       // تحديث نوع الوسائط إذا كان تلقائيًا
       if (uploadMediaType && uploadMediaType.value === 'auto') {
@@ -182,10 +182,38 @@
    * دالة لمسح الملف المرفق من الرسالة
    */
   window.clearMediaAttachment = function() {
-    document.getElementById('mediaPreview').style.display = 'none';
-    document.getElementById('mediaFileName').textContent = '';
-    document.getElementById('mediaId').value = '';
-    document.getElementById('mediaType').value = '';
+    // إخفاء المعاينة وإعادة تعيين الحقول
+    const mediaPreview = document.getElementById('mediaPreview');
+    const mediaFile = document.getElementById('mediaFile');
+    const mediaFileName = document.getElementById('mediaFileName');
+    const mediaIdInput = document.getElementById('mediaId'); // الحقل المخفي لمعرف الوسائط
+    const mediaTypeInput = document.getElementById('mediaType');
+    const progressBar = mediaPreview ? mediaPreview.querySelector('.progress-bar') : null;
+    const progressContainer = mediaPreview ? mediaPreview.querySelector('.upload-progress') : null;
+
+    if (mediaPreview) {
+        mediaPreview.classList.remove('visible'); // استخدام فئة visible للإخفاء
+    }
+    if (mediaFile) {
+        mediaFile.value = '';
+    }
+    if (mediaFileName) {
+        mediaFileName.textContent = '';
+    }
+    if (mediaIdInput) {
+        mediaIdInput.value = '';
+    }
+    if (mediaTypeInput) {
+        mediaTypeInput.value = '';
+    }
+    if (progressBar) {
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.setAttribute('aria-valuenow', 0);
+    }
+    if (progressContainer) {
+        progressContainer.style.display = 'none';
+    }
   };
 
   /**
