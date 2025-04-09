@@ -269,28 +269,39 @@ class ChatGptService {
       // 2. إضافة الوسائط (الصوت تم تحويله سابقاً، لذا نركز على الصور)
       if (message.mediaType === 'image' && message.mediaUrl && this.enableVisionSupport && this.isVisionCapableModel(this.model)) {
         let accessibleImageUrl = message.mediaUrl;
+        let skipImageProcessing = false;
         
-        // التحقق إذا كان الرابط داخلياً (يبدأ بمسار نسبي) وتحويله إلى رابط كامل
-        if (accessibleImageUrl && !accessibleImageUrl.startsWith('http')) {
-          // استخدام عنوان الموقع الكامل لتحويل المسار النسبي إلى مسار مطلق
-          const baseUrl = process.env.BASE_URL || 'https://lic.tic-ly.com';
-          // تأكد من عدم وجود شرطة مائلة مزدوجة
-          if (accessibleImageUrl.startsWith('/')) {
-            accessibleImageUrl = `${baseUrl}${accessibleImageUrl}`;
-          } else {
-            accessibleImageUrl = `${baseUrl}/${accessibleImageUrl}`;
-          }
+        // التحقق مما إذا كان الرابط يحتوي على معرف ميتا واتساب (معرف رقمي فقط)
+        const isMetaId = /^\d+$/.test(accessibleImageUrl) || (accessibleImageUrl.includes('/') && /^\d+$/.test(accessibleImageUrl.split('/').pop()));
+        
+        if (!accessibleImageUrl.startsWith('data:image/') && (isMetaId || !accessibleImageUrl.startsWith('http'))) {
+          logger.info('chatGptService', 'تحويل رابط غير مباشر للصورة في formatMessagesForChatGPT');
           
-          logger.info('chatGptService', `تم تحويل رابط الصورة الداخلي إلى رابط مطلق: ${accessibleImageUrl}`);
+          // محاولة تحويل الرابط إلى عنوان صحيح
+          if (message._id) {
+            const baseUrl = process.env.BASE_URL || 'https://lic.tic-ly.com';
+            accessibleImageUrl = `${baseUrl}/whatsapp/media/content/${message._id}`;
+            logger.info('chatGptService', `تم تحويل رابط الصورة إلى: ${accessibleImageUrl}`);
+          } else {
+            logger.warn('chatGptService', 'لا يمكن تحويل رابط الصورة - لا يوجد معرّف رسالة');
+            skipImageProcessing = true;
+            
+            // إضافة وصف نصي بديل
+            if (contentPayload.length === 0) {
+              contentPayload.push({ type: 'text', text: '[صورة غير متاحة]' });
+            }
+          }
         }
         
-        contentPayload.push({
-          type: 'image_url',
-          image_url: {
-            url: accessibleImageUrl,
-            detail: "auto"
-          }
-        });
+        if (!skipImageProcessing) {
+          contentPayload.push({
+            type: 'image_url',
+            image_url: {
+              url: accessibleImageUrl,
+              detail: "auto"
+            }
+          });
+        }
       } else if (message.mediaType && !(message.mediaType === 'image' && this.enableVisionSupport && this.isVisionCapableModel(this.model))) {
         // إذا كانت هناك وسائط أخرى غير مدعومة للتحليل (أو الرؤية معطلة/النموذج غير قادر)
         // نضيف وصفًا نصيًا لها كما كان سابقًا
@@ -546,33 +557,58 @@ class ChatGptService {
       } 
       // معالجة الصور إذا كان mediaType === 'image' و enableVisionSupport مفعل
       else if (mediaType === 'image' && mediaUrl && this.enableVisionSupport && this.isVisionCapableModel(this.model)) {
-        // التحقق من نوع الـ URL للصورة
-        if (!mediaUrl.startsWith('http')) {
+        // متغير لتحديد ما إذا وجدنا صورة صالحة
+        let validImageFound = false;
+        
+        // التحقق مما إذا كان الرابط يحتوي على معرف ميتا واتساب (معرف رقمي فقط)
+        const isMetaId = /^\d+$/.test(mediaUrl) || (mediaUrl.includes('/') && /^\d+$/.test(mediaUrl.split('/').pop()));
+        
+        // تحويل الروابط حسب نوعها
+        if (mediaUrl.startsWith('data:image/')) {
+          // صورة Data URI - صالحة مباشرة للاستخدام
+          logger.info('chatGptService', 'استخدام Data URI للصورة مباشرة');
+          validImageFound = true;
+        } 
+        else if (isMetaId || !mediaUrl.startsWith('http')) {
           // الحصول على الصورة من قاعدة البيانات
-          const WhatsappMedia = require('../models/WhatsappMedia');
-          const mediaRecord = await WhatsappMedia.findOne({ messageId: message._id });
-          
-          if (mediaRecord && mediaRecord.fileData) {
-            // إذا وجدنا بيانات الصورة، نستخدم base64 مباشرة
-            // استبدال URL داخلي بداتا URI مباشرة لتجنب مشاكل الوصول من OpenAI
-            logger.info('chatGptService', 'تم العثور على بيانات الصورة في قاعدة البيانات واستخدامها مباشرة');
+          try {
+            const WhatsappMedia = require('../models/WhatsappMedia');
+            const mediaRecord = await WhatsappMedia.findOne({ messageId: message._id });
             
-            // المسار النسبي يعني أننا نستطيع الوصول للصورة من خلال محتوى خادم ويب
-            const baseUrl = process.env.BASE_URL || 'https://lic.tic-ly.com';
-            // إنشاء URL كامل يمكن للخدمات الخارجية الوصول إليه
-            mediaUrl = `${baseUrl}/whatsapp/media/content/${mediaRecord._id}`;
-            
-            logger.info('chatGptService', `تم إنشاء رابط عام للصورة: ${mediaUrl}`);
-          } else {
-            logger.warn('chatGptService', 'لم يتم العثور على بيانات الصورة في قاعدة البيانات');
-            // إضافة محتوى نصي يشير إلى وجود صورة غير متاحة
-            if (!messageContent) {
-              messageContent = '[صورة غير متاحة للمعالجة]';
+            if (mediaRecord && mediaRecord.fileData) {
+              // تحويل الصورة إلى data URI
+              const mimeType = mediaRecord.mimeType || 'image/jpeg';
+              mediaUrl = `data:${mimeType};base64,${mediaRecord.fileData}`;
+              logger.info('chatGptService', 'تم تحويل الصورة إلى Data URI مباشر');
+              validImageFound = true;
+            } 
+            else if (message._id) {
+              // استخدام واجهة API
+              const baseUrl = process.env.BASE_URL || 'https://lic.tic-ly.com';
+              mediaUrl = `${baseUrl}/whatsapp/media/content/${message._id}`;
+              logger.info('chatGptService', `تم إنشاء رابط عام للصورة: ${mediaUrl}`);
+              validImageFound = true;
             }
-            // إلغاء معلومات الصورة لتجنب محاولة معالجتها
-            mediaType = null;
-            mediaUrl = null;
+          } catch (error) {
+            logger.error('chatGptService', 'خطأ في معالجة الصورة:', error);
+            // سنتجاهل الصورة في حالة حدوث خطأ
           }
+        }
+        else {
+          // رابط HTTP خارجي - نفترض أنه صالح
+          validImageFound = true;
+        }
+        
+        // إذا لم نتمكن من العثور على صورة صالحة
+        if (!validImageFound) {
+          logger.warn('chatGptService', 'لم يتم العثور على صورة صالحة للمعالجة');
+          // إضافة محتوى نصي بديل
+          if (!messageContent) {
+            messageContent = '[صورة غير متاحة للمعالجة]';
+          }
+          // إلغاء معلومات الصورة
+          mediaType = null;
+          mediaUrl = null;
         }
       }
       
