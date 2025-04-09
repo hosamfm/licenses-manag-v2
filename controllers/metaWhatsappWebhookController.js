@@ -688,7 +688,8 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
     // استخدام معالج الذكاء الاصطناعي للرسائل الواردة الجديدة
     if (message.direction === 'incoming') {
       try {
-        // معالجة الرسالة بالذكاء الاصطناعي فقط إذا كانت الإعدادات تسمح بذلك
+        // تم تعطيل معالجة الذكاء الاصطناعي تماماً
+        /*
         const systemSettings = await SystemSettings.findOne() || {};
         const aiEnabled = systemSettings.aiAssistantEnabled !== false;  // افتراضياً ممكّن
 
@@ -708,8 +709,14 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
               });
             });
         }
+        */
+
+        logger.info('metaWhatsappWebhookController', 'تم تعطيل معالجة الذكاء الاصطناعي للرسائل الواردة', {
+          conversationId: conversationInstance._id,
+          messageId: message._id
+        });
       } catch (aiError) {
-        logger.error('metaWhatsappWebhookController', 'خطأ عام في معالجة الذكاء الاصطناعي', {
+        logger.error('metaWhatsappWebhookController', 'خطأ عام في معالجة الرسالة الواردة', {
           conversationId: conversationInstance._id,
           messageId: message._id,
           error: aiError.message
