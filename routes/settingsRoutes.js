@@ -306,18 +306,65 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     
     // تحديث الإعدادات الجديدة
     // تحديث بذرة العشوائية
-    aiSettings.seed = seed ? 
-      (typeof seed === 'string' ? (seed.trim() !== '' ? parseInt(seed) : null) : (seed || null)) 
-      : null;
+    aiSettings.seed = (() => {
+      // إذا كان العنصر مصفوفة، نأخذ أول قيمة غير فارغة
+      if (Array.isArray(seed)) {
+        for (const val of seed) {
+          if (val && typeof val === 'string' && val.trim() !== '') {
+            return parseInt(val.trim());
+          }
+        }
+        return null;
+      }
+      
+      // التعامل مع القيمة المفردة
+      return seed ? 
+        (typeof seed === 'string' ? (seed.trim() !== '' ? parseInt(seed) : null) : (seed || null)) 
+        : null;
+    })();
     
     // تحديث تنسيق الاستجابة
-    aiSettings.responseFormat = responseFormat && responseFormat !== '' ? responseFormat : null;
+    aiSettings.responseFormat = (() => {
+      // إذا كان العنصر مصفوفة، نأخذ أول قيمة غير فارغة
+      if (Array.isArray(responseFormat)) {
+        for (const val of responseFormat) {
+          if (val && typeof val === 'string' && val !== '') {
+            return val;
+          }
+        }
+        return null;
+      }
+      
+      // التعامل مع القيمة المفردة
+      return responseFormat && responseFormat !== '' ? responseFormat : null;
+    })();
     
     // تحديث معرّف المستخدم
-    aiSettings.userIdentifier = userIdentifier && typeof userIdentifier === 'string' && userIdentifier.trim() !== '' ? userIdentifier.trim() : null;
+    aiSettings.userIdentifier = (() => {
+      // إذا كان العنصر مصفوفة، نأخذ أول قيمة غير فارغة
+      if (Array.isArray(userIdentifier)) {
+        for (const val of userIdentifier) {
+          if (val && typeof val === 'string' && val.trim() !== '') {
+            return val.trim();
+          }
+        }
+        return null;
+      }
+      
+      // التعامل مع القيمة المفردة
+      return userIdentifier && typeof userIdentifier === 'string' && userIdentifier.trim() !== '' ? userIdentifier.trim() : null;
+    })();
     
     // تحديث خيار التدفق
-    aiSettings.stream = !!stream; // تحويل إلى boolean
+    aiSettings.stream = (() => {
+      // إذا كان العنصر مصفوفة، نستخدم القيمة الأولى أو أي قيمة صحيحة
+      if (Array.isArray(stream)) {
+        return stream.some(val => val === 'on' || val === true || val === 'true');
+      }
+      
+      // التعامل مع القيمة المفردة
+      return !!stream;
+    })();
     
     // تحديث مستخدم التحديث
     aiSettings.updatedBy = req.session.userId;
