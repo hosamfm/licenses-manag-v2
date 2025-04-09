@@ -97,12 +97,49 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
         }
       );
       
-      // استخدام اسم العميل إن وجد من أجل التخصيص
-      const customerName = conversation.customerName || '';
+      // استخدام معلومات العميل من جهة الاتصال المرتبطة بالمحادثة إن وجدت
+      let customerInfo = null;
+      
+      // التحقق من وجود معرف جهة اتصال في المحادثة وتحميل معلوماته
+      if (conversation.contactId) {
+        try {
+          const Contact = require('../models/Contact');
+          const contact = await Contact.findById(conversation.contactId).lean();
+          
+          if (contact) {
+            customerInfo = {
+              name: contact.name,
+              email: contact.email,
+              company: contact.company,
+              phoneNumber: contact.phoneNumber
+            };
+            
+            logger.debug('aiConversationController', 'تم تحميل معلومات العميل من جهة الاتصال', {
+              conversationId: conversation._id,
+              contactId: conversation.contactId,
+              customerName: customerInfo.name
+            });
+          }
+        } catch (error) {
+          logger.error('aiConversationController', 'خطأ في تحميل بيانات جهة الاتصال', {
+            conversationId: conversation._id,
+            contactId: conversation.contactId,
+            error: error.message
+          });
+        }
+      }
+      
+      // إذا لم يتم العثور على معلومات من جهة الاتصال، استخدم المعلومات المتوفرة في المحادثة
+      if (!customerInfo) {
+        customerInfo = {
+          name: conversation.customerName || '',
+          phoneNumber: conversation.phoneNumber
+        };
+      }
       
       // إرسال رسالة أولى مخصصة بناءً على إعدادات النظام
       // استدعاء خدمة الذكاء الاصطناعي لإنشاء رسالة استقبال مخصصة
-      const initialResponse = await chatGptService.getInitialGreeting(customerName);
+      const initialResponse = await chatGptService.getInitialGreeting(customerInfo.name);
       
       // إرسال الرد المخصص للعميل
       await exports.sendAiResponseToCustomer(conversation, initialResponse);
@@ -443,7 +480,8 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
     const currentDate = new Date();
     const isoDateString = currentDate.toISOString();
     
-    socketService.notifyNewMessage(conversation._id.toString(), {
+    // إنشاء كائن الرسالة الذي سيتم إرساله للواجهة
+    const messageForUI = {
       _id: savedMessage._id.toString(),
       conversationId: conversation._id.toString(),
       content: savedMessage.content,
@@ -463,24 +501,32 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
         }
       },
       createdAt: isoDateString
-    });
+    };
     
-    // تحديث واجهة المستخدم لقائمة المحادثات
-    socketService.notifyConversationUpdate(conversation._id.toString(), {
-      _id: conversation._id.toString(),
-      status: conversation.status,
-      assignedTo: conversation.assignedTo,
-      lastMessageAt: isoDateString,
-      phoneNumber: conversation.phoneNumber,
-      customerName: conversation.customerName,
-      lastMessage: {
-        _id: savedMessage._id.toString(),
-        content: savedMessage.content,
-        direction: 'outgoing',
-        timestamp: isoDateString,
-        status: 'sent'
+    // إرسال إشعار واحد فقط عن الرسالة الجديدة
+    socketService.notifyNewMessage(conversation._id.toString(), messageForUI);
+    
+    // تحديث واجهة المستخدم لقائمة المحادثات بشكل منفصل عن الرسالة
+    // ولكن بدون إرسال بيانات الرسالة الكاملة مرة أخرى
+    socketService.emitToRoom(
+      'admin',
+      'conversation-list-update',
+      {
+        _id: conversation._id.toString(),
+        status: conversation.status,
+        assignedTo: conversation.assignedTo,
+        lastMessageAt: isoDateString,
+        phoneNumber: conversation.phoneNumber,
+        customerName: conversation.customerName,
+        lastMessage: {
+          _id: savedMessage._id.toString(),
+          content: savedMessage.content,
+          direction: 'outgoing',
+          timestamp: isoDateString,
+          status: 'sent'
+        }
       }
-    });
+    );
     
     return messageResult;
   } catch (error) {
