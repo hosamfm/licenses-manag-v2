@@ -224,23 +224,67 @@ conversationSchema.methods.reopen = async function(userId) {
 conversationSchema.methods.automaticReopen = async function() {
   try {
     if (this.status === 'open') {
+      logger.debug('المحادثة مفتوحة بالفعل', { conversationId: this._id });
       return this; // لا تفعل شيئًا إذا كانت مفتوحة بالفعل
     }
+    
+    logger.debug('بدء إعادة فتح المحادثة تلقائيًا', { 
+      conversationId: this._id, 
+      currentStatus: this.status 
+    });
+    
     const now = new Date();
     this.status = 'open';
     this.lastOpenedAt = now;
 
     // إنشاء سجل حدث إعادة الفتح التلقائي
-    await ConversationEvent.create({
-      conversationId: this._id,
-      eventType: 'reopened_automatically',
-      timestamp: now,
-      userId: null // لا يوجد مستخدم مرتبط بهذا الإجراء
-    });
+    try {
+      logger.debug('محاولة إنشاء حدث فتح تلقائي للمحادثة', { 
+        conversationId: this._id,
+        eventType: 'reopened_automatically'
+      });
+      
+      const newEvent = await ConversationEvent.create({
+        conversationId: this._id,
+        eventType: 'reopened_automatically',
+        timestamp: now,
+        userId: null // لا يوجد مستخدم مرتبط بهذا الإجراء
+      });
+      
+      logger.debug('تم إنشاء حدث فتح تلقائي للمحادثة بنجاح', { 
+        conversationId: this._id,
+        eventId: newEvent._id
+      });
+    } catch (eventError) {
+      logger.error('فشل في إنشاء حدث فتح تلقائي للمحادثة', { 
+        conversationId: this._id,
+        error: eventError.message,
+        stack: eventError.stack
+      });
+      // استمر في العملية رغم فشل إنشاء الحدث
+    }
 
-    await this.save();
-    return this;
+    try {
+      await this.save();
+      logger.debug('تم حفظ المحادثة بعد إعادة الفتح التلقائي', { 
+        conversationId: this._id,
+        status: this.status
+      });
+      return this;
+    } catch (saveError) {
+      logger.error('فشل في حفظ المحادثة بعد إعادة الفتح التلقائي', { 
+        conversationId: this._id,
+        error: saveError.message,
+        stack: saveError.stack
+      });
+      throw saveError;
+    }
   } catch (error) {
+    logger.error('خطأ عام في إعادة فتح المحادثة تلقائيًا', { 
+      conversationId: this._id,
+      error: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 };

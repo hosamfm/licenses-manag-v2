@@ -15,6 +15,7 @@ const NotificationSocketService = require('../services/notificationSocketService
 const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const Contact = require('../models/Contact');
 const ContactHelper = require('../utils/contactHelper');
+const ConversationEvent = require('../models/ConversationEvent'); // إضافة استيراد ConversationEvent
 
 /**
  * مصادقة webhook واتساب من ميتا
@@ -318,8 +319,28 @@ exports.handleIncomingMessages = async (messages, meta) => {
 
           // التحقق من حالة المحادثة وإعادة فتحها تلقائيًا إذا كانت مغلقة
           if (conversationInstance.status === 'closed') {
-            await conversationInstance.automaticReopen();
-            conversationInstance.lastMessageAt = new Date(); 
+            logger.info('metaWhatsappWebhookController', 'محاولة إعادة فتح محادثة مغلقة تلقائيًا', {
+              conversationId: conversationInstance._id.toString(),
+              phoneNumber: phone,
+              previousStatus: 'closed'
+            });
+            
+            try {
+              await conversationInstance.automaticReopen();
+              logger.info('metaWhatsappWebhookController', 'تم إعادة فتح المحادثة بنجاح', {
+                conversationId: conversationInstance._id.toString(),
+                phoneNumber: phone,
+                newStatus: conversationInstance.status
+              });
+            } catch (reopenError) {
+              logger.error('metaWhatsappWebhookController', 'فشل في إعادة فتح المحادثة تلقائيًا', {
+                conversationId: conversationInstance._id.toString(),
+                error: reopenError.message,
+                stack: reopenError.stack
+              });
+            }
+            
+            conversationInstance.lastMessageAt = new Date();
           } else {
             conversationInstance.lastMessageAt = new Date();
           }
@@ -366,6 +387,33 @@ exports.handleIncomingMessages = async (messages, meta) => {
           }
           
           conversationInstance = await Conversation.create(conversationData);
+          
+          // تسجيل حدث فتح المحادثة الجديدة
+          try {
+            logger.debug('metaWhatsappWebhookController', 'محاولة تسجيل حدث إنشاء محادثة جديدة', { 
+              conversationId: conversationInstance._id.toString(),
+              phoneNumber: phone
+            });
+            
+            await ConversationEvent.create({
+              conversationId: conversationInstance._id,
+              eventType: 'opened',
+              timestamp: new Date(),
+              userId: null // لا يوجد مستخدم مرتبط بالإنشاء الأولي
+            });
+            
+            logger.info('metaWhatsappWebhookController', 'تم تسجيل حدث إنشاء محادثة جديدة بنجاح', { 
+              conversationId: conversationInstance._id.toString(),
+              phoneNumber: phone
+            });
+          } catch (eventError) {
+            logger.error('metaWhatsappWebhookController', 'فشل في تسجيل حدث إنشاء محادثة جديدة', {
+              conversationId: conversationInstance._id.toString(),
+              error: eventError.message,
+              stack: eventError.stack
+            });
+            // استمر في العملية حتى مع فشل تسجيل الحدث
+          }
         }
 
         const conversation = conversationInstance.toObject();
