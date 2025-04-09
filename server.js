@@ -57,6 +57,10 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// تسجيل مسارات وسائط الواتساب **قبل** أي وسائط مصادقة أو جلسات
+// هذا يسمح بالوصول العام إلى محتوى الوسائط
+app.use('/whatsapp/media', whatsappMediaRoutes);
+
 // إضافة دعم تنسيق multipart/form-data لطلبات webhook
 const multer = require('multer');
 const upload = multer();
@@ -184,7 +188,6 @@ app.use(whatsappChannelRoutes);
 app.use('/telegram', telegramMessagesRoutes);
 app.use('/crm', crmRoutes);
 app.use('/api', apiRoutes);
-app.use('/whatsapp/media', whatsappMediaRoutes); // تسجيل مسارات وسائط الواتساب
 app.use('/api/user', userApiRoutes); // تسجيل مسارات API للمستخدمين
 app.use('/api/conversations', conversationRoutes); // تسجيل مسارات المحادثات
 app.use('/api/profile', profileRoutes); // تسجيل مسارات الملف الشخصي
