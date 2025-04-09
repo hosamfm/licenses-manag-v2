@@ -13,7 +13,7 @@ const smsSettingsController = require('../controllers/smsSettingsController');
 const smsWebhookController = require('../controllers/smsWebhookController');
 const whatsappSettingsController = require('../controllers/whatsappSettingsController');
 const whatsappWebhookController = require('../controllers/whatsappWebhookController');
-const AISettings = require('../models/AiSettings');
+const AISettings = require('../models/ai-settings');
 
 function handleError(req, res, error, message, redirectPath) {
   console.error(message, error.message, error.stack);
