@@ -201,23 +201,50 @@ class MetaWhatsappService {
 
     /**
      * إرسال رسالة نصية عبر واتساب
-     * @param {string} to رقم الهاتف المستلم
-     * @param {string} text نص الرسالة
-     * @param {string} phoneNumberId معرف رقم الهاتف المرسل (اختياري)
+     * @param {object|string} options كائن يحتوي على خيارات الإرسال أو رقم الهاتف المستلم
+     * @param {string} [options.phoneNumber] رقم الهاتف المستلم
+     * @param {string} [options.message] نص الرسالة
+     * @param {string} [options.phoneNumberId] معرف رقم الهاتف المرسل (اختياري)
+     * @param {string} [text] نص الرسالة (إذا تم استخدام المعلمات المنفصلة)
+     * @param {string} [phoneNumberId] معرف رقم الهاتف المرسل (اختياري إذا تم استخدام المعلمات المنفصلة)
      * @returns {Promise<object>} نتيجة الإرسال
      */
-    async sendTextMessage(to, text, phoneNumberId = null) {
+    async sendTextMessage(options, text, phoneNumberId = null) {
         if (!this.initialized) {
             await this.initialize();
         }
 
+        // التحقق من نمط المعلمات المستخدم (كائن أو معلمات منفصلة)
+        let to, messageText, targetPhoneNumberId;
+        
+        if (typeof options === 'object' && options !== null) {
+            // استخدام نمط الكائن
+            to = options.phoneNumber;
+            messageText = options.message;
+            targetPhoneNumberId = options.phoneNumberId || phoneNumberId;
+        } else {
+            // استخدام نمط المعلمات المنفصلة
+            to = options; // options هنا هو رقم الهاتف المستلم
+            messageText = text;
+            targetPhoneNumberId = phoneNumberId;
+        }
+        
+        // التحقق من وجود المعلمات الإلزامية
+        if (!to) {
+            throw new Error('رقم الهاتف المستلم مطلوب');
+        }
+        
+        if (!messageText) {
+            throw new Error('نص الرسالة مطلوب');
+        }
+
         // استخدام معرف رقم الهاتف المحدد، أو استخدام الإعدادات الافتراضية
-        let targetPhoneId = phoneNumberId;
+        let targetPhoneId = targetPhoneNumberId;
         let settingsToUse = this.settings;
         
         // إذا تم تحديد معرف رقم هاتف مختلف، نحصل على الإعدادات المناسبة
-        if (phoneNumberId && phoneNumberId !== this.settings.config.phoneNumberId) {
-            settingsToUse = await this.getSettingsByPhoneNumberId(phoneNumberId);
+        if (targetPhoneId && targetPhoneId !== this.settings.config.phoneNumberId) {
+            settingsToUse = await this.getSettingsByPhoneNumberId(targetPhoneId);
             if (!settingsToUse) {
                 throw new Error('لم يتم العثور على إعدادات لرقم الهاتف المحدد');
             }
@@ -236,7 +263,7 @@ class MetaWhatsappService {
             to,
             type: 'text',
             text: {
-                body: text
+                body: messageText
             }
         };
 
