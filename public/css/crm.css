@@ -346,3 +346,146 @@
     margin-bottom: 1rem;
   }
 }
+
+/* ----- تنسيقات لوحة التحكم الجديدة ----- */
+.dashboard-content {
+    /* يمكن إضافة أي تنسيقات خاصة بحاوية المحتوى هنا إذا لزم الأمر */
+}
+
+/* بطاقات مؤشرات الأداء (KPI) */
+.kpi-card {
+  background-color: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  padding: 1.25rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.kpi-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin-left: 1rem; /* لليمين في RTL */
+  flex-shrink: 0;
+}
+
+.kpi-content {
+  flex-grow: 1;
+}
+
+.kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #212529;
+  margin-bottom: 0.25rem;
+}
+
+.kpi-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* حاوية الرسم البياني */
+.dashboard-chart-container .card-body {
+    min-height: 300px; /* لضمان وجود مساحة للرسم */
+    position: relative;
+}
+
+#conversationStatusChart {
+    max-width: 100%;
+    max-height: 300px; /* تحديد ارتفاع أقصى */
+}
+
+/* بطاقات القوائم */
+.dashboard-list-card .list-group-item {
+    border: none;
+    padding: 0.8rem 1.25rem;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background-color 0.15s ease;
+}
+
+.dashboard-list-card .list-group-item:last-child {
+    border-bottom: none;
+}
+
+.dashboard-list-card .list-group-item:hover {
+    background-color: #f8fafc;
+}
+
+.conversation-list-item strong {
+    font-weight: 600;
+}
+
+.contact-list-item strong {
+     font-weight: 600;
+}
+
+/* بطاقة الإجراءات السريعة */
+.dashboard-action-card .card-body {
+    padding: 2rem 1.5rem;
+}
+
+.dashboard-action-card .btn {
+    font-weight: 600;
+}
+
+/* تحسينات الاستجابة للوحة التحكم */
+@media (max-width: 767.98px) {
+    .kpi-card {
+        flex-direction: column;
+        text-align: center;
+        padding: 1rem;
+    }
+    .kpi-icon {
+        margin-left: 0;
+        margin-bottom: 0.75rem;
+    }
+    .kpi-value {
+        font-size: 1.5rem;
+    }
+}
+
+/* --- نهاية تنسيقات لوحة التحكم --- */
+
+/* تحديد ارتفاع لوحة التحكم ومنع تمرير الصفحة على الشاشات الكبيرة */
+@media (min-width: 992px) {
+  .crm-sidebar {
+    position: fixed;
+    right: 0; /* تثبيت في اليمين لـ RTL */
+    top: 60px; /* أسفل الهيدر (بافتراض ارتفاع 60px) */
+    height: calc(100vh - 110px); /* ملء المساحة بين الهيدر (60) والفوتر (50) */
+    width: 260px; /* الحفاظ على العرض الأصلي */
+    overflow-y: auto; /* إضافة تمرير داخلي */
+    z-index: 100; /* تأكد من أنه فوق بعض العناصر ولكن قد يكون أقل من modals */
+    /* إلغاء أي تعديلات flex قد تؤثر على الـ position fixed */
+    /* قد لا تحتاج لتعديل إضافي هنا */
+  }
+
+  .crm-content {
+    /* إضافة هامش يميني لتعويض عرض الشريط الجانبي الثابت */
+    margin-right: 260px;
+    /* التأكد من أن width لم يعد 100% أو يتأثر بـ flex: 1 بطريقة خاطئة */
+    /* flex: 1 سيظل يعمل لملء المساحة الأفقية المتبقية */
+    /* height: 100% يجب أن يظل يعمل لملء ارتفاع .crm-container */
+  }
+
+  /* التعديل السابق الخاص بارتفاع لوحة التحكم يجب أن يظل يعمل داخل .crm-content المعدل */
+  .dashboard-content {
+    height: calc(100vh - 110px); /* الارتفاع المتاح بين الهيدر (60) والفوتر (50) */
+    overflow-y: auto; /* إضافة تمرير داخلي عند الحاجة */
+    box-sizing: border-box; /* لضمان حساب الارتفاع بشكل صحيح مع الحشو */
+  }
+}

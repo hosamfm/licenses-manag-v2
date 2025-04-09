@@ -5,16 +5,18 @@
   <title>لوحة التحكم - إدارة العملاء</title>
   <!-- ربط ملف التنسيقات الخاص بنظام CRM -->
   <link rel="stylesheet" href="/css/crm.css">
+  <!-- تضمين Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <%- include('../partials/_header') %>
   
   <div class="crm-container">
     <!-- القائمة الجانبية - استخدام القالب الجزئي الموحد -->
-    <%- include('../partials/_crm_sidebar') %>
+    <%- include('../partials/_crm_sidebar', { isDashboardPage: true }) %>
     
     <!-- المحتوى الرئيسي -->
-    <div class="crm-content">
+    <div class="crm-content dashboard-content">
       <% if (flashMessages && flashMessages.error) { %>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
           <%= flashMessages.error %>
@@ -29,77 +31,152 @@
         </div>
       <% } %>
       
-      <!-- هنا محتوى صفحة لوحة التحكم -->
-      <!-- لوحة التحكم الرئيسية لنظام CRM -->
-      <h1 class="page-title">
+      <h1 class="page-title mb-4">
         <i class="fas fa-tachometer-alt me-2"></i>
-        لوحة التحكم
+        لوحة التحكم الرئيسية
       </h1>
 
-      <!-- إحصائيات سريعة -->
-      <div class="row mb-4">
-        <div class="col-md-3">
-          <div class="crm-stats-card bg-primary-gradient">
-            <i class="fas fa-comments"></i>
-            <div class="stat-value"><%= stats.conversations.total %></div>
-            <div class="stat-label">إجمالي المحادثات</div>
+      <!-- صف مؤشرات الأداء الرئيسية (KPIs) -->
+      <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-md-6">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon bg-primary text-white">
+              <i class="fas fa-comments"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value"><%= stats.conversations.total %></div>
+              <div class="kpi-label">إجمالي المحادثات</div>
+            </div>
           </div>
         </div>
-        
-        <div class="col-md-3">
-          <div class="crm-stats-card bg-success-gradient">
-            <i class="fas fa-address-book"></i>
-            <div class="stat-value"><%= stats.contacts %></div>
-            <div class="stat-label">جهات الاتصال</div>
+        <div class="col-lg-3 col-md-6">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon bg-success text-white">
+              <i class="fas fa-address-book"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value"><%= stats.contacts %></div>
+              <div class="kpi-label">جهات الاتصال</div>
+            </div>
           </div>
         </div>
-        
-        <div class="col-md-3">
-          <div class="crm-stats-card bg-info-gradient">
-            <i class="fas fa-envelope-open"></i>
-            <div class="stat-value"><%= stats.conversations.open %></div>
-            <div class="stat-label">محادثات مفتوحة</div>
+        <div class="col-lg-3 col-md-6">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon bg-info text-white">
+              <i class="fas fa-envelope-open"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value"><%= stats.conversations.open %></div>
+              <div class="kpi-label">محادثات مفتوحة</div>
+            </div>
           </div>
         </div>
-        
-        <div class="col-md-3">
-          <div class="crm-stats-card bg-warning-gradient">
-            <i class="fas fa-user-check"></i>
-            <div class="stat-value"><%= stats.conversations.assigned %></div>
-            <div class="stat-label">محادثات مسندة</div>
+        <div class="col-lg-3 col-md-6">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon bg-warning text-dark">
+              <i class="fas fa-user-check"></i>
+            </div>
+            <div class="kpi-content">
+              <div class="kpi-value"><%= stats.conversations.assigned %></div>
+              <div class="kpi-label">محادثات مسندة</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="row">
-        <!-- أحدث جهات الاتصال -->
-        <div class="col-md-6">
-          <div class="card">
+      <!-- صف الرسم البياني والمحادثات الهامة -->
+      <div class="row g-4 mb-4">
+        <!-- عمود الرسم البياني -->
+        <div class="col-lg-7">
+          <div class="card dashboard-chart-container h-100">
+            <div class="card-header">
+              <h5 class="card-title mb-0"><i class="fas fa-chart-pie me-2"></i>توزيع حالات المحادثات</h5>
+            </div>
+            <div class="card-body d-flex justify-content-center align-items-center">
+              <% if (stats.conversations.total > 0) { %>
+                <canvas id="conversationStatusChart"
+                        data-open="<%= stats.conversations.open %>"
+                        data-assigned="<%= stats.conversations.assigned %>"
+                        data-total="<%= stats.conversations.total %>">
+                </canvas>
+              <% } else { %>
+                <p class="text-muted mb-0">لا توجد بيانات لعرض الرسم البياني.</p>
+              <% } %>
+            </div>
+          </div>
+        </div>
+        <!-- عمود المحادثات الهامة -->
+        <div class="col-lg-5">
+          <div class="card dashboard-list-card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-              <h5 class="card-title mb-0">
-                <i class="fas fa-address-book me-2"></i>
-                أحدث جهات الاتصال
-              </h5>
+              <h5 class="card-title mb-0"><i class="fas fa-comments-dollar me-2"></i>أحدث المحادثات</h5>
+              <a href="/crm/conversations/ajax" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+            </div>
+            <div class="card-body p-0">
+              <% if (latestConversations && latestConversations.length > 0) { %>
+                <ul class="list-group list-group-flush">
+                  <% latestConversations.slice(0, 7).forEach(conversation => { %>
+                    <% 
+                      let customerName = (conversation.contactId && conversation.contactId.name) || conversation.customerName || conversation.phoneNumber || 'غير معروف';
+                      let lastMessageContent = '...';
+                      if (conversation.lastMessage) {
+                          if (conversation.lastMessage.mediaType) {
+                              lastMessageContent = `<i>[${conversation.lastMessage.mediaType}]</i>`;
+                          } else if (conversation.lastMessage.content) {
+                              let content = conversation.lastMessage.content;
+                              lastMessageContent = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+                          } else {
+                              lastMessageContent = 'رسالة فارغة';
+                          }
+                      }
+                      let channelIcon = conversation.channel === 'whatsapp' ? 'fab fa-whatsapp text-success' : 'fas fa-comments text-primary';
+                    %> 
+                    <li class="list-group-item conversation-list-item">
+                      <a href="/crm/conversations/ajax?selected=<%= conversation._id %>" class="text-decoration-none text-dark d-flex align-items-center">
+                        <i class="<%= channelIcon %> fa-lg me-3"></i>
+                        <div class="flex-grow-1">
+                          <div class="d-flex justify-content-between">
+                            <strong class="mb-1"><%= customerName %></strong>
+                            <small class="text-muted"><%= moment(conversation.lastMessageAt || conversation.updatedAt).locale('ar-ly').fromNow(true) %></small>
+                          </div>
+                          <small class="d-block text-muted text-truncate"><%= lastMessageContent %></small>
+                        </div>
+                      </a>
+                    </li>
+                  <% }); %>
+                </ul>
+              <% } else { %>
+                <p class="text-muted text-center p-4 mb-0">لا توجد محادثات لعرضها.</p>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- صف جهات الاتصال والإجراءات -->
+      <div class="row g-4">
+        <!-- عمود أحدث جهات الاتصال -->
+        <div class="col-lg-6">
+          <div class="card dashboard-list-card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="card-title mb-0"><i class="fas fa-address-book me-2"></i>أحدث جهات الاتصال</h5>
               <a href="/crm/contacts" class="btn btn-sm btn-outline-primary">عرض الكل</a>
             </div>
             <div class="card-body p-0">
               <% if (latestContacts && latestContacts.length > 0) { %>
                 <ul class="list-group list-group-flush">
-                  <% latestContacts.forEach(function(contact) { %>
-                    <li class="list-group-item">
+                  <% latestContacts.slice(0, 5).forEach(function(contact) { %>
+                    <li class="list-group-item contact-list-item">
                       <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                          <a href="/crm/contacts/<%= contact._id %>" class="text-decoration-none">
+                        <div class="flex-grow-1 me-2">
+                           <a href="/crm/contacts/<%= contact._id %>" class="text-decoration-none text-dark">
                             <strong><%= contact.name %></strong>
                           </a>
                           <br>
                           <small class="text-muted"><%= contact.phoneNumber %></small>
                         </div>
-                        <div>
-                          <a href="/crm/contacts/<%= contact._id %>" class="btn btn-sm btn-outline-secondary me-1">
-                            <i class="far fa-eye"></i>
-                          </a>
-                          <a href="/crm/conversations/start?contactId=<%= contact._id %>" class="btn btn-sm btn-outline-primary">
+                        <div class="flex-shrink-0">
+                          <a href="/crm/conversations/start?contactId=<%= contact._id %>" class="btn btn-sm btn-outline-success" title="بدء محادثة">
                             <i class="fas fa-comment-dots"></i>
                           </a>
                         </div>
@@ -108,93 +185,96 @@
                   <% }); %>
                 </ul>
               <% } else { %>
-                <div class="text-center p-4 text-muted">
-                  <i class="fas fa-users mb-3" style="font-size: 2rem; opacity: 0.3;"></i>
-                  <p>لا توجد جهات اتصال بعد</p>
-                </div>
+                <p class="text-muted text-center p-4 mb-0">لا توجد جهات اتصال لعرضها.</p>
               <% } %>
             </div>
           </div>
         </div>
-        
-        <!-- عرض المحادثات الأخيرة -->
-        <% if (latestConversations && latestConversations.length > 0) { %>
-          <div class="col-md-6">
-            <div class="card">
-              <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                  <i class="fas fa-comments me-2"></i>
-                  آخر المحادثات
-                </h5>
-                <a href="/crm/conversations/ajax" class="btn btn-sm btn-outline-primary">عرض الكل</a>
-              </div>
-              <div class="card-body p-0">
-                <div class="list-group">
-                  <% latestConversations.forEach(conversation => { %>
-                    <a href="/crm/conversations/ajax?selected=<%= conversation._id %>" class="list-group-item list-group-item-action">
-                      <div class="d-flex w-100 justify-content-between">
-                        <% 
-                          // استخدام منطق مماثل للدالة المساعدة للحصول على اسم العميل
-                          let customerName = '';
-                          if (conversation.contactId && typeof conversation.contactId === 'object' && conversation.contactId.name) {
-                            customerName = conversation.contactId.name;
-                          } else if (conversation.customerName) {
-                            customerName = conversation.customerName;
-                          } else {
-                            customerName = conversation.phoneNumber || 'رقم غير معروف';
-                          }
-                        %>
-                        <strong><%= customerName %></strong>
-                        <small>
-                          <% if (conversation.lastMessageAt) { %>
-                            <%= moment(conversation.lastMessageAt).locale('ar-ly').fromNow() %>
-                          <% } else { %>
-                            غير معروف
-                          <% } %>
-                        </small>
-                      </div>
-                    </a>
-                  <% }); %>
-                </div>
-              </div>
-            </div>
-          </div>
-        <% } else { %>
-          <div class="text-center p-4 text-muted">
-            <i class="fas fa-comment-dots mb-3" style="font-size: 2rem; opacity: 0.3;"></i>
-            <p>لا توجد محادثات بعد</p>
-          </div>
-        <% } %>
-      </div>
-
-      <div class="row mt-4">
-        <div class="col-12">
-          <div class="card">
+        <!-- عمود الإجراءات السريعة -->
+        <div class="col-lg-6">
+          <div class="card dashboard-action-card h-100">
             <div class="card-header">
-              إجراءات سريعة
+              <h5 class="card-title mb-0"><i class="fas fa-bolt me-2"></i>إجراءات سريعة</h5>
             </div>
-            <div class="card-body">
-              <div class="row justify-content-center text-center">
-                <div class="col-md-6">
-                  <a href="/crm/contacts/new" class="btn btn-lg btn-outline-primary w-100 mb-2">
-                    <i class="fas fa-user-plus"></i>
-                  </a>
-                  <div>إضافة جهة اتصال</div>
-                </div>
-                <div class="col-md-6">
-                  <button class="btn btn-lg btn-outline-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#startConversationModal">
-                    <i class="fas fa-comment-dots"></i>
-                  </button>
-                  <div>بدء محادثة جديدة</div>
-                </div>
-              </div>
+            <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
+              <a href="/crm/contacts/new" class="btn btn-lg btn-outline-primary w-75 mb-3">
+                <i class="fas fa-user-plus me-2"></i>إضافة جهة اتصال
+              </a>
+              <button class="btn btn-lg btn-outline-success w-75" data-bs-toggle="modal" data-bs-target="#startConversationModal">
+                <i class="fas fa-comment-medical me-2"></i>بدء محادثة جديدة
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </div>
+
+    </div> <!-- نهاية .crm-content -->
+  </div> <!-- نهاية .crm-container -->
   
   <%- include('../partials/_footer') %>
+
+  <!-- Modal لبدء محادثة جديدة (إذا كان موجودًا أو بحاجة له) -->
+  <!-- <div class="modal fade" id="startConversationModal" ...> ... </div> -->
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // تهيئة الرسم البياني لحالة المحادثات
+      const ctx = document.getElementById('conversationStatusChart');
+      if (ctx && typeof Chart !== 'undefined') {
+        const openCount = parseInt(ctx.dataset.open) || 0;
+        const assignedCount = parseInt(ctx.dataset.assigned) || 0;
+        const totalCount = parseInt(ctx.dataset.total) || 0;
+
+        if (totalCount > 0) {
+          const closedCount = Math.max(0, totalCount - openCount - assignedCount);
+
+          new Chart(ctx, {
+            type: 'doughnut', // أو 'pie'
+            data: {
+              labels: ['مفتوحة', 'مسندة', 'مغلقة'],
+              datasets: [{
+                label: 'حالة المحادثات',
+                data: [openCount, assignedCount, closedCount],
+                backgroundColor: [
+                  'rgba(23, 162, 184, 0.7)', // Info
+                  'rgba(255, 193, 7, 0.7)',  // Warning
+                  'rgba(108, 117, 125, 0.7)' // Secondary
+                ],
+                borderColor: [
+                  'rgba(23, 162, 184, 1)',
+                  'rgba(255, 193, 7, 1)',
+                  'rgba(108, 117, 125, 1)'
+                ],
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                },
+                tooltip: {
+                  callbacks: {
+                    label: function(context) {
+                      let label = context.label || '';
+                      if (label) {
+                        label += ': ';
+                      }
+                      if (context.parsed !== null) {
+                        label += context.parsed + ' محادثة';
+                      }
+                      return label;
+                    }
+                  }
+                }
+              }
+            }
+          });
+        }
+      }
+    });
+  </script>
 </body>
 </html>
