@@ -60,7 +60,7 @@ exports.getSemClients = async (req, res) => {
  */
 exports.createSemClient = async (req, res) => {
     try {
-        const { name, email, phone, company, dailyLimit, monthlyLimit, messagingChannels, defaultCountry } = req.body;
+        const { name, email, phone, company, dailyLimit, monthlyLimit, messagingChannels, defaultCountry, metaWhatsappTemplates } = req.body;
         const { userId } = req.session;
         
         // التحقق من البريد الإلكتروني
@@ -84,9 +84,19 @@ exports.createSemClient = async (req, res) => {
             monthlyLimit: monthlyLimit || 3000,
             messagingChannels: {
                 sms: messagingChannels?.sms ?? true,
-                whatsapp: messagingChannels?.whatsapp ?? false
+                whatsapp: messagingChannels?.whatsapp ?? false,
+                metaWhatsapp: messagingChannels?.metaWhatsapp ?? false
             }
         });
+        
+        // إضافة إعدادات نماذج واتساب ميتا إذا كانت موجودة
+        if (metaWhatsappTemplates) {
+            newClient.metaWhatsappTemplates = {
+                name: metaWhatsappTemplates.name || 'siraj',
+                language: metaWhatsappTemplates.language || 'ar',
+                phoneNumberId: metaWhatsappTemplates.phoneNumberId || null
+            };
+        }
         
         // إضافة إعدادات كود الدولة الافتراضي إذا وجدت
         if (defaultCountry) {
@@ -200,7 +210,8 @@ exports.updateSemClient = async (req, res) => {
         if (metaWhatsappTemplates) {
             client.metaWhatsappTemplates = {
                 name: metaWhatsappTemplates.name || client.metaWhatsappTemplates?.name || 'siraj',
-                language: metaWhatsappTemplates.language || client.metaWhatsappTemplates?.language || 'ar'
+                language: metaWhatsappTemplates.language || client.metaWhatsappTemplates?.language || 'ar',
+                phoneNumberId: metaWhatsappTemplates.phoneNumberId || client.metaWhatsappTemplates?.phoneNumberId || null
             };
         }
         

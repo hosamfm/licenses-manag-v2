@@ -121,7 +121,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (document.getElementById('metaWhatsappChannel').checked) {
             formData.metaWhatsappTemplates = {
                 name: document.getElementById('metaWhatsappTemplateName').value,
-                language: document.getElementById('metaWhatsappTemplateLanguage').value
+                language: document.getElementById('metaWhatsappTemplateLanguage').value,
+                phoneNumberId: document.getElementById('metaWhatsappPhoneNumberId').value
             };
         }
         

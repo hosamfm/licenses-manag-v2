@@ -339,6 +339,22 @@
                                     <option value="en">الإنجليزية</option>
                                 </select>
                             </div>
+                            <div class="col-md-12 mb-2">
+                                <label for="edit-metawhatsapp-phone-number-id" class="form-label">معرف رقم هاتف ميتا (اختياري)</label>
+                                <select class="form-select almarai-regular" id="edit-metawhatsapp-phone-number-id" name="edit-metawhatsapp-phone-number-id">
+                                    <option value="">استخدام الرقم الافتراضي</option>
+                                    <% if (typeof metaWhatsappSettings !== 'undefined' && metaWhatsappSettings) { %>
+                                        <% metaWhatsappSettings.forEach(setting => { %>
+                                            <option value="<%= setting.config.phoneNumberId %>">
+                                                <%= setting.name %> - <%= setting.config.phoneNumberId %>
+                                            </option>
+                                        <% }); %>
+                                    <% } %>
+                                </select>
+                                <small class="form-text text-muted">
+                                    إذا لم تحدد رقم هاتف، سيتم استخدام أول رقم متاح في إعدادات النظام
+                                </small>
+                            </div>
                         </div>
                     </div>
                     

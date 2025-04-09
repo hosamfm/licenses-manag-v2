@@ -5,19 +5,47 @@ const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 const User = require('../models/User');
 
 // صفحة إدارة عملاء SEM (واجهة المستخدم)
-router.get('/sem-clients/manage', isAuthenticated, (req, res) => {
-    res.render('manage_sem_clients', {
-        title: 'إدارة عملاء خدمة الرسائل',
-        activeLink: 'sem-clients'
-    });
+router.get('/sem-clients/manage', isAuthenticated, async (req, res) => {
+    try {
+        // الحصول على إعدادات واتساب ميتا النشطة لعرضها في قائمة الاختيار
+        const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
+        const metaWhatsappSettings = await MetaWhatsappSettings.find({ isActive: true }).sort({ name: 1 });
+        
+        res.render('manage_sem_clients', {
+            title: 'إدارة عملاء خدمة الرسائل',
+            activeLink: 'sem-clients',
+            metaWhatsappSettings
+        });
+    } catch (error) {
+        console.error('Error loading meta whatsapp settings:', error.message);
+        res.render('manage_sem_clients', {
+            title: 'إدارة عملاء خدمة الرسائل',
+            activeLink: 'sem-clients',
+            metaWhatsappSettings: []
+        });
+    }
 });
 
 // صفحة إنشاء عميل جديد
-router.get('/sem-clients/create', isAuthenticated, (req, res) => {
-    res.render('create_sem_client', {
-        title: 'إنشاء عميل جديد',
-        activeLink: 'sem-clients'
-    });
+router.get('/sem-clients/create', isAuthenticated, async (req, res) => {
+    try {
+        // الحصول على إعدادات واتساب ميتا النشطة لعرضها في قائمة الاختيار
+        const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
+        const metaWhatsappSettings = await MetaWhatsappSettings.find({ isActive: true }).sort({ name: 1 });
+        
+        res.render('create_sem_client', {
+            title: 'إنشاء عميل جديد',
+            activeLink: 'sem-clients',
+            metaWhatsappSettings
+        });
+    } catch (error) {
+        console.error('Error loading meta whatsapp settings:', error.message);
+        res.render('create_sem_client', {
+            title: 'إنشاء عميل جديد',
+            activeLink: 'sem-clients',
+            metaWhatsappSettings: []
+        });
+    }
 });
 
 // API للحصول على قائمة العملاء

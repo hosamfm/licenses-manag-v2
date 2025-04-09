@@ -38,19 +38,9 @@ async function _initializeSmsManager() {
 
 async function _initializeWhatsappManager() {
   try {
-    if (WhatsappManager.initialized) return true;
-    const settings = await WhatsappSettings.getActiveSettings();
-    if (!settings) {
-      logger.error('messageController', 'لا يمكن العثور على إعدادات الواتساب النشطة');
-      return false;
-    }
-    const config = settings.getProviderConfig();
-    const initialized = await WhatsappManager.initialize(config);
-    if (!initialized) {
-      logger.error('messageController', 'فشل في تهيئة مدير خدمة الواتساب');
-      return false;
-    }
-    return true;
+    // إيقاف خدمة واتساب غير الرسمية
+    logger.warn('messageController', 'تم إيقاف خدمة واتساب غير الرسمية. سيتم تحويل جميع الطلبات إلى الواتساب الرسمي.');
+    return false; // إرجاع قيمة فشل لإجبار النظام على استخدام القناة البديلة
   } catch (error) {
     logger.error('messageController', 'خطأ في تهيئة مدير خدمة الواتساب', error);
     return false;
@@ -147,7 +137,7 @@ async function updateClientBalance(client, smsSent, whatsappSent, msgContent) {
     const messageCount = Math.ceil(msgContent.length / maxLength);
     let points = 0;
     if (smsSent) points += messageCount;               // 1 نقطة لكل رسالة SMS
-    if (whatsappSent) points += (messageCount * 0.25);   // 0.25 نقطة لكل رسالة واتساب
+    if (whatsappSent) points += (messageCount * 0.25);   // 0.25 نقطة لكل رسالة واتساب (رسمي أو غير رسمي)
     client.balance -= points;
     client.messagesSent += (smsSent ? 1 : 0) + (whatsappSent ? 1 : 0);
     await client.save();
@@ -275,17 +265,26 @@ async function sendWhatsappAndUpdate(message, client, formattedPhone, msgContent
  * @param {string} formattedPhone - رقم الهاتف المنسق
  * @param {string} msgContent - محتوى الرسالة
  * @param {boolean} updateSemMessage - تحديث سجل SemMessage أم لا
- * @param {string} phoneNumberId - معرف رقم الهاتف المرسل (اختياري)
  * @returns {Promise<Object>} نتيجة الإرسال
  */
-async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, updateSemMessage = true, phoneNumberId = null) {
+async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgContent, updateSemMessage = true) {
   try {
+    // استخدام معرف رقم الهاتف المخصص للعميل إذا وجد
+    const phoneNumberId = client.metaWhatsappTemplates?.phoneNumberId || null;
+    
     logger.debug('messageController', 'إرسال رسالة عبر Meta واتساب', { 
       formattedPhone,
       clientId: client._id,
       clientName: client.name,
       phoneNumberId: phoneNumberId || 'الافتراضي'
     });
+    
+    // تنظيف محتوى الرسالة من الأسطر الجديدة وعلامات الجدولة والمسافات المتتالية
+    const cleanedMsgContent = msgContent
+      .replace(/\n/g, ' ') // استبدال الأسطر الجديدة بمسافة
+      .replace(/\t/g, ' ') // استبدال علامات الجدولة بمسافة
+      .replace(/\r/g, ' ') // استبدال علامات الإرجاع بمسافة
+      .replace(/ {4,}/g, ' '); // استبدال 4 مسافات متتالية أو أكثر بمسافة واحدة
     
     // استخدام إعدادات النموذج المخصصة للعميل أو الإعدادات الافتراضية
     const templateName = client.metaWhatsappTemplates?.name || 'siraj';
@@ -298,7 +297,7 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
         parameters: [
           {
             type: 'text',
-            text: msgContent
+            text: cleanedMsgContent
           }
         ]
       }
@@ -311,7 +310,7 @@ async function sendMetaWhatsappAndUpdate(message, client, formattedPhone, msgCon
       templateName, 
       templateLanguage, 
       components,
-      phoneNumberId // معرف رقم الهاتف (اختياري)
+      phoneNumberId // معرف رقم الهاتف المخصص للعميل
     );
     
     // تخزين معرف الرسالة الخارجي من Meta
@@ -403,24 +402,30 @@ async function processChannelFallback(message, client, formattedPhone, msgConten
     // تحديد ترتيب القنوات بناءً على تفضيل العميل
     let channels = [];
     const canSendSms = client.messagingChannels?.sms !== false;
-    const canSendWhatsapp = client.messagingChannels?.whatsapp === true;
-    const canSendMetaWhatsapp = client.messagingChannels?.metaWhatsapp === true;
+    const canSendWhatsapp = false; // إيقاف واتساب غير رسمي
+    const canSendMetaWhatsapp = client.messagingChannels?.metaWhatsapp === true || client.messagingChannels?.whatsapp === true; // اعتبار العملاء المشتركين في واتساب غير رسمي مشتركين في الواتساب الرسمي
+    
+    // إذا كان العميل مشترك في واتساب غير رسمي لكن ليس مشترك في ميتا واتساب، نسجل ذلك
+    if (client.messagingChannels?.whatsapp === true && client.messagingChannels?.metaWhatsapp !== true) {
+      logger.info('processChannelFallback', `تحويل عميل من واتساب غير رسمي إلى رسمي: ${client.name}`, {
+        clientId: client._id,
+        clientName: client.name
+      });
+    }
     
     // إضافة القنوات المتاحة حسب الترتيب المفضل
     if (preferredChannel === 'sms' && canSendSms) {
       channels.push('sms');
-    } else if (preferredChannel === 'whatsapp' && canSendWhatsapp) {
-      channels.push('whatsapp');
+    } else if (preferredChannel === 'whatsapp' && canSendMetaWhatsapp) {
+      // إذا كان التفضيل للواتساب غير الرسمي، نستخدم الرسمي بدلاً منه
+      channels.push('metaWhatsapp');
     } else if ((preferredChannel === 'metaWhatsapp' || preferredChannel === 'metawhatsapp') && canSendMetaWhatsapp) {
       channels.push('metaWhatsapp');
     }
     
-    // إضافة القنوات المتبقية بترتيب: ميتا واتساب، واتساب غير رسمي، SMS
+    // إضافة القنوات المتبقية بترتيب: ميتا واتساب، SMS
     if (canSendMetaWhatsapp && !channels.includes('metaWhatsapp')) {
       channels.push('metaWhatsapp');
-    }
-    if (canSendWhatsapp && !channels.includes('whatsapp')) {
-      channels.push('whatsapp');
     }
     if (canSendSms && !channels.includes('sms')) {
       channels.push('sms');
@@ -565,8 +570,15 @@ async function waitForMessageStatusAndFallback(messageId, client, formattedPhone
           if (result) {
           }
         } else if (nextChannel === 'whatsapp') {
-          const whatsappResult = await sendWhatsappAndUpdate(null, client, formattedPhone, msgContent, whatsappConfig, true);
-          result = whatsappResult.success;
+          // تحويل طلبات واتساب غير رسمي إلى واتساب ميتا الرسمي
+          logger.info('waitForMessageStatusAndFallback', 'تحويل طلب واتساب غير رسمي إلى واتساب ميتا الرسمي', {
+            clientId: client._id,
+            clientName: client.name,
+            formattedPhone
+          });
+          
+          const metaWhatsappResult = await sendMetaWhatsappAndUpdate(null, client, formattedPhone, msgContent, true);
+          result = metaWhatsappResult.success;
           if (result) {
           }
         } else if (nextChannel === 'metaWhatsapp') {
@@ -701,9 +713,18 @@ exports.sendMessage = async (req, res) => {
     
     /* تحديد القنوات المفعلة */
     const canSendSms = client.messagingChannels?.sms !== false;
-    const canSendWhatsapp = client.messagingChannels?.whatsapp === true;
-    const canSendMetaWhatsapp = client.messagingChannels?.metaWhatsapp === true;
-    if (!canSendSms && !canSendWhatsapp && !canSendMetaWhatsapp) {
+    const canSendWhatsapp = false; // إيقاف واتساب غير رسمي
+    const canSendMetaWhatsapp = client.messagingChannels?.metaWhatsapp === true || client.messagingChannels?.whatsapp === true; // اعتبار العملاء المشتركين في واتساب غير رسمي مشتركين في الواتساب الرسمي
+
+    // إذا كان العميل مشترك في واتساب غير رسمي لكن ليس مشترك في ميتا واتساب، نسجل ذلك
+    if (client.messagingChannels?.whatsapp === true && client.messagingChannels?.metaWhatsapp !== true) {
+      logger.info('sendMessage', `تحويل عميل من واتساب غير رسمي إلى رسمي: ${client.name}`, {
+        clientId: client._id,
+        clientName: client.name
+      });
+    }
+
+    if (!canSendSms && !canSendMetaWhatsapp) {
       const errorMessage = new SemMessage({
         clientId: client._id,
         recipients: [formattedPhone],
@@ -719,7 +740,7 @@ exports.sendMessage = async (req, res) => {
     
     /* تهيئة الخدمات حسب القنوات */
     const smsInitialized = canSendSms ? await _initializeSmsManager() : false;
-    const whatsappInitialized = canSendWhatsapp ? await _initializeWhatsappManager() : false;
+    const whatsappInitialized = false; // إيقاف واتساب غير رسمي
     const metaWhatsappInitialized = canSendMetaWhatsapp ? await _initializeMetaWhatsappManager() : false;
     
     if (!smsInitialized && !whatsappInitialized && !metaWhatsappInitialized) {
@@ -761,13 +782,12 @@ exports.sendMessage = async (req, res) => {
             if (smsSuccess) {
               await updateClientBalance(client, true, false, msg);
             }
-          } else if (canSendWhatsapp && whatsappInitialized) {
-            const whatsappConfig = (await WhatsappSettings.getActiveSettings()).getProviderConfig();
-            const whatsappResult = await sendWhatsappAndUpdate(semMessage, client, formattedPhone, msg, whatsappConfig, true);
-            if (whatsappResult.success) {
-              await updateClientBalance(client, false, true, msg);
-            }
           } else if (canSendMetaWhatsapp && metaWhatsappInitialized) {
+            // إذا كان العميل مشترك في واتساب غير رسمي ولكن ليس في ميتا واتساب، نستخدم ميتا واتساب
+            if (client.messagingChannels?.whatsapp === true && client.messagingChannels?.metaWhatsapp !== true) {
+              logger.info('sendMessage', `استخدام ميتا واتساب كبديل للواتساب غير الرسمي: ${client.name}`);
+            }
+            
             const metaResult = await sendMetaWhatsappAndUpdate(semMessage, client, formattedPhone, msg, true);
             if (metaResult.success) {
               await updateClientBalance(client, false, true, msg);

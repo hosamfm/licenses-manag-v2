@@ -634,10 +634,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (client.metaWhatsappTemplates) {
                 document.getElementById('edit-metawhatsapp-template-name').value = client.metaWhatsappTemplates.name || 'siraj';
                 document.getElementById('edit-metawhatsapp-template-language').value = client.metaWhatsappTemplates.language || 'ar';
+                
+                // تعبئة معرف رقم هاتف ميتا إذا كان موجودًا
+                if (document.getElementById('edit-metawhatsapp-phone-number-id')) {
+                    document.getElementById('edit-metawhatsapp-phone-number-id').value = client.metaWhatsappTemplates.phoneNumberId || '';
+                }
             } else {
                 // تعيين القيم الافتراضية إذا لم تكن موجودة
                 document.getElementById('edit-metawhatsapp-template-name').value = 'siraj';
                 document.getElementById('edit-metawhatsapp-template-language').value = 'ar';
+                if (document.getElementById('edit-metawhatsapp-phone-number-id')) {
+                    document.getElementById('edit-metawhatsapp-phone-number-id').value = '';
+                }
             }
             
             // إظهار أو إخفاء إعدادات النماذج
@@ -736,7 +744,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (document.getElementById('edit-metawhatsapp-channel').checked) {
             data.metaWhatsappTemplates = {
                 name: document.getElementById('edit-metawhatsapp-template-name').value,
-                language: document.getElementById('edit-metawhatsapp-template-language').value
+                language: document.getElementById('edit-metawhatsapp-template-language').value,
+                phoneNumberId: document.getElementById('edit-metawhatsapp-phone-number-id').value
             };
         }
         

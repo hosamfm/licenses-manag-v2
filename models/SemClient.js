@@ -46,7 +46,8 @@ const semClientSchema = new mongoose.Schema({
     // إعدادات نماذج رسائل Meta WhatsApp
     metaWhatsappTemplates: {
         name: { type: String, default: 'siraj' },
-        language: { type: String, default: 'ar' }
+        language: { type: String, default: 'ar' },
+        phoneNumberId: { type: String }
     },
     apiKey: {
         type: String,
