@@ -7,7 +7,7 @@ const axios = require('axios');
 const logger = require('./loggerService');
 const WhatsappMessage = require('../models/WhatsappMessageModel');
 const User = require('../models/User');
-const AISettings = require('../models/AISettings');
+const AISettings = require('../models/AiSettings');
 const socketService = require('./socketService');
 const FormData = require('form-data');
 require('dotenv').config();
