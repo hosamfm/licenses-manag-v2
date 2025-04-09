@@ -146,7 +146,7 @@ class ChatGptService {
         return;
       }
       
-      logger.info('chatGptService', `إرسال إشعارات إلى ${eligibleUsers.length} مستخدم مؤهل`, { 
+      logger.info('chatGptService', `إرسال إشعارات إلى ${eligibleUsers.length} مستخدم مؤهل بغض النظر عن نشاطهم`, { 
         conversationId, 
         reason,
         userIds: eligibleUsers.map(u => u._id)
@@ -193,7 +193,7 @@ class ChatGptService {
       
       for (const user of eligibleUsers) {
         try {
-          logger.info('chatGptService', `محاولة إرسال إشعار للمستخدم ${user._id}`, {
+          logger.info('chatGptService', `إرسال إشعار للمستخدم ${user._id} بغض النظر عن نشاطه`, {
             username: user.username,
             fullName: user.full_name
           });
@@ -210,7 +210,7 @@ class ChatGptService {
             subscriptionCount: userDetails?.webPushSubscriptions?.length || 0
           });
           
-          // إرسال الإشعار
+          // إرسال الإشعار عبر جميع القنوات المتاحة (إشعارات قاعدة البيانات + Socket + Web Push)
           const notification = await NotificationService.createAndSendNotification({
             recipient: user._id,
             type: 'conversation',
