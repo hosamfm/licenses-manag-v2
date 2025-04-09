@@ -17,7 +17,7 @@
     }
     
     const messageInput = document.getElementById('replyMessage');
-    const conversationId = document.getElementById('conversationId');
+    const conversationId = document.getElementById('replyFormConversationId');
     const sendButton = document.getElementById('sendButton');
     const sendingIndicator = document.getElementById('sendingIndicator');
     

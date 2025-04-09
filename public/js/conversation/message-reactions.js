@@ -121,7 +121,8 @@
       return;
     }
     
-    const conversationId = document.getElementById('conversationId')?.value;
+    const conversationId = document.getElementById('replyFormConversationId')?.value || 
+                           document.getElementById('conversationId')?.value;
     if (!conversationId) {
       console.error('خطأ: لم يتم العثور على معرف المحادثة');
       return;

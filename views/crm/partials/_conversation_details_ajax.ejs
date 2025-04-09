@@ -293,7 +293,7 @@
   <div class="message-input-container">
     <% if (conversation.status !== 'closed') { %>
       <form id="replyForm" onsubmit="window.sendReply(event)">
-        <input type="hidden" id="conversationId" value="<%= conversation._id %>">
+        <input type="hidden" id="replyFormConversationId" value="<%= conversation._id %>">
         
         <div class="reply-form-content">
           <div class="reply-form-controls">

@@ -96,7 +96,8 @@
     const replyMessage = document.getElementById('replyMessage');
     const sendButton = document.getElementById('sendButton');
     const sendingIndicator = document.getElementById('sendingIndicator');
-    const conversationId = document.getElementById('conversationId')?.value;
+    const conversationId = document.getElementById('replyFormConversationId')?.value || 
+                           document.getElementById('conversationId')?.value;
     const attachMediaBtn = document.getElementById('attachMediaBtn');
     const mediaFile = document.getElementById('mediaFile');
     

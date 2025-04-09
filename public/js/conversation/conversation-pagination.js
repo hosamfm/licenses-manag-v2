@@ -32,7 +32,7 @@
     
     // الحصول على معرف المحادثة الحالية من DOM
     if (!state.conversationId) {
-      const conversationIdEl = document.getElementById('conversationId');
+      const conversationIdEl = document.getElementById('replyFormConversationId') || document.getElementById('conversationId');
       if (conversationIdEl) {
         state.conversationId = conversationIdEl.value;
       }

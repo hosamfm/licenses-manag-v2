@@ -373,8 +373,10 @@
     
     // الحصول على معرف المحادثة الحالية وتعيينه في النافذة
     const conversationId = window.currentConversationId || 
-                          (document.getElementById('conversationId') ? 
-                            document.getElementById('conversationId').value : null);
+                          (document.getElementById('replyFormConversationId') ? 
+                            document.getElementById('replyFormConversationId').value : 
+                            (document.getElementById('conversationId') ? 
+                              document.getElementById('conversationId').value : null));
     
     if (conversationId) {
       // تعيين معرف المحادثة في الحقل الخفي
