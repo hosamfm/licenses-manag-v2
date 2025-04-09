@@ -153,9 +153,12 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
       newStatus = 'failed';
     }
     
+    // البحث عن الرسالة في جدول WhatsappMessage
     let message = await WhatsappMessage.findOne({ externalMessageId: externalId });
+    let messageFound = false;
     
     if (message) {
+      messageFound = true;
       message.status = newStatus;
       if (newStatus === 'delivered') {
         message.deliveredAt = timestamp;
@@ -186,8 +189,48 @@ exports.updateMessageStatus = async (externalId, newStatus, timestamp) => {
           logger.error('metaWhatsappWebhookController', 'خطأ في تحديث SemMessage', semUpdateErr);
         }
       }
-    } else {
-      logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage، تم تجاهل الحالة', { externalId, newStatus });
+    }
+    
+    // ===================================================================================================================
+    // تنبيه هام: هذا الجزء متعلق بنظام إرسال الرسائل API وليس بنظام المراسلات مع العملاء (CRM)
+    // يخص تحديث حالة الرسائل المرسلة عبر واجهة API (قسم إدارة عملاء الرسائل)
+    // تم تصميمه لتحديث حالة الرسائل في جدول SemMessage
+    // الرجاء عدم تعديل هذا الجزء أو الإضافة إليه إلا بعد التنسيق مع فريق تطوير API
+    // ===================================================================================================================
+    
+    // إذا لم يجد الرسالة في WhatsappMessage أو كان هناك معرف ربط، ابحث في SemMessage
+    if (!messageFound || (message && message.metadata && message.metadata.semMessageId)) {
+      // البحث عن الرسالة في جدول SemMessage باستخدام externalMessageId
+      const semMessage = await SemMessage.findOne({ externalMessageId: externalId });
+      
+      if (semMessage) {
+        logger.info('metaWhatsappWebhookController', 'تم العثور على رسالة في SemMessage وتحديث حالتها', { 
+          messageId: semMessage._id,
+          externalId,
+          newStatus 
+        });
+        
+        // تحديث حالة الرسالة في SemMessage
+        semMessage.status = newStatus;
+        if (newStatus === 'delivered') {
+          semMessage.deliveredAt = timestamp;
+        } else if (newStatus === 'read') {
+          semMessage.readAt = timestamp;
+        }
+        
+        // تحديث بيانات المزود أيضًا
+        if (semMessage.providerData) {
+          semMessage.providerData.lastUpdate = new Date();
+          semMessage.providerData.lastStatus = newStatus;
+        }
+        
+        await semMessage.save();
+        messageFound = true;
+      }
+    }
+    
+    if (!messageFound) {
+      logger.warn('metaWhatsappWebhookController', 'رسالة غير موجودة في WhatsappMessage أو SemMessage، تم تجاهل الحالة', { externalId, newStatus });
     }
   } catch (err) {
     logger.error('metaWhatsappWebhookController', 'خطأ في updateMessageStatus', err);
