@@ -134,34 +134,31 @@
             <select class="form-select" id="model" name="model">
               <!-- النماذج الرئيسية -->
               <optgroup label="النماذج الرئيسية (الأحدث)">
-                <option value="gpt-4.5-preview" <%= aiSettings.model === 'gpt-4.5-preview' ? 'selected' : '' %>>GPT-4.5 Preview - أحدث وأكبر نموذج من OpenAI</option>
-                <option value="gpt-4o" <%= aiSettings.model === 'gpt-4o' ? 'selected' : '' %>>GPT-4o - الإصدار المحسن والمتعدد الوسائط</option>
-                <option value="o1" <%= aiSettings.model === 'o1' ? 'selected' : '' %>>o1 - نموذج التفكير المنطقي للمهام المعقدة</option>
-                <option value="o1-mini" <%= aiSettings.model === 'o1-mini' ? 'selected' : '' %>>o1-mini - إصدار أصغر من o1 بتكلفة أقل</option>
-                <option value="o3-mini" <%= aiSettings.model === 'o3-mini' ? 'selected' : '' %>>o3-mini - نموذج خفيف يوازن بين الأداء والتكلفة</option>
-                <option value="o1-pro" <%= aiSettings.model === 'o1-pro' ? 'selected' : '' %>>o1-pro - إصدار محسن من o1 للردود الأفضل</option>
+                <option value="gpt-4o" <%= aiSettings.model === 'gpt-4o' ? 'selected' : '' %>>GPT-4o (الأحدث والأكثر قدرة)</option>
+                <option value="gpt-4o-mini" <%= aiSettings.model === 'gpt-4o-mini' ? 'selected' : '' %>>GPT-4o Mini (سريع وفعال)</option>
               </optgroup>
               
-              <!-- نماذج الاستدلال -->
-              <optgroup label="نماذج الاستدلال (o-series)">
-                <option value="o3-mini" <%= aiSettings.model === 'o3-mini' ? 'selected' : '' %>>o3-mini - نموذج استدلالي سريع ومرن</option>
-                <option value="o1" <%= aiSettings.model === 'o1' ? 'selected' : '' %>>o1 - نموذج استدلالي عالي الذكاء</option>
-                <option value="o1-mini" <%= aiSettings.model === 'o1-mini' ? 'selected' : '' %>>o1-mini - إصدار أسرع وأكثر اقتصادية من o1</option>
-                <option value="o1-pro" <%= aiSettings.model === 'o1-pro' ? 'selected' : '' %>>o1-pro - إصدار محسن من o1 للردود الأفضل</option>
-              </optgroup>
-              
-              <!-- نماذج الوقت الفعلي -->
-              <optgroup label="نماذج الوقت الفعلي">
-                <option value="gpt-4o-realtime-preview" <%= aiSettings.model === 'gpt-4o-realtime-preview' ? 'selected' : '' %>>GPT-4o Realtime - دعم النص والصوت بالوقت الفعلي</option>
-                <option value="gpt-4o-mini-realtime-preview" <%= aiSettings.model === 'gpt-4o-mini-realtime-preview' ? 'selected' : '' %>>GPT-4o mini Realtime - إصدار اقتصادي للوقت الفعلي</option>
-              </optgroup>
-              
-              <!-- النماذج القديمة -->
-              <optgroup label="النماذج القديمة (مدعومة)">
+              <!-- النماذج المتقدمة -->
+              <optgroup label="النماذج المتقدمة">
                 <option value="gpt-4-turbo" <%= aiSettings.model === 'gpt-4-turbo' ? 'selected' : '' %>>GPT-4 Turbo</option>
-                <option value="gpt-4" <%= aiSettings.model === 'gpt-4' ? 'selected' : '' %>>GPT-4</option>
+                <option value="gpt-4-turbo-2024-04-09" <%= aiSettings.model === 'gpt-4-turbo-2024-04-09' ? 'selected' : '' %>>GPT-4 Turbo 2024-04-09</option>
+                <option value="gpt-4-0125-preview" <%= aiSettings.model === 'gpt-4-0125-preview' ? 'selected' : '' %>>GPT-4 0125 Preview</option>
+                <option value="gpt-4-1106-preview" <%= aiSettings.model === 'gpt-4-1106-preview' ? 'selected' : '' %>>GPT-4 1106 Preview</option>
+              </optgroup>
+              
+              <!-- النماذج الأساسية -->
+              <optgroup label="النماذج الأساسية">
                 <option value="gpt-3.5-turbo" <%= aiSettings.model === 'gpt-3.5-turbo' ? 'selected' : '' %>>GPT-3.5 Turbo</option>
-                <option value="gpt-3.5-turbo-16k" <%= aiSettings.model === 'gpt-3.5-turbo-16k' ? 'selected' : '' %>>GPT-3.5 Turbo (16K)</option>
+                <option value="gpt-3.5-turbo-0125" <%= aiSettings.model === 'gpt-3.5-turbo-0125' ? 'selected' : '' %>>GPT-3.5 Turbo 0125</option>
+                <option value="gpt-3.5-turbo-1106" <%= aiSettings.model === 'gpt-3.5-turbo-1106' ? 'selected' : '' %>>GPT-3.5 Turbo 1106</option>
+                <option value="gpt-3.5-turbo-instruct" <%= aiSettings.model === 'gpt-3.5-turbo-instruct' ? 'selected' : '' %>>GPT-3.5 Turbo Instruct</option>
+              </optgroup>
+              
+              <!-- نماذج الوسائط المتعددة -->
+              <optgroup label="نماذج الوسائط المتعددة">
+                <option value="gpt-4-vision-preview" <%= aiSettings.model === 'gpt-4-vision-preview' ? 'selected' : '' %>>GPT-4 Vision Preview</option>
+                <option value="dall-e-3" <%= aiSettings.model === 'dall-e-3' ? 'selected' : '' %>>DALL-E 3 (إنشاء صور)</option>
+                <option value="dall-e-2" <%= aiSettings.model === 'dall-e-2' ? 'selected' : '' %>>DALL-E 2 (إنشاء صور)</option>
               </optgroup>
             </select>
             <div class="form-text">نموذج OpenAI المستخدم. النماذج الأحدث تكون أكثر قدرة لكن أعلى تكلفة. لاحظ أن بعض النماذج قد تتطلب ترقية حسابك لدى OpenAI.</div>
@@ -217,42 +214,97 @@
         </div>
       </div>
 
-      <!-- إعدادات التوليد -->
+      <!-- إعدادات الجودة -->
       <div class="form-section">
-        <h2 class="section-title"><i class="fas fa-sliders-h"></i> إعدادات جودة التوليد</h2>
-        <p class="text-muted">هذه الإعدادات تؤثر على جودة وطبيعة الردود التي ينتجها الذكاء الاصطناعي. تعديلها يمكن أن يحسن الردود حسب احتياجات خدمة العملاء.</p>
-        
+        <h2 class="section-title"><i class="fas fa-sliders-h"></i> إعدادات جودة وأداء النماذج</h2>
         <div class="row mb-3">
           <div class="col-md-6">
-            <label for="temperature" class="form-label">درجة الحرارة (Temperature): <span id="temperatureValue" class="range-value"><%= aiSettings.temperature %></span></label>
+            <label for="temperature" class="form-label">درجة الإبداعية (Temperature)</label>
             <input type="range" class="form-range" id="temperature" name="temperature" min="0" max="2" step="0.1" value="<%= aiSettings.temperature %>">
-            <div class="form-text">تتحكم في درجة إبداعية الردود. القيم المنخفضة تنتج ردوداً أكثر تحديداً وأقل مخاطرة، والقيم العالية تزيد من الإبداع والتنوع.</div>
+            <div class="d-flex justify-content-between">
+              <div>0 (أكثر دقة)</div>
+              <div id="temperatureValue"><%= aiSettings.temperature %></div>
+              <div>2 (أكثر إبداعًا)</div>
+            </div>
+            <div class="form-text">تؤثر على تنوع وإبداعية الردود. القيم المنخفضة تجعل الردود أكثر تركيزًا ودقة، بينما القيم العالية تزيد من الإبداعية والتنوع.</div>
           </div>
           <div class="col-md-6">
-            <label for="maxTokens" class="form-label">الحد الأقصى للرموز (Max Tokens): <span id="maxTokensValue" class="range-value"><%= aiSettings.maxTokens %></span></label>
+            <label for="maxTokens" class="form-label">الحد الأقصى للتوكنز (Max Tokens)</label>
             <input type="range" class="form-range" id="maxTokens" name="maxTokens" min="100" max="4000" step="50" value="<%= aiSettings.maxTokens %>">
-            <div class="form-text">الحد الأقصى لطول الرد. الرموز هي وحدات النص التي يعالجها الذكاء الاصطناعي. حوالي 750 رمز تساوي 500 كلمة عربية.</div>
+            <div class="d-flex justify-content-between">
+              <div>100</div>
+              <div id="maxTokensValue"><%= aiSettings.maxTokens %></div>
+              <div>4000</div>
+            </div>
+            <div class="form-text">الحد الأقصى لعدد التوكنز (وحدات النص) التي يمكن للنموذج إنتاجها في الرد الواحد. التوكن الواحد يعادل تقريباً ¾ كلمة.</div>
           </div>
         </div>
         
         <div class="row mb-3">
           <div class="col-md-6">
-            <label for="topP" class="form-label">أعلى احتمالية (Top P): <span id="topPValue" class="range-value"><%= aiSettings.topP %></span></label>
+            <label for="topP" class="form-label">التركيز النسبي (Top P)</label>
             <input type="range" class="form-range" id="topP" name="topP" min="0" max="1" step="0.05" value="<%= aiSettings.topP %>">
-            <div class="form-text">تتحكم في تنوع الكلمات المختارة. استخدم قيمة أقل (مثل 0.5) للحصول على إجابات أكثر تركيزاً، وقيمة أعلى للمزيد من الاحتمالات.</div>
+            <div class="d-flex justify-content-between">
+              <div>0 (أكثر تركيزًا)</div>
+              <div id="topPValue"><%= aiSettings.topP %></div>
+              <div>1</div>
+            </div>
+            <div class="form-text">تقنية أخرى للتحكم في تنوع النص، حيث يختار النموذج من مجموعة الاحتمالات الأعلى. القيم المنخفضة تنتج نصوصًا أكثر تركيزًا.</div>
           </div>
           <div class="col-md-6">
-            <label for="frequencyPenalty" class="form-label">عقوبة التكرار (Frequency Penalty): <span id="frequencyPenaltyValue" class="range-value"><%= aiSettings.frequencyPenalty %></span></label>
-            <input type="range" class="form-range" id="frequencyPenalty" name="frequencyPenalty" min="-2" max="2" step="0.1" value="<%= aiSettings.frequencyPenalty %>">
-            <div class="form-text">تثبيط تكرار نفس الكلمات والعبارات. القيم الموجبة تشجع التنوع في المفردات والموضوعات.</div>
+            <label for="seed" class="form-label">بذرة عشوائية (Seed)</label>
+            <input type="number" class="form-control" id="seed" name="seed" min="0" max="9999999" step="1" value="<%= aiSettings.seed !== null ? aiSettings.seed : '' %>" placeholder="تركه فارغًا = عشوائي">
+            <div class="form-text">رقم تحكم للحصول على نتائج متسقة عند استخدام نفس المدخلات. اتركه فارغًا للسلوك العشوائي الطبيعي.</div>
           </div>
         </div>
         
         <div class="row mb-3">
           <div class="col-md-6">
-            <label for="presencePenalty" class="form-label">عقوبة الحضور (Presence Penalty): <span id="presencePenaltyValue" class="range-value"><%= aiSettings.presencePenalty %></span></label>
+            <label for="presencePenalty" class="form-label">معامل عقوبة التكرار (Presence Penalty)</label>
             <input type="range" class="form-range" id="presencePenalty" name="presencePenalty" min="-2" max="2" step="0.1" value="<%= aiSettings.presencePenalty %>">
-            <div class="form-text">تشجيع التحدث عن مواضيع جديدة. القيم الموجبة تساعد على تجنب تكرار الأفكار والمواضيع نفسها.</div>
+            <div class="d-flex justify-content-between">
+              <div>-2</div>
+              <div id="presencePenaltyValue"><%= aiSettings.presencePenalty %></div>
+              <div>2</div>
+            </div>
+            <div class="form-text">يؤثر على احتمالية تكرار المواضيع. القيم الموجبة تقلل من تكرار المواضيع التي ظهرت بالفعل.</div>
+          </div>
+          <div class="col-md-6">
+            <label for="frequencyPenalty" class="form-label">معامل عقوبة تكرار الكلمات (Frequency Penalty)</label>
+            <input type="range" class="form-range" id="frequencyPenalty" name="frequencyPenalty" min="-2" max="2" step="0.1" value="<%= aiSettings.frequencyPenalty %>">
+            <div class="d-flex justify-content-between">
+              <div>-2</div>
+              <div id="frequencyPenaltyValue"><%= aiSettings.frequencyPenalty %></div>
+              <div>2</div>
+            </div>
+            <div class="form-text">يؤثر على احتمالية تكرار نفس الكلمات. القيم الموجبة تقلل من تكرار الكلمات.</div>
+          </div>
+        </div>
+
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="responseFormat" class="form-label">تنسيق الاستجابة (Response Format)</label>
+            <select class="form-select" id="responseFormat" name="responseFormat">
+              <option value="" <%= !aiSettings.responseFormat ? 'selected' : '' %>>النص العادي (الافتراضي)</option>
+              <option value="text" <%= aiSettings.responseFormat === 'text' ? 'selected' : '' %>>نص عادي (Text)</option>
+              <option value="json_object" <%= aiSettings.responseFormat === 'json_object' ? 'selected' : '' %>>كائن JSON (JSON Object)</option>
+            </select>
+            <div class="form-text">تنسيق الرد المطلوب من النموذج. استخدم JSON للتطبيقات التي تحتاج إلى بيانات مهيكلة.</div>
+          </div>
+          <div class="col-md-6">
+            <label for="userIdentifier" class="form-label">معرف المستخدم (User Identifier)</label>
+            <input type="text" class="form-control" id="userIdentifier" name="userIdentifier" value="<%= aiSettings.userIdentifier || '' %>" placeholder="معرف خاص بنظامك">
+            <div class="form-text">معرف اختياري للمستخدم النهائي يساعد OpenAI في مراقبة وكشف إساءة الاستخدام.</div>
+          </div>
+        </div>
+
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="stream" name="stream" <%= aiSettings.stream ? 'checked' : '' %>>
+              <label class="form-check-label" for="stream">تفعيل تدفق الاستجابة (Streaming)</label>
+            </div>
+            <div class="form-text">عند تفعيله، سيتم استلام الرد من النموذج تدريجيًا أثناء إنشائه بدلاً من انتظار الرد الكامل.</div>
           </div>
         </div>
       </div>
@@ -314,6 +366,66 @@
           <div class="col-md-12">
             <textarea class="form-control" id="systemInstructions" name="systemInstructions" rows="12"><%= aiSettings.systemInstructions %></textarea>
             <div class="token-counter">عدد الأحرف: <span id="charCount">0</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- إعدادات الخيارات المتقدمة -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-sliders-h"></i> خيارات متقدمة</h2>
+        <p class="text-muted">هذه الإعدادات تتحكم في سلوك محدد للنماذج وهي مفيدة للحالات المتخصصة.</p>
+        
+        <div class="row mb-3">
+          <div class="col-md-4">
+            <label for="seed" class="form-label">قيمة البذرة (Seed)</label>
+            <input type="number" class="form-control" id="seed" name="seed" value="<%= aiSettings.seed || '' %>">
+            <div class="form-text">قيمة عشوائية لجعل ردود النموذج أكثر قابلية للتنبؤ. اتركها فارغة للحصول على ردود متنوعة.</div>
+          </div>
+          
+          <div class="col-md-4">
+            <label for="responseFormat" class="form-label">تنسيق الاستجابة</label>
+            <select class="form-select" id="responseFormat" name="responseFormat">
+              <option value="" <%= !aiSettings.responseFormat ? 'selected' : '' %>>افتراضي</option>
+              <option value="text" <%= aiSettings.responseFormat === 'text' ? 'selected' : '' %>>نص عادي</option>
+              <option value="json_object" <%= aiSettings.responseFormat === 'json_object' ? 'selected' : '' %>>كائن JSON</option>
+            </select>
+            <div class="form-text">تنسيق مخرجات النموذج (JSON للتطبيقات التي تتطلب بيانات منظمة).</div>
+          </div>
+          
+          <div class="col-md-4">
+            <label for="userIdentifier" class="form-label">معرّف المستخدم</label>
+            <input type="text" class="form-control" id="userIdentifier" name="userIdentifier" value="<%= aiSettings.userIdentifier || '' %>">
+            <div class="form-text">معرّف للمستخدم النهائي لتتبع استخدام API (اختياري).</div>
+          </div>
+        </div>
+        
+        <div class="row mb-3">
+          <div class="col-md-4">
+            <label for="stream" class="form-label">التدفق (Streaming)</label>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="stream" name="stream" <%= aiSettings.stream ? 'checked' : '' %>>
+              <label class="form-check-label" for="stream">تفعيل التدفق</label>
+            </div>
+            <div class="form-text">بث ردود النماذج كلمة بكلمة بدلاً من انتظار الرد الكامل.</div>
+          </div>
+          
+          <div class="col-md-4">
+            <label for="truncation" class="form-label">تقنية التقصير</label>
+            <select class="form-select" id="truncation" name="truncation">
+              <option value="disabled" <%= aiSettings.truncation === 'disabled' ? 'selected' : '' %>>معطل</option>
+              <option value="auto" <%= aiSettings.truncation === 'auto' ? 'selected' : '' %>>تلقائي</option>
+            </select>
+            <div class="form-text">كيفية تعامل النظام مع النصوص الطويلة.</div>
+          </div>
+          
+          <div class="col-md-4">
+            <label for="toolChoice" class="form-label">اختيار الأدوات</label>
+            <select class="form-select" id="toolChoice" name="toolChoice">
+              <option value="auto" <%= aiSettings.toolChoice === 'auto' ? 'selected' : '' %>>تلقائي</option>
+              <option value="none" <%= aiSettings.toolChoice === 'none' ? 'selected' : '' %>>لا شيء</option>
+              <option value="required" <%= aiSettings.toolChoice === 'required' ? 'selected' : '' %>>مطلوب</option>
+            </select>
+            <div class="form-text">كيفية استخدام النموذج للأدوات المتاحة (للنماذج التي تدعم استدعاء الوظائف).</div>
           </div>
         </div>
       </div>

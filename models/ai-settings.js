@@ -19,16 +19,20 @@ const aiSettingsSchema = new mongoose.Schema({
     default: 'gpt-4o',
     enum: [
       // النماذج الرئيسية الأحدث
-      'gpt-4.5-preview', 'gpt-4o', 'gpt-4o-mini',
+      'gpt-4o', 'gpt-4o-mini',
       
-      // نماذج الاستدلال (o-series)
-      'o3-mini', 'o1', 'o1-mini', 'o1-pro',
+      // نماذج النص إلى صورة
+      'dall-e-3', 'dall-e-2',
       
-      // نماذج الوقت الفعلي
-      'gpt-4o-realtime-preview', 'gpt-4o-mini-realtime-preview',
+      // النماذج المتقدمة
+      'gpt-4-turbo', 'gpt-4-turbo-2024-04-09',
+      'gpt-4-0125-preview', 'gpt-4-1106-preview', 'gpt-4-vision-preview',
       
-      // النماذج القديمة
-      'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k'
+      // النماذج الأساسية
+      'gpt-3.5-turbo', 'gpt-3.5-turbo-0125', 'gpt-3.5-turbo-1106', 'gpt-3.5-turbo-instruct',
+      
+      // نماذج تجريبية
+      'gpt-4-vision-preview'
     ]
   },
   
@@ -149,6 +153,47 @@ const aiSettingsSchema = new mongoose.Schema({
     ]
   },
   
+  // إعدادات خيارات OpenAI المحدثة
+  seed: {
+    type: Number,
+    default: null,
+    description: 'قيمة عشوائية للتحكم في قدر معين من الاتساق في الإخراج'
+  },
+  responseFormat: {
+    type: String,
+    enum: ['text', 'json_object', null],
+    default: null,
+    description: 'تنسيق الاستجابة المطلوب'
+  },
+  stream: {
+    type: Boolean,
+    default: false,
+    description: 'ما إذا كان سيتم بث الرد عبر تقنية Server-Sent Events'
+  },
+  
+  // إضافة معرّف المستخدم للتتبع من OpenAI
+  userIdentifier: {
+    type: String,
+    default: null,
+    description: 'معرّف المستخدم النهائي للمساعدة في مراقبة سوء الاستخدام'
+  },
+  
+  // إعدادات نماذج الاستجابات الجديدة
+  truncation: {
+    type: String,
+    enum: ['disabled', 'auto', null],
+    default: 'disabled',
+    description: 'خيار تحديد كيفية تعامل النظام مع النصوص الطويلة'
+  },
+  
+  // إعدادات للأدوات والوظائف
+  toolChoice: {
+    type: String,
+    enum: ['none', 'auto', 'required', null],
+    default: 'auto',
+    description: 'كيفية اختيار النموذج للأدوات'
+  },
+  
   // من قام بتحديث الإعدادات
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -189,7 +234,25 @@ aiSettingsSchema.statics.getSettings = async function() {
       conversationHistoryLimit: defaultHistoryLimit,
       previousConversationsLimit: defaultPreviousLimit,
       systemInstructions: process.env.AI_SYSTEM_INSTRUCTIONS || `أنت مساعد ذكاء اصطناعي مفيد في خدمة العملاء باسم "مساعد". 
-مهمتك مساعدة العملاء بلغة عربية فصيحة ومهذبة. استخدم لهجة احترافية ولطيفة.`
+مهمتك مساعدة العملاء بلغة عربية فصيحة ومهذبة. استخدم لهجة احترافية ولطيفة.`,
+
+      // الإعدادات الجديدة المحدثة
+      seed: process.env.AI_SEED || null,
+      responseFormat: process.env.AI_RESPONSE_FORMAT || null,
+      stream: process.env.AI_STREAM === 'true',
+      userIdentifier: process.env.AI_USER_IDENTIFIER || null,
+      truncation: process.env.AI_TRUNCATION || 'disabled',
+      toolChoice: process.env.AI_TOOL_CHOICE || 'auto',
+      
+      transferKeywords: Array.isArray(JSON.parse(process.env.AI_TRANSFER_KEYWORDS || '[]')) ? 
+        JSON.parse(process.env.AI_TRANSFER_KEYWORDS || '[]') : 
+        [
+          "تحدث مع مندوب",
+          "تكلم مع شخص حقيقي",
+          "أريد التحدث مع شخص",
+          "مساعدة من مندوب",
+          "تواصل مع مسؤول"
+        ]
     });
   }
   
@@ -198,4 +261,4 @@ aiSettingsSchema.statics.getSettings = async function() {
 
 const AISettings = mongoose.model('AISettings', aiSettingsSchema);
 
-module.exports = AISettings; 
+module.exports = AISettings;

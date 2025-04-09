@@ -260,7 +260,11 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
       conversationHistoryLimit,
       previousConversationsLimit,
       transferKeywords,
-      systemInstructions
+      systemInstructions,
+      seed,
+      responseFormat,
+      userIdentifier,
+      stream
     } = req.body;
     
     // الحصول على إعدادات الذكاء الاصطناعي أو إنشاء كائن جديد إذا لم تكن موجودة
@@ -299,6 +303,19 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     
     // تحديث تعليمات النظام
     aiSettings.systemInstructions = systemInstructions;
+    
+    // تحديث الإعدادات الجديدة
+    // تحديث بذرة العشوائية
+    aiSettings.seed = seed && seed.trim() !== '' ? parseInt(seed) : null;
+    
+    // تحديث تنسيق الاستجابة
+    aiSettings.responseFormat = responseFormat && responseFormat !== '' ? responseFormat : null;
+    
+    // تحديث معرّف المستخدم
+    aiSettings.userIdentifier = userIdentifier && userIdentifier.trim() !== '' ? userIdentifier : null;
+    
+    // تحديث خيار التدفق
+    aiSettings.stream = !!stream; // تحويل إلى boolean
     
     // تحديث مستخدم التحديث
     aiSettings.updatedBy = req.session.userId;

@@ -19,6 +19,12 @@ class ChatGptService {
     this.apiEndpoint = null;
     this.model = null;
     
+    // إعدادات الوسائط المتعددة
+    this.enableVisionSupport = true;
+    this.enableAudioSupport = true;
+    this.audioToTextModel = 'whisper-1';
+    this.textToSpeechModel = 'tts-1';
+    
     // إعدادات الجودة (سيتم تحميلها من قاعدة البيانات)
     this.temperature = null;
     this.maxTokens = null;
@@ -39,6 +45,17 @@ class ChatGptService {
     // حالة التهيئة
     this.initialized = false;
     this.aiUserId = null;
+    
+    // إعدادات محدثة
+    this.seed = null;
+    this.responseFormat = null;
+    this.stream = false;
+    this.userIdentifier = null;
+    this.truncation = 'disabled';
+    this.toolChoice = 'auto';
+    
+    // المعرف الفريد للاستجابة لتتبع التصحيح والاستعلام
+    this.lastRequestId = null;
   }
 
   /**
@@ -105,6 +122,14 @@ class ChatGptService {
         // تحميل كلمات التحويل
         this.transferKeywords = settings.transferKeywords || [];
         
+        // تحميل إعدادات جديدة
+        this.seed = settings.seed;
+        this.responseFormat = settings.responseFormat;
+        this.userIdentifier = settings.userIdentifier;
+        this.stream = settings.stream;
+        this.truncation = settings.truncation;
+        this.toolChoice = settings.toolChoice;
+        
         logger.info('chatGptService', 'تم تحميل إعدادات الذكاء الاصطناعي من قاعدة البيانات بنجاح');
         return true;
       } else {
@@ -124,24 +149,20 @@ class ChatGptService {
    * @returns {String} نقطة النهاية المناسبة للنموذج
    */
   determineApiEndpoint(model, defaultEndpoint) {
-    // نقطة النهاية الافتراضية إذا لم يتم تحديدها في الإعدادات
-    const fallbackEndpoint = defaultEndpoint || 'https://api.openai.com/v1/chat/completions';
-    
-    // تحديد النقطة بناءً على اسم النموذج
-    if (model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')) {
-      // جميع نماذج الدردشة والاستدلال الحالية تستخدم هذه النقطة
-      return 'https://api.openai.com/v1/chat/completions';
-    } else if (model.startsWith('whisper')) {
-      // نماذج تحويل الكلام إلى نص
+    // تعيين نقاط النهاية المخصصة للنماذج المختلفة
+    if (model.startsWith('dall-e')) {
+      // نماذج DALL-E للصور
+      return 'https://api.openai.com/v1/images/generations';
+    } else if (model === 'whisper-1') {
+      // نموذج Whisper لتحويل الصوت إلى نص
       return 'https://api.openai.com/v1/audio/transcriptions';
-    } else if (model.startsWith('tts')) {
-      // نماذج تحويل النص إلى كلام
+    } else if (model.startsWith('tts-')) {
+      // نماذج TTS لتحويل النص إلى صوت
       return 'https://api.openai.com/v1/audio/speech';
+    } else {
+      // النماذج النصية
+      return 'https://api.openai.com/v1/chat/completions';
     }
-    // يمكنك إضافة نقاط نهاية أخرى هنا إذا لزم الأمر (مثل التضمين)
-    
-    // إرجاع نقطة النهاية الافتراضية من الإعدادات أو الـ fallback
-    return fallbackEndpoint;
   }
 
   /**
@@ -384,9 +405,9 @@ class ChatGptService {
    * @returns {Boolean}
    */
   isVisionCapableModel(model) {
-    // قائمة النماذج المعروفة بدعم الرؤية
-    const visionModels = ['gpt-4o', 'gpt-4.5-preview', 'gpt-4-turbo']; // قد تحتاج للتحديث
-    return visionModels.some(vm => model.startsWith(vm));
+    // قائمة النماذج المعروفة بدعم الرؤية وفقاً لتوثيق OpenAI الرسمي
+    const visionModels = ['gpt-4o', 'gpt-4-vision-preview', 'gpt-4-turbo'];
+    return visionModels.some(vm => model.includes(vm));
   }
 
   /**
@@ -411,13 +432,16 @@ class ChatGptService {
    */
   async getChatGptResponse(formattedMessages) {
     try {
-      if (!this.initialized || !this.apiKey) {
-        throw new Error('لم يتم تهيئة خدمة الذكاء الاصطناعي بشكل صحيح');
+      // التحقق من تنسيق الرسائل
+      if (!Array.isArray(formattedMessages) || formattedMessages.length === 0) {
+        throw new Error('الرسائل المقدمة ليست مصفوفة أو أنها فارغة');
       }
 
-      // إعداد متغيرات الطلب
-      let apiUrl = this.apiEndpoint;
-      let data = {
+      // التحقق مما إذا كانت الرسائل تحتوي على صور
+      const containsImages = this.checkIfMessagesContainImages(formattedMessages);
+      
+      // الإعدادات الأساسية للطلب
+      const requestData = {
         model: this.model,
         messages: formattedMessages,
         temperature: this.temperature,
@@ -426,97 +450,252 @@ class ChatGptService {
         presence_penalty: this.presencePenalty,
         frequency_penalty: this.frequencyPenalty
       };
-
-      // تعديل هيكل الطلب حسب النموذج
-      if (this.model.startsWith('o1') || this.model.startsWith('o3')) {
-        // نماذج الاستدلال تستخدم بنية مختلفة للطلب
-        data = {
-          model: this.model,
-          input: {
-            messages: formattedMessages
-          },
-          temperature: this.temperature,
-          max_tokens: this.maxTokens,
-          top_p: this.topP,
-        };
+      
+      // إذا كان هناك صور، تأكد من استخدام نموذج يدعم الرؤية
+      if (containsImages && !this.isVisionCapableModel(this.model)) {
+        logger.warn('chatGptService', 'الرسائل تحتوي على صور ولكن النموذج المُحدد لا يدعم تحليل الصور');
+        
+        // تصفية محتوى الصور من الرسائل إذا كان النموذج لا يدعم الرؤية
+        requestData.messages = formattedMessages.map(msg => {
+          if (msg.content && Array.isArray(msg.content)) {
+            return {
+              ...msg,
+              content: msg.content
+                .filter(item => item.type !== 'image_url')
+                .map(item => item.text || '')
+                .join('\n')
+            };
+          }
+          return msg;
+        });
       }
       
-      // التحقق إذا كانت الرسائل تحتوي على صور والتأكد من دعم النموذج
-      const containsImages = this.checkIfMessagesContainImages(formattedMessages);
-      const supportsVision = this.isVisionCapableModel(this.model);
-      
-      if (containsImages && !supportsVision) {
-        logger.warn('chatGptService', `تم اكتشاف صور في الرسائل ولكن النموذج ${this.model} لا يدعم الرؤية. يفضل استخدام نموذج مثل gpt-4o.`);
+      // إضافة الخيارات المتقدمة إذا كانت متوفرة
+      if (this.seed !== null && this.seed !== undefined) {
+        requestData.seed = this.seed;
       }
       
-      logger.info('chatGptService', `إرسال طلب إلى OpenAI: نموذج=${this.model}, دعم الرؤية=${supportsVision}, تحتوي على صور=${containsImages}`);
+      if (this.responseFormat) {
+        requestData.response_format = { type: this.responseFormat };
+      }
+      
+      if (this.userIdentifier) {
+        requestData.user = this.userIdentifier;
+      }
+      
+      if (this.truncation && this.truncation !== 'disabled') {
+        requestData.truncation = this.truncation;
+      }
+      
+      if (this.toolChoice && this.toolChoice !== 'auto') {
+        requestData.tool_choice = this.toolChoice;
+      }
+      
+      // التحقق من خيار التدفق واستخدام التنفيذ المناسب
+      if (this.stream) {
+        return await this.getChatGptStreamingResponse(requestData);
+      }
+      
+      // إرسال الطلب إلى واجهة برمجة التطبيقات
+      logger.debug('chatGptService', 'إرسال طلب إلى OpenAI', {
+        apiEndpoint: this.apiEndpoint,
+        model: this.model,
+        messagesCount: formattedMessages.length,
+        containsImages
+      });
       
       const response = await axios.post(
-        apiUrl,
-        data,
+        this.apiEndpoint,
+        requestData,
         {
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
           }
         }
       );
       
-      // معالجة الاستجابة حسب نوع النموذج
-      if (this.model.startsWith('o1') || this.model.startsWith('o3')) {
-        // نماذج الاستدلال لها بنية استجابة مختلفة
-        if (response.data && response.data.output && response.data.output.message) {
-          return response.data.output.message.content;
-        }
-      } else {
-        // معالجة الاستجابة للنماذج القياسية
-        if (response.data && response.data.choices && response.data.choices.length > 0) {
-          // رد النموذج قد يكون محتوى نصيًا أو كائن محتوى
-          const message = response.data.choices[0].message;
-          
-          if (typeof message.content === 'string') {
-            return message.content;
-          } else if (Array.isArray(message.content)) {
-            // استخراج النصوص من كائن المحتوى المركب
-            return message.content
-              .filter(item => item.type === 'text')
-              .map(item => item.text)
-              .join('\n');
-          }
-        }
-      }
-
-      // إذا لم نجد الرد في أي من الحالات
-      throw new Error('لم يتم الحصول على رد من OpenAI');
+      // حفظ معرف الطلب للتصحيح
+      this.lastRequestId = response.headers['x-request-id'];
       
+      // استخراج الرد من استجابة OpenAI
+      const result = response.data;
+      
+      if (!result.choices || result.choices.length === 0) {
+        throw new Error('لم يتم استلام خيارات في الرد من OpenAI');
+      }
+      
+      const aiMessage = result.choices[0].message.content;
+      
+      // تسجيل المعلومات حول الاستخدام
+      logger.debug('chatGptService', 'استلام رد من OpenAI', {
+        tokens: result.usage,
+        modelUsed: result.model,
+        systemFingerprint: result.system_fingerprint || 'غير متوفر',
+        aiMessageLength: aiMessage ? aiMessage.length : 0,
+        requestId: this.lastRequestId
+      });
+      
+      return {
+        content: aiMessage,
+        model: result.model,
+        usage: result.usage,
+        systemFingerprint: result.system_fingerprint,
+        requestId: this.lastRequestId,
+        finishReason: result.choices[0].finish_reason
+      };
     } catch (error) {
-      const errorDetails = error.response?.data || error.message;
-      logger.error('chatGptService', `خطأ في الحصول على رد من OpenAI: ${JSON.stringify(errorDetails)}`);
-      return null;
+      // التعامل مع أخطاء API
+      const errorDetails = error.response?.data || { error: { message: error.message } };
+      const statusCode = error.response?.status || 500;
+      
+      logger.error('chatGptService', 'خطأ في الحصول على رد من OpenAI', {
+        error: errorDetails.error.message,
+        statusCode,
+        type: errorDetails.error.type || 'unknown',
+        requestId: error.response?.headers?.['x-request-id']
+      });
+      
+      throw new Error(`فشل في الحصول على رد من الذكاء الاصطناعي: ${errorDetails.error.message} (${statusCode})`);
     }
+  }
+  
+  /**
+   * التحقق مما إذا كانت الرسائل تحتوي على صور
+   * @param {Array} messages مصفوفة الرسائل
+   * @returns {Boolean} ما إذا كانت تحتوي على صور
+   */
+  checkIfMessagesContainImages(messages) {
+    return messages.some(msg => 
+      msg.content && Array.isArray(msg.content) && 
+      msg.content.some(item => item.type === 'image_url')
+    );
   }
 
   /**
-   * التحقق مما إذا كانت الرسائل تحتوي على صور
-   * @param {Array} messages الرسائل المنسقة
-   * @returns {Boolean}
+   * الحصول على رد من OpenAI بتقنية التدفق (Streaming)
+   * @param {Object} requestData بيانات الطلب المُعدة
+   * @returns {Promise<Object>} الرد المجمع من البيانات المتدفقة
    */
-  checkIfMessagesContainImages(messages) {
-    if (!messages || !Array.isArray(messages)) {
-      return false;
-    }
-    
-    for (const message of messages) {
-      if (message.content && Array.isArray(message.content)) {
-        for (const contentItem of message.content) {
-          if (contentItem.type === 'image_url') {
-            return true;
-          }
+  async getChatGptStreamingResponse(requestData) {
+    try {
+      // تكوين الطلب للتدفق
+      requestData.stream = true;
+      
+      // إرسال الطلب مع تحديد responseType كـ 'stream'
+      const response = await axios.post(
+        this.apiEndpoint,
+        requestData,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'stream'
         }
-      }
+      );
+      
+      // حفظ معرف الطلب للتصحيح
+      this.lastRequestId = response.headers['x-request-id'];
+      
+      return new Promise((resolve, reject) => {
+        let completeMessage = '';
+        let usageData = null;
+        let model = this.model;
+        let systemFingerprint = null;
+        let finishReason = null;
+        
+        // معالجة البيانات المتدفقة
+        response.data.on('data', (chunk) => {
+          try {
+            // تحويل البيانات المستلمة إلى نص
+            const chunkText = chunk.toString();
+            
+            // OpenAI يرسل البيانات كـ "data: {JSON}" لكل جزء
+            const lines = chunkText.split('\n').filter(line => line.trim() !== '');
+            
+            // معالجة كل سطر
+            for (const line of lines) {
+              // تخطي رسائل [DONE]
+              if (line.includes('[DONE]')) continue;
+              
+              // استخراج بيانات JSON
+              const jsonLine = line.replace(/^data: /, '').trim();
+              if (!jsonLine) continue;
+              
+              try {
+                const chunkData = JSON.parse(jsonLine);
+                
+                // تخزين معلومات النموذج والنظام إذا كانت متوفرة
+                if (chunkData.model) model = chunkData.model;
+                if (chunkData.system_fingerprint) systemFingerprint = chunkData.system_fingerprint;
+                
+                // تجميع محتوى الرسالة
+                if (chunkData.choices && chunkData.choices.length > 0) {
+                  const choice = chunkData.choices[0];
+                  
+                  // تجميع محتوى الرسالة من الخاصية delta للتدفق
+                  if (choice.delta && choice.delta.content) {
+                    completeMessage += choice.delta.content;
+                  }
+                  
+                  // حفظ بيانات الاستخدام إذا كانت متوفرة
+                  if (chunkData.usage) {
+                    usageData = chunkData.usage;
+                  }
+                  
+                  // حفظ سبب الإنهاء إذا وُجد
+                  if (choice.finish_reason) {
+                    finishReason = choice.finish_reason;
+                  }
+                }
+              } catch (parseError) {
+                logger.error('chatGptService', 'خطأ في تحليل بيانات التدفق', parseError);
+              }
+            }
+          } catch (chunkError) {
+            logger.error('chatGptService', 'خطأ في معالجة جزء البيانات', chunkError);
+          }
+        });
+        
+        // عند انتهاء التدفق
+        response.data.on('end', () => {
+          logger.debug('chatGptService', 'اكتمل تدفق رد OpenAI', {
+            messageLength: completeMessage.length,
+            modelUsed: model,
+            requestId: this.lastRequestId
+          });
+          
+          resolve({
+            content: completeMessage,
+            model: model,
+            usage: usageData,
+            systemFingerprint: systemFingerprint,
+            requestId: this.lastRequestId,
+            finishReason: finishReason
+          });
+        });
+        
+        // في حالة حدوث خطأ أثناء التدفق
+        response.data.on('error', (error) => {
+          logger.error('chatGptService', 'خطأ في تدفق رد OpenAI', error);
+          reject(new Error(`فشل في معالجة التدفق: ${error.message}`));
+        });
+      });
+    } catch (error) {
+      // التعامل مع أخطاء API
+      const errorDetails = error.response?.data || { error: { message: error.message } };
+      const statusCode = error.response?.status || 500;
+      
+      logger.error('chatGptService', 'خطأ في الحصول على رد متدفق من OpenAI', {
+        error: errorDetails.error?.message || error.message,
+        statusCode,
+        type: errorDetails.error?.type || 'unknown',
+        requestId: error.response?.headers?.['x-request-id']
+      });
+      
+      throw new Error(`فشل في الحصول على رد متدفق من الذكاء الاصطناعي: ${errorDetails.error?.message || error.message} (${statusCode})`);
     }
-    
-    return false;
   }
 
   /**
@@ -537,8 +716,9 @@ class ChatGptService {
       // التحقق من وجود وسائط صوتية وتفعيل الدعم
       if (mediaType === 'audio' && mediaUrl && this.enableAudioSupport) {
         let accessibleAudioUrl = mediaUrl;
-        // التحقق مما إذا كان الرابط معرف ميتا أو رابط داخلي
+        // التحقق مما إذا كان الرابط يحتوي على معرف ميتا أو رابط داخلي
         const isMetaIdAudio = /^\d+$/.test(accessibleAudioUrl) || (accessibleAudioUrl.includes('/') && /^\d+$/.test(accessibleAudioUrl.split('/').pop()));
+        
         if (isMetaIdAudio || !accessibleAudioUrl.startsWith('http')) {
           // إذا كان معرف، حاول بناء رابط API
           if (message._id) {
@@ -695,7 +875,7 @@ class ChatGptService {
       // إنشاء رسالة رد من الذكاء الاصطناعي
       const responseMessage = await WhatsappMessage.createOutgoingMessage(
         conversation._id,
-        aiResponse,
+        aiResponse.content,
         this.aiUserId
       );
       

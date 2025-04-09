@@ -49,9 +49,9 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
           conversation.status = 'assigned';
           await conversation.save();
           
-          // إرسال رسالة للعميل بأنه تم تحويله لمندوب بشري
+          // إرسال رسالة للعميل بأنه تم تحويله لمندوب خدمة عملاء
           const transferMessage = 'سيتم تحويلك الآن إلى مندوب خدمة عملاء للمساعدة.';
-          await sendAiResponseToCustomer(conversation, transferMessage);
+          await exports.sendAiResponseToCustomer(conversation, transferMessage);
         }
       } else if (shouldTransfer && conversation.assignedTo && 
                  conversation.assignedTo.toString() === chatGptService.aiUserId.toString()) {
@@ -62,7 +62,7 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
         
         // إرسال رسالة للعميل فقط
         const transferMessage = 'سنقوم بتحويلك إلى مندوب خدمة عملاء بشري في أقرب وقت. شكراً لصبرك.';
-        await sendAiResponseToCustomer(conversation, transferMessage);
+        await exports.sendAiResponseToCustomer(conversation, transferMessage);
       }
       
       return null;
@@ -72,49 +72,130 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
     logger.info('aiConversationController', 'معالجة رسالة واردة باستخدام الذكاء الاصطناعي', { 
       conversationId: conversation._id,
       messageId: message._id,
-      autoAssignAI: autoAssignAI
+      mediaType: message.mediaType || 'text'
     });
     
-    // تعيين المحادثة لمستخدم الذكاء الاصطناعي إذا لم تكن معينة وكان التعيين التلقائي مفعلاً
-    if (!conversation.assignedTo && autoAssignAI) {
+    // إذا لم تكن المحادثة معينة للذكاء الاصطناعي، قم بتعيينها
+    if (autoAssignAI && (!conversation.assignedTo || conversation.assignedTo.toString() !== chatGptService.aiUserId.toString())) {
       conversation.assignedTo = chatGptService.aiUserId;
       conversation.status = 'assigned';
       await conversation.save();
       
-      logger.info('aiConversationController', 'تم تعيين المحادثة تلقائياً للذكاء الاصطناعي', { 
-        conversationId: conversation._id
-      });
-    } else if (!conversation.assignedTo && !autoAssignAI) {
-      logger.info('aiConversationController', 'تم تجاوز التعيين التلقائي للذكاء الاصطناعي', { 
+      // إشعار الواجهة بتحديث المحادثة
+      socketService.emitToRoom(
+        'admin',
+        'conversation:updated',
+        {
+          _id: conversation._id,
+          assignedTo: chatGptService.aiUserId,
+          status: 'assigned'
+        }
+      );
+      
+      // إرسال رسالة ترحيب
+      const welcomeMessage = 'مرحباً! أنا المساعد الآلي وسأكون سعيداً بمساعدتك اليوم. كيف يمكنني خدمتك؟';
+      await exports.sendAiResponseToCustomer(conversation, welcomeMessage);
+    }
+    
+    // معالجة الرسالة واستخراج الرد من ChatGPT
+    // هذا سيقوم بإدارة الرد على الصور والملفات الصوتية أيضاً
+    logger.debug('aiConversationController', 'ما قبل معالجة chatGptService للرسالة', { 
+      messageId: message._id, 
+      hasContent: !!message.content, 
+      mediaType: message.mediaType || 'text' 
+    });
+    
+    // تهيئة متغيرات المعالجة
+    conversation.status = 'open';
+    let aiResponse;
+    let responseContentForWhatsapp;
+    
+    try {
+      // إرسال الرسالة إلى ChatGPT للحصول على رد
+      logger.info('aiConversationController', 'معالجة الرسالة باستخدام الذكاء الاصطناعي', {
         conversationId: conversation._id
       });
       
-      // المحادثة غير معينة للذكاء الاصطناعي ولا نرغب في التعيين التلقائي، لذا لا نعالج الرسالة
-      logger.info('aiConversationController', 'تجاوز معالجة الرسالة لأن المحادثة غير معينة للذكاء الاصطناعي', {
-        conversationId: conversation._id
-      });
+      // إذا كانت المحادثة غير معينة لأحد، قم بتعيينها للذكاء الاصطناعي
+      if (!conversation.assignedTo && autoAssignAI) {
+        conversation.assignedTo = chatGptService.aiUserId;
+        await conversation.save();
+      }
+      
+      // معالجة الرسالة ببرمجيات الذكاء الاصطناعي
+      aiResponse = await chatGptService.processIncomingMessage(conversation, message);
+      
+      if (!aiResponse) {
+        logger.warn('aiConversationController', 'لم يتم الحصول على رد من الذكاء الاصطناعي', {
+          conversationId: conversation._id
+        });
+        return null;
+      }
+      
+      // استخراج محتوى الرد من كائن الاستجابة
+      responseContentForWhatsapp = aiResponse.content;
+      
+      // تسجيل معلومات الرد وإحصائيات الاستخدام
+      if (aiResponse.usage) {
+        logger.info('aiConversationController', 'إحصائيات استخدام OpenAI', {
+          promptTokens: aiResponse.usage.prompt_tokens,
+          completionTokens: aiResponse.usage.completion_tokens,
+          totalTokens: aiResponse.usage.total_tokens,
+          model: aiResponse.model || chatGptService.model
+        });
+      }
+      
+      // إرسال الرد إلى العميل
+      await exports.sendAiResponseToCustomer(conversation, responseContentForWhatsapp);
+      
+      return aiResponse;
+      
+    } catch (error) {
+      logger.error('aiConversationController', 'خطأ أثناء معالجة رسالة الذكاء الاصطناعي', error);
+      
+      // إرسال رسالة خطأ بسيطة للعميل إذا فشلت المعالجة
+      const errorMessage = 'عذراً، حدث خطأ أثناء معالجة طلبك. سيتم توجيهك إلى مندوب خدمة عملاء في أقرب وقت.';
+      
+      try {
+        await exports.sendAiResponseToCustomer(conversation, errorMessage);
+      } catch (sendError) {
+        logger.error('aiConversationController', 'فشل في إرسال رسالة الخطأ للعميل', sendError);
+      }
+      
       return null;
     }
     
-    // التحقق من أن المحادثة معينة للذكاء الاصطناعي قبل معالجة الرسالة
-    if (!conversation.assignedTo || conversation.assignedTo.toString() !== chatGptService.aiUserId.toString()) {
-      logger.info('aiConversationController', 'تجاوز معالجة الرسالة لأن المحادثة غير معينة للذكاء الاصطناعي', {
+    // إذا كانت المحادثة معينة للذكاء الاصطناعي ولكنها لم تتم معالجتها، قم بإرسال رسالة اعتذار
+    if (conversation.status === 'abandoned') {
+      // تعيين المحادثة إلى مندوب بشري إذا فشل الذكاء الاصطناعي
+      logger.warn('aiConversationController', 'تعيين المحادثة إلى مندوب بشري بعد فشل الذكاء الاصطناعي', {
         conversationId: conversation._id
       });
-      return null;
+      
+      // تحديث المحادثة
+      conversation.status = 'unassigned';
+      conversation.assignedTo = null;
+      await conversation.save();
+      
+      // إشعار الواجهة
+      socketService.emitToRoom(
+        'admin',
+        'conversation:updated',
+        {
+          _id: conversation._id,
+          assignedTo: null,
+          status: 'unassigned'
+        }
+      );
+      
+      // إرسال رسالة اعتذار
+      const apologizeMessage = 'عذراً، أواجه بعض الصعوبات في التعامل مع طلبك. سأقوم بتحويلك إلى مندوب خدمة عملاء بشري في أقرب وقت ممكن.';
+      await exports.sendAiResponseToCustomer(conversation, apologizeMessage);
     }
     
-    // الحصول على رد الذكاء الاصطناعي (فقط إذا كانت المحادثة معينة للذكاء الاصطناعي)
-    const aiResponseMessage = await chatGptService.processIncomingMessage(conversation, message);
-    
-    if (aiResponseMessage && aiResponseMessage.content) {
-      // إرسال الرد إلى العميل عبر واتساب
-      await sendAiResponseToCustomer(conversation, aiResponseMessage.content, aiResponseMessage);
-    }
-    
-    return aiResponseMessage;
+    return null;
   } catch (error) {
-    logger.error('aiConversationController', 'خطأ في معالجة رسالة باستخدام الذكاء الاصطناعي', error);
+    logger.error('aiConversationController', 'خطأ في معالجة رسالة واردة للذكاء الاصطناعي', error);
     return null;
   }
 };
@@ -125,68 +206,51 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
  * @param {String} response نص الرد
  * @param {Object} existingMessage الرسالة الموجودة من chatGPT (اختياري)
  */
-async function sendAiResponseToCustomer(conversation, response, existingMessage = null) {
+exports.sendAiResponseToCustomer = async (conversation, response, existingMessage = null) => {
   try {
-    // 1. جلب معلومات القناة من المحادثة
-    const WhatsAppChannel = require('../models/WhatsAppChannel');
-    const channel = await WhatsAppChannel.findById(conversation.channelId);
-    
-    if (!channel) {
-      logger.error('aiConversationController', 'القناة غير موجودة', { conversationId: conversation._id });
+    if (!response || typeof response !== 'string' || !conversation) {
+      logger.error('aiConversationController', 'تم تمرير بيانات غير صالحة إلى sendAiResponseToCustomer', {
+        hasResponse: !!response, 
+        responseType: typeof response,
+        hasConversation: !!conversation
+      });
       return null;
     }
     
-    // 2. إرسال الرد عبر واتساب
-    const phoneNumber = conversation.phoneNumber;
+    const { phoneNumber, channelId, phoneNumberId } = conversation;
     
-    // --- بداية: جلب phoneNumberId الصحيح ---
-    let phoneNumberId = null;
-    const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
-    
-    if (channel && channel.settingsId) {
-      const settings = await MetaWhatsappSettings.findById(channel.settingsId).lean();
-      if (settings && settings.config && settings.config.phoneNumberId) {
-        phoneNumberId = settings.config.phoneNumberId;
-        logger.info('aiConversationController', 'تم تحديد رقم الهاتف للإرسال من القناة', { 
-          channelId: channel._id,
-          settingsId: channel.settingsId,
-          phoneNumberId
-        });
-      } else {
-        logger.warn('aiConversationController', 'لم يتم العثور على إعدادات أو phoneNumberId للقناة المرتبطة بالمحادثة', {
-          conversationId: conversation._id,
-          channelId: channel._id,
-          settingsId: channel.settingsId
-        });
-      }
-    } else {
-      logger.warn('aiConversationController', 'لم يتم العثور على settingsId في القناة لجلب phoneNumberId', {
-        conversationId: conversation._id,
-        channelId: conversation.channelId
+    if (!phoneNumber || !channelId) {
+      logger.error('aiConversationController', 'بيانات المحادثة غير مكتملة', {
+        phoneNumber,
+        channelId
       });
+      return null;
     }
     
-    // التحقق النهائي قبل الإرسال
-    if (!phoneNumberId) {
-      logger.error('aiConversationController', 'فشل في تحديد رقم هاتف الإرسال الصحيح للقناة', {
-        conversationId: conversation._id,
-        channelId: conversation.channelId
-      });
-      
-      // محاولة استخدام الرقم الافتراضي من المتغير المخزن في channel.phoneNumberId كاختيار ثانوي
-      phoneNumberId = channel.phoneNumberId || null;
-    }
-    // --- نهاية: جلب phoneNumberId الصحيح ---
+    // 1. إرسال الرسالة عبر WhatsApp
+    logger.debug('aiConversationController', 'جاري إرسال رسالة الذكاء الاصطناعي للعميل', {
+      phoneNumber, 
+      responseLength: response.length 
+    });
     
-    // استخدام خدمة ميتا لإرسال الرسالة مع تمرير phoneNumberId
-    const messageResult = await metaWhatsappService.sendTextMessage(
+    const channel = await metaWhatsappService.getChannelById(channelId);
+    
+    if (!channel) {
+      logger.error('aiConversationController', 'لم يتم العثور على قناة الواتس أب', {
+        channelId
+      });
+      return null;
+    }
+    
+    // إرسال الرسالة عبر API الواتس أب
+    const messageResult = await metaWhatsappService.sendTextMessage({
       phoneNumber,
-      response,
-      phoneNumberId
-    );
+      message: response,
+      phoneNumberId: phoneNumberId || channel.phoneNumberId
+    });
     
-    if (!messageResult) {
-      logger.error('aiConversationController', 'فشل في إرسال رد الذكاء الاصطناعي', { 
+    if (!messageResult || !messageResult.messages || messageResult.messages.length === 0) {
+      logger.error('aiConversationController', 'فشل في إرسال رسالة الذكاء الاصطناعي للعميل', {
         conversationId: conversation._id,
         channelId: channel._id,
         phoneNumber,
@@ -297,4 +361,4 @@ async function sendAiResponseToCustomer(conversation, response, existingMessage 
     logger.error('aiConversationController', 'خطأ في إرسال رد الذكاء الاصطناعي', error);
     return null;
   }
-} 
+}
