@@ -9,6 +9,7 @@ const MetaWhatsappSettings = require('../models/MetaWhatsappSettings');
 const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const logger = require('../services/loggerService');
 const mediaService = require('../services/mediaService');
+const WhatsappMessage = require('../models/WhatsappMessageModel');
 require('dotenv').config();
 
 /**
@@ -266,21 +267,34 @@ exports.getMediaContent = async (req, res) => {
     if (!mediaContent) {
       // logger.warn('whatsappMediaController', `لم يتم العثور على وسائط بالمعرف: ${mediaId}`);
       
-      // محاولة البحث عن الوسائط باستخدام معرف الرسالة
+      // محاولة البحث عن الوسائط باستخدام معرف الرسالة كخطة بديلة
       try {
         const message = await WhatsappMessage.findById(mediaId);
         if (message && message.mediaType) {
           const mediaFromMessage = await mediaService.findMediaForMessage(message);
           
           if (mediaFromMessage) {
-            // إعادة توجيه الطلب إلى معرف الوسائط الصحيح
-            return res.redirect(`/whatsapp/media/content/${mediaFromMessage._id}`);
+            // وجدنا الوسائط من خلال الرسالة، نعيد محتواها مباشرة
+            logger.info('whatsappMediaController', `تم العثور على وسائط بديلة ${mediaFromMessage._id} للطلب ${mediaId}`);
+            // نستدعي نفس المنطق لإرسال المحتوى، لكن باستخدام mediaFromMessage
+            if (mediaFromMessage.fileData) {
+              const fileData = mediaFromMessage.fileData;
+              const buffer = Buffer.from(fileData, 'base64');
+              res.set('Content-Type', mediaFromMessage.mimeType || 'application/octet-stream');
+              res.set('Content-Disposition', `inline; filename="${mediaFromMessage.fileName || 'file'}"`);
+              return res.send(buffer);
+            } else {
+              // لا يوجد محتوى بيانات، نرجع خطأ 404
+              logger.warn('whatsappMediaController', `الوسائط البديلة ${mediaFromMessage._id} لا تحتوي على بيانات`);
+              return res.status(404).json({ success: false, error: 'بيانات الوسائط البديلة غير متوفرة' });
+            }
           }
         }
       } catch (messageError) {
-        logger.debug('whatsappMediaController', 'خطأ في البحث عن الرسالة', { error: messageError.message });
+        logger.debug('whatsappMediaController', 'خطأ في البحث عن الرسالة كخطة بديلة', { error: messageError.message });
       }
       
+      // إذا لم نجد الوسائط بأي طريقة، نرجع خطأ 404
       return res.status(404).json({ success: false, error: 'لم يتم العثور على الوسائط المطلوبة' });
     }
     
