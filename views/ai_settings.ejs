@@ -326,6 +326,43 @@
         </div>
       </div>
 
+      <!-- إعدادات رسالة الترحيب -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-hand-sparkles"></i> إعدادات رسالة الترحيب الأولية</h2>
+        <p class="text-muted">تخصيص رسالة الترحيب التي يتم إرسالها تلقائيًا عند بدء محادثة جديدة.</p>
+        
+        <div class="row mb-3">
+          <div class="col-md-12">
+            <label for="greetingPrompt" class="form-label">نص التوجيه لإنشاء الترحيب (Prompt)</label>
+            <textarea class="form-control" id="greetingPrompt" name="greetingPrompt" rows="6"><%= aiSettings.greetingPrompt || 'مهمتك هي إنشاء رسالة ترحيب ودية وغير رسمية للعميل، كأنك تتحدث مع صديق.\nلا تتجاوز الرسالة سطرين أو ثلاثة كحد أقصى.\nابدأ بالسؤال عن حاله (مثال: كيف حالك؟ أو شخبارك؟).\nثم اسأله \"كيف نخدمك اليوم؟\".\nإذا كان الاسم عربياً، استخدم الاسم الأول فقط (مثال: \"حسام الدين\" يصبح \"حسام\").\nإذا كان الاسم بالإنجليزية، حاول استخدام المقابل العربي (مثال: \"Mohamed\" يصبح \"محمد\").\nتجنب تمامًا عبارة \"كيف يمكنني مساعدتك؟\" وأي عبارات رسمية أخرى.\nاستخدم رمز تعبيري (إيموجي) ودود في نهاية الرسالة.\nأجب باللغة العربية فقط وبلهجة بسيطة ومفهومة.' %></textarea>
+            <div class="form-text">اكتب التعليمات التي سيتبعها الذكاء الاصطناعي لإنشاء رسالة الترحيب. يمكنك استخدام متغيرات مثل `{customerName}` إذا أردت تضمين اسم العميل (سيتم استبداله بالاسم الأول).</div>
+          </div>
+        </div>
+        
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="greetingModel" class="form-label">النموذج المستخدم للترحيب</label>
+            <select class="form-select" id="greetingModel" name="greetingModel">
+              <option value="gpt-3.5-turbo" <%= aiSettings.greetingModel === 'gpt-3.5-turbo' ? 'selected' : '' %>>GPT-3.5 Turbo (أسرع وأقل تكلفة)</option>
+              <option value="gpt-4o-mini" <%= aiSettings.greetingModel === 'gpt-4o-mini' ? 'selected' : '' %>>GPT-4o Mini</option>
+              <option value="gpt-4o" <%= aiSettings.greetingModel === 'gpt-4o' ? 'selected' : '' %>>GPT-4o</option>
+              <!-- يمكنك إضافة نماذج أخرى إذا لزم الأمر -->
+            </select>
+            <div class="form-text">اختر نموذج الذكاء الاصطناعي لإنشاء رسالة الترحيب. النماذج الأبسط تكون كافية غالبًا وأقل تكلفة.</div>
+          </div>
+          <div class="col-md-6">
+            <label for="greetingTemperature" class="form-label">درجة إبداعية الترحيب (Temperature)</label>
+            <input type="range" class="form-range" id="greetingTemperature" name="greetingTemperature" min="0" max="2" step="0.1" value="<%= aiSettings.greetingTemperature || 0.8 %>">
+            <div class="d-flex justify-content-between">
+              <div>0 (أكثر دقة)</div>
+              <div id="greetingTemperatureValue"><%= aiSettings.greetingTemperature || 0.8 %></div>
+              <div>2 (أكثر إبداعًا)</div>
+            </div>
+            <div class="form-text">تتحكم في مدى إبداعية رسالة الترحيب. القيم الأعلى تجعلها ودودة أكثر.</div>
+          </div>
+        </div>
+      </div>
+      
       <!-- كلمات التحويل للمندوب البشري -->
       <div class="form-section">
         <h2 class="section-title"><i class="fas fa-exchange-alt"></i> كلمات التحويل للمندوب البشري</h2>
@@ -479,6 +516,17 @@
           window.location.href = '/settings/ai-settings-reset';
         }
       });
+
+      // تحديث قيمة درجة حرارة الترحيب
+      const greetingTempInput = document.getElementById('greetingTemperature');
+      const greetingTempValueSpan = document.getElementById('greetingTemperatureValue');
+      if (greetingTempInput && greetingTempValueSpan) {
+        greetingTempInput.addEventListener('input', function() {
+          greetingTempValueSpan.textContent = this.value;
+        });
+        // Ensure initial value is displayed correctly
+        greetingTempValueSpan.textContent = greetingTempInput.value; 
+      }
     });
   </script>
 </body>
