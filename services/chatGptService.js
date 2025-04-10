@@ -10,6 +10,8 @@ const User = require('../models/User');
 const AISettings = require('../models/ai-settings');
 const socketService = require('./socketService');
 const FormData = require('form-data');
+const notificationSocketService = require('./notificationSocketService');
+const ContactHelper = require('../utils/contactHelper');
 require('dotenv').config();
 
 class ChatGptService {
@@ -275,22 +277,21 @@ class ChatGptService {
   /**
    * تحويل سجل المحادثة إلى تنسيق مناسب لـ ChatGPT
    * @param {Array} messages مصفوفة من رسائل المحادثة
+   * @param {String} systemMessageContent محتوى رسالة النظام
    * @param {Object} customerInfo معلومات العميل (اختياري)
    * @param {Array} previousConversations سجل المحادثات السابقة (اختياري)
    */
-  formatMessagesForChatGPT(messages, customerInfo = null, previousConversations = []) {
+  formatMessagesForChatGPT(messages, systemMessageContent) {
     const formattedMessages = [];
     
-    // إنشاء رسالة النظام مع معلومات العميل وسجل المحادثات السابقة
-    const systemMessageContent = this.buildSystemMessage(customerInfo, previousConversations);
-    
+    // إضافة رسالة النظام
+    formattedMessages.push({ role: 'system', content: systemMessageContent });
+
     // تسجيل التصحيح لرسالة النظام النهائية
     logger.debug('chatGptService', 'استخدام رسالة النظام', {
       length: systemMessageContent.length,
       firstChars: systemMessageContent.substring(0, 80) + '...'
     });
-    
-    formattedMessages.push({ role: 'system', content: systemMessageContent });
 
     // إضافة رسائل المحادثة
     for (let i = 0; i < messages.length; i++) {
@@ -381,9 +382,9 @@ class ChatGptService {
    * بناء محتوى رسالة النظام
    * @param {Object} customerInfo معلومات العميل
    * @param {Array} previousConversations سجل المحادثات السابقة
-   * @returns {String} محتوى رسالة النظام
+   * @returns {Promise<String>} محتوى رسالة النظام
    */
-  buildSystemMessage(customerInfo, previousConversations) {
+  async buildSystemMessage(customerInfo, previousConversations) {
     // التأكد من أن تعليمات النظام هي نص صالح وغير فارغ
     let systemMessage = (this.systemInstructions && this.systemInstructions.trim()) 
       ? this.systemInstructions 
@@ -411,6 +412,30 @@ class ChatGptService {
         const expiryDate = new Date(customerInfo.subscriptionExpiryDate);
         systemMessage += `\n- تاريخ انتهاء الاشتراك: ${expiryDate.toISOString().split('T')[0]}`;
       }
+    }
+
+    // إضافة معلومات المندوبين المتاحين
+    try {
+      const agents = await this.getEligibleUsers();
+      if (agents && agents.length > 0) {
+        systemMessage += `\n\nقائمة المندوبين المتاحين للمساعدة:`;
+        agents.forEach((agent, index) => {
+          systemMessage += `\n- المندوب #${index + 1}: ${agent.full_name || agent.username} (${agent.user_role === 'admin' ? 'مدير' : 'مندوب'})`;
+        });
+        
+        // تعليمات واضحة حول كيفية تحويل المحادثة للمندوب المطلوب
+        systemMessage += `\n\nإذا طلب العميل التحدث مع مندوب معين أو مع أي مندوب بشري، اتبع هذه الخطوات:
+1. اشرح للعميل أنك ستقوم بتحويله للمندوب المطلوب أو لمندوب متاح إذا لم يحدد شخصاً معيناً.
+2. استجب لأي استفسارات أخرى في الرسالة إذا وُجدت.
+3. أضف في نهاية ردك علامة خاصة تالية: [تحويل:اسم_المندوب] حيث اسم_المندوب هو الاسم الكامل للمندوب من القائمة أعلاه.
+
+مثال للرد:
+"سأقوم بتحويلك للتحدث مع المندوب أحمد حالاً، شكراً لانتظارك. [تحويل:أحمد]"
+
+لا تستخدم هذه العلامة إلا إذا طلب العميل بوضوح التحدث مع مندوب بشري أو مندوب محدد.`;
+      }
+    } catch (error) {
+      logger.error('chatGptService', 'خطأ في الحصول على المندوبين المتاحين للإرسال في رسالة النظام', error);
     }
 
     // إضافة ملخص المحادثات السابقة
@@ -824,12 +849,12 @@ class ChatGptService {
       // بناء رسائل المحادثة للإرسال إلى ChatGPT
       
       // إنشاء رسالة النظام باستخدام معلومات العميل المفصلة
-      const systemMessage = this.buildSystemMessage(customerInfo, previousConversations);
+      const systemMessageContent = await this.buildSystemMessage(customerInfo, previousConversations);
       
       // تحويل المحادثة إلى تنسيق مناسب لـ ChatGPT مع إضافة معلومات العميل
       const formattedMessages = this.formatMessagesForChatGPT(
         conversationHistory, 
-        systemMessage
+        systemMessageContent
       );
       
       // إرسال المحادثة إلى ChatGPT
@@ -846,6 +871,89 @@ class ChatGptService {
       
       // استخراج نص الرد من استجابة ChatGPT
       const responseContent = gptResponse.content.trim();
+      
+      // فحص إذا كان هناك طلب لتحويل المحادثة إلى مندوب معين
+      const transferPattern = /\[تحويل:(.*?)\]/;
+      const transferMatch = responseContent.match(transferPattern);
+      
+      if (transferMatch) {
+        const agentName = transferMatch[1].trim();
+        // الحصول على المندوبين المتاحين
+        const availableAgents = await this.getEligibleUsers();
+        
+        // البحث عن المندوب المطلوب
+        const agent = availableAgents.find(a => 
+          (a.full_name && a.full_name.includes(agentName)) || 
+          (a.username && a.username.includes(agentName))
+        );
+        
+        if (agent) {
+          logger.info('chatGptService', 'تم العثور على المندوب المطلوب للتحويل', {
+            agentName,
+            agentId: agent._id,
+            conversationId: conversation._id
+          });
+          
+          // تعيين المحادثة للمندوب المطلوب
+          conversation.assignedTo = agent._id;
+          conversation.status = 'assigned';
+          conversation.updatedAt = new Date();
+          await conversation.save();
+          
+          // إرسال إشعار بتحديث المحادثة (استخدام نفس الآلية التي يستخدمها النظام)
+          socketService.notifyConversationUpdate(conversation._id, {
+            type: 'assigned',
+            status: conversation.status,
+            assignedTo: agent._id,
+            assignedBy: this.aiUserId, // الإسناد تم بواسطة الذكاء الاصطناعي
+            // إضافة معلومات إضافية للإشعار
+            assignee: {
+              _id: agent._id,
+              username: agent.username,
+              full_name: agent.full_name
+            }
+          });
+          
+          // إرسال إشعار شخصي للمندوب
+          let customerName = 'العميل';
+          try {
+            customerName = ContactHelper.getServerDisplayName(conversation);
+          } catch (error) {
+            logger.error('chatGptService', 'خطأ في الحصول على اسم العميل المعروض', error);
+            // استخدام اسم العميل من المحادثة إذا كان موجوداً، وإلا رقم الهاتف
+            customerName = conversation.customerName || conversation.phoneNumber || 'العميل';
+          }
+          
+          socketService.notifyUser(agent._id, 'conversation_assigned', {
+            conversationId: conversation._id,
+            assignedBy: 'مساعد الذكاء الاصطناعي',
+            customerName: customerName,
+            phoneNumber: conversation.phoneNumber,
+            displayName: customerName
+          });
+          
+          // تحديث إشعارات المحادثة
+          await notificationSocketService.updateConversationNotifications(conversation._id, conversation);
+          
+          // حذف علامة التحويل من الرسالة
+          const cleanedResponse = responseContent.replace(transferPattern, '').trim();
+          
+          return {
+            content: cleanedResponse,
+            metadata: {
+              model: gptResponse.model,
+              usage: gptResponse.usage,
+              requestId: gptResponse.requestId,
+              transferredTo: agent.full_name || agent.username
+            }
+          };
+        } else {
+          logger.warn('chatGptService', 'لم يتم العثور على المندوب المطلوب للتحويل', {
+            requestedAgent: agentName,
+            availableAgentsCount: availableAgents.length
+          });
+        }
+      }
       
       // يمكن تخزين الرسالة في قاعدة البيانات هنا إذا لزم الأمر
       
