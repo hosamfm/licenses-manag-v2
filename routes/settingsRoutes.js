@@ -373,7 +373,14 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     // إعادة تهيئة خدمة الذكاء الاصطناعي
     // هذا يتطلب استدعاء خدمة الذكاء الاصطناعي وإعادة تحميل إعداداتها
     const chatGptService = require('../services/chatGptService');
+    console.log('إعادة تحميل إعدادات الذكاء الاصطناعي - قبل loadSettings()');
+    
+    // قبل إعادة تحميل الإعدادات، نحفظ حجم الرسائل المعالجة حاليًا
+    const currentProcessedSize = chatGptService.processedMessages ? chatGptService.processedMessages.size : 0;
+    
     const loadSuccess = await chatGptService.loadSettings();
+    console.log(`إعادة تحميل إعدادات الذكاء الاصطناعي - بعد loadSettings(): ${loadSuccess ? 'نجاح' : 'فشل'}`);
+    console.log(`حجم مجموعة الرسائل المعالجة قبل: ${currentProcessedSize}, بعد: ${chatGptService.processedMessages ? chatGptService.processedMessages.size : 'غير موجود'}`);
     
     if (!loadSuccess) {
       req.flash('warning', 'تم حفظ الإعدادات ولكن قد تكون هناك مشكلة في تحميلها. يرجى التحقق من سجلات النظام.');

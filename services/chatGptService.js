@@ -27,6 +27,9 @@ class ChatGptService {
     this.audioToTextModel = 'whisper-1';
     this.textToSpeechModel = 'tts-1';
     
+    // إضافة مجموعة لتتبع الرسائل التي تمت معالجتها لمنع المعالجة المزدوجة
+    this.processedMessages = new Set();
+    
     // إعدادات الجودة (سيتم تحميلها من قاعدة البيانات)
     this.temperature = null;
     this.maxTokens = null;
@@ -101,6 +104,9 @@ class ChatGptService {
    */
   async loadSettings() {
     try {
+      // حفظ حالة تتبع الرسائل المعالجة
+      const tempProcessedMessages = this.processedMessages ? new Set(this.processedMessages) : new Set();
+      
       // الحصول على إعدادات الذكاء الاصطناعي من قاعدة البيانات
       const settings = await AISettings.getSettings();
       
@@ -154,17 +160,25 @@ class ChatGptService {
         // تحميل الرسالة الافتراضية
         this.defaultResponse = settings.defaultResponse || 'مرحباً، كيف يمكنني مساعدتك؟';
         
+        // استعادة مجموعة الرسائل المعالجة
+        this.processedMessages = tempProcessedMessages;
+        
         // تسجيل معلومات مفصلة للتصحيح
         logger.info('chatGptService', 'تم تحميل إعدادات الذكاء الاصطناعي من قاعدة البيانات بنجاح', {
           model: this.model,
           hasSystemInstructions: this.systemInstructions ? 'نعم' : 'لا',
           systemInstructionsLength: this.systemInstructions ? this.systemInstructions.length : 0,
-          systemInstructionsPreview: this.systemInstructions ? `${this.systemInstructions.substring(0, 50)}...` : 'فارغة'
+          systemInstructionsPreview: this.systemInstructions ? `${this.systemInstructions.substring(0, 50)}...` : 'فارغة',
+          processedMessagesCount: this.processedMessages.size
         });
         
         return true;
       } else {
         logger.error('chatGptService', 'لم يتم العثور على إعدادات الذكاء الاصطناعي في قاعدة البيانات');
+        
+        // استعادة مجموعة الرسائل المعالجة
+        this.processedMessages = tempProcessedMessages;
+        
         return false;
       }
     } catch (error) {
@@ -773,6 +787,26 @@ class ChatGptService {
    */
   async processIncomingMessage(conversation, message) {
     try {
+      // التحقق مما إذا كانت هذه الرسالة تمت معالجتها بالفعل
+      if (message._id && this.processedMessages.has(message._id.toString())) {
+        logger.info('chatGptService', 'تجاهل رسالة تمت معالجتها بالفعل', {
+          messageId: message._id.toString(),
+          conversationId: conversation._id.toString()
+        });
+        return null;
+      }
+
+      // إضافة الرسالة إلى قائمة الرسائل المعالجة
+      if (message._id) {
+        this.processedMessages.add(message._id.toString());
+        
+        // تنظيف المجموعة إذا أصبحت كبيرة
+        if (this.processedMessages.size > 1000) {
+          const oldestItems = Array.from(this.processedMessages).slice(0, 200);
+          oldestItems.forEach(id => this.processedMessages.delete(id));
+        }
+      }
+      
       if (!this.initialized || !this.aiUserId) {
         await this.initialize();
       }

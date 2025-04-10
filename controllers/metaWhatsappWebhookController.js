@@ -656,44 +656,6 @@ exports.handleIncomingMessages = async (messages, meta) => {
 
         if (messageWithMedia) {
           await processNewMessage(messageWithMedia, conversationInstance, isNewConversation);
-          
-          // معالجة الذكاء الاصطناعي هنا (بعد نقله من processNewMessage)
-          if (messageWithMedia.direction === 'incoming') {
-            try {
-              const systemSettings = await SystemSettings.findOne() || {};
-              const aiEnabled = systemSettings.aiAssistantEnabled !== false;  // افتراضياً ممكّن
-              const autoAssignAI = systemSettings.autoAssignAI !== false;  // تعيين الذكاء الاصطناعي تلقائياً للمحادثات الجديدة
-
-              if (aiEnabled) {
-                logger.info('metaWhatsappWebhookController', 'إرسال الرسالة لمعالجة الذكاء الاصطناعي', {
-                  conversationId: conversationInstance._id,
-                  messageId: messageWithMedia._id,
-                  autoAssignAI: autoAssignAI
-                });
-                
-                // تمرير معلمة التعيين التلقائي إلى معالج الذكاء الاصطناعي
-                aiConversationController.processIncomingMessage(messageWithMedia, conversationInstance, autoAssignAI)
-                  .catch(error => {
-                    logger.error('metaWhatsappWebhookController', 'خطأ في معالجة الذكاء الاصطناعي', {
-                      conversationId: conversationInstance._id,
-                      messageId: messageWithMedia._id,
-                      error: error.message
-                    });
-                  });
-              } else {
-                logger.info('metaWhatsappWebhookController', 'تم تعطيل معالجة الذكاء الاصطناعي للرسائل الواردة', {
-                  conversationId: conversationInstance._id,
-                  messageId: messageWithMedia._id
-                });
-              }
-            } catch (aiError) {
-              logger.error('metaWhatsappWebhookController', 'خطأ عام في معالجة الرسالة الواردة', {
-                conversationId: conversationInstance._id,
-                messageId: messageWithMedia._id,
-                error: aiError.message
-              });
-            }
-          }
         }
       } catch (err) {
         logger.error('metaWhatsappWebhookController', 'خطأ في معالجة رسالة فردية', err);
@@ -771,6 +733,46 @@ async function processNewMessage(message, conversationInstance, isNewConversatio
     
     // إرسال إشعارات بالرسالة الجديدة للمستخدمين المعنيين
     notificationSocketService.sendMessageNotification(conversationInstance._id.toString(), message, conversationInstance);
+
+    // معالجة الذكاء الاصطناعي للرسائل الواردة
+    if (message.direction === 'incoming') {
+      try {
+        const systemSettings = await SystemSettings.findOne() || {};
+        const aiEnabled = systemSettings.aiAssistantEnabled !== false;  // افتراضياً ممكّن
+        const autoAssignAI = systemSettings.autoAssignAI !== false;  // تعيين الذكاء الاصطناعي تلقائياً للمحادثات الجديدة
+
+        if (aiEnabled) {
+          logger.info('metaWhatsappWebhookController', 'إرسال الرسالة لمعالجة الذكاء الاصطناعي', {
+            conversationId: conversationInstance._id,
+            messageId: message._id,
+            autoAssignAI: autoAssignAI
+          });
+          
+          // تمرير معلمة التعيين التلقائي إلى معالج الذكاء الاصطناعي
+          // نستخدم await هنا بدلاً من .catch للتعامل بشكل أفضل مع الأخطاء
+          try {
+            await aiConversationController.processIncomingMessage(message, conversationInstance, autoAssignAI);
+          } catch (aiProcessError) {
+            logger.error('metaWhatsappWebhookController', 'خطأ في معالجة الذكاء الاصطناعي', {
+              conversationId: conversationInstance._id,
+              messageId: message._id,
+              error: aiProcessError.message
+            });
+          }
+        } else {
+          logger.info('metaWhatsappWebhookController', 'تم تعطيل معالجة الذكاء الاصطناعي للرسائل الواردة', {
+            conversationId: conversationInstance._id,
+            messageId: message._id
+          });
+        }
+      } catch (aiError) {
+        logger.error('metaWhatsappWebhookController', 'خطأ عام في معالجة الرسالة الواردة', {
+          conversationId: conversationInstance._id,
+          messageId: message._id,
+          error: aiError.message
+        });
+      }
+    }
   } catch (error) {
     logger.error('metaWhatsappWebhookController', 'خطأ في معالجة الرسالة الجديدة', error);
   }
