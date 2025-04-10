@@ -313,7 +313,9 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     aiSettings.transferInstructions = transferInstructions;
     
     // تبسيط معالجة الحقول الأخرى
-    aiSettings.seed = seed && seed.trim() !== '' ? parseInt(seed) : null;
+    aiSettings.seed = seed && seed !== '' ? 
+      (typeof seed === 'string' ? parseInt(seed.trim()) : parseInt(seed)) 
+      : null;
     aiSettings.responseFormat = responseFormat && responseFormat !== '' ? responseFormat : null;
     aiSettings.userIdentifier = userIdentifier && userIdentifier.trim() !== '' ? userIdentifier.trim() : null;
     aiSettings.stream = !!stream;
