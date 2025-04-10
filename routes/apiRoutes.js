@@ -197,4 +197,8 @@ router.use('/balance', balanceRoutes);
 // إضافة استخدام مسارات الردود السريعة
 router.use('/quick-replies', quickReplyRoutes);
 
+// مسارات واجهة برمجة التطبيقات لجهات الاتصال
+const contactApiRoutes = require('./api/contactRoutes');
+router.use('/contacts', contactApiRoutes);
+
 module.exports = router;

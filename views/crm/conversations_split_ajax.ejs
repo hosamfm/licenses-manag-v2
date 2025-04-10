@@ -163,5 +163,177 @@
 
   <!-- عنصر الصوت للتنبيه عند وصول رسالة جديدة -->
   <audio id="messageSound" src="/sounds/new-message.mp3" preload="auto"></audio>
+  
+  <!-- نافذة منبثقة لعرض معلومات جهة الاتصال -->
+  <div class="modal fade" id="contactInfoModal" tabindex="-1" aria-labelledby="contactInfoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="contactInfoModalLabel">معلومات جهة الاتصال</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+        </div>
+        <div class="modal-body" id="contactInfoContent">
+          <!-- سيتم ملء هذا المحتوى بواسطة الجافاسكريبت -->
+        </div>
+        <div class="modal-footer">
+          <a href="#" class="btn btn-primary" id="viewContactDetailsBtn" style="display: none;">
+            <i class="fas fa-external-link-alt me-1"></i>
+            عرض تفاصيل الملف الكامل
+          </a>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // دالة عامة لفتح نافذة معلومات جهة الاتصال
+    // تخزين مؤقت لبيانات جهات الاتصال التي تم جلبها سابقًا
+    window.contactsCache = {};
+    
+    window.openContactInfoModal = function(contactId) {
+      if (!contactId) return;
+      
+      // عرض النافذة المنبثقة فورًا
+      $('#contactInfoModal').modal('show');
+      
+      // محاولة استرداد أي بيانات متوفرة عن العميل من صفحة المحادثة الحالية
+      let initialName = '';
+      let initialPhone = '';
+      
+      // البحث عن العنصر الذي تم النقر عليه للحصول على أي معلومات أولية
+      const nameElement = document.querySelector('.customer-name a[data-contact-id="'+contactId+'"]');
+      if (nameElement) {
+        initialName = nameElement.textContent.trim().replace(/\s*ⓘ\s*$/, '');
+      }
+      
+      // البحث عن رقم الهاتف في المحادثة إن وجد
+      const phoneElement = document.querySelector('.phoneNumber[data-contact-id="'+contactId+'"]');
+      if (phoneElement) {
+        initialPhone = phoneElement.textContent.trim();
+      }
+      
+      // عرض البيانات المتوفرة مبدئيًا
+      if (initialName) {
+        $('#contactInfoContent').html(`
+          <div class="text-center mb-3">
+            <div class="avatar-lg mx-auto">
+              <i class="fas fa-user-circle fa-4x text-primary"></i>
+            </div>
+            <h4 class="mt-2">${initialName}</h4>
+          </div>
+          <div class="contact-info-details">
+            ${initialPhone ? `
+            <div class="mb-2 row">
+              <div class="col-sm-4 text-muted">رقم الهاتف:</div>
+              <div class="col-sm-8 fw-bold" dir="ltr">${initialPhone}</div>
+            </div>` : ''}
+            <div class="text-center">
+              <div class="spinner-border spinner-border-sm text-primary" role="status">
+                <span class="visually-hidden">جاري تحميل التفاصيل...</span>
+              </div>
+              <small class="text-muted ms-2">جاري تحميل المعلومات الإضافية...</small>
+            </div>
+          </div>
+        `);
+      } else {
+        // إذا لم تتوفر بيانات أولية، عرض مؤشر التحميل
+        $('#contactInfoContent').html(`
+          <div class="text-center p-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+            <p class="mt-2">جاري تحميل معلومات جهة الاتصال...</p>
+          </div>
+        `);
+      }
+      
+      // تحديث زر عرض التفاصيل على الفور
+      $('#viewContactDetailsBtn').attr('href', `/crm/contacts/${contactId}`).show();
+      
+      // التحقق من وجود البيانات في التخزين المؤقت
+      if (window.contactsCache[contactId]) {
+        // استخدام البيانات المخزنة مؤقتًا
+        updateContactModalContent(window.contactsCache[contactId]);
+        return;
+      }
+      
+      // جلب معلومات جهة الاتصال من الخادم
+      fetch(`/api/contacts/${contactId}`)
+        .then(response => response.ok ? response.json() : Promise.reject('فشل جلب بيانات جهة الاتصال'))
+        .then(data => {
+          if (data.success && data.contact) {
+            // تخزين البيانات في الذاكرة المؤقتة
+            window.contactsCache[contactId] = data.contact;
+            // تحديث محتوى النافذة
+            updateContactModalContent(data.contact);
+          } else {
+            handleContactFetchError('تعذر تحميل معلومات جهة الاتصال. يرجى المحاولة مرة أخرى.');
+          }
+        })
+        .catch(error => {
+          console.error('خطأ في جلب معلومات جهة الاتصال:', error);
+          handleContactFetchError('حدث خطأ أثناء جلب معلومات جهة الاتصال. يرجى المحاولة مرة أخرى.');
+        });
+    };
+    
+    // دالة لتحديث محتوى النافذة المنبثقة
+    function updateContactModalContent(contact) {
+      $('#contactInfoContent').html(`
+        <div class="text-center mb-3">
+          <div class="avatar-lg mx-auto">
+            <i class="fas fa-user-circle fa-4x text-primary"></i>
+          </div>
+          <h4 class="mt-2">${contact.name}</h4>
+        </div>
+        
+        <div class="contact-info-details">
+          <div class="mb-2 row">
+            <div class="col-sm-4 text-muted">رقم الهاتف:</div>
+            <div class="col-sm-8 fw-bold" dir="ltr">${contact.phoneNumber}</div>
+          </div>
+          
+          <div class="mb-2 row">
+            <div class="col-sm-4 text-muted">البريد الإلكتروني:</div>
+            <div class="col-sm-8">${contact.email || 'غير محدد'}</div>
+          </div>
+          
+          <div class="mb-2 row">
+            <div class="col-sm-4 text-muted">الشركة:</div>
+            <div class="col-sm-8">${contact.company || 'غير محدد'}</div>
+          </div>
+        </div>
+      `);
+    }
+    
+    // دالة لمعالجة أخطاء جلب البيانات
+    function handleContactFetchError(errorMessage) {
+      // إضافة رسالة خطأ مع الاحتفاظ بأي معلومات أولية معروضة
+      const currentContent = $('#contactInfoContent').html();
+      if (currentContent.includes('spinner-border')) {
+        $('#contactInfoContent').html(`
+          <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            ${errorMessage}
+          </div>
+        `);
+      } else {
+        // إذا كانت هناك بيانات معروضة بالفعل، إضافة رسالة خطأ في الأسفل
+        $('#contactInfoContent').append(`
+          <div class="alert alert-warning mt-3">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            <small>${errorMessage}</small>
+          </div>
+        `);
+      }
+    }
+    
+    // إضافة مستمع الحدث للنقر على رابط معلومات جهة الاتصال
+    $(document).on('click', '.contact-info-link', function(e) {
+      e.preventDefault();
+      const contactId = $(this).data('contact-id');
+      window.openContactInfoModal(contactId);
+    });
+  </script>
 </body>
 </html>
