@@ -140,7 +140,14 @@ class ChatGptService {
         this.greetingModel = settings.greetingModel || 'gpt-3.5-turbo';
         this.greetingTemperature = settings.greetingTemperature !== undefined ? settings.greetingTemperature : 0.8;
 
-        logger.info('chatGptService', 'تم تحميل إعدادات الذكاء الاصطناعي من قاعدة البيانات بنجاح');
+        // تسجيل معلومات مفصلة للتصحيح
+        logger.info('chatGptService', 'تم تحميل إعدادات الذكاء الاصطناعي من قاعدة البيانات بنجاح', {
+          model: this.model,
+          hasSystemInstructions: this.systemInstructions ? 'نعم' : 'لا',
+          systemInstructionsLength: this.systemInstructions ? this.systemInstructions.length : 0,
+          systemInstructionsPreview: this.systemInstructions ? `${this.systemInstructions.substring(0, 50)}...` : 'فارغة'
+        });
+        
         return true;
       } else {
         logger.error('chatGptService', 'لم يتم العثور على إعدادات الذكاء الاصطناعي في قاعدة البيانات');
@@ -275,7 +282,14 @@ class ChatGptService {
     const formattedMessages = [];
     
     // إنشاء رسالة النظام مع معلومات العميل وسجل المحادثات السابقة
-    let systemMessageContent = this.buildSystemMessage(customerInfo, previousConversations);
+    const systemMessageContent = this.buildSystemMessage(customerInfo, previousConversations);
+    
+    // تسجيل التصحيح لرسالة النظام النهائية
+    logger.debug('chatGptService', 'استخدام رسالة النظام', {
+      length: systemMessageContent.length,
+      firstChars: systemMessageContent.substring(0, 80) + '...'
+    });
+    
     formattedMessages.push({ role: 'system', content: systemMessageContent });
 
     // إضافة رسائل المحادثة
@@ -354,6 +368,12 @@ class ChatGptService {
       }
     }
     
+    // تسجيل عدد الرسائل المنسقة للتصحيح
+    logger.debug('chatGptService', 'مجموع الرسائل المنسقة للمحادثة', {
+      totalMessages: formattedMessages.length,
+      systemMessagePresent: formattedMessages.length > 0 && formattedMessages[0].role === 'system'
+    });
+    
     return formattedMessages;
   }
 
@@ -364,7 +384,17 @@ class ChatGptService {
    * @returns {String} محتوى رسالة النظام
    */
   buildSystemMessage(customerInfo, previousConversations) {
-    let systemMessage = this.systemInstructions || 'أنت مساعد ذكي مفيد.'; // استخدام التعليمات من الإعدادات أو قيمة افتراضية بسيطة جداً
+    // التأكد من أن تعليمات النظام هي نص صالح وغير فارغ
+    let systemMessage = (this.systemInstructions && this.systemInstructions.trim()) 
+      ? this.systemInstructions 
+      : 'أنت مساعد ذكي مفيد.';
+    
+    // تسجيل تعليمات النظام المستخدمة للتصحيح
+    logger.debug('chatGptService', 'إعداد تعليمات النظام', {
+      systemInstructionsLength: systemMessage.length,
+      systemInstructionsFirst50Chars: systemMessage.substring(0, 50) + '...',
+      fromDefault: !this.systemInstructions || !this.systemInstructions.trim()
+    });
 
     // إضافة معلومات العميل إذا كانت متاحة
     if (customerInfo) {
