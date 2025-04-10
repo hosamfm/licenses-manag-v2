@@ -313,11 +313,30 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     aiSettings.transferInstructions = transferInstructions;
     
     // تبسيط معالجة الحقول الأخرى
-    aiSettings.seed = seed && seed !== '' ? 
-      (typeof seed === 'string' ? parseInt(seed.trim()) : parseInt(seed)) 
+    aiSettings.seed = seed ? 
+      (() => {
+        // التعامل مع seed كمصفوفة أو قيمة مفردة
+        const seedValue = Array.isArray(seed) ? seed[0] : seed;
+        // محاولة تحويل القيمة إلى رقم صحيح
+        const parsedSeed = parseInt(seedValue);
+        // التحقق مما إذا كانت نتيجة التحويل رقماً صالحاً
+        return isNaN(parsedSeed) ? null : parsedSeed;
+      })() 
       : null;
-    aiSettings.responseFormat = responseFormat && responseFormat !== '' ? responseFormat : null;
-    aiSettings.userIdentifier = userIdentifier && userIdentifier.trim() !== '' ? userIdentifier.trim() : null;
+      
+    // معالجة responseFormat (قد يكون مصفوفة)
+    aiSettings.responseFormat = responseFormat ? 
+      (Array.isArray(responseFormat) ? 
+        (responseFormat[0] || null) : responseFormat) 
+      : null;
+      
+    // معالجة userIdentifier (قد يكون مصفوفة)
+    aiSettings.userIdentifier = userIdentifier ? 
+      (Array.isArray(userIdentifier) ? 
+        (userIdentifier[0] ? userIdentifier[0].trim() : null) : 
+        (typeof userIdentifier === 'string' ? userIdentifier.trim() : userIdentifier))
+      : null;
+    
     aiSettings.stream = !!stream;
     
     // تحديث إعدادات رسالة الترحيب
