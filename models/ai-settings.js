@@ -113,85 +113,65 @@ const aiSettingsSchema = new mongoose.Schema({
   // تعليمات الذكاء الاصطناعي
   systemInstructions: {
     type: String,
-    default: `أنت مساعد ذكاء اصطناعي مفيد في خدمة العملاء باسم "مساعد". 
-مهمتك مساعدة العملاء بلغة عربية فصيحة ومهذبة. استخدم لهجة احترافية ولطيفة.`
+    default: null
   },
   
   // كلمات تحويل المحادثة لمندوب بشري
   transferKeywords: {
     type: [String],
-    default: [
-      // كلمات صريحة لطلب التحدث مع موظف
-      'أريد التحدث مع شخص',
-      'أريد التحدث إلى مندوب',
-      'تحويل إلى موظف',
-      'موظف حقيقي',
-      'انسان حقيقي',
-      'شخص حقيقي',
-      'تواصل مع موظف',
-      'مندوب خدمة',
-      'مساعدة بشرية',
-      'تحدث معي',
-      
-      // عبارات تعبر عن عدم الرضا
-      'مساعد غير مفيد',
-      'روبوت غبي',
-      'لا تفهمني',
-      'لم أفهم',
-      'لست مفيد',
-      'لم تجب على سؤالي',
-      
-      // طلبات خاصة قد تحتاج لتدخل بشري
-      'مشكلة معقدة',
-      'مشكلة في الفاتورة',
-      'أطلب استرداد المبلغ',
-      'إلغاء الطلب',
-      'شكوى',
-      'أود رفع شكوى',
-      'خطأ في الطلب',
-      'تأخير في التوصيل'
-    ]
+    default: ["تحدث مع مندوب", "تكلم مع شخص حقيقي", "أريد التحدث مع شخص", "مساعدة من مندوب", "تواصل مع مسؤول"]
   },
   
   // إعدادات خيارات OpenAI المحدثة
   seed: {
     type: Number,
-    default: null,
-    description: 'قيمة عشوائية للتحكم في قدر معين من الاتساق في الإخراج'
+    default: null
   },
   responseFormat: {
     type: String,
     enum: ['text', 'json_object', null],
-    default: null,
-    description: 'تنسيق الاستجابة المطلوب'
+    default: null
   },
   stream: {
     type: Boolean,
-    default: false,
-    description: 'ما إذا كان سيتم بث الرد عبر تقنية Server-Sent Events'
+    default: false
   },
   
   // إضافة معرّف المستخدم للتتبع من OpenAI
   userIdentifier: {
     type: String,
-    default: null,
-    description: 'معرّف المستخدم النهائي للمساعدة في مراقبة سوء الاستخدام'
+    default: null
   },
   
   // إعدادات نماذج الاستجابات الجديدة
   truncation: {
     type: String,
     enum: ['disabled', 'auto', null],
-    default: 'disabled',
-    description: 'خيار تحديد كيفية تعامل النظام مع النصوص الطويلة'
+    default: 'disabled'
   },
   
   // إعدادات للأدوات والوظائف
   toolChoice: {
     type: String,
     enum: ['none', 'auto', 'required', null],
-    default: 'auto',
-    description: 'كيفية اختيار النموذج للأدوات'
+    default: 'auto'
+  },
+  
+  // إعدادات رسالة الترحيب
+  greetingPrompt: {
+    type: String,
+    default: null
+  },
+  greetingModel: {
+    type: String,
+    default: 'gpt-3.5-turbo',
+    enum: ['gpt-3.5-turbo', 'gpt-4o-mini', 'gpt-4o']
+  },
+  greetingTemperature: {
+    type: Number,
+    default: 0.8,
+    min: 0,
+    max: 2
   },
   
   // من قام بتحديث الإعدادات
@@ -202,97 +182,30 @@ const aiSettingsSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 /**
- * الحصول على الإعدادات النشطة أو إنشاء إعدادات افتراضية إذا لم تكن موجودة
+ * الحصول على الإعدادات النشطة أو إنشاء إعدادات افتراضية
  */
 aiSettingsSchema.statics.getSettings = async function() {
   // البحث عن إعدادات موجودة
   let settings = await this.findOne();
   
-  // إذا لم تكن هناك إعدادات، قم بإنشاء إعدادات افتراضية
+  // إنشاء إعدادات افتراضية إذا لم تكن موجودة
   if (!settings) {
-    // القيم الافتراضية المناسبة
-    const defaultMaxTokens = Math.min(parseInt(process.env.AI_MAX_TOKENS || '800'), 4000);
-    const defaultHistoryLimit = Math.min(parseInt(process.env.AI_HISTORY_LIMIT || '15'), 50);
-    const defaultPreviousLimit = Math.min(parseInt(process.env.AI_PREVIOUS_CONVERSATIONS_LIMIT || '3'), 10);
-    
-    settings = await this.create({
+    // استخدام متغيرات البيئة إذا كانت متوفرة، وإلا سيتم استخدام القيم الافتراضية المحددة في المخطط
+    const data = {
       apiKey: process.env.OPENAI_API_KEY || 'YOUR_API_KEY_HERE',
-      apiEndpoint: process.env.OPENAI_API_ENDPOINT || 'https://api.openai.com/v1/chat/completions',
-      model: process.env.OPENAI_MODEL || 'gpt-4o',
+      apiEndpoint: process.env.OPENAI_API_ENDPOINT,
+      model: process.env.OPENAI_MODEL,
       
-      // إعدادات الوسائط المتعددة
-      enableVisionSupport: process.env.AI_ENABLE_VISION !== 'false',
-      enableAudioSupport: process.env.AI_ENABLE_AUDIO !== 'false',
-      audioToTextModel: process.env.AI_AUDIO_TO_TEXT_MODEL || 'whisper-1',
-      textToSpeechModel: process.env.AI_TEXT_TO_SPEECH_MODEL || 'tts-1',
-      
-      temperature: Math.min(Math.max(parseFloat(process.env.AI_TEMPERATURE || '0.7'), 0), 2),
-      maxTokens: defaultMaxTokens,
-      topP: Math.min(Math.max(parseFloat(process.env.AI_TOP_P || '0.9'), 0), 1),
-      presencePenalty: Math.min(Math.max(parseFloat(process.env.AI_PRESENCE_PENALTY || '0.6'), -2), 2),
-      frequencyPenalty: Math.min(Math.max(parseFloat(process.env.AI_FREQUENCY_PENALTY || '0.5'), -2), 2),
-      conversationHistoryLimit: defaultHistoryLimit,
-      previousConversationsLimit: defaultPreviousLimit,
-      systemInstructions: process.env.AI_SYSTEM_INSTRUCTIONS || `أنت مساعد ذكاء اصطناعي مفيد في خدمة العملاء باسم "مساعد". 
-مهمتك مساعدة العملاء بلغة عربية فصيحة ومهذبة. استخدم لهجة احترافية ولطيفة.`,
-
-      // الإعدادات الجديدة المحدثة
-      seed: process.env.AI_SEED || null,
-      responseFormat: process.env.AI_RESPONSE_FORMAT || null,
-      stream: process.env.AI_STREAM === 'true',
-      userIdentifier: process.env.AI_USER_IDENTIFIER || null,
-      truncation: process.env.AI_TRUNCATION || 'disabled',
-      toolChoice: process.env.AI_TOOL_CHOICE || 'auto',
-      
-      transferKeywords: (() => {
-        try {
-          const keywords = process.env.AI_TRANSFER_KEYWORDS;
-          if (!keywords) return [
-            "تحدث مع مندوب",
-            "تكلم مع شخص حقيقي",
-            "أريد التحدث مع شخص",
-            "مساعدة من مندوب",
-            "تواصل مع مسؤول"
-          ];
-          
-          // محاولة تحليل النص كـ JSON
-          try {
-            const parsed = JSON.parse(keywords);
-            if (Array.isArray(parsed)) return parsed;
-          } catch (e) {
-            // إذا فشل التحليل كـ JSON، نفترض أنه نص عادي
-            console.log(`تعذر تحليل transferKeywords كـ JSON، استخدام القيمة كنص عادي: ${e.message}`);
-          }
-          
-          // التعامل مع النص كقائمة مفصولة بفواصل
-          if (typeof keywords === 'string') {
-            if (keywords.includes(',')) {
-              return keywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
-            }
-            // إذا كانت كلمة واحدة، نضعها في مصفوفة
-            return [keywords.trim()];
-          }
-          
-          // إرجاع القيم الافتراضية إذا لم نتمكن من تحليل القيمة
-          return [
-            "تحدث مع مندوب",
-            "تكلم مع شخص حقيقي",
-            "أريد التحدث مع شخص",
-            "مساعدة من مندوب",
-            "تواصل مع مسؤول"
-          ];
-        } catch (e) {
-          console.error("خطأ أثناء معالجة transferKeywords:", e);
-          return [
-            "تحدث مع مندوب",
-            "تكلم مع شخص حقيقي",
-            "أريد التحدث مع شخص",
-            "مساعدة من مندوب",
-            "تواصل مع مسؤول"
-          ];
-        }
-      })()
-    });
+      // إعدادات أخرى يمكن تحميلها من متغيرات البيئة
+      systemInstructions: process.env.AI_SYSTEM_INSTRUCTIONS,
+      greetingPrompt: process.env.AI_GREETING_PROMPT
+    };
+    
+    // إزالة الحقول ذات القيمة undefined
+    Object.keys(data).forEach(key => data[key] === undefined && delete data[key]);
+    
+    // إنشاء إعدادات جديدة (سيتم استخدام القيم الافتراضية المحددة في المخطط للحقول غير المحددة)
+    settings = await this.create(data);
   }
   
   return settings;

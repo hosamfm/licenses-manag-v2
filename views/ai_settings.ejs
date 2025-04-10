@@ -334,7 +334,7 @@
         <div class="row mb-3">
           <div class="col-md-12">
             <label for="greetingPrompt" class="form-label">نص التوجيه لإنشاء الترحيب (Prompt)</label>
-            <textarea class="form-control" id="greetingPrompt" name="greetingPrompt" rows="6"><%= aiSettings.greetingPrompt || 'مهمتك هي إنشاء رسالة ترحيب ودية وغير رسمية للعميل، كأنك تتحدث مع صديق.\nلا تتجاوز الرسالة سطرين أو ثلاثة كحد أقصى.\nابدأ بالسؤال عن حاله (مثال: كيف حالك؟ أو شخبارك؟).\nثم اسأله \"كيف نخدمك اليوم؟\".\nإذا كان الاسم عربياً، استخدم الاسم الأول فقط (مثال: \"حسام الدين\" يصبح \"حسام\").\nإذا كان الاسم بالإنجليزية، حاول استخدام المقابل العربي (مثال: \"Mohamed\" يصبح \"محمد\").\nتجنب تمامًا عبارة \"كيف يمكنني مساعدتك؟\" وأي عبارات رسمية أخرى.\nاستخدم رمز تعبيري (إيموجي) ودود في نهاية الرسالة.\nأجب باللغة العربية فقط وبلهجة بسيطة ومفهومة.' %></textarea>
+            <textarea class="form-control" id="greetingPrompt" name="greetingPrompt" rows="6"><%= aiSettings.greetingPrompt || '' %></textarea>
             <div class="form-text">اكتب التعليمات التي سيتبعها الذكاء الاصطناعي لإنشاء رسالة الترحيب. يمكنك استخدام متغيرات مثل `{customerName}` إذا أردت تضمين اسم العميل (سيتم استبداله بالاسم الأول).</div>
           </div>
         </div>

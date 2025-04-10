@@ -264,7 +264,11 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
       seed,
       responseFormat,
       userIdentifier,
-      stream
+      stream,
+      // إعدادات رسالة الترحيب الجديدة
+      greetingPrompt,
+      greetingModel,
+      greetingTemperature
     } = req.body;
     
     // الحصول على إعدادات الذكاء الاصطناعي أو إنشاء كائن جديد إذا لم تكن موجودة
@@ -304,7 +308,6 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     // تحديث تعليمات النظام
     aiSettings.systemInstructions = systemInstructions;
     
-    // تحديث الإعدادات الجديدة
     // تحديث بذرة العشوائية
     aiSettings.seed = (() => {
       // إذا كان العنصر مصفوفة، نأخذ أول قيمة غير فارغة
@@ -365,6 +368,17 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
       // التعامل مع القيمة المفردة
       return !!stream;
     })();
+    
+    // تحديث إعدادات رسالة الترحيب
+    aiSettings.greetingPrompt = greetingPrompt;
+    
+    if (greetingModel) {
+      aiSettings.greetingModel = greetingModel;
+    }
+    
+    if (greetingTemperature !== undefined) {
+      aiSettings.greetingTemperature = Math.min(Math.max(parseFloat(greetingTemperature), 0), 2);
+    }
     
     // تحديث مستخدم التحديث
     aiSettings.updatedBy = req.session.userId;
