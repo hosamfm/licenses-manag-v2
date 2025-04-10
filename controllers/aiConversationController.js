@@ -31,42 +31,41 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
     const assignedToOtherAgent = conversation.assignedTo && 
                                 conversation.assignedTo.toString() !== chatGptService.aiUserId.toString();
     
-    if (shouldTransfer || assignedToOtherAgent) {
-      // إذا كانت المحادثة معينة بالفعل لمندوب آخر أو يجب تحويلها، لا تستخدم الذكاء الاصطناعي
-      logger.info('aiConversationController', 'تجاوز معالجة الذكاء الاصطناعي للرسالة الواردة', { 
+    // إذا كانت المحادثة معينة بالفعل لمندوب آخر، لا تستخدم الذكاء الاصطناعي
+    if (assignedToOtherAgent) {
+      logger.info('aiConversationController', 'تجاوز معالجة الذكاء الاصطناعي للرسالة الواردة - المحادثة معينة لمندوب آخر', { 
         conversationId: conversation._id,
-        shouldTransfer,
-        alreadyAssigned: !!conversation.assignedTo,
-        assignedToOtherAgent
+        alreadyAssigned: true,
+        assignedToOtherAgent: true
       });
-      
-      // إذا كان لدينا الكلمات المفتاحية لتحويل المحادثة وليست معينة بالفعل
-      if (shouldTransfer && !conversation.assignedTo) {
-        // تعيين المحادثة لمندوب بشري متاح
-        const humanAgent = await chatGptService.getAvailableHumanAgent();
-        if (humanAgent) {
-          // تحديث المحادثة وتعيينها للمندوب البشري
-          conversation.assignedTo = humanAgent._id;
-          conversation.status = 'assigned';
-          await conversation.save();
-          
-          // إرسال رسالة للعميل بأنه تم تحويله لمندوب خدمة عملاء
-          const transferMessage = 'سيتم تحويلك الآن إلى مندوب خدمة عملاء للمساعدة.';
-          await exports.sendAiResponseToCustomer(conversation, transferMessage);
-        }
-      } else if (shouldTransfer && conversation.assignedTo && 
-                 conversation.assignedTo.toString() === chatGptService.aiUserId.toString()) {
-        // المحادثة معينة للذكاء الاصطناعي ولكن تحتاج للتدخل البشري
-        logger.info('aiConversationController', 'المحادثة معينة للذكاء الاصطناعي ولكن تحتاج لتدخل بشري', {
-          conversationId: conversation._id
-        });
-        
-        // إرسال رسالة للعميل فقط
-        const transferMessage = 'سنقوم بتحويلك إلى مندوب خدمة عملاء بشري في أقرب وقت. شكراً لصبرك.';
-        await exports.sendAiResponseToCustomer(conversation, transferMessage);
-      }
-      
       return null;
+    }
+    
+    // إذا تم اكتشاف كلمة مفتاحية ولم تكن المحادثة معينة للذكاء الاصطناعي بعد
+    if (shouldTransfer && !conversation.assignedTo) {
+      // نعين المحادثة للذكاء الاصطناعي أولاً ليتمكن من معالجة الطلب
+      conversation.assignedTo = chatGptService.aiUserId;
+      conversation.status = 'assigned';
+      await conversation.save();
+      
+      // إشعار الواجهة بتحديث المحادثة
+      socketService.emitToRoom(
+        'admin',
+        'conversation:updated',
+        {
+          _id: conversation._id,
+          assignedTo: chatGptService.aiUserId,
+          status: 'assigned'
+        }
+      );
+    } 
+    // إذا كانت المحادثة معينة للذكاء الاصطناعي وتم اكتشاف كلمة مفتاحية
+    else if (shouldTransfer && conversation.assignedTo && 
+             conversation.assignedTo.toString() === chatGptService.aiUserId.toString()) {
+      // نترك الذكاء الاصطناعي يعالج الطلب
+      logger.info('aiConversationController', 'اكتشاف طلب تحويل المحادثة لمندوب بشري، سيتم معالجته بواسطة الذكاء الاصطناعي', {
+        conversationId: conversation._id
+      });
     }
     
     // معالجة الرسالة الواردة وإرسال رد الذكاء الاصطناعي
@@ -540,32 +539,24 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
  * التحقق مما إذا كان يجب تحويل المحادثة إلى مندوب بشري
  * @param {String} messageContent محتوى الرسالة
  * @returns {Boolean} إذا كان يجب تحويل المحادثة
+ * 
+ * ملاحظة: تستخدم هذه الدالة كلمات التحويل من إعدادات chatGptService والتي يتم تحميلها 
+ * مباشرة من قاعدة البيانات عبر نموذج AISettings بدلاً من استخدام قائمة ثابتة في الكود.
  */
 exports.shouldTransferToHuman = async (messageContent) => {
   try {
     if (!messageContent) return false;
     
-    // قائمة الكلمات المفتاحية التي تشير إلى الحاجة للتواصل مع مندوب بشري
-    const transferKeywords = [
-      'تحدث مع شخص',
-      'مساعدة بشرية',
-      'مندوب',
-      'خدمة عملاء',
-      'موظف',
-      'عميل بشري',
-      'وكيل',
-      'مشرف',
-      'تحويل',
-      'متخصص',
-      'مسؤول',
-      'مساعد حقيقي'
-    ];
-    
+    // استخدام كلمات التحويل من إعدادات chatGptService بدلاً من القائمة الثابتة
+    if (!chatGptService.initialized) {
+      await chatGptService.initialize();
+    }
+
     // تحويل النص إلى أحرف صغيرة للمقارنة
     const lowerCaseMessage = messageContent.toLowerCase();
-    
+
     // البحث عن الكلمات المفتاحية في الرسالة
-    for (const keyword of transferKeywords) {
+    for (const keyword of chatGptService.transferKeywords) {
       if (lowerCaseMessage.includes(keyword.toLowerCase())) {
         logger.info('aiConversationController', 'تم اكتشاف طلب للتحويل لمندوب بشري', { 
           keyword,

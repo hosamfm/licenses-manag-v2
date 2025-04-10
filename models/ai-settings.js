@@ -116,6 +116,12 @@ const aiSettingsSchema = new mongoose.Schema({
     default: null
   },
   
+  // تعليمات تحويل المحادثات إلى المندوبين
+  transferInstructions: {
+    type: String,
+    default: null
+  },
+  
   // كلمات تحويل المحادثة لمندوب بشري
   transferKeywords: {
     type: [String],

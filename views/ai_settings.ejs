@@ -383,6 +383,24 @@
         </div>
       </div>
 
+      <!-- تعليمات تحويل المحادثات إلى المندوبين -->
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-random"></i> تعليمات تحويل المحادثات</h2>
+        <p class="text-muted">حدد التعليمات التي سيتبعها الذكاء الاصطناعي عند التعامل مع طلبات تحويل المحادثة إلى المندوبين البشريين.</p>
+        
+        <div class="row mb-3">
+          <div class="col-md-12">
+            <div class="instructions-info">
+              <p><i class="fas fa-info-circle"></i> <strong>تعليمات:</strong> أضف تعليمات تفصيلية حول كيفية تعامل الذكاء الاصطناعي مع طلبات التحويل للمندوبين البشريين.</p>
+            </div>
+            <textarea class="form-control" id="transferInstructions" name="transferInstructions" rows="8"><%= aiSettings.transferInstructions || '' %></textarea>
+            <div class="form-text">
+              هذه التعليمات تستخدم لتوجيه الذكاء الاصطناعي حول كيفية التعامل مع طلبات التحويل. <strong>يرجى إضافة تعليمات مفصلة هنا</strong> لأن النظام لا يستخدم أي تعليمات افتراضية. تأكد من شرح عملية استخدام علامة [تحويل:اسم_المندوب] وأي خطوات أخرى ضرورية لعملية التحويل.
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- تعليمات النظام للذكاء الاصطناعي -->
       <div class="form-section">
         <h2 class="section-title"><i class="fas fa-brain"></i> تعليمات النظام للذكاء الاصطناعي</h2>

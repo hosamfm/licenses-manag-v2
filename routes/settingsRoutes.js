@@ -260,6 +260,7 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
       conversationHistoryLimit,
       previousConversationsLimit,
       transferKeywords,
+      transferInstructions,
       systemInstructions,
       seed,
       responseFormat,
@@ -307,6 +308,9 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     
     // تحديث تعليمات النظام
     aiSettings.systemInstructions = systemInstructions;
+    
+    // تحديث تعليمات التحويل
+    aiSettings.transferInstructions = transferInstructions;
     
     // تبسيط معالجة الحقول الأخرى
     aiSettings.seed = seed && seed.trim() !== '' ? parseInt(seed) : null;
