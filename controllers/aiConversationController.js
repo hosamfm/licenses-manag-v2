@@ -79,69 +79,96 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
     const assignToAI = autoAssignAI || 
                       (conversation.assignedTo && conversation.assignedTo.toString() === chatGptService.aiUserId.toString());
     
-    // إذا لم تكن المحادثة معينة للذكاء الاصطناعي، قم بتعيينها
-    if (autoAssignAI && (!conversation.assignedTo || conversation.assignedTo.toString() !== chatGptService.aiUserId.toString())) {
-      conversation.assignedTo = chatGptService.aiUserId;
-      conversation.status = 'assigned';
-      await conversation.save();
-      
-      // إشعار الواجهة بتحديث المحادثة
-      socketService.emitToRoom(
-        'admin',
-        'conversation:updated',
-        {
-          _id: conversation._id,
+    // تحميل معلومات العميل إذا كانت مطلوبة
+    let customerInfo = null;
+    const contactId = conversation.contactId;
+    if (contactId) {
+      try {
+        const Contact = require('../models/Contact');
+        const contact = await Contact.findById(contactId).lean();
+        if (contact) {
+          logger.debug('aiConversationController', 'تم تحميل معلومات العميل من جهة الاتصال', {
+            conversationId: conversation._id,
+            contactId: contactId,
+            customerName: contact.name
+          });
+          
+          customerInfo = {
+            name: contact.name,
+            phoneNumber: contact.phoneNumber,
+            email: contact.email || null,
+            company: contact.company || null,
+            notes: contact.notes || null
+          };
+        }
+      } catch (contactError) {
+        logger.error('aiConversationController', 'فشل في تحميل معلومات العميل من جهة الاتصال', {
+          error: contactError.message,
+          contactId,
+          conversationId: conversation._id
+        });
+      }
+    }
+    
+    // إذا لم يتم العثور على معلومات من جهة الاتصال، استخدم المعلومات المتوفرة في المحادثة
+    if (!customerInfo) {
+      customerInfo = {
+        name: conversation.customerName || '',
+        phoneNumber: conversation.phoneNumber
+      };
+    }
+
+    // معالجة المحادثات الجديدة - إرسال رسالة ترحيب إذا لزم الأمر
+    const isNewConversation = conversation.messageCount === 1 || !conversation.welcomeMessageSent;
+
+    // إرسال رسالة ترحيب فقط إذا:
+    // 1. كانت المحادثة جديدة (welcomeMessageSent غير موجود أو false)
+    // 2. لم يكن هناك وكيل معين بالفعل (غير الذكاء الاصطناعي)
+    // 3. كان التعيين التلقائي مفعلاً
+    if (isNewConversation && autoAssignAI && !conversation.welcomeMessageSent) {
+      try {
+        // تحديث المحادثة لمنع إرسال رسالة ترحيب مرة أخرى
+        await Conversation.findByIdAndUpdate(conversation._id, {
+          welcomeMessageSent: true,
           assignedTo: chatGptService.aiUserId,
           status: 'assigned'
-        }
-      );
-      
-      // استخدام معلومات العميل من جهة الاتصال المرتبطة بالمحادثة إن وجدت
-      let customerInfo = null;
-      
-      // التحقق من وجود معرف جهة اتصال في المحادثة وتحميل معلوماته
-      if (conversation.contactId) {
-        try {
-          const Contact = require('../models/Contact');
-          const contact = await Contact.findById(conversation.contactId).lean();
-          
-          if (contact) {
-            customerInfo = {
-              name: contact.name,
-              email: contact.email,
-              company: contact.company,
-              phoneNumber: contact.phoneNumber
-            };
-            
-            logger.debug('aiConversationController', 'تم تحميل معلومات العميل من جهة الاتصال', {
-              conversationId: conversation._id,
-              contactId: conversation.contactId,
-              customerName: customerInfo.name
-            });
-          }
-        } catch (error) {
-          logger.error('aiConversationController', 'خطأ في تحميل بيانات جهة الاتصال', {
+        });
+        
+        // تحديث النسخة المحلية من كائن المحادثة أيضاً
+        conversation.welcomeMessageSent = true;
+        conversation.assignedTo = chatGptService.aiUserId;
+        conversation.status = 'assigned';
+        
+        logger.info('aiConversationController', 'محادثة جديدة - إرسال رسالة ترحيب', {
+          conversationId: conversation._id,
+          customerName: customerInfo.name || 'غير معروف'
+        });
+        
+        // استدعاء خدمة الذكاء الاصطناعي لإنشاء رسالة استقبال مخصصة
+        const initialResponse = await chatGptService.getInitialGreeting(customerInfo.name);
+        
+        // إرسال الرد المخصص للعميل
+        await exports.sendAiResponseToCustomer(conversation, initialResponse);
+        
+        // لا نريد معالجة الرسالة مرتين في المحادثات الجديدة
+        // هذا هو المفتاح لحل المشكلة - نتجاهل الرسالة الأولى ونكتفي بالترحيب فقط
+        if (message.content && message.content.trim().length > 0) {
+          logger.debug('aiConversationController', 'تجاهل معالجة الرسالة الأولى بعد إرسال الترحيب', {
             conversationId: conversation._id,
-            contactId: conversation.contactId,
-            error: error.message
+            messageId: message._id,
+            messageContent: message.content.substring(0, 50) + (message.content.length > 50 ? '...' : '')
           });
         }
+        
+        // نعود هنا ولا نكمل المعالجة لتجنب الاستجابة المزدوجة
+        return { content: initialResponse };
+      } catch (welcomeError) {
+        logger.error('aiConversationController', 'خطأ في إرسال رسالة الترحيب', {
+          error: welcomeError.message,
+          conversationId: conversation._id
+        });
+        // نستمر في معالجة الرسالة في حالة فشل الترحيب
       }
-      
-      // إذا لم يتم العثور على معلومات من جهة الاتصال، استخدم المعلومات المتوفرة في المحادثة
-      if (!customerInfo) {
-        customerInfo = {
-          name: conversation.customerName || '',
-          phoneNumber: conversation.phoneNumber
-        };
-      }
-      
-      // إرسال رسالة أولى مخصصة بناءً على إعدادات النظام
-      // استدعاء خدمة الذكاء الاصطناعي لإنشاء رسالة استقبال مخصصة
-      const initialResponse = await chatGptService.getInitialGreeting(customerInfo.name);
-      
-      // إرسال الرد المخصص للعميل
-      await exports.sendAiResponseToCustomer(conversation, initialResponse);
     }
     
     // معالجة الرسالة واستخراج الرد من ChatGPT فقط إذا كان التعيين التلقائي مفعلاً أو المحادثة معينة للذكاء الاصطناعي بالفعل
@@ -170,7 +197,7 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
     
     return null;
   } catch (error) {
-    logger.error('aiConversationController', 'خطأ في معالجة رسالة واردة للذكاء الاصطناعي', error);
+    logger.error('aiConversationController', 'خطأ في معالجة رسالة واردة باستخدام الذكاء الاصطناعي', error);
     return null;
   }
 };

@@ -49,6 +49,10 @@ const conversationSchema = new mongoose.Schema({
     type: Date,
     default: Date.now // افتراضياً عند الإنشاء تكون مفتوحة
   },
+  welcomeMessageSent: { // إضافة حقل لتتبع إرسال رسالة الترحيب
+    type: Boolean,
+    default: false
+  },
   tags: [{ 
     type: String 
   }],
