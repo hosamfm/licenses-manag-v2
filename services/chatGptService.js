@@ -52,6 +52,9 @@ class ChatGptService {
     this.greetingModel = 'gpt-3.5-turbo';
     this.greetingTemperature = 0.8;
     
+    // الرسالة الافتراضية عند عدم وجود استجابة صالحة
+    this.defaultResponse = 'مرحباً، كيف يمكنني مساعدتك؟';
+    
     // حالة التهيئة
     this.initialized = false;
     this.aiUserId = null;
@@ -147,7 +150,10 @@ class ChatGptService {
         this.greetingPrompt = settings.greetingPrompt || null;
         this.greetingModel = settings.greetingModel || 'gpt-3.5-turbo';
         this.greetingTemperature = settings.greetingTemperature !== undefined ? settings.greetingTemperature : 0.8;
-
+        
+        // تحميل الرسالة الافتراضية
+        this.defaultResponse = settings.defaultResponse || 'مرحباً، كيف يمكنني مساعدتك؟';
+        
         // تسجيل معلومات مفصلة للتصحيح
         logger.info('chatGptService', 'تم تحميل إعدادات الذكاء الاصطناعي من قاعدة البيانات بنجاح', {
           model: this.model,

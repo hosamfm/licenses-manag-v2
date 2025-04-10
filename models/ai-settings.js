@@ -180,6 +180,12 @@ const aiSettingsSchema = new mongoose.Schema({
     max: 2
   },
   
+  // الرسالة الافتراضية عند عدم وجود استجابة صالحة
+  defaultResponse: {
+    type: String,
+    default: 'مرحباً، كيف يمكنني مساعدتك؟'
+  },
+  
   // من قام بتحديث الإعدادات
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,

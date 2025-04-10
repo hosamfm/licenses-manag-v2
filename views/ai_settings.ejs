@@ -485,6 +485,18 @@
         </div>
       </div>
 
+      <div class="form-section">
+        <h2 class="section-title"><i class="fas fa-comment-dots"></i> إعدادات الردود الافتراضية</h2>
+        
+        <div class="row mb-3">
+          <div class="col-md-12">
+            <label for="defaultResponse" class="form-label">الرسالة الافتراضية (عند وجود خطأ أو غياب الاستجابة)</label>
+            <input type="text" class="form-control" id="defaultResponse" name="defaultResponse" value="<%= aiSettings.defaultResponse || 'مرحباً، كيف يمكنني مساعدتك؟' %>">
+            <div class="form-text">رسالة تظهر للمستخدم في حال حدوث خطأ في استجابة الذكاء الاصطناعي</div>
+          </div>
+        </div>
+      </div>
+
       <div class="d-grid gap-2">
         <button type="submit" class="btn btn-ai btn-lg">
           <i class="fas fa-save"></i> حفظ إعدادات الذكاء الاصطناعي

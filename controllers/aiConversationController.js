@@ -383,7 +383,7 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
           hasContent: !!response.content,
           contentType: typeof response.content
         });
-        messageText = 'مرحباً، كيف يمكنني مساعدتك؟';
+        messageText = chatGptService.defaultResponse;
       }
       
     } else if (response) {
@@ -397,12 +397,12 @@ exports.sendAiResponseToCustomer = async (conversation, response, existingMessag
         logger.error('aiConversationController', 'فشل تحويل نص الرسالة إلى سلسلة نصية', {
           error: conversionError.message
         });
-        messageText = 'عذراً، حدث خطأ في معالجة الرسالة.';
+        messageText = chatGptService.defaultResponse;
       }
       
     } else {
       // الرد غير موجود
-      messageText = 'عذراً، لم يتم إنشاء رد.';
+      messageText = chatGptService.defaultResponse;
     }
     
     // إرسال الرسالة عبر خدمة ميتا واتساب

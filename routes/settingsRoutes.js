@@ -269,7 +269,9 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
       // إعدادات رسالة الترحيب الجديدة
       greetingPrompt,
       greetingModel,
-      greetingTemperature
+      greetingTemperature,
+      // الرسالة الافتراضية
+      defaultResponse
     } = req.body;
     
     // الحصول على إعدادات الذكاء الاصطناعي أو إنشاء كائن جديد إذا لم تكن موجودة
@@ -348,6 +350,11 @@ router.post('/settings/ai-detailed-settings', [isAuthenticated, checkRole(['admi
     
     if (greetingTemperature !== undefined) {
       aiSettings.greetingTemperature = Math.min(Math.max(parseFloat(greetingTemperature), 0), 2);
+    }
+    
+    // تحديث الرسالة الافتراضية
+    if (defaultResponse) {
+      aiSettings.defaultResponse = defaultResponse;
     }
     
     // تحديث مستخدم التحديث
