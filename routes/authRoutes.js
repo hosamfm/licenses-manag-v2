@@ -12,7 +12,7 @@ router.get('/auth/register', (req, res) => {
 // المسار الجديد لإنشاء المستخدمين من قبل admin, supervisor, supplier
 router.post('/auth/admin/register', isAuthenticated, checkRole(['admin', 'supervisor', 'supplier']), async (req, res) => {
   try {
-    const { username, password, confirmPassword, fullName, companyName, phoneNumber, userRole } = req.body;
+    const { username, password, confirmPassword, fullName, companyName, phoneNumber, userRole, email } = req.body;
 
     if (password !== confirmPassword) {
       return res.status(400).json({ error: 'Passwords do not match.' });
@@ -33,6 +33,7 @@ router.post('/auth/admin/register', isAuthenticated, checkRole(['admin', 'superv
     const user = await User.create({ 
       username: username.toLowerCase(), 
       password: hashedPassword, 
+      email: email,
       full_name: fullName, 
       company_name: companyName, 
       phone_number: phoneNumber, 
@@ -52,7 +53,7 @@ router.post('/auth/admin/register', isAuthenticated, checkRole(['admin', 'superv
 // المسارات الحالية
 router.post('/auth/register', async (req, res) => {
   try {
-    const { username, password, confirmPassword, fullName, companyName, phoneNumber } = req.body;
+    const { username, password, confirmPassword, fullName, companyName, phoneNumber, email } = req.body;
 
     if (password !== confirmPassword) {
       req.flash('error', 'Passwords do not match.');
@@ -74,6 +75,7 @@ router.post('/auth/register', async (req, res) => {
     const user = await User.create({ 
       username: username.toLowerCase(), 
       password: hashedPassword, 
+      email: email,
       full_name: fullName, 
       company_name: companyName, 
       phone_number: phoneNumber, 

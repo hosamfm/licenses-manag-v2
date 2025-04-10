@@ -444,6 +444,10 @@
             <label for="companyName" class="form-label">اسم الشركة</label>
             <input type="text" class="form-control" id="companyName" name="companyName" required>
           </div>
+          <div class="mb-3">
+            <label for="email" class="form-label">البريد الإلكتروني</label>
+            <input type="email" class="form-control" id="email" name="email" required>
+          </div>
           <% if (session.userRole === 'admin') { %>
             <div class="mb-3">
               <label for="userRole" class="form-label">دور المستخدم</label>
