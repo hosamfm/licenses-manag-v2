@@ -32,7 +32,12 @@ router.get('/my', ensureCanAccessConversations, (req, res) => {
 // 1) صفحة عرض المحادثات بأسلوب AJAX (صفحة عمودين)
 router.get('/ajax', ensureCanAccessConversations, conversationController.listConversationsAjax);
 
-// 2) جلب قائمة المحادثات للتحديث عبر AJAX
+// 2) جلب قائمة المحادثات للتحديث عبر AJAX (البحث المحسن)
+// يدعم البحث في:
+// - اسم العميل
+// - رقم الهاتف
+// - محتوى الرسائل
+// - جهات الاتصال المرتبطة
 router.get('/ajax/list', ensureCanAccessConversations, conversationController.listConversationsAjaxList);
 
 // 2.1) جلب محادثة واحدة محدثة باستخدام معرفها (للاحتياط في تحديثات السوكت)

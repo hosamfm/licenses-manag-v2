@@ -1008,18 +1008,6 @@ exports.listConversationsAjaxList = async (req, res) => {
       // 'all' - لا تضيف شرط فلترة
     }
     
-    // 3. معالجة البحث النصي
-    if (search && search.trim() !== '') {
-      const searchTerm = search.trim();
-      const regex = new RegExp(searchTerm, 'i'); // بحث غير حساس لحالة الأحرف
-
-      filterOptions.$or = [
-        { customerName: regex },
-        { phoneNumber: regex }
-        // يمكن إضافة حقول أخرى للبحث عند الحاجة
-      ];
-    }
-    
     // إعداد خيارات التصفح
     const paginationOptions = {
       limit: 50,
@@ -1027,6 +1015,84 @@ exports.listConversationsAjaxList = async (req, res) => {
       sort: { lastMessageAt: -1 } // الترتيب حسب آخر رسالة
     };
 
+    // 3. معالجة البحث النصي - تحسين منطق البحث
+    if (search && search.trim() !== '') {
+      const searchTerm = search.trim();
+      const regex = new RegExp(searchTerm, 'i'); // بحث غير حساس لحالة الأحرف
+      
+      // مجموعة من المحادثات المطابقة للبحث
+      let matchingConversationIds = new Set();
+      
+      // أ) البحث في الحقول الأساسية للمحادثة
+      const basicMatches = await Conversation.find({
+        $or: [
+          { customerName: regex },
+          { phoneNumber: regex }
+        ]
+      }).select('_id').lean();
+      
+      basicMatches.forEach(conv => matchingConversationIds.add(conv._id.toString()));
+      
+      // ب) البحث في محتوى الرسائل
+      const messageMatches = await WhatsappMessage.find({
+        content: regex,
+        // نبحث فقط في الرسائل النصية (نتجاهل الرسائل الصوتية والصور)
+        $or: [
+          { mediaType: { $exists: false } },
+          { mediaType: null }
+        ]
+      }).select('conversationId').lean();
+      
+      messageMatches.forEach(msg => {
+        if (msg.conversationId) {
+          matchingConversationIds.add(msg.conversationId.toString());
+        }
+      });
+      
+      // ج) البحث في جهات الاتصال المرتبطة
+      const Contact = require('../models/Contact');
+      const contactMatches = await Contact.find({
+        $or: [
+          { name: regex },
+          { phoneNumber: regex },
+          { email: regex },
+          { company: regex }
+        ]
+      }).select('_id phoneNumber').lean();
+      
+      // جلب المحادثات المرتبطة بجهات الاتصال المطابقة
+      if (contactMatches.length > 0) {
+        const contactIds = contactMatches.map(c => c._id);
+        const phoneNumbers = contactMatches.map(c => c.phoneNumber);
+        
+        const contactConversations = await Conversation.find({
+          $or: [
+            { contactId: { $in: contactIds } },
+            { phoneNumber: { $in: phoneNumbers } }
+          ]
+        }).select('_id').lean();
+        
+        contactConversations.forEach(conv => {
+          matchingConversationIds.add(conv._id.toString());
+        });
+      }
+      
+      // إذا وجدنا نتائج بحث، نضيف فلتر للمعرفات
+      if (matchingConversationIds.size > 0) {
+        // تحويل المجموعة إلى مصفوفة من ObjectId
+        const matchingIds = Array.from(matchingConversationIds).map(id => 
+          mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+        );
+        
+        filterOptions._id = { $in: matchingIds };
+      } else {
+        // إذا لم نجد نتائج، نعيد مصفوفة فارغة مباشرة
+        return res.json({
+          success: true,
+          conversations: []
+        });
+      }
+    }
     
     // استخدام خدمة المحادثات للحصول على قائمة المحادثات
     const result = await conversationService.getConversationsList(
@@ -1035,6 +1101,16 @@ exports.listConversationsAjaxList = async (req, res) => {
       true,  // تضمين آخر رسالة
       true   // تضمين عدد الرسائل غير المقروءة
     );
+    
+    // إضافة اسم العرض الموحد لكل محادثة
+    if (result.conversations && result.conversations.length > 0) {
+      result.conversations = result.conversations.map(conv => {
+        return {
+          ...conv,
+          displayName: ContactHelper.getServerDisplayName(conv)
+        };
+      });
+    }
     
     // إرجاع البيانات بصيغة JSON
     return res.json({
