@@ -122,7 +122,7 @@ async function renderConversationsList(options, req, res, viewName, pageTitle) {
       flashMessages: req.flash()
     });
   } catch (error) {
-    logger.error('conversationController', `خطأ في عرض ${pageTitle}`, error);
+    // logger.error('conversationController', `خطأ في عرض ${pageTitle}`, error);
     req.flash('error', 'حدث خطأ أثناء تحميل المحادثات');
     res.redirect('/');
   }
@@ -224,7 +224,7 @@ exports.assignConversation = async (req, res) => {
       : 'تم إلغاء إسناد المحادثة بنجاح');
     res.redirect(`/crm/conversations/${conversationId}`);
   } catch (error) {
-    logger.error('conversationController', 'خطأ في إسناد المحادثة', error);
+    // logger.error('conversationController', 'خطأ في إسناد المحادثة', error);
     req.flash('error', 'حدث خطأ أثناء محاولة إسناد المحادثة');
     res.redirect(`/crm/conversations/${req.params.conversationId || ''}`);
   }
@@ -314,7 +314,28 @@ exports.addInternalNote = async (req, res) => {
       message: 'تمت إضافة الملاحظة بنجاح',
       note: noteWithSender
     });
+
+    // logger.info('conversationController', `تمت إضافة ملاحظة داخلية إلى المحادثة ${conversationId}`);
+
+    // إشعار التحديثات عبر Socket.io
+    socketService.notifyConversationUpdate(conversationId, {
+      _id: noteMsg._id,
+      status: noteMsg.status,
+      assignedTo: noteMsg.assignedTo,
+      assignedBy: noteMsg.sentBy,
+      timestamp: noteMsg.timestamp,
+      content: noteMsg.content,
+      direction: 'internal',
+      externalMessageId: noteMsg.externalMessageId,
+      mediaType: noteMsg.mediaType,
+      fileName: noteMsg.fileName,
+      fileSize: noteMsg.fileSize,
+      sentBy: noteMsg.sentBy ? noteMsg.sentBy.toString() : null,
+      metadata: noteMsg.metadata || { senderInfo: {} }
+    });
+
   } catch (error) {
+    // logger.error('conversationController', 'خطأ في إضافة الملاحظة', error);
     res.status(500).json({ success: false, error: 'خطأ في إضافة الملاحظة', message: error.message });
   }
 };
@@ -355,6 +376,20 @@ exports.toggleConversationStatus = async (req, res) => {
 
     req.flash('success', newStatus === 'closed' ? 'تم إغلاق المحادثة' : 'تم فتح المحادثة');
     res.redirect(`/crm/conversations/${conversationId}`);
+
+    // logger.info('conversationController', `تم تغيير حالة المحادثة ${conversationId} إلى ${newStatus}`);
+
+    // إشعار التحديثات عبر Socket.io
+    socketService.notifyConversationUpdate(conversationId, {
+      _id: conversation._id,
+      status: conversation.status,
+      assignedTo: conversation.assignedTo,
+      assignedBy: conversation.assignedBy,
+      updatedAt: conversation.updatedAt,
+      closedAt: conversation.closedAt,
+      closedBy: conversation.closedBy
+    });
+
   } catch (error) {
     logger.error('conversationController', 'خطأ في تغيير حالة المحادثة', error);
     req.flash('error', 'حدث خطأ أثناء تغيير حالة المحادثة');
@@ -558,11 +593,6 @@ exports.replyToConversation = async (req, res) => {
       
       // التحقق من وجود وسائط
       if (mediaId && mediaType) {
-        // جلب معلومات الوسائط
-        // --- إزالة تعريف مكرر ---
-        // const whatsappMediaController = require('./whatsappMediaController');
-        // --- نهاية الإزالة ---
-        
         const media = await WhatsappMedia.findById(mediaId);
         
         if (!media) {
@@ -658,7 +688,6 @@ exports.replyToConversation = async (req, res) => {
         }
     }
     
-    // --- نهاية تحضير كائن الرسالة ---
 
     // إشعار Socket.io - اعتماداً على ما إذا كانت رداً أو رسالة عادية
     if (replyToMessageId) {
@@ -856,8 +885,8 @@ exports.listConversationsAjax = async (req, res) => {
       flashMessages: req.flash()
     });
   } catch (err) {
-    req.flash('error', 'حدث خطأ أثناء تحميل المحادثات (AJAX)');
-    res.redirect('/'); 
+    // logger.error('conversationController', 'خطأ في جلب قائمة المحادثات AJAX', error); // إزالة السطر
+    res.status(500).json({ success: false, error: 'حدث خطأ أثناء جلب المحادثات' });
   }
 };
 
@@ -916,8 +945,7 @@ exports.getConversationDetailsAjax = async (req, res) => {
           // return res.status(500).send('<div class="alert alert-danger">خطأ في معالجة مرفقات الرسائل.</div>');
         }
       } else {
-        // تسجيل تحذير إذا كانت الخدمة غير معرفة
-        // logger.warn('conversationController', 'mediaService أو processMessagesWithMedia غير معرفة في getConversationDetailsAjax');
+
       }
     }
 
@@ -938,8 +966,7 @@ exports.getConversationDetailsAjax = async (req, res) => {
           }
         });
       } else {
-        // إذا لم تكن الصفحة الأولى ولا توجد رسائل (نهاية المحادثة)، أرجع استجابة فارغة 200
-        // هذا يمنع استبدال المحتوى الحالي بقالب فارغ عند الوصول لنهاية التمرير
+
         return res.status(200).send('');
       }
     }
@@ -1048,39 +1075,11 @@ exports.listConversationsAjaxList = async (req, res) => {
         finalFilter = { $or: searchOrConditions };
       }
 
-      /* -- إزالة الجزء القديم الذي سبب المشكلة --
-      // دمج شروط البحث ($or) مع الفلاتر الأساسية ($and)
-      finalFilter = {
-        $and: [
-          filterOptions, 
-          { $or: searchConditions } // <--- كان هنا الخطأ المحتمل
-        ]
-      };
-      
-      if (Object.keys(filterOptions).length === 0) {
-         finalFilter = { $or: searchConditions };
-      }
-      */
-
     }
     // --- نهاية: تعديل منطق البحث ---
     
     // Log the final filter for debugging
     logger.info('conversationController', 'Final filter for conversation list:', JSON.stringify(finalFilter, null, 2)); // <-- ADD THIS LINE
-
-    /* --- إزالة الاستعلام التشخيصي المؤقت ---
-    // --- TEMPORARY DIAGNOSTIC QUERY ---
-    try {
-      const directResult = await Conversation.find(finalFilter)
-                                           .limit(50) // Use similar limits
-                                           .sort({ lastMessageAt: -1 }) // Use similar sort
-                                           .lean();
-      logger.info('conversationController', 'Direct query result count:', directResult.length);
-    } catch (directQueryError) {
-      logger.error('conversationController', 'Error during direct diagnostic query', directQueryError);
-    }
-    // --- END TEMPORARY DIAGNOSTIC QUERY ---
-    */
 
     // إعداد خيارات التصفح (تبقى كما هي)
     const paginationOptions = {
@@ -1132,14 +1131,6 @@ exports.closeConversation = async (req, res) => {
       return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
     }
 
-    // --- نقطة للتحقق من الصلاحيات --- 
-    // هنا يمكنك إضافة منطق للتحقق مما إذا كان المستخدم الحالي (userId)
-    // يمتلك الصلاحية لإغلاق هذه المحادثة (مثلاً، هل هو مشرف أو معين لهذه المحادثة؟)
-    // if (!userHasPermissionToClose(userId, conversation)) {
-    //   return res.status(403).json({ success: false, error: 'غير مصرح لك بإغلاق هذه المحادثة' });
-    // }
-    // -------
-
     const updatedConversation = await conversation.close(userId, reason, note);
 
     // إرسال إشعار بتحديث حالة المحادثة عبر Socket.io
@@ -1181,14 +1172,6 @@ exports.reopenConversation = async (req, res) => {
       return res.status(404).json({ success: false, error: 'المحادثة غير موجودة' });
     }
 
-    // --- نقطة للتحقق من الصلاحيات --- 
-    // هنا يمكنك إضافة منطق للتحقق مما إذا كان المستخدم الحالي (userId)
-    // يمتلك الصلاحية لإعادة فتح هذه المحادثة
-    // if (!userHasPermissionToReopen(userId, conversation)) {
-    //   return res.status(403).json({ success: false, error: 'غير مصرح لك بإعادة فتح هذه المحادثة' });
-    // }
-    // -------
-
     const updatedConversation = await conversation.reopen(userId);
 
     // إرسال إشعار بتحديث حالة المحادثة عبر Socket.io
@@ -1210,9 +1193,6 @@ exports.reopenConversation = async (req, res) => {
   }
 };
 
-/**
- * الحصول على قائمة المستخدمين المخولين للوصول إلى المحادثات
- */
 exports.getConversationHandlers = async (req, res) => {
   try {
     // البحث عن جميع المستخدمين النشطين الذين يملكون صلاحية الوصول للمحادثات
@@ -1232,17 +1212,14 @@ exports.getConversationHandlers = async (req, res) => {
       }))
     });
   } catch (error) {
-    logger.error('conversationController', 'خطأ في جلب قائمة مستخدمي المحادثات', error);
-    return res.status(500).json({ 
+    // logger.error('conversationController', 'خطأ في جلب قائمة مستخدمي المحادثات', error); // إزالة السطر
+    res.status(500).json({ 
       success: false, 
       error: 'حدث خطأ أثناء جلب قائمة المستخدمين' 
     });
   }
 };
 
-/**
- * API لتعيين المحادثة لمستخدم
- */
 exports.assignConversationAPI = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -1351,9 +1328,6 @@ exports.assignConversationAPI = async (req, res) => {
   }
 };
 
-/**
- * تعيين المحادثة للمستخدم الحالي (تعيين سريع)
- */
 exports.assignToMe = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -1434,9 +1408,6 @@ exports.assignToMe = async (req, res) => {
   }
 };
 
-/**
- * 5.1) إرجاع محادثة واحدة محدثة (للحل الاحتياطي في تحديثات السوكت)
- */
 exports.getSingleConversationAjax = async (req, res) => {
   try {
     const conversationId = req.params.id;
