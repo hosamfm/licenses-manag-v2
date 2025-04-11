@@ -12,6 +12,7 @@ const socketService = require('./socketService');
 const FormData = require('form-data');
 const notificationSocketService = require('./notificationSocketService');
 const ContactHelper = require('../utils/contactHelper');
+const aiKnowledgeService = require('./aiKnowledgeService');
 require('dotenv').config();
 
 class ChatGptService {
@@ -285,6 +286,15 @@ class ChatGptService {
    */
   async getConversationHistory(conversationId, limit = 10) {
     try {
+      if (!limit || limit <= 0) {
+        limit = 10; // قيمة افتراضية في حالة عدم تحديد حد أو تحديد قيمة غير صالحة
+      }
+      
+      logger.debug('chatGptService', 'جلب سجل المحادثة', {
+        conversationId,
+        requestedMessagesLimit: limit
+      });
+      
       // جلب آخر عدد محدد من الرسائل
       const messages = await WhatsappMessage.find({ conversationId })
         .sort({ timestamp: -1 })
@@ -293,7 +303,14 @@ class ChatGptService {
         .lean();
       
       // عكس ترتيب الرسائل لتكون من الأقدم للأحدث
-      return messages.reverse();
+      const sortedMessages = messages.reverse();
+      
+      logger.debug('chatGptService', 'تم جلب سجل المحادثة بنجاح', {
+        conversationId,
+        messagesCount: sortedMessages.length
+      });
+      
+      return sortedMessages;
     } catch (error) {
       logger.error('chatGptService', 'خطأ في جلب سجل المحادثة:', error);
       return [];
@@ -407,7 +424,7 @@ class ChatGptService {
   /**
    * بناء محتوى رسالة النظام
    * @param {Object} customerInfo معلومات العميل
-   * @param {Array} previousConversations سجل المحادثات السابقة
+   * @param {Array} previousConversations سجل المحادثات السابقة (غير مستخدم في المنطق الجديد)
    * @returns {Promise<String>} محتوى رسالة النظام
    */
   async buildSystemMessage(customerInfo, previousConversations) {
@@ -464,18 +481,6 @@ class ChatGptService {
       }
     } catch (error) {
       logger.error('chatGptService', 'خطأ في الحصول على المندوبين المتاحين للإرسال في رسالة النظام', error);
-    }
-
-    // إضافة ملخص المحادثات السابقة
-    if (previousConversations && previousConversations.length > 0) {
-      systemMessage += `\n\nملخص المحادثات السابقة:`;
-      previousConversations.forEach((conv, index) => {
-        systemMessage += `\n\nمحادثة #${index + 1} (${new Date(conv.startTime).toISOString().split('T')[0]})`;
-        systemMessage += `\n- بدأت بـ: "${conv.firstMessage.substring(0, 100)}${conv.firstMessage.length > 100 ? '...' : ''}"`;
-        systemMessage += `\n- انتهت بـ: "${conv.lastMessage.substring(0, 100)}${conv.lastMessage.length > 100 ? '...' : ''}"`;
-        systemMessage += `\n- عدد الرسائل: ${conv.messageCount}`;
-      });
-      systemMessage += `\n\nاستخدم هذه المعلومات للتعامل بشكل أفضل مع العميل وتذكر تفاصيل التواصل السابق إذا كان ذلك مناسباً.`;
     }
 
     return systemMessage;
@@ -814,13 +819,9 @@ class ChatGptService {
       // الحصول على معلومات العميل الكاملة من جهة الاتصال
       const customerInfo = await this.getCustomerInformation(conversation);
       
-      // الحصول على سجل المحادثات السابقة إذا كان ذلك ممكناً
-      const previousConversations = await this.getCustomerPreviousConversations(conversation.phoneNumber);
-      
       logger.info('chatGptService', 'معالجة رسالة واردة مع معلومات العميل', {
         conversationId: conversation._id,
-        customerName: customerInfo?.name || 'غير معروف',
-        previousConversationsCount: previousConversations?.length || 0
+        customerName: customerInfo?.name || 'غير معروف'
       });
       
       let messageContent = message.content;
@@ -896,8 +897,23 @@ class ChatGptService {
       
       // بناء رسائل المحادثة للإرسال إلى ChatGPT
       
-      // إنشاء رسالة النظام باستخدام معلومات العميل المفصلة
-      const systemMessageContent = await this.buildSystemMessage(customerInfo, previousConversations);
+      // إنشاء رسالة النظام باستخدام معلومات العميل المفصلة (بدون محادثات سابقة)
+      const baseSystemMessage = await this.buildSystemMessage(customerInfo, []);
+      
+      // تحسين رسالة النظام بإضافة معلومات من قاعدة المعرفة باستخدام البحث الذكي
+      const systemMessageContent = await aiKnowledgeService.enhanceSystemMessageWithKnowledge(
+        baseSystemMessage,
+        messageContent,
+        this.apiKey,
+        this.model
+      );
+      
+      // تسجيل معلومات لتصحيح الأخطاء
+      logger.debug('chatGptService', 'تم إثراء رسالة النظام بمعلومات من قاعدة المعرفة', {
+        originalLength: baseSystemMessage.length,
+        enhancedLength: systemMessageContent.length,
+        containsKnowledgeBase: systemMessageContent.includes('معلومات ذات صلة من قاعدة المعرفة')
+      });
       
       // تحويل المحادثة إلى تنسيق مناسب لـ ChatGPT مع إضافة معلومات العميل
       const formattedMessages = this.formatMessagesForChatGPT(
@@ -1068,15 +1084,32 @@ class ChatGptService {
   }
 
   /**
-   * جلب محادثات العميل السابقة باستخدام رقم الهاتف
+   * جلب رسائل إضافية من المحادثة الحالية (مستخدم في بناء السياق للذكاء الاصطناعي)
    * @param {String} phoneNumber رقم هاتف العميل
-   * @param {Number} limit عدد المحادثات الأقصى للجلب
-   * @returns {Array} سجل ملخص للمحادثات السابقة
+   * @param {Number} limit عدد الرسائل الإضافية للجلب
+   * @returns {Array} سجل بالرسائل السابقة الإضافية
    */
   async getCustomerPreviousConversations(phoneNumber, limit = 3) {
     try {
       if (!phoneNumber) return [];
       
+      const oldFunction = false; // تغيير إلى false للاستخدام الجديد
+      
+      // استخدام المنطق الجديد: جلب رسائل إضافية من نفس المحادثة
+      if (!oldFunction) {
+        // في هذه الحالة، نستخدم هذه الدالة فقط لتحضير بيانات لعرضها في رسالة النظام
+        // نحن لا نريد جلب رسائل فعلية هنا، لأن الرسائل يتم جلبها بواسطة getConversationHistory
+        // بدلاً من ذلك، سنرجع معلومات إحصائية لكي تستخدم في رسالة النظام
+        
+        logger.debug('chatGptService', 'استخدام منطق جديد لبناء سياق المحادثة', {
+          phoneNumber,
+          additionalMessagesLimit: limit
+        });
+        
+        return []; // نرجع مصفوفة فارغة لأن الرسائل الفعلية تُجلب من getConversationHistory
+      }
+      
+      // الكود القديم للاحتفاظ به مؤقتًا - سيتم حذفه لاحقاً
       // استدعاء نموذج المحادثات
       const Conversation = require('../models/Conversation');
       
@@ -1122,7 +1155,7 @@ class ChatGptService {
       
       return conversationSummaries;
     } catch (error) {
-      logger.error('chatGptService', 'خطأ في جلب محادثات العميل السابقة:', error);
+      logger.error('chatGptService', 'خطأ في جلب بيانات المحادثة السابقة:', error);
       return [];
     }
   }

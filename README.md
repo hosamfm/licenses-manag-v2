@@ -1,45 +1,54 @@
-# LicenseManager
+# نظام قاعدة المعرفة للذكاء الاصطناعي
 
-LicenseManager is a comprehensive web application for managing license requests. It enables users to create new license requests, manage existing licenses, update request statuses, and delete unwanted requests. The program is designed to streamline the license management process with an easy-to-use and secure user interface.
+## نظرة عامة
 
-## Overview
+يوفر هذا النظام قاعدة معرفة متكاملة مع خدمة الذكاء الاصطناعي (OpenAI) لتحسين الردود على استفسارات العملاء. يستخدم النظام آلية بحث ذكية تمكن الذكاء الاصطناعي من فهم سؤال العميل وإعادة صياغته لتحسين نتائج البحث.
 
-The application is built using Node.js for the backend, Express for routing, MongoDB as the database, and EJS for templating. The frontend utilizes HTML, CSS, and JavaScript to create an interactive user experience. The project structure includes models for user and license request data, routes for handling authentication and license management, and views for user interface components.
+## المكونات الرئيسية
 
-## Features
+1. **قاعدة المعرفة (AIKnowledgeBase)**
+   - نموذج بيانات لتخزين المعلومات المهيكلة
+   - واجهة مستخدم لإدارة المعلومات (إضافة، تعديل، حذف)
+   - إمكانية تحديد أولويات وتصنيفات للمعلومات
 
-- **User Authentication**: Secure login/logout functionality with user registration and Telegram account verification.
-- **Create License Requests**: Users can submit requests for new licenses or modifications to existing licenses.
-  - **Supported request types**:
-    - New License
-    - Additional License
-    - Temporary License
-    - Additional Feature Request
-    - Re-License
-    - Free License
-- **Manage Requests**: Admins can view all license requests, update their statuses, and delete them as needed.
-- **Interactive User Interface**: Easy navigation and immediate feedback on user actions.
-- **Integration with Telegram**: Sending license requests and receiving license details via Telegram.
-- **Data Validation**: Ensures the integrity of the data entered by users.
-- **Permissions and Role Management**: Different roles with varying levels of access (No Permissions, Representative, Supervisor, Admin, supplier).
-- **User Management**: Admins can add, delete users, and modify their roles and permissions.
+2. **خدمة البحث الذكي (aiKnowledgeService)**
+   - تحليل استفسارات العملاء باستخدام OpenAI
+   - إعادة صياغة الأسئلة للتعامل مع اللهجات المختلفة
+   - استخراج الكلمات المفتاحية وتحديد التصنيفات المناسبة
 
-## Getting started
+3. **تكامل الذكاء الاصطناعي (chatGptService)**
+   - معالجة المحادثات مع العملاء
+   - إثراء سياق المحادثة بالمعلومات ذات الصلة
+   - دعم الوسائط المتعددة (صور، صوتيات)
 
-### Requirements
+## آلية البحث الذكي
 
-- Node.js
-- MongoDB
-- Express
-- A Telegram bot token (for Telegram integration)
+تعتمد آلية البحث الذكي على الخطوات التالية:
 
-### Quickstart
+1. **تحليل السؤال**: يتم تحليل سؤال العميل باستخدام OpenAI لفهمه بغض النظر عن اللهجة أو طريقة الصياغة
+2. **إعادة الصياغة**: يتم إعادة صياغة السؤال باللغة العربية الفصحى لتحسين نتائج البحث
+3. **استخراج الكلمات المفتاحية**: يتم تحديد 4-6 كلمات مفتاحية أساسية في السؤال
+4. **تحديد التصنيف**: يتم تحديد التصنيف الأنسب للسؤال
+5. **بحث متعدد المسارات**: يتم إجراء بحث باستخدام الصياغة الجديدة والكلمات المفتاحية والتصنيف
+6. **دمج النتائج**: يتم دمج نتائج جميع مسارات البحث وترتيبها حسب الأولوية
 
-1. Clone the repository to your local machine.
-2. Install the necessary dependencies by running `npm install`.
-3. Copy `.env.example` to `.env` and fill in the required environment variables.
-4. Start the application using `npm start`. The application will be available on `http://localhost:3001`.
+## مزايا النظام الجديد
 
-### License
+- **فهم أفضل للهجات**: القدرة على فهم الأسئلة بمختلف اللهجات وأساليب الصياغة
+- **نتائج أكثر دقة**: تحسين دقة نتائج البحث من خلال فهم المقصود وليس النص الحرفي
+- **مرونة في التصنيف**: القدرة على تحديد التصنيف المناسب حتى مع عدم ذكره صراحة
+- **تجربة مستخدم أفضل**: ردود أكثر دقة وملاءمة لاستفسارات العملاء
 
-Copyright (c) 2024.
+## خطوات الاستخدام
+
+1. إضافة معلومات إلى قاعدة المعرفة من خلال واجهة `ai_knowledge_base.ejs`
+2. تحديد الكلمات المفتاحية والتصنيفات المناسبة
+3. تعيين مستوى الأولوية للمعلومات (1-10)
+4. سيقوم النظام تلقائيًا باستخدام هذه المعلومات لإثراء ردود الذكاء الاصطناعي
+
+## التحديثات المستقبلية المقترحة
+
+- تحسين خوارزمية الترتيب لنتائج البحث
+- إضافة دعم للبحث الدلالي (Semantic Search)
+- إمكانية تدريب نموذج خاص للبحث في قاعدة المعرفة
+- إضافة ميزة التعلم التلقائي من ردود العملاء والمندوبين

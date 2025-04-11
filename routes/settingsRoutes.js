@@ -14,6 +14,7 @@ const smsWebhookController = require('../controllers/smsWebhookController');
 const whatsappSettingsController = require('../controllers/whatsappSettingsController');
 const whatsappWebhookController = require('../controllers/whatsappWebhookController');
 const AISettings = require('../models/ai-settings');
+const aiKnowledgeBaseController = require('../controllers/aiKnowledgeBaseController');
 
 function handleError(req, res, error, message, redirectPath) {
   console.error(message, error.message, error.stack);
@@ -413,5 +414,13 @@ router.get('/settings/ai-settings-reset', [isAuthenticated, checkRole(['admin'])
     handleError(req, res, error, 'حدث خطأ أثناء إعادة تعيين إعدادات الذكاء الاصطناعي.', '/settings/ai-settings');
   }
 });
+
+// المسارات الخاصة بإدارة قاعدة المعرفة للذكاء الاصطناعي
+router.get('/settings/ai-knowledge-base', [isAuthenticated, checkRole(['admin'])], aiKnowledgeBaseController.showKnowledgeBasePage);
+router.post('/settings/ai-knowledge-base', [isAuthenticated, checkRole(['admin'])], aiKnowledgeBaseController.saveKnowledgeItem);
+router.get('/settings/ai-knowledge-base/item/:id', [isAuthenticated, checkRole(['admin'])], aiKnowledgeBaseController.getKnowledgeItem);
+router.get('/settings/ai-knowledge-base/toggle/:id', [isAuthenticated, checkRole(['admin'])], aiKnowledgeBaseController.toggleItemStatus);
+router.get('/settings/ai-knowledge-base/delete/:id', [isAuthenticated, checkRole(['admin'])], aiKnowledgeBaseController.deleteKnowledgeItem);
+router.get('/settings/ai-knowledge-base/search', [isAuthenticated, checkRole(['admin'])], aiKnowledgeBaseController.searchKnowledgeBase);
 
 module.exports = router;

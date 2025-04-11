@@ -79,44 +79,17 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
     const assignToAI = autoAssignAI || 
                       (conversation.assignedTo && conversation.assignedTo.toString() === chatGptService.aiUserId.toString());
     
-    // تحميل معلومات العميل إذا كانت مطلوبة
-    let customerInfo = null;
-    const contactId = conversation.contactId;
-    if (contactId) {
-      try {
-        const Contact = require('../models/Contact');
-        const contact = await Contact.findById(contactId).lean();
-        if (contact) {
-          logger.debug('aiConversationController', 'تم تحميل معلومات العميل من جهة الاتصال', {
-            conversationId: conversation._id,
-            contactId: contactId,
-            customerName: contact.name
-          });
-          
-          customerInfo = {
-            name: contact.name,
-            phoneNumber: contact.phoneNumber,
-            email: contact.email || null,
-            company: contact.company || null,
-            notes: contact.notes || null
-          };
-        }
-      } catch (contactError) {
-        logger.error('aiConversationController', 'فشل في تحميل معلومات العميل من جهة الاتصال', {
-          error: contactError.message,
-          contactId,
-          conversationId: conversation._id
-        });
-      }
-    }
+    // الحصول على معلومات العميل الكاملة من جهة الاتصال
+    const customerInfo = await this.getCustomerInformation(conversation);
     
-    // إذا لم يتم العثور على معلومات من جهة الاتصال، استخدم المعلومات المتوفرة في المحادثة
-    if (!customerInfo) {
-      customerInfo = {
-        name: conversation.customerName || '',
-        phoneNumber: conversation.phoneNumber
-      };
-    }
+    logger.info('chatGptService', 'معالجة رسالة واردة مع معلومات العميل', {
+      conversationId: conversation._id,
+      customerName: customerInfo?.name || 'غير معروف'
+    });
+    
+    let messageContent = message.content;
+    let mediaType = message.mediaType;
+    let mediaUrl = message.mediaUrl;
 
     // معالجة المحادثات الجديدة - إرسال رسالة ترحيب إذا لزم الأمر
     const isNewConversation = conversation.messageCount === 1 || !conversation.welcomeMessageSent;

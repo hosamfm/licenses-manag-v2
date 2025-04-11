@@ -90,6 +90,9 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h1><i class="fas fa-robot"></i> إعدادات الذكاء الاصطناعي</h1>
       <div class="header-buttons">
+        <a href="/settings/ai-knowledge-base" class="btn btn-success">
+          <i class="fas fa-book"></i> إدارة قاعدة المعرفة
+        </a>
         <button type="button" class="btn btn-warning" id="resetDefaults">
           <i class="fas fa-undo"></i> استعادة الإعدادات الافتراضية
         </button>
@@ -313,17 +316,19 @@
       <div class="form-section">
         <h2 class="section-title"><i class="fas fa-history"></i> إعدادات السياق والتاريخ</h2>
         <div class="row mb-3">
-          <div class="col-md-6">
-            <label for="conversationHistoryLimit" class="form-label">حد تاريخ المحادثة الحالية: <span id="conversationHistoryLimitValue" class="range-value"><%= aiSettings.conversationHistoryLimit %></span></label>
+          <div class="col-md-12">
+            <label for="conversationHistoryLimit" class="form-label">حد الرسائل الأقصى في المحادثة: <span id="conversationHistoryLimitValue" class="range-value"><%= aiSettings.conversationHistoryLimit %></span></label>
             <input type="range" class="form-range" id="conversationHistoryLimit" name="conversationHistoryLimit" min="5" max="50" step="1" value="<%= aiSettings.conversationHistoryLimit %>">
-            <div class="form-text">عدد الرسائل السابقة التي سيتذكرها الذكاء الاصطناعي في المحادثة الحالية. القيمة الأعلى تحسن السياق لكن تزيد التكلفة.</div>
-          </div>
-          <div class="col-md-6">
-            <label for="previousConversationsLimit" class="form-label">حد المحادثات السابقة: <span id="previousConversationsLimitValue" class="range-value"><%= aiSettings.previousConversationsLimit %></span></label>
-            <input type="range" class="form-range" id="previousConversationsLimit" name="previousConversationsLimit" min="0" max="10" step="1" value="<%= aiSettings.previousConversationsLimit %>">
-            <div class="form-text">عدد المحادثات السابقة المكتملة التي سيتم تزويد الذكاء الاصطناعي بملخص عنها. القيمة 0 تعني تجاهل المحادثات السابقة.</div>
+            <div class="form-text">عدد الرسائل السابقة التي سيتذكرها الذكاء الاصطناعي في المحادثة الحالية. زيادة العدد تحسن من فهم سياق المحادثة لكنها تزيد التكلفة.</div>
           </div>
         </div>
+        <!-- ملاحظة توضيحية -->
+        <div class="alert alert-info mb-3">
+          <p><i class="fas fa-info-circle"></i> <strong>ملاحظة</strong>: يتم إرسال آخر <strong><%= aiSettings.conversationHistoryLimit %></strong> رسالة فقط من المحادثة الحالية إلى الذكاء الاصطناعي في كل مرة. يمكنك زيادة هذا العدد للحصول على سياق أفضل، ولكن ذلك قد يؤدي إلى زيادة التكلفة واستهلاك الرموز (tokens).</p>
+        </div>
+        
+        <!-- إخفاء خيار حد المحادثات السابقة والاحتفاظ به للتوافق مع قاعدة البيانات -->
+        <input type="hidden" id="previousConversationsLimit" name="previousConversationsLimit" value="<%= aiSettings.previousConversationsLimit %>">
       </div>
 
       <!-- إعدادات رسالة الترحيب -->
