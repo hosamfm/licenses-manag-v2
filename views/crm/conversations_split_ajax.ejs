@@ -341,6 +341,7 @@
 
     // تحسينات للبحث في المحادثات
     document.addEventListener('DOMContentLoaded', function() {
+      // ---------- تعريف العناصر الأساسية ----------
       const searchInput = document.getElementById('conversationSearchInput');
       const clearSearchBtn = document.getElementById('clearSearchBtn');
       const conversationList = document.getElementById('conversationList');
@@ -349,101 +350,142 @@
       const filterStatus = document.getElementById('filterStatus');
       const filterAssignment = document.getElementById('filterAssignment');
       
-      // التحقق من وجود جميع العناصر المطلوبة
-      if (!searchInput || !conversationList) {
-        console.error('عناصر البحث الأساسية غير موجودة في الصفحة');
-        return; // الخروج من الدالة إذا كانت العناصر الأساسية غير موجودة
+      // التحقق من وجود العناصر الأساسية للبحث
+      if (!conversationList) {
+        console.error('عنصر قائمة المحادثات (conversationList) غير موجود في الصفحة');
+        return;
       }
       
-      // عامل تأخير البحث لمنع طلبات البحث المتكررة
-      let searchTimeout;
+      // ---------- متغيرات عامة لإدارة التحديثات ----------
+      let searchTimeout = null;         // مؤقت لتأخير البحث
+      let isUpdating = false;           // قفل لمنع التحديثات المتزامنة
+      let lastRequestId = 0;            // معرف الطلب الأخير
+      let currentFilters = {            // حالة الفلاتر الحالية
+        status: filterStatus ? filterStatus.value : 'open',
+        assignment: filterAssignment ? filterAssignment.value : 'all',
+        search: searchInput ? searchInput.value.trim() : ''
+      };
       
-      // دالة لتحديث قائمة المحادثات
-      function updateConversationsList() {
-        // إظهار مؤشر التحميل (فقط إذا كان موجودًا)
-        if (conversationListLoader) {
-          conversationListLoader.classList.remove('d-none');
-        }
+      // ---------- وظائف إدارة حالة واجهة المستخدم ----------
+      
+      /**
+       * تحديث حالة الفلاتر الحالية وحفظها
+       */
+      function updateCurrentFilters() {
+        currentFilters = {
+          status: filterStatus ? filterStatus.value : 'open',
+          assignment: filterAssignment ? filterAssignment.value : 'all',
+          search: searchInput ? searchInput.value.trim() : ''
+        };
         
-        // إخفاء رسالة عدم وجود محادثات (فقط إذا كانت موجودة)
-        if (noConversationsMessage) {
-          noConversationsMessage.classList.add('d-none');
-        }
-        
-        // بناء معلمات الطلب
-        const params = new URLSearchParams();
-        if (searchInput.value.trim()) {
-          params.append('search', searchInput.value.trim());
-          if (clearSearchBtn) {
+        // تحديث زر مسح البحث
+        if (clearSearchBtn) {
+          if (currentFilters.search) {
             clearSearchBtn.classList.remove('d-none');
-          }
-        } else {
-          if (clearSearchBtn) {
+          } else {
             clearSearchBtn.classList.add('d-none');
           }
         }
         
-        // إضافة معلمات الفلاتر إذا كانت موجودة
-        if (filterStatus) {
-          params.append('status', filterStatus.value);
+        // يمكن إضافة حفظ الفلاتر في localStorage هنا إذا لزم الأمر
+      }
+      
+      /**
+       * إظهار حالة التحميل
+       */
+      function showLoading() {
+        if (conversationListLoader) {
+          conversationListLoader.classList.remove('d-none');
+        }
+        if (noConversationsMessage) {
+          noConversationsMessage.classList.add('d-none');
+        }
+      }
+      
+      /**
+       * إخفاء حالة التحميل
+       */
+      function hideLoading() {
+        if (conversationListLoader) {
+          conversationListLoader.classList.add('d-none');
+        }
+      }
+      
+      /**
+       * عرض رسالة عدم وجود محادثات
+       */
+      function showNoConversationsMessage(customMessage = null) {
+        if (noConversationsMessage) {
+          if (customMessage) {
+            noConversationsMessage.textContent = customMessage;
+          } else {
+            noConversationsMessage.textContent = 'لا توجد محادثات تطابق الفلتر الحالي.';
+          }
+          noConversationsMessage.classList.remove('d-none');
+        }
+      }
+      
+      /**
+       * مسح محتويات قائمة المحادثات (العناصر فقط)
+       */
+      function clearConversationList() {
+        if (conversationList) {
+          const elements = conversationList.querySelectorAll('.conversation-item');
+          elements.forEach(el => el.remove());
+        }
+      }
+      
+      // ---------- الوظائف الرئيسية لتحديث المحادثات ----------
+      
+      /**
+       * جلب قائمة المحادثات من الخادم حسب الفلاتر الحالية
+       * @returns {Promise} وعد بنتيجة الطلب
+       */
+      function fetchConversations() {
+        // إنشاء معرف فريد للطلب الحالي
+        const requestId = ++lastRequestId;
+        
+        // بناء معلمات الطلب
+        const params = new URLSearchParams();
+        
+        if (currentFilters.search) {
+          params.append('search', currentFilters.search);
         }
         
-        if (filterAssignment) {
-          params.append('assignment', filterAssignment.value);
-        }
+        params.append('status', currentFilters.status);
+        params.append('assignment', currentFilters.assignment);
         
-        // إرسال طلب البحث
-        fetch(`/crm/conversations/ajax/list?${params.toString()}`)
-          .then(response => response.json())
-          .then(data => {
-            // إخفاء مؤشر التحميل
-            if (conversationListLoader) {
-              conversationListLoader.classList.add('d-none');
+        // إرسال الطلب
+        return fetch(`/crm/conversations/ajax/list?${params.toString()}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`خطأ في الطلب: ${response.status}`);
             }
-            
-            // تفريغ القائمة الحالية إذا كانت موجودة
-            if (conversationList) {
-              const elements = conversationList.querySelectorAll('.conversation-item');
-              elements.forEach(el => el.remove());
-              
-              // إضافة المحادثات الجديدة إلى القائمة
-              if (data.success && data.conversations && data.conversations.length > 0) {
-                data.conversations.forEach(conversation => {
-                  const conversationItem = createConversationItem(conversation);
-                  conversationList.appendChild(conversationItem);
-                });
-              } else {
-                // إظهار رسالة عدم وجود محادثات
-                if (noConversationsMessage) {
-                  noConversationsMessage.classList.remove('d-none');
-                }
-              }
-            }
+            return response.json();
           })
-          .catch(error => {
-            console.error('خطأ في تحديث قائمة المحادثات:', error);
-            
-            // إخفاء مؤشر التحميل في حالة الخطأ
-            if (conversationListLoader) {
-              conversationListLoader.classList.add('d-none');
+          .then(data => {
+            // تجاهل النتائج إذا كان هناك طلب أحدث
+            if (requestId < lastRequestId) {
+              console.log('تم تجاهل استجابة قديمة', requestId, lastRequestId);
+              return { skipped: true };
             }
             
-            // إظهار رسالة خطأ
-            if (noConversationsMessage) {
-              noConversationsMessage.textContent = 'حدث خطأ أثناء تحميل المحادثات. يرجى المحاولة مرة أخرى.';
-              noConversationsMessage.classList.remove('d-none');
-            }
+            return data;
           });
       }
       
-      // دالة إنشاء عنصر محادثة
+      /**
+       * إنشاء عنصر محادثة للعرض في القائمة
+       * @param {Object} conversation بيانات المحادثة
+       * @returns {HTMLElement} عنصر DOM للمحادثة
+       */
       function createConversationItem(conversation) {
         // إنشاء عنصر المحادثة
         const item = document.createElement('div');
         item.className = 'conversation-item';
         item.dataset.id = conversation._id;
         
-        // تحديد التنسيق اعتمادًا على حالة المحادثة
+        // تطبيق الفئات المناسبة
         if (conversation.status === 'closed') {
           item.classList.add('closed');
         }
@@ -452,10 +494,8 @@
           item.classList.add('has-unread');
         }
         
-        // تحديد اسم العميل المعروض
+        // تحديد المعلومات المعروضة
         const displayName = conversation.displayName || conversation.customerName || conversation.phoneNumber;
-        
-        // تحديد وقت آخر رسالة
         const lastMessageTime = conversation.lastMessageAt ? new Date(conversation.lastMessageAt) : new Date(conversation.createdAt);
         const timeString = formatConversationTime(lastMessageTime);
         
@@ -466,10 +506,13 @@
           assignedInfo = `<small class="assigned-info"><i class="fas fa-user-check"></i> ${assigneeName}</small>`;
         }
         
-        // محتوى آخر رسالة
+        // محتوى آخر رسالة (مع تأمين من XSS)
         let lastMessagePreview = '';
         if (conversation.lastMessage && conversation.lastMessage.content) {
-          lastMessagePreview = conversation.lastMessage.content.substring(0, 40) + (conversation.lastMessage.content.length > 40 ? '...' : '');
+          const contentText = conversation.lastMessage.content.substring(0, 40);
+          lastMessagePreview = document.createElement('div');
+          lastMessagePreview.textContent = contentText + (conversation.lastMessage.content.length > 40 ? '...' : '');
+          lastMessagePreview = lastMessagePreview.innerHTML;
         } else if (conversation.lastMessage) {
           lastMessagePreview = 'مرفق وسائط';
         } else {
@@ -491,12 +534,11 @@
         
         // إضافة مستمع حدث للنقر
         item.addEventListener('click', function() {
-          // إزالة الفئة النشطة من جميع العناصر
+          // تحديد العنصر النشط
           document.querySelectorAll('.conversation-item.active').forEach(el => {
             el.classList.remove('active');
           });
           
-          // إضافة الفئة النشطة إلى العنصر الحالي
           this.classList.add('active');
           
           // تحميل تفاصيل المحادثة
@@ -512,35 +554,96 @@
         return item;
       }
       
-      // دالة تنسيق الوقت
-      function formatConversationTime(date) {
-        const now = new Date();
-        const diff = now - date;
-        
-        // أقل من يوم واحد
-        if (diff < 86400000) {
-          return date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-        }
-        
-        // أقل من أسبوع
-        if (diff < 604800000) {
-          const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-          return days[date.getDay()];
-        }
-        
-        // تاريخ كامل
-        return date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
-      }
-      
-      // دالة تحميل تفاصيل المحادثة
-      function loadConversationDetails(conversationId) {
-        const detailsContainer = document.getElementById('conversationDetailsContainer');
-        if (!detailsContainer) {
-          console.error('عنصر تفاصيل المحادثة غير موجود في الصفحة');
+      /**
+       * معالجة نتائج المحادثات وعرضها
+       * @param {Object} data البيانات المستلمة من الخادم
+       */
+      function processConversationResults(data) {
+        // التعامل مع البيانات التي تم تجاهلها
+        if (data.skipped) {
           return;
         }
         
-        // تنظيف المحتوى الحالي وإظهار مؤشر التحميل
+        // تنظيف القائمة قبل إضافة العناصر الجديدة
+        clearConversationList();
+        
+        // إضافة المحادثات إلى القائمة
+        if (data.success && data.conversations && data.conversations.length > 0) {
+          const fragment = document.createDocumentFragment();
+          
+          data.conversations.forEach(conversation => {
+            const item = createConversationItem(conversation);
+            fragment.appendChild(item);
+          });
+          
+          conversationList.appendChild(fragment);
+        } else {
+          // عرض رسالة عدم وجود محادثات
+          showNoConversationsMessage();
+        }
+        
+        // تحديد المحادثة النشطة إذا كانت محددة مسبقًا
+        if (window.currentConversationId) {
+          const activeItem = conversationList.querySelector(`.conversation-item[data-id="${window.currentConversationId}"]`);
+          if (activeItem) {
+            activeItem.classList.add('active');
+          }
+        }
+      }
+      
+      /**
+       * تنفيذ تحديث قائمة المحادثات (الدالة الرئيسية)
+       * يستخدم قفل لمنع التحديثات المتزامنة
+       */
+      function updateConversationsList() {
+        // منع التحديثات المتزامنة
+        if (isUpdating) {
+          console.log('جاري تحديث القائمة بالفعل، تم تجاهل الطلب');
+          return;
+        }
+        
+        // تعيين قفل التحديث
+        isUpdating = true;
+        
+        // تحديث الفلاتر الحالية
+        updateCurrentFilters();
+        
+        // إظهار مؤشر التحميل
+        showLoading();
+        
+        // جلب البيانات من الخادم
+        fetchConversations()
+          .then(data => {
+            // معالجة نتائج الطلب
+            processConversationResults(data);
+          })
+          .catch(error => {
+            console.error('خطأ في تحديث قائمة المحادثات:', error);
+            
+            // عرض رسالة الخطأ
+            showNoConversationsMessage('حدث خطأ أثناء تحميل المحادثات. يرجى المحاولة مرة أخرى.');
+          })
+          .finally(() => {
+            // إخفاء مؤشر التحميل
+            hideLoading();
+            
+            // إزالة قفل التحديث
+            isUpdating = false;
+          });
+      }
+      
+      /**
+       * تحميل تفاصيل محادثة محددة
+       * @param {string} conversationId معرف المحادثة
+       */
+      function loadConversationDetails(conversationId) {
+        const detailsContainer = document.getElementById('conversationDetailsContainer');
+        if (!detailsContainer) {
+          console.error('عنصر تفاصيل المحادثة غير موجود');
+          return;
+        }
+        
+        // عرض مؤشر التحميل
         detailsContainer.innerHTML = `
           <div class="conversation-loading-details">
             <div class="spinner-border text-primary" role="status">
@@ -550,7 +653,7 @@
           </div>
         `;
         
-        // تحميل تفاصيل المحادثة باستخدام AJAX
+        // طلب تفاصيل المحادثة
         fetch(`/crm/conversations/ajax/details/${conversationId}`)
           .then(response => {
             if (!response.ok) {
@@ -559,45 +662,73 @@
             return response.text();
           })
           .then(html => {
-            if (detailsContainer) {
-              detailsContainer.innerHTML = html;
-              
-              // تحديث عنوان المتصفح ليتضمن معرف المحادثة
-              try {
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('selected', conversationId);
-                window.history.replaceState({}, '', currentUrl.toString());
-              } catch (e) {
-                console.error('خطأ في تحديث عنوان المتصفح:', e);
-              }
-              
-              // تحديد المحادثة النشطة الحالية
-              window.currentConversationId = conversationId;
-              
-              // الانضمام إلى غرفة Socket.io للمحادثة
-              if (window.socketConnected && window.socketConnection) {
-                window.socketConnection.emit('join-conversation', { conversationId });
-              }
+            // عرض المحتوى المستلم
+            detailsContainer.innerHTML = html;
+            
+            // تحديث عنوان المتصفح
+            try {
+              const currentUrl = new URL(window.location.href);
+              currentUrl.searchParams.set('selected', conversationId);
+              window.history.replaceState({}, '', currentUrl.toString());
+            } catch (e) {
+              console.error('خطأ في تحديث عنوان المتصفح:', e);
+            }
+            
+            // حفظ المحادثة النشطة
+            window.currentConversationId = conversationId;
+            
+            // الانضمام إلى غرفة Socket.io
+            if (window.socketConnected && window.socketConnection) {
+              window.socketConnection.emit('join-conversation', { conversationId });
             }
           })
           .catch(error => {
             console.error('خطأ في تحميل تفاصيل المحادثة:', error);
-            if (detailsContainer) {
-              detailsContainer.innerHTML = `
-                <div class="alert alert-danger">
-                  <i class="fas fa-exclamation-circle me-2"></i>
-                  حدث خطأ أثناء تحميل تفاصيل المحادثة. يرجى المحاولة مرة أخرى.
-                </div>
-              `;
-            }
+            detailsContainer.innerHTML = `
+              <div class="alert alert-danger">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                حدث خطأ أثناء تحميل تفاصيل المحادثة. يرجى المحاولة مرة أخرى.
+              </div>
+            `;
           });
       }
       
-      // مستمع حدث البحث
+      /**
+       * تنسيق وقت آخر رسالة
+       * @param {Date} date تاريخ الرسالة
+       * @returns {string} النص المنسق للوقت
+       */
+      function formatConversationTime(date) {
+        const now = new Date();
+        const diff = now - date;
+        
+        try {
+          // أقل من يوم واحد
+          if (diff < 86400000) {
+            return date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+          }
+          
+          // أقل من أسبوع
+          if (diff < 604800000) {
+            const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+            return days[date.getDay()];
+          }
+          
+          // تاريخ كامل
+          return date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
+        } catch (e) {
+          console.error('خطأ في تنسيق التاريخ:', e);
+          return '';
+        }
+      }
+      
+      // ---------- تهيئة مستمعات الأحداث ----------
+      
+      // مستمع حدث البحث (مع تأخير)
       if (searchInput) {
         searchInput.addEventListener('input', function() {
           clearTimeout(searchTimeout);
-          searchTimeout = setTimeout(updateConversationsList, 500); // تأخير البحث بـ 500 مللي ثانية
+          searchTimeout = setTimeout(updateConversationsList, 500);
         });
       }
       
@@ -612,7 +743,7 @@
         });
       }
       
-      // مستمع حدث تغيير الفلتر
+      // مستمعات أحداث الفلاتر
       if (filterStatus) {
         filterStatus.addEventListener('change', updateConversationsList);
       }
@@ -620,9 +751,6 @@
       if (filterAssignment) {
         filterAssignment.addEventListener('change', updateConversationsList);
       }
-      
-      // تحميل المحادثات عند تحميل الصفحة
-      updateConversationsList();
       
       // زر تبديل عرض قائمة المحادثات على الأجهزة المحمولة
       const listToggler = document.getElementById('conversationListToggler');
@@ -632,6 +760,31 @@
           if (listColumn) {
             listColumn.classList.toggle('mobile-hidden');
           }
+        });
+      }
+      
+      // ---------- استدعاء التحديث الأولي ----------
+      
+      // تحديث قائمة المحادثات عند تحميل الصفحة
+      // استخدام setTimeout للتأكد من تحميل كل العناصر
+      setTimeout(updateConversationsList, 0);
+      
+      // ---------- تفعيل تحديثات Socket.io للمحادثات ----------
+      
+      // مستمع لتحديثات المحادثات عبر Socket.io
+      if (window.socketConnection) {
+        // استماع لتحديث محادثة
+        window.socketConnection.on('conversation_update', function(data) {
+          // تحديث قائمة المحادثات في حالة تغيير الحالة أو الإسناد
+          if (data && (data.type === 'status_changed' || data.type === 'assigned')) {
+            updateConversationsList();
+          }
+        });
+        
+        // استماع لوصول رسالة جديدة
+        window.socketConnection.on('new_message', function(data) {
+          // تحديث قائمة المحادثات لإظهار الرسالة الجديدة
+          updateConversationsList();
         });
       }
     });
