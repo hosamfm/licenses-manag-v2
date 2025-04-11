@@ -21,29 +21,16 @@ const logger = require('./loggerService');
  */
 exports.getConversationsList = async (filterOptions = {}, paginationOptions = {}, includeLastMessage = true, includeUnreadCount = true) => {
     try {
-        // بناء الاستعلام بناءً على خيارات التصفية
-        const query = {};
-        
-        // إضافة حالة المحادثة للاستعلام إذا تم تحديدها وليست 'all'
-        if (filterOptions.status && filterOptions.status !== 'all') {
-            query.status = filterOptions.status;
-        }
-        
-        // إضافة المستخدم المسند إليه المحادثة إذا تم تحديده
-        if (filterOptions.assignedTo) {
-            query.assignedTo = filterOptions.assignedTo;
-        }
-        
         // خيارات التصفح
         const page = paginationOptions.page || 1;
         const limit = paginationOptions.limit || 20;
         const skip = (page - 1) * limit;
         
-        // حساب إجمالي المحادثات التي تطابق الاستعلام
-        const total = await Conversation.countDocuments(query);
+        // حساب إجمالي المحادثات التي تطابق الاستعلام - استخدام filterOptions مباشرة
+        const total = await Conversation.countDocuments(filterOptions);
         
-        // جلب المحادثات مع عمليات التجميع (populate)
-        const conversations = await Conversation.find(query)
+        // جلب المحادثات - استخدام filterOptions مباشرة
+        const conversations = await Conversation.find(filterOptions)
             .sort(paginationOptions.sort || { lastMessageAt: -1 })
             .skip(paginationOptions.skipPagination ? 0 : skip)
             .limit(paginationOptions.skipPagination ? (paginationOptions.limit || 50) : limit)

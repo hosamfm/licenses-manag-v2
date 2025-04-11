@@ -979,18 +979,14 @@ exports.listConversationsAjaxList = async (req, res) => {
   try {
     const { status, assignment, search } = req.query;
     
-    // بناء معايير التصفية
+    // بناء معايير التصفية الأساسية للحالة والتعيين
     const filterOptions = {};
 
-    // 1. معالجة فلتر الحالة (مفتوحة/مغلقة)
+    // 1. معالجة فلتر الحالة (مفتوحة/مغلقة/الكل)
     if (status && status !== 'all') {
       if (status === 'open') {
-        // تشمل الحالات التي تعتبر مفتوحة
-        filterOptions.status = { $nin: ['closed'] }; // استبعاد الحالات المغلقة
-      } else if (status === 'closed') {
-        filterOptions.status = 'closed';
-      } else {
-        // حالات محددة أخرى
+        filterOptions.status = { $ne: 'closed' }; // $ne بدلاً من $nin لتبسيط الشرط
+      } else { // closed أو حالة محددة أخرى
         filterOptions.status = status;
       }
     }
@@ -998,68 +994,104 @@ exports.listConversationsAjaxList = async (req, res) => {
     // 2. معالجة فلتر التعيين (الكل/محادثاتي/غير مسندة)
     if (assignment) {
       if (assignment === 'mine' && req.user && req.user._id) {
-        // محادثاتي - المسندة للمستخدم الحالي
         filterOptions.assignedTo = req.user._id;
       } else if (assignment === 'unassigned') {
-        // المحادثات غير المسندة
         filterOptions.assignedTo = null;
       }
-      // 'all' - لا تضيف شرط فلترة
+      // 'all' - لا تضيف شرط فلترة للتعيين
     }
     
-    // 3. معالجة البحث النصي
+    // --- بداية: تعديل منطق البحث ---
+    let finalFilter = { ...filterOptions }; // نسخ الفلاتر الأساسية
+
     if (search && search.trim() !== '') {
       const searchTerm = search.trim();
       const regex = new RegExp(searchTerm, 'i'); // بحث غير حساس لحالة الأحرف
 
-      // بحث في المحادثات مباشرة (اسم العميل ورقم الهاتف)
-      const directSearchFilter = {
-        $or: [
-          { customerName: regex },
-          { phoneNumber: regex }
+      // الخطوة 1: البحث عن معرفات المحادثات التي تحتوي رسائلها على مصطلح البحث
+      let matchingConversationIds = [];
+      try {
+        matchingConversationIds = await WhatsappMessage.find({
+          content: { $regex: searchTerm, $options: 'i' } // <-- Use explicit $regex operator
+        }).distinct('conversationId'); // .distinct للحصول على المعرفات الفريدة
+        
+        // Log the result of message search
+        logger.info('conversationController', 'Found matching conversation IDs from messages:', matchingConversationIds);
+
+      } catch (msgSearchError) {
+        logger.error('conversationController', 'خطأ أثناء البحث في محتوى الرسائل', msgSearchError);
+      }
+
+      // الخطوة 2: بناء شروط $or مباشرة
+      const searchOrConditions = [
+        { customerName: { $regex: searchTerm, $options: 'i' } }, // <-- Use explicit $regex
+        { phoneNumber: { $regex: searchTerm, $options: 'i' } }  // <-- Use explicit $regex
+      ];
+
+      // إضافة شرط البحث بمعرف المحادثة إذا وجدت نتائج من الرسائل
+      if (matchingConversationIds.length > 0) {
+        searchOrConditions.push({ _id: { $in: matchingConversationIds } });
+      }
+
+      // الخطوة 3: دمج الفلاتر الأساسية مع شروط البحث
+      // التحقق مما إذا كانت filterOptions تحتوي على أي شروط
+      if (Object.keys(filterOptions).length > 0) {
+        // دمج باستخدام $and إذا كانت هناك فلاتر أساسية
+        finalFilter = {
+          $and: [
+            filterOptions, // تطبيق فلاتر الحالة والتعيين
+            { $or: searchOrConditions } // تطبيق شروط البحث
+          ]
+        };
+      } else {
+        // استخدام $or مباشرة إذا لم تكن هناك فلاتر أساسية
+        finalFilter = { $or: searchOrConditions };
+      }
+
+      /* -- إزالة الجزء القديم الذي سبب المشكلة --
+      // دمج شروط البحث ($or) مع الفلاتر الأساسية ($and)
+      finalFilter = {
+        $and: [
+          filterOptions, 
+          { $or: searchConditions } // <--- كان هنا الخطأ المحتمل
         ]
       };
       
-      // البحث في جهات الاتصال المرتبطة
-      const Contact = require('../models/Contact');
-      const matchingContacts = await Contact.find({
-        $or: [
-          { name: regex },
-          { email: regex },
-          { company: regex },
-          { notes: regex }
-        ]
-      }).select('_id phoneNumber').lean();
-      
-      const contactIds = matchingContacts.map(c => c._id);
-      const contactPhoneNumbers = matchingContacts.map(c => c.phoneNumber);
-      
-      // البحث في محتوى الرسائل - استخدام النموذج المستورد مباشرة
-      // const WhatsappMessage = mongoose.model('WhatsappMessage');
-      const conversationsWithMatchingMessages = await WhatsappMessage.find({
-        content: regex,
-        direction: { $in: ['incoming', 'outgoing'] } // استثناء الملاحظات الداخلية
-      }).select('conversationId').distinct('conversationId');
-      
-      // جمع كل معايير البحث
-      filterOptions.$or = [
-        directSearchFilter.$or,
-        { contactId: { $in: contactIds } },
-        { phoneNumber: { $in: contactPhoneNumbers } },
-        { _id: { $in: conversationsWithMatchingMessages } }
-      ];
+      if (Object.keys(filterOptions).length === 0) {
+         finalFilter = { $or: searchConditions };
+      }
+      */
+
     }
+    // --- نهاية: تعديل منطق البحث ---
     
-    // إعداد خيارات التصفح
+    // Log the final filter for debugging
+    logger.info('conversationController', 'Final filter for conversation list:', JSON.stringify(finalFilter, null, 2)); // <-- ADD THIS LINE
+
+    /* --- إزالة الاستعلام التشخيصي المؤقت ---
+    // --- TEMPORARY DIAGNOSTIC QUERY ---
+    try {
+      const directResult = await Conversation.find(finalFilter)
+                                           .limit(50) // Use similar limits
+                                           .sort({ lastMessageAt: -1 }) // Use similar sort
+                                           .lean();
+      logger.info('conversationController', 'Direct query result count:', directResult.length);
+    } catch (directQueryError) {
+      logger.error('conversationController', 'Error during direct diagnostic query', directQueryError);
+    }
+    // --- END TEMPORARY DIAGNOSTIC QUERY ---
+    */
+
+    // إعداد خيارات التصفح (تبقى كما هي)
     const paginationOptions = {
-      limit: 50,
-      skipPagination: true,
+      limit: 50, // حدد النتائج بـ 50 لتجنب التحميل الزائد
+      skipPagination: true, // لا حاجة لترقيم الصفحات هنا، القائمة تُعرض كلها
       sort: { lastMessageAt: -1 } // الترتيب حسب آخر رسالة
     };
 
-    // استخدام خدمة المحادثات للحصول على قائمة المحادثات
+    // استخدام خدمة المحادثات للحصول على قائمة المحادثات بالفلتر النهائي
     const result = await conversationService.getConversationsList(
-      filterOptions,
+      finalFilter, // استخدام الفلتر المعدل الذي يشمل البحث في المحتوى
       paginationOptions,
       true,  // تضمين آخر رسالة
       true   // تضمين عدد الرسائل غير المقروءة
@@ -1716,52 +1748,12 @@ exports.showConversationsAjax = async (req, res) => {
     }
     
     // إضافة تصفية البحث إذا تم تقديمها
-    let matchingConversationIds = [];
-    
-    if (search && search.trim() !== '') {
-      const searchTerm = search.trim();
-      const regex = new RegExp(searchTerm, 'i');
-      
-      // 1. البحث الأساسي في المحادثات
+    if (search) {
       filter.$or = [
-        { phoneNumber: { $regex: searchTerm, $options: 'i' } },
-        { customerName: { $regex: searchTerm, $options: 'i' } }
+        { phoneNumber: { $regex: search, $options: 'i' } },
+        { customerName: { $regex: search, $options: 'i' } },
+        // إضافة البحث في جهات الاتصال المرتبطة (تتم بشكل منفصل)
       ];
-      
-      // 2. البحث في محتوى الرسائل بشكل منفصل (لتحسين الأداء)
-      // لا نريد دمج هذا كشرط مباشر في الاستعلام الرئيسي لتفادي بطء الأداء
-      try {
-        // استخدام النموذج المستورد مباشرة
-        // const WhatsappMessage = mongoose.model('WhatsappMessage');
-        const messageMatches = await WhatsappMessage.find({
-          content: regex,
-          direction: { $in: ['incoming', 'outgoing'] }
-        }).select('conversationId').distinct('conversationId');
-        
-        if (messageMatches && messageMatches.length > 0) {
-          matchingConversationIds = messageMatches;
-        }
-      } catch (msgError) {
-        logger.error('conversationController', 'خطأ في البحث عن الرسائل', msgError);
-      }
-      
-      // 3. البحث في جهات الاتصال
-      const Contact = require('../models/Contact');
-      const matchingContacts = await Contact.find({
-        $or: [
-          { name: regex },
-          { email: regex },
-          { company: regex },
-          { notes: regex }
-        ]
-      }).select('_id phoneNumber').lean();
-      
-      const contactIds = matchingContacts.map(c => c._id);
-      const contactPhones = matchingContacts.map(c => c.phoneNumber);
-      
-      // تجميع الاستعلامات
-      // نستخدم جلب منفصل للمحادثات التي تطابق رسائلها أو جهات اتصالها معايير البحث
-      // دون دمجها في الاستعلام الرئيسي السابق
     }
     
     // الصفحة
@@ -1769,56 +1761,61 @@ exports.showConversationsAjax = async (req, res) => {
     const limit = 20;
     const skip = (page - 1) * limit;
     
-    // استرجاع المحادثات من الفلتر الرئيسي
+    // استرجاع المحادثات
     let conversations = await Conversation.find(filter)
       .sort({ lastMessageAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate('assignedTo', 'username full_name')
-      .populate('contactId', 'name phoneNumber')
+      .populate('contactId', 'name phoneNumber')  // تحميل معلومات جهة الاتصال المرتبطة
       .lean();
-    
-    // إذا كان هناك بحث نصي وتطابقت بعض المحادثات من خلال الرسائل
-    if (search && search.trim() !== '' && matchingConversationIds.length > 0) {
-      // جلب المحادثات التي تطابقت من خلال الرسائل
-      const messageMatchedConversations = await Conversation.find({
-        _id: { $in: matchingConversationIds },
-        ...filter // تطبيق نفس الفلاتر الأخرى (الحالة، التعيين)
-      })
-      .sort({ lastMessageAt: -1 })
-      .populate('assignedTo', 'username full_name')
-      .populate('contactId', 'name phoneNumber')
-      .lean();
-      
-      // دمج النتائج مع المحادثات التي تم العثور عليها من الفلتر الرئيسي
-      if (messageMatchedConversations && messageMatchedConversations.length > 0) {
-        // دمج المصفوفات مع إزالة التكرارات
-        const allConversations = [...conversations, ...messageMatchedConversations];
-        const uniqueConversationsMap = new Map();
-        
-        // استخدام Map للحصول على القيم الفريدة
-        allConversations.forEach(conv => {
-          uniqueConversationsMap.set(conv._id.toString(), conv);
-        });
-        
-        // تحويل Map إلى مصفوفة مرة أخرى
-        conversations = Array.from(uniqueConversationsMap.values());
-        
-        // إعادة ترتيب النتائج حسب آخر رسالة
-        conversations.sort((a, b) => 
-          new Date(b.lastMessageAt || b.updatedAt) - new Date(a.lastMessageAt || a.updatedAt)
-        );
-        
-        // اقتصار على الحد الأقصى
-        conversations = conversations.slice(0, limit);
-      }
-    }
     
     // إضافة اسم العرض الموحد لكل محادثة
     conversations = conversations.map(conv => ({
       ...conv,
       displayName: ContactHelper.getServerDisplayName(conv)
     }));
+    
+    // تنفيذ البحث في جهات الاتصال بشكل منفصل إذا تم تقديم البحث
+    if (search) {
+      const Contact = require('../models/Contact');
+      const matchingContacts = await Contact.find({
+        name: { $regex: search, $options: 'i' }
+      }).select('phoneNumber').lean();
+      
+      // تضمين محادثات جهات الاتصال المطابقة
+      if (matchingContacts.length > 0) {
+        const phoneNumbers = matchingContacts.map(c => c.phoneNumber);
+        
+        const additionalConversations = await Conversation.find({
+          phoneNumber: { $in: phoneNumbers },
+          ...filter
+        })
+          .sort({ lastMessageAt: -1 })
+          .populate('assignedTo', 'username full_name')
+          .populate('contactId', 'name phoneNumber')
+          .lean();
+        
+        // إضافة اسم العرض الموحد للمحادثات الإضافية
+        const processedAdditionalConvs = additionalConversations.map(conv => ({
+          ...conv,
+          displayName: ContactHelper.getServerDisplayName(conv)
+        }));
+        
+        // دمج النتائج وإزالة التكرار
+        const allConversations = [...conversations, ...processedAdditionalConvs];
+        const uniqueConversations = Array.from(
+          new Map(allConversations.map(conv => [conv._id.toString(), conv])).values()
+        );
+        
+        // إعادة الترتيب حسب آخر رسالة
+        uniqueConversations.sort((a, b) => 
+          new Date(b.lastMessageAt || b.updatedAt) - new Date(a.lastMessageAt || a.updatedAt)
+        );
+        
+        conversations = uniqueConversations.slice(0, limit);
+      }
+    }
     
     // عرض الصفحة مع المحادثات
     res.render('crm/conversations_split_ajax', {

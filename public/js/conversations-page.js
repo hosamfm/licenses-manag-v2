@@ -103,7 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterStatusSelect = document.getElementById('filterStatus');
     const filterAssignmentSelect = document.getElementById('filterAssignment');
     const searchInput = document.getElementById('conversationSearchInput');
-    const clearSearchBtn = document.getElementById('clearSearchBtn');
 
     // عناصر الأزرار والقوائم الجانبية الجديدة
     const crmSidebar = document.querySelector('.crm-sidebar');
@@ -159,9 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
         conversationListLoader.classList.remove('d-none');
         conversationListContainer.innerHTML = '';
         noConversationsMessage.classList.add('d-none');
-        
-        // تحديث مؤشر البحث النشط في واجهة المستخدم
-        updateSearchIndicator(filters.searchTerm);
 
         // بناء معلمات الاستعلام
         const queryParams = new URLSearchParams();
@@ -188,10 +184,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data.success && Array.isArray(data.conversations)) {
                 renderConversationsList(data.conversations);
-                // تحديث عدد النتائج
-                if (filters.searchTerm) {
-                    updateSearchResultCount(data.conversations.length);
-                }
             } else {
                 // console.error("فشل في جلب المحادثات أو تنسيق بيانات غير صالح:", data);
                 noConversationsMessage.textContent = 'حدث خطأ أثناء تحميل المحادثات.';
@@ -543,31 +535,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
-        // فلتر البحث (فحص الاسم/الهاتف/آخر رسالة)
+        // فلتر البحث (فحص الاسم/الهاتف)
         const searchTerm = filters.searchTerm ? filters.searchTerm.trim().toLowerCase() : '';
-        if (!searchTerm) {
-            return true; // لا يوجد بحث، المحادثة تطابق
+        const searchMatch = !searchTerm ||
+                            (conv.customerName && conv.customerName.toLowerCase().includes(searchTerm)) ||
+                            (conv.phoneNumber && conv.phoneNumber.toLowerCase().includes(searchTerm)) ||
+                            (conv.contactId && conv.contactId.name && conv.contactId.name.toLowerCase().includes(searchTerm));
+
+        if (!searchMatch) {
+            return false;
         }
-        
-        // البحث في البيانات الأساسية
-        const basicDataMatch = 
-            (conv.customerName && conv.customerName.toLowerCase().includes(searchTerm)) ||
-            (conv.phoneNumber && conv.phoneNumber.toLowerCase().includes(searchTerm)) ||
-            (conv.displayName && conv.displayName.toLowerCase().includes(searchTerm)) ||
-            (conv.contactId && conv.contactId.name && conv.contactId.name.toLowerCase().includes(searchTerm));
-        
-        // البحث في آخر رسالة
-        const lastMessageMatch = 
-            (conv.lastMessage && conv.lastMessage.content && 
-             conv.lastMessage.content.toLowerCase().includes(searchTerm));
-             
-        // البحث في أي خاصية أخرى متاحة
-        const otherPropertyMatch = 
-            (conv.lastMessage && conv.lastMessage.fileName && 
-             conv.lastMessage.fileName.toLowerCase().includes(searchTerm));
-        
-        // المحادثة تطابق إذا طابقت أي من الشروط
-        return basicDataMatch || lastMessageMatch || otherPropertyMatch;
+
+        // المحادثة تطابق جميع الفلاتر
+        return true;
     }
 
     /**
@@ -1343,65 +1323,6 @@ document.addEventListener('DOMContentLoaded', () => {
         //     }
         // });
 
-        // --- إضافة وظائف مسح البحث وتحسين تجربة البحث ---
-        
-        /**
-         * مسح حقل البحث وإعادة تحميل القائمة
-         * تعريف الدالة كخاصية للنافذة لإتاحتها عالمياً
-         */
-        window.clearSearch = function() {
-            if (searchInput) {
-                searchInput.value = '';
-                window.currentFilters.searchTerm = '';
-                
-                // إخفاء زر المسح
-                if (clearSearchBtn) {
-                    clearSearchBtn.classList.add('d-none');
-                }
-                
-                // إعادة تحميل القائمة
-                fetchAndRenderConversations(window.currentFilters);
-                
-                // التركيز على حقل البحث مرة أخرى
-                searchInput.focus();
-            }
-        };
-        
-        // إضافة مستمع لزر مسح البحث
-        if (clearSearchBtn) {
-            clearSearchBtn.addEventListener('click', window.clearSearch);
-        }
-        
-        // إضافة مستمع للبحث مع تحسين التجربة
-        if (searchInput) {
-            // إضافة مستمع للإدخال لتحديث الفلاتر وإظهار/إخفاء زر المسح
-            searchInput.addEventListener('input', function() {
-                // إظهار أو إخفاء زر المسح بناءً على محتوى حقل البحث
-                if (clearSearchBtn) {
-                    if (this.value.trim()) {
-                        clearSearchBtn.classList.remove('d-none');
-                    } else {
-                        clearSearchBtn.classList.add('d-none');
-                    }
-                }
-            });
-            
-            // استخدام التأخير للبحث لتجنب الكثير من الطلبات
-            const debouncedSearch = debounce(function() {
-                window.currentFilters.searchTerm = searchInput.value;
-                fetchAndRenderConversations(window.currentFilters);
-            }, 500); // 500ms تأخير
-            
-            // إضافة مستمع حدث input بدلاً من مستمع وظيفي
-            searchInput.addEventListener('input', debouncedSearch);
-            
-            // إضافة مستمع لمفتاح Escape لمسح البحث
-            searchInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    window.clearSearch();
-                }
-            });
-        }
     }
 
     // تنفيذ التهيئة
@@ -1410,84 +1331,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Socket.IO Event Handlers ---
     // ... (الكود الموجود لمعالجة Socket.IO)
     // ...
-
-    /**
-     * تحديث مؤشر البحث في واجهة المستخدم
-     * @param {string} searchTerm - مصطلح البحث
-     */
-    function updateSearchIndicator(searchTerm) {
-        // البحث عن عنصر مؤشر البحث في الصفحة، إنشاؤه إذا لم يكن موجودًا
-        let searchIndicator = document.getElementById('searchActiveIndicator');
-        
-        if (!searchTerm || searchTerm.trim() === '') {
-            // إزالة المؤشر إذا كان موجوداً ولم يكن هناك بحث نشط
-            if (searchIndicator) {
-                searchIndicator.remove();
-            }
-            return;
-        }
-        
-        // إنشاء مؤشر البحث إذا لم يكن موجودًا
-        if (!searchIndicator) {
-            searchIndicator = document.createElement('div');
-            searchIndicator.id = 'searchActiveIndicator';
-            searchIndicator.className = 'search-active-indicator px-3 py-2 mb-2 text-center bg-light rounded';
-            
-            // إدراجه في أعلى قائمة المحادثات (بعد منطقة الفلاتر)
-            const listContainer = document.querySelector('.conversations-list');
-            if (listContainer) {
-                listContainer.insertBefore(searchIndicator, listContainer.firstChild);
-            }
-        }
-        
-        // تحديث نص المؤشر
-        searchIndicator.innerHTML = `
-            <span class="search-term">
-                <i class="fas fa-search me-1 text-primary"></i>
-                البحث عن: <strong>"${searchTerm}"</strong>
-            </span>
-            <button class="btn btn-sm btn-outline-secondary ms-2 clear-search-btn" title="مسح البحث">
-                <i class="fas fa-times"></i>
-            </button>
-        `;
-        
-        // إضافة مستمع حدث لزر المسح
-        const clearBtn = searchIndicator.querySelector('.clear-search-btn');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', function() {
-                // استدعاء دالة مسح البحث الموجودة
-                if (typeof window.clearSearch === 'function') {
-                    window.clearSearch();
-                }
-            });
-        }
-    }
-
-    /**
-     * تحديث عدد نتائج البحث
-     * @param {number} count - عدد النتائج
-     */
-    function updateSearchResultCount(count) {
-        const searchIndicator = document.getElementById('searchActiveIndicator');
-        if (!searchIndicator) return;
-        
-        // إضافة معلومات عدد النتائج
-        const countEl = document.createElement('div');
-        countEl.className = 'search-result-count mt-1 small text-muted';
-        
-        if (count === 0) {
-            countEl.innerHTML = '<i class="fas fa-info-circle me-1"></i> لم يتم العثور على نتائج';
-        } else {
-            countEl.innerHTML = `<i class="fas fa-check-circle me-1 text-success"></i> تم العثور على ${count} محادثة`;
-        }
-        
-        // إزالة أي مؤشر عدد سابق
-        const oldCount = searchIndicator.querySelector('.search-result-count');
-        if (oldCount) {
-            oldCount.remove();
-        }
-        
-        // إضافة مؤشر العدد الجديد
-        searchIndicator.appendChild(countEl);
-    }
 }); 
