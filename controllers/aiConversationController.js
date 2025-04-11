@@ -10,6 +10,7 @@ const metaWhatsappService = require('../services/whatsapp/MetaWhatsappService');
 const socketService = require('../services/socketService');
 const User = require('../models/User');
 const WhatsAppChannel = require('../models/WhatsAppChannel');
+const Contact = require('../models/Contact');
 
 /**
  * معالجة رسالة واردة جديدة باستخدام الذكاء الاصطناعي
@@ -80,7 +81,7 @@ exports.processIncomingMessage = async (message, conversation, autoAssignAI = tr
                       (conversation.assignedTo && conversation.assignedTo.toString() === chatGptService.aiUserId.toString());
     
     // الحصول على معلومات العميل الكاملة من جهة الاتصال
-    const customerInfo = await this.getCustomerInformation(conversation);
+    const customerInfo = await exports.getCustomerInformation(conversation);
     
     logger.info('chatGptService', 'معالجة رسالة واردة مع معلومات العميل', {
       conversationId: conversation._id,
@@ -586,5 +587,46 @@ exports.shouldTransferToHuman = async (messageContent) => {
   } catch (error) {
     logger.error('aiConversationController', 'خطأ في تحليل محتوى الرسالة:', error);
     return false;
+  }
+};
+
+/**
+ * الحصول على معلومات العميل من جهة الاتصال
+ * @param {Object} conversation كائن المحادثة
+ * @returns {Object} معلومات العميل
+ */
+exports.getCustomerInformation = async (conversation) => {
+  try {
+    if (!conversation) return null;
+    
+    // فحص وجود معرف جهة اتصال في المحادثة
+    if (conversation.contactId) {
+      // جلب معلومات جهة الاتصال من قاعدة البيانات
+      const contact = await Contact.findById(conversation.contactId).lean();
+      
+      if (contact) {
+        return {
+          name: contact.name,
+          phone: contact.phoneNumber,
+          email: contact.email,
+          company: contact.company,
+          notes: contact.notes
+        };
+      }
+    }
+    
+    // إذا لم يتم العثور على جهة اتصال، استخدم المعلومات المتوفرة في المحادثة
+    return {
+      name: conversation.customerName || 'العميل',
+      phone: conversation.phoneNumber,
+      // لا توجد معلومات إضافية متوفرة
+    };
+  } catch (error) {
+    logger.error('aiConversationController', 'خطأ في جلب معلومات العميل:', error);
+    // إرجاع معلومات بسيطة في حالة الخطأ
+    return {
+      name: conversation.customerName || 'العميل',
+      phone: conversation.phoneNumber
+    };
   }
 };

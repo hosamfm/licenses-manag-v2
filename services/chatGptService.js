@@ -895,8 +895,6 @@ class ChatGptService {
       // إضافة الرسالة الحالية (المعالجة) إلى نهاية السجل
       conversationHistory.push(processedMessage);
       
-      // بناء رسائل المحادثة للإرسال إلى ChatGPT
-      
       // إنشاء رسالة النظام باستخدام معلومات العميل المفصلة (بدون محادثات سابقة)
       const baseSystemMessage = await this.buildSystemMessage(customerInfo, []);
       
